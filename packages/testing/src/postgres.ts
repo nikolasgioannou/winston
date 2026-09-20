@@ -8,7 +8,7 @@ const image =
   "postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995";
 
 export async function withTestPostgres<Result>(
-  run: (sql: SQL) => Promise<Result>,
+  run: (sql: SQL, connectionString: string) => Promise<Result>,
 ): Promise<Result> {
   const container = await new PostgreSqlContainer(image)
     .withDatabase("winston_test")
@@ -36,7 +36,7 @@ export async function withTestPostgres<Result>(
     // Never read DATABASE_URL or accept a caller-supplied database connection.
     sql = new SQL(uri.toString(), { max: 4, connectionTimeout: 10 });
 
-    return await run(sql);
+    return await run(sql, uri.toString());
   } finally {
     try {
       await sql?.close();
