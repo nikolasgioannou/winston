@@ -30,7 +30,7 @@ mise exec -- bun run dev
 
 The neutral compiler configuration exposes no ambient runtime globals. Bun and browser entrypoints opt into their own environment. Every workspace declares its dependencies explicitly; Bun uses isolated installs. Bun entrypoints use `skipLibCheck` because the pinned Bun declarations contain upstream declaration errors; strict checking of application source remains enabled. Neutral and web configurations retain declaration checking. See [Bun’s TypeScript guidance](https://bun.sh/docs/typescript-6). Shared configurations are consumed through package exports, not cross-package relative paths or aliases.
 
-Domain, application, contracts, adapters, UI, and protected browser modules are added as their implementation begins. Import-boundary linting, formatting, and local Git hooks are configured. CI remains a separate upcoming change.
+Domain, application, contracts, adapters, UI, and protected browser modules are added as their implementation begins. Import-boundary linting, formatting, local Git hooks, and GitHub quality checks are configured. Deployment remains a separate upcoming change.
 
 ## Quality checks
 
@@ -82,3 +82,11 @@ chore(hooks): enforce local quality and commit conventions
 ```
 
 The commit-msg hook validates the message format. Run `bun run commitlint --edit <message-file>` to check a draft without creating a commit. There is no additional pre-push gate; the full quality gate already runs before committing.
+
+Commit body paragraphs may remain on one source line; the conventional header limit still applies. `bun run check:commits` validates existing history locally. In GitHub Actions it reads the event's commit range, including every commit in a multi-commit push or pull request. Initial pushes and manual runs check the entire reachable history.
+
+## GitHub checks
+
+GitHub Actions repeats the local quality gate on pull requests and pushes to `main`: frozen dependency installation, Conventional Commit validation, `bun run check`, and `bun run build`. It installs the runtimes from `mise.toml` and runs real disposable PostgreSQL tests on the hosted runner's Docker engine. Actions are pinned to immutable revisions, checkout credentials are not persisted, and the workflow has read-only repository permissions with no deployment or provider secrets.
+
+The `Quality` job is the gate that future deployment jobs must depend on. This workflow does not deploy. Any later deployment must be restricted to trusted pushes to `main` and run only after this gate succeeds.

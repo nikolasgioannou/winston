@@ -9,6 +9,7 @@
   "scripts": {
     "build": "bun run --filter './apps/*' build",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
+    "check:commits": "node scripts/check-commits.mjs",
     "check:staged": "node scripts/check-staged.mjs",
     "commitlint": "commitlint",
     "dev": "bun run --filter @winston/web dev",
