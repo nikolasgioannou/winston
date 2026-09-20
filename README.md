@@ -71,6 +71,12 @@ Integration tests require a running local Docker-compatible runtime. On macOS, C
 
 `test` runs tooling, unit, and PostgreSQL integration suites without Google, OpenRouter, or other production credentials. A stopped container runtime is a failure, not a skipped integration test. Browser and native suites will be added with their respective application implementations and exposed separately. Deterministic adapters do not replace real-provider smoke checks: OAuth grants and refresh, model streaming/tool calls, cloud browser takeover, and macOS permissions must each be verified against their real services or operating system before those integrations are considered complete.
 
+### Live model checks
+
+Run `mise exec -- bun run test:models /absolute/path/to/synthetic.wav` from the repository root with the development key in `.env.local`. The WAV fixture must say “Remind me to call Alex tomorrow” and be smaller than 1 MB. Use synthetic audio only: this command sends it to OpenRouter and prints its transcript. The suite makes bounded, paid requests with no automatic retries, checks the live model catalog, and exercises streaming, corrected user messages, structured account/device clarification, a synthetic computer tool, cancellation, and transcription. It reports observed timing without enforcing a latency threshold.
+
+These opt-in checks are excluded from `test`, hooks, and CI. Ordinary unit tests exercise the actual SDK against synthetic HTTP responses, including provider errors and stale-response suppression, without network access. The revision fixture demonstrates the publication guard; durable coordination and Telegram delivery still require their production implementation.
+
 ## Git hooks
 
 Lefthook is a project dependency. Bun trusts its installation script to install hooks in this checkout; `bun run hooks:install` explicitly installs or repairs them. Run Git with the pinned runtimes available on PATH, for example `mise exec -- git commit`. No global hook configuration is changed.

@@ -20,6 +20,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "test": "bun run test:tooling && bun run test:unit && bun run test:integration",
     "test:integration": "node scripts/test-integration.mjs",
+    "test:models": "bun packages/testing/tests/models/live.ts",
     "test:tooling": "node --test scripts/*.test.mjs",
     "test:unit": "bun run --filter @winston/testing test:unit",
     "typecheck": "bun run --filter '*' typecheck"
