@@ -1,0 +1,11 @@
+{
+  "name": "@winston/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./typescript/base": "./typescript/base.json",
+    "./typescript/bun": "./typescript/bun.json",
+    "./typescript/react": "./typescript/react.json"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "winston",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": "1.4.2",
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @winston/web dev",
+    "build": "bun run --filter './apps/*' build",
+    "typecheck": "bun run --filter './apps/*' typecheck"
+  }
+}

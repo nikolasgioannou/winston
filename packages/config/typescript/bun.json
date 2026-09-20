@@ -1,0 +1,9 @@
+{
+  "extends": "./base.json",
+  "compilerOptions": {
+    "types": [
+      "bun"
+    ],
+    "skipLibCheck": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "@winston/config/typescript/base",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "vite.config.ts"
+  ]
+}
