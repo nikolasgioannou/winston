@@ -16,6 +16,8 @@ mise exec -- bun run dev
 
 `dev` starts the web app on localhost. It currently renders an empty React root; product screens follow design review. Server, workspace, and CLI entrypoints currently build as empty modules and do not start services or execute commands. No provider credentials or infrastructure are required for these checks.
 
+For live model validation, copy `.env.example` to `.env.local` at the repository root and set `OPENROUTER_API_KEY` to a development key. `.env.local` is ignored by Git; `.env.example` contains placeholders only. The automated quality checks do not need this key. Keep provider credentials server-side and never expose them through `VITE_` variables. Additional environment variables will be documented as their integrations are implemented.
+
 ## Source layout
 
 | Directory            | Responsibility                                       |
