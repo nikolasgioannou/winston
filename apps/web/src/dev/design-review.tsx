@@ -1,5 +1,7 @@
 import { Activity, Link, Monitor, Palette, Sidebar, SidebarLink } from "@winston/ui";
 import { ComponentGallery } from "./component-gallery";
+import { PageReview } from "./page-review";
+import { readReviewSelection, reviewLink, reviewPages } from "./review-registry";
 
 const rootPath = "/__dev/design";
 const componentsPath = `${rootPath}/components`;
@@ -21,8 +23,18 @@ export function DesignReview() {
   const inComponents = path === componentsPath;
   const inPages = path === pagesPath;
   const nested = inComponents || inPages;
-  const activeHref = inComponents ? `${componentsPath}?section=${selectedSection}` : path;
-  const items = inComponents ? sections : inPages ? [] : categories;
+  const selection = readReviewSelection(window.location.search);
+  const pageItems = reviewPages.map((page) => ({
+    label: page.label,
+    href: reviewLink(page.id, page.states[0].id),
+    icon: Monitor,
+  }));
+  const activeHref = inComponents
+    ? `${componentsPath}?section=${selectedSection}`
+    : inPages && selection.page
+      ? reviewLink(selection.page.id, selection.page.states[0].id)
+      : path;
+  const items = inComponents ? sections : inPages ? pageItems : categories;
 
   return (
     <Sidebar
@@ -40,7 +52,7 @@ export function DesignReview() {
         {inComponents ? (
           <ComponentGallery section={selectedSection} />
         ) : inPages ? (
-          <PageReviewIndex />
+          <PageReview />
         ) : (
           <div className="space-y-8">
             <header>
@@ -61,18 +73,5 @@ export function DesignReview() {
         )}
       </main>
     </Sidebar>
-  );
-}
-
-function PageReviewIndex() {
-  return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Pages & states</h1>
-      </header>
-      <div className="rounded-lg border border-line px-6 py-10">
-        <h2 className="font-medium">No application pages to review yet</h2>
-      </div>
-    </div>
   );
 }

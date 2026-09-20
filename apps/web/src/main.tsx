@@ -10,7 +10,15 @@ if (!container) {
 
 const root = createRoot(container);
 
-if (
+if (import.meta.env.DEV && window.location.pathname === "/__dev/design/frame") {
+  const { ReviewFrame } = await import("./dev/review-frame");
+
+  root.render(
+    <StrictMode>
+      <ReviewFrame />
+    </StrictMode>,
+  );
+} else if (
   import.meta.env.DEV &&
   ["/__dev/design", "/__dev/design/components", "/__dev/design/pages"].includes(
     window.location.pathname,

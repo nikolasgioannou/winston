@@ -33,24 +33,30 @@ export function Sidebar({
   header,
   children,
   onNavigate,
+  persistWidth = true,
 }: {
   items: NavigationItem[];
   activeHref: string;
   header?: ReactNode;
   children: ReactNode;
   onNavigate?: (href: string) => void;
+  persistWidth?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [resizing, setResizing] = useState(false);
-  const [width, setWidth] = useState(readWidth);
+  const [width, setWidth] = useState(() => (persistWidth ? readWidth() : minimumWidth));
 
   useEffect(() => {
+    if (!persistWidth) {
+      return;
+    }
+
     try {
       localStorage.setItem(storageKey, String(width));
     } catch {
       // Resizing still works when the browser disallows persistent storage.
     }
-  }, [width]);
+  }, [width, persistWidth]);
 
   useEffect(() => {
     const resize = () => {
@@ -72,9 +78,13 @@ export function Sidebar({
           <SidebarLink
             key={item.href}
             href={item.href}
-            onClick={() => {
+            onClick={(event) => {
               setOpen(false);
-              onNavigate?.(item.href);
+
+              if (onNavigate) {
+                event.preventDefault();
+                onNavigate(item.href);
+              }
             }}
             aria-current={item.href === activeHref ? "page" : undefined}
           >
