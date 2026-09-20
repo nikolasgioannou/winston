@@ -1,0 +1,9 @@
+pre-commit:
+  commands:
+    quality:
+      run: bun run check:staged && bun run check && bun run build
+
+commit-msg:
+  commands:
+    message:
+      run: bun run commitlint --edit "{1}"
