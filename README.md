@@ -39,7 +39,7 @@ Every visible element must earn its place. Include text, controls, icons, and co
 
 The neutral compiler configuration exposes no ambient runtime globals. Bun and browser entrypoints opt into their own environment. Every workspace declares its dependencies explicitly; Bun uses isolated installs. Bun entrypoints use `skipLibCheck` because the pinned Bun declarations contain upstream declaration errors; strict checking of application source remains enabled. Neutral and web configurations retain declaration checking. See [Bun’s TypeScript guidance](https://bun.sh/docs/typescript-6). Shared configurations are consumed through package exports, not cross-package relative paths or aliases.
 
-Domain, application, contracts, adapters, and protected browser modules are added as their implementation begins. Import-boundary linting, formatting, local Git hooks, and GitHub quality checks are configured. Deployment remains a separate upcoming change.
+Domain, application, contracts, and protected browser modules are added as their implementation begins. `packages/adapters` contains the Postgres adapter. Import-boundary linting, formatting, local Git hooks, and GitHub quality checks are configured. Deployment remains a separate upcoming change.
 
 Web pages consume Winston components from `@winston/ui`, which composes Base UI behavior with Tailwind tokens and Lucide icons. Import `@winston/ui/styles.css` after Tailwind and include the UI package source in Tailwind's source scan. Keep shared interaction and styling changes in the UI package so each page gets the same keyboard, focus, and responsive behavior. Searchable selects place their search input in the popup. Shared transitions respect reduced-motion preferences, and sidebar hover, selection, and keyboard focus use distinct tokens.
 
@@ -73,6 +73,16 @@ Keep component layout, sizing, interaction states, and transitions in Tailwind u
 TypeScript 6.0.3 and ESLint 9.39.5 are intentionally pinned to the support ranges of typescript-eslint and the accessibility plugin. Upgrade the compiler and lint toolchain together after checking their peer support; do not suppress unsupported-version warnings. Vite's config is checked against its separate Node tsconfig while application files use TypeScript project service.
 
 `test:tooling` exercises the real configuration with allowed and forbidden examples. `check` runs formatting/text checks, linting, typechecking, and all implemented test suites. Pre-commit runs `check` and `build`; CI will use the same commands.
+
+## Database
+
+The database adapter uses Drizzle 0.45.2 and the already validated `pg` 8.23.0 driver. Application traffic uses a bounded pool with connection recycling; migrations use a dedicated direct connection and a session advisory lock. With Fly Managed Postgres, use the pooled URL for application traffic and `DIRECT_DATABASE_URL` for migrations and session listeners. No named prepared statements or automatic transaction retries are used. An interrupted commit can have an unknown outcome; callers must reconcile using their operation IDs rather than replaying external actions.
+
+Run `bun run db:migrate` with `DIRECT_DATABASE_URL` set for the intended environment. Keep `packages/adapters/migrations` beside the adapter when packaging releases. SQL migrations and the Drizzle journal are append-only; never edit an applied file. Changes to typed schema definitions require a new reviewed SQL migration and journal entry. The migrator checks the applied prefix before advancing and verifies the final schema. Call `assertCompatible()` before marking a database-backed service ready; pending, newer, or altered migration history fails this check. Roll forward with a new migration instead of shipping down migrations.
+
+Repositories are bound to an explicit owner ID for each transaction. The initial owner repository cannot query a different owner through its public methods. This is application scoping, not a substitute for authentication or a database role boundary: callers must supply an authenticated owner identity. Add repositories to the transaction scope as their domain tickets are implemented, and keep model/provider calls outside SQL transactions.
+
+Drizzle's published declaration files currently fail strict library checking, including unused database drivers ([upstream issue](https://github.com/drizzle-team/drizzle-orm/issues/5187)). Only the adapters and integration-test workspaces use `skipLibCheck`; our source retains strict typing and exact optional properties. Revisit this exception when upgrading Drizzle. Real PostgreSQL tests cover schema upgrades, migration serialization/history checks, owner scoping, rollback, and idle-connection recovery. Actual Fly connection and failover validation belongs to infrastructure deployment.
 
 ## Testing
 

@@ -1,0 +1,23 @@
+{
+  "name": "@winston/adapters",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./database": "./src/database/index.ts"
+  },
+  "scripts": {
+    "db:migrate": "bun src/database/migrate.ts",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "@types/pg": "8.23.1",
+    "@winston/config": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

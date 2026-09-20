@@ -1,4 +1,5 @@
 {
   "extends": "@winston/config/typescript/bun",
+  "compilerOptions": { "skipLibCheck": true },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }
