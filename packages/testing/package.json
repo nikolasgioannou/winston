@@ -1,0 +1,24 @@
+{
+  "name": "@winston/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./postgres": "./src/postgres.ts"
+  },
+  "scripts": {
+    "test:integration": "bun test ./tests/integration --timeout 120000",
+    "test:unit": "bun test ./tests/unit",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@testcontainers/postgresql": "12.1.0",
+    "testcontainers": "12.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@winston/config": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

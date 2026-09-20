@@ -24,6 +24,7 @@ const dependencies = {
   workspace: ["contracts"],
   cli: ["contracts"],
   browser: ["contracts"],
+  testing: [],
 };
 const apps = new Set(["server", "web", "workspace", "cli", "browser"]);
 
@@ -108,13 +109,16 @@ export default [
                     "workspace",
                     "cli",
                     "browser",
+                    "testing",
                   ],
                 },
               },
               allow: { to: { module: { origin: "external" } } },
             },
             {
-              from: { element: { type: ["adapters", "server", "workspace", "cli", "browser"] } },
+              from: {
+                element: { type: ["adapters", "server", "workspace", "cli", "browser", "testing"] },
+              },
               allow: { to: { module: { origin: "core" } } },
             },
             {

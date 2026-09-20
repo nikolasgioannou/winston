@@ -1,0 +1,4 @@
+{
+  "extends": "@winston/config/typescript/bun",
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

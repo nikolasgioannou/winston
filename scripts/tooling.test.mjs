@@ -65,6 +65,10 @@ test("a server cannot reach into the workspace app", async () => {
   await expectRule('import "../../workspace/src/main";', server, "boundaries/dependencies");
 });
 
+test("production code cannot depend on the test harness", async () => {
+  await expectRule('import "../../../packages/testing/src";', server, "boundaries/dependencies");
+});
+
 test("normal React and awaited Bun code remain allowed", async () => {
   for (const [code, filePath] of [
     [
