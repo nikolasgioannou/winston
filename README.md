@@ -14,7 +14,9 @@ mise exec -- bun run build
 mise exec -- bun run dev
 ```
 
-`dev` starts the web app on localhost. It currently renders an empty React root; product screens follow design review. Server, workspace, and CLI entrypoints currently build as empty modules and do not start services or execute commands. No provider credentials or infrastructure are required for these checks.
+`dev` starts the web app on localhost. It currently renders an empty React root; product screens follow design review. `dev:server` starts the API on `127.0.0.1:3001`; `HOST`, `PORT`, and `SHUTDOWN_TIMEOUT_MS` are documented in `.env.example`. Workspace and CLI entrypoints still build as empty modules. No provider credentials or infrastructure are required for these checks.
+
+The API exposes `/health/live` for process liveness and `/health/ready` for startup and dependency readiness. Dependency probes are injected as services are connected; the current host has no database dependency. Callback, owner, device, and task route groups have separate authenticators and reject access by default. Actual authentication and device WebSocket protocols arrive with their integrations; this host never accepts an unauthenticated upgrade. Request errors use stable codes and server-generated correlation IDs. Logs contain only correlation ID, status, and duration, excluding request content and raw exceptions. SIGINT/SIGTERM stop new connections and drain active requests, forcing closure after the configured timeout.
 
 For live model validation, copy `.env.example` to `.env.local` at the repository root and set `OPENROUTER_API_KEY` to a development key. `.env.local` is ignored by Git; `.env.example` contains placeholders only. The automated quality checks do not need this key. Keep provider credentials server-side and never expose them through `VITE_` variables. Additional environment variables will be documented as their integrations are implemented.
 

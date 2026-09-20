@@ -5,7 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "bun build ./src/main.ts --target=bun --outdir=dist",
+    "dev": "bun --watch src/main.ts",
+    "start": "bun dist/main.js",
+    "test:unit": "bun test ./tests",
     "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "hono": "4.13.8",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
