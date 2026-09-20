@@ -1,7 +1,4 @@
 {
   "extends": "@winston/config/typescript/react",
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
