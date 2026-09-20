@@ -107,6 +107,72 @@ test("React hooks and accessibility rules are active", async () => {
   );
 });
 
+test("Tailwind rules reject conflicting, unknown, duplicate, and deprecated classes", async () => {
+  for (const [classes, rule] of [
+    ["flex grid", "no-conflicting-classes"],
+    ["w-button-typo", "no-unknown-classes"],
+    ["flex flex", "no-duplicate-classes"],
+    ["rounded", "no-deprecated-classes"],
+  ]) {
+    await expectRule(
+      `export const screen = <div className="${classes}" />;`,
+      web,
+      `better-tailwindcss/${rule}`,
+    );
+  }
+
+  await expectRule(
+    "export const screen = (color: string) => <div className={`bg-${color}`} />;",
+    web,
+    "better-tailwindcss/no-concatenated-classes",
+  );
+});
+
+test("Tailwind reads shared theme tokens in both UI workspaces", async () => {
+  for (const filePath of [web, join(root, "packages/ui/src/button.tsx")]) {
+    const [result] = await eslint.lintText(
+      `
+        export const screen = (active: boolean) => (
+          <div className={active
+            ? "bg-paper text-ink flex md:grid w-[min(271px,90vw)]"
+            : "bg-input text-muted shadow-input-focus"}
+          />
+        );
+      `,
+      { filePath },
+    );
+
+    assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
+  }
+});
+
+test("Tailwind checks reusable class strings and variant maps", async () => {
+  await expectRule(
+    'export const popupClasses = "flex grid";',
+    join(root, "packages/ui/src/popup-styles.ts"),
+    "better-tailwindcss/no-conflicting-classes",
+  );
+
+  await expectRule(
+    'export const variantClasses = { primary: "bg-typo" };',
+    join(root, "packages/ui/src/button.tsx"),
+    "better-tailwindcss/no-unknown-classes",
+  );
+});
+
+test("Tailwind canonical fixes simplify spacing and shorthand without changing direction", async () => {
+  const checker = new ESLint({ cwd: root, fix: true });
+  const [result] = await checker.lintText(
+    'export const screen = <div className="after:left-[3px] h-8 w-8 ms-2 me-2" />;',
+    { filePath: web },
+  );
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
+  assert.ok(result.output.includes("after:left-0.75"));
+  assert.ok(result.output.includes("size-8"));
+  assert.ok(!result.output.includes("mx-2"));
+});
+
 test("Prettier keeps a Markdown paragraph on one source line", async () => {
   const options = await prettier.resolveConfig(join(root, "README.md"));
   const paragraph = "A deliberately long paragraph with several sentences. ".repeat(10).trim();

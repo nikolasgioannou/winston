@@ -38,6 +38,9 @@ jobs:
       - name: Check commit messages
         run: bun run check:commits
 
+      - name: Install project-local test browser
+        run: bun run test:browser:install
+
       - name: Run the local quality gate
         run: bun run check
 

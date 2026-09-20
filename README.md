@@ -14,27 +14,38 @@ mise exec -- bun run build
 mise exec -- bun run dev
 ```
 
-`dev` starts the web app on localhost. It currently renders an empty React root; product screens follow design review. `dev:server` starts the API on `127.0.0.1:3001`; `HOST`, `PORT`, and `SHUTDOWN_TIMEOUT_MS` are documented in `.env.example`. Workspace and CLI entrypoints still build as empty modules. No provider credentials or infrastructure are required for these checks.
+`dev` starts the web app on localhost. Visit `/__dev/design` to review working shared components, the sidebar, and mobile navigation. This development-only surface uses synthetic examples and no external services; its module is excluded from production builds. Product management pages follow separately. `dev:server` starts the API on `127.0.0.1:3001`; `HOST`, `PORT`, and `SHUTDOWN_TIMEOUT_MS` are documented in `.env.example`. Workspace and CLI entrypoints still build as empty modules. No provider credentials or infrastructure are required for these checks.
 
 The API exposes `/health/live` for process liveness and `/health/ready` for startup and dependency readiness. Dependency probes are injected as services are connected; the current host has no database dependency. Callback, owner, device, and task route groups have separate authenticators and reject access by default. Actual authentication and device WebSocket protocols arrive with their integrations; this host never accepts an unauthenticated upgrade. Request errors use stable codes and server-generated correlation IDs. Logs contain only correlation ID, status, and duration, excluding request content and raw exceptions. SIGINT/SIGTERM stop new connections and drain active requests, forcing closure after the configured timeout.
 
 For live model validation, copy `.env.example` to `.env.local` at the repository root and set `OPENROUTER_API_KEY` to a development key. `.env.local` is ignored by Git; `.env.example` contains placeholders only. The automated quality checks do not need this key. Keep provider credentials server-side and never expose them through `VITE_` variables. Additional environment variables will be documented as their integrations are implemented.
 
+## Design principles
+
+Every visible element must earn its place. Include text, controls, icons, and containers only when they support a user action, decision, navigation, or necessary status. Prefer clear labels and concise actionable feedback. Avoid redundant headings, obvious instructions, decorative filler, implementation commentary, and explanations of what the interface already shows. Apply this standard to product pages and development review surfaces alike; retain accessibility labels and useful error guidance.
+
 ## Source layout
 
-| Directory            | Responsibility                                       |
-| -------------------- | ---------------------------------------------------- |
-| `apps/web`           | React management interface, built with Vite          |
-| `apps/server`        | Protected application entrypoint                     |
-| `apps/workspace`     | Isolated computer execution entrypoint               |
-| `apps/cli`           | The `winston` command entrypoint                     |
-| `apps/desktop-macos` | Reserved for the native Swift proxy                  |
-| `packages/config`    | Exported TypeScript compiler configurations          |
-| `packages/testing`   | Deterministic fixtures and disposable database tests |
+| Directory            | Responsibility                                               |
+| -------------------- | ------------------------------------------------------------ |
+| `apps/web`           | React management interface, built with Vite                  |
+| `apps/server`        | Protected application entrypoint                             |
+| `apps/workspace`     | Isolated computer execution entrypoint                       |
+| `apps/cli`           | The `winston` command entrypoint                             |
+| `apps/desktop-macos` | Reserved for the native Swift proxy                          |
+| `packages/config`    | Exported TypeScript compiler configurations                  |
+| `packages/testing`   | Deterministic fixtures and disposable database tests         |
+| `packages/ui`        | Winston components, Lucide icons, and shared Tailwind tokens |
 
 The neutral compiler configuration exposes no ambient runtime globals. Bun and browser entrypoints opt into their own environment. Every workspace declares its dependencies explicitly; Bun uses isolated installs. Bun entrypoints use `skipLibCheck` because the pinned Bun declarations contain upstream declaration errors; strict checking of application source remains enabled. Neutral and web configurations retain declaration checking. See [Bun’s TypeScript guidance](https://bun.sh/docs/typescript-6). Shared configurations are consumed through package exports, not cross-package relative paths or aliases.
 
-Domain, application, contracts, adapters, UI, and protected browser modules are added as their implementation begins. Import-boundary linting, formatting, local Git hooks, and GitHub quality checks are configured. Deployment remains a separate upcoming change.
+Domain, application, contracts, adapters, and protected browser modules are added as their implementation begins. Import-boundary linting, formatting, local Git hooks, and GitHub quality checks are configured. Deployment remains a separate upcoming change.
+
+Web pages consume Winston components from `@winston/ui`, which composes Base UI behavior with Tailwind tokens and Lucide icons. Import `@winston/ui/styles.css` after Tailwind and include the UI package source in Tailwind's source scan. Keep shared interaction and styling changes in the UI package so each page gets the same keyboard, focus, and responsive behavior. Searchable selects place their search input in the popup. Shared transitions respect reduced-motion preferences, and sidebar hover, selection, and keyboard focus use distinct tokens.
+
+The development review starts at `/__dev/design`. Enter Components (`/__dev/design/components`) or Pages & states (`/__dev/design/pages`) to switch the sidebar into that area's sub-tabs. Component tabs select distinct previews using the `section` query parameter. Pages & states currently has an empty landing page for the forthcoming real-page state gallery. Register production page components and their synthetic states as those pages are implemented; component specimens are not substitutes for page coverage. All review routes are excluded from production JavaScript.
+
+The desktop sidebar can be resized by dragging its edge or using the focused separator's arrow keys, Home, and End. Its minimum width is 270px, matching the measured Notion sidebar; the maximum preserves room for content. The resize affordance is a neutral 2px divider on hover, keyboard focus, and drag. The width is stored locally as `winston.sidebar.width`, with graceful fallback when storage is unavailable. Shared controls accept `size="sm" | "md" | "lg"` for fixed 28/32/36px heights, defaulting to medium. Icon-only buttons use `iconOnly` and an accessible label; their width always matches their height.
 
 ## Quality checks
 
@@ -52,6 +63,10 @@ Prettier owns layout with LF line endings and one source line per Markdown parag
 `sort-package-json` orders fields, scripts, and dependencies in the root and workspace manifests before Prettier runs. `format:check` checks that ordering without changing files. Manifest paths are limited to the root, `apps/*`, and `packages/*` to avoid dependencies and generated output.
 
 ESLint uses typed strict rules for promises and unsafe values, React hooks/accessibility rules, and explicit package dependency directions. Cross-package source imports must use package exports. Domain code cannot import runtime or third-party modules; application code depends only on domain. Web code cannot import server adapters or Node built-ins. Tool configuration uses its own Node environment. New packages must match the architecture map and provide a TypeScript configuration before typed linting passes.
+
+Tailwind class strings in the web app and shared UI use `eslint-plugin-better-tailwindcss` with its correctness preset, duplicate checks, deprecated-class checks, and canonical-class checks. The plugin reads the web app's Tailwind 4 CSS entry point, including shared theme tokens. Unknown classes, conflicting utilities, and dynamically constructed class names fail the normal lint gate. Reusable class strings and variant maps use names ending in `Classes` so they receive the same checks as JSX. Canonicalization uses the default 16px root font size to prefer equivalent spacing utilities and shorthand, with logical-to-physical conversion disabled to preserve directional behavior. Revisit that setting if the root font size changes. ESLint owns canonical suggestions; the duplicate Tailwind IntelliSense diagnostic is disabled in workspace settings. Prettier retains formatting ownership; class sorting, wrapping, forced logical properties, and class restrictions are not enforced. Arbitrary values remain available when no canonical equivalent exists. These checks cover source class strings; the application build validates CSS directives and `@apply` usage.
+
+Keep component layout, sizing, interaction states, and transitions in Tailwind utilities alongside the component. Shared CSS contains theme tokens and base defaults, not a parallel collection of component selectors. Extract reusable components first; small shared utility strings are appropriate for identical styling across different Base UI primitives. Use complete static class names in variant maps and `motion-reduce` variants for animations.
 
 TypeScript 6.0.3 and ESLint 9.39.5 are intentionally pinned to the support ranges of typescript-eslint and the accessibility plugin. Upgrade the compiler and lint toolchain together after checking their peer support; do not suppress unsupported-version warnings. Vite's config is checked against its separate Node tsconfig while application files use TypeScript project service.
 
@@ -73,7 +88,9 @@ Queue integration tests use pg-boss with its PostgreSQL driver under Bun. They v
 
 `@winston/testing/postgres` creates a fresh PostgreSQL 17 container from a pinned image for each callback. It generates credentials, connects only to the container's local port, and removes the container and volumes even when the callback throws. It never accepts a database URL from the caller. The integration command deliberately supplies an unusable `DATABASE_URL` to verify that ambient database credentials are ignored. Keep Testcontainers' cleanup sidecar enabled so interrupted processes also have cleanup coverage. Initial runs download container images; later runs reuse the images, never database state.
 
-`test` runs tooling, unit, and PostgreSQL integration suites without Google, OpenRouter, or other production credentials. A stopped container runtime is a failure, not a skipped integration test. Browser and native suites will be added with their respective application implementations and exposed separately. Deterministic adapters do not replace real-provider smoke checks: OAuth grants and refresh, model streaming/tool calls, cloud browser takeover, and macOS permissions must each be verified against their real services or operating system before those integrations are considered complete.
+`test` runs tooling, unit, PostgreSQL integration, and browser suites without Google, OpenRouter, or other production credentials. A stopped container runtime is a failure, not a skipped integration test. Native suites will be added with their application implementation. Deterministic adapters do not replace real-provider smoke checks: OAuth grants and refresh, model streaming/tool calls, cloud browser takeover, and macOS permissions must each be verified against their real services or operating system before those integrations are considered complete.
+
+Run `bun run test:browser:install` once after installing dependencies, and again after upgrading Playwright. Chromium is stored in this project's `node_modules/.cache/ms-playwright`, without changing your normal browser. `bun run test:browser` starts its own Vite server on `127.0.0.1:4175` and checks real controls, keyboard selection, dialog focus, validation, and mobile navigation. That port must be free. Browser checks run in the full local gate and CI; failures retain traces under ignored `test-results/`.
 
 ### Live model checks
 

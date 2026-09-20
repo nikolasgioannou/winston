@@ -1,0 +1,7 @@
+{
+  "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
+  "files.associations": {
+    "**/apps/web/src/styles.css": "tailwindcss",
+    "**/packages/ui/src/styles.css": "tailwindcss"
+  }
+}

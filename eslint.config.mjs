@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import js from "@eslint/js";
 import prettier from "eslint-config-prettier/flat";
+import betterTailwindcss from "eslint-plugin-better-tailwindcss";
+import { getDefaultSelectors } from "eslint-plugin-better-tailwindcss/api/defaults";
 import boundaries from "eslint-plugin-boundaries";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -30,7 +32,13 @@ const apps = new Set(["server", "web", "workspace", "cli", "browser"]);
 
 export default [
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "**/coverage/**"],
+    ignores: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/coverage/**",
+      "test-results/**",
+      "playwright-report/**",
+    ],
   },
   {
     ...js.configs.recommended,
@@ -65,6 +73,32 @@ export default [
     files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks, "jsx-a11y": jsxA11y },
     rules: { ...reactHooks.configs.recommended.rules, ...jsxA11y.flatConfigs.recommended.rules },
+  },
+  {
+    files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
+    plugins: { "better-tailwindcss": betterTailwindcss },
+    settings: {
+      "better-tailwindcss": {
+        cwd: `${root}/apps/web`,
+        entryPoint: "src/styles.css",
+        detectComponentClasses: true,
+        rootFontSize: 16,
+        selectors: [
+          ...getDefaultSelectors(),
+          {
+            kind: "variable",
+            name: "^.*Classes$",
+            match: [{ type: "strings" }, { type: "objectValues" }],
+          },
+        ],
+      },
+    },
+    rules: {
+      ...betterTailwindcss.configs["correctness-error"].rules,
+      "better-tailwindcss/no-duplicate-classes": "error",
+      "better-tailwindcss/no-deprecated-classes": "error",
+      "better-tailwindcss/enforce-canonical-classes": ["error", { logical: false }],
+    },
   },
   {
     files: sourceFiles,
