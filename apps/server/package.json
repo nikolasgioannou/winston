@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/main.ts --target=bun --outdir=dist",
+    "build": "bun build ./src/main.ts --target=bun --outdir=dist --external '@winston/adapters/*'",
     "dev": "bun --watch src/main.ts",
     "start": "bun dist/main.js",
     "test:unit": "bun test ./tests",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@winston/adapters": "workspace:*",
     "hono": "4.13.8",
     "zod": "4.6.5"
   },

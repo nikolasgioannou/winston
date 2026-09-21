@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+
+test("sign-in failures offer retry and never redirect to an unexpected host", async ({ page }) => {
+  await page.route("**/api/owner/session", (route) => route.fulfill({ status: 401, json: {} }));
+  await page.route("**/api/auth/sign-in/social", (route) =>
+    route.fulfill({ json: { url: "https://untrusted.example" } }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Unable to sign in. Please try again.");
+  await expect(page).toHaveURL("/");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("OAuth denial remains visible and its query parameters are removed", async ({ page }) => {
+  await page.route("**/api/owner/session", (route) => route.fulfill({ status: 401, json: {} }));
+  await page.goto("/?error=access_denied");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page).toHaveURL("/");
+});
+
+test("signed-in users can sign out and review fixtures remain interactive", async ({ page }) => {
+  await page.route("**/api/owner/session", (route) => route.fulfill({ json: { kind: "owner" } }));
+  await page.route("**/api/auth/sign-out", (route) => route.fulfill({ json: { success: true } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+
+  await page.goto("/__dev/design/pages?page=sign-in&state=error&viewport=mobile");
+  const preview = page.frameLocator("iframe");
+  await expect(preview.getByRole("alert")).toBeVisible();
+  await preview.getByRole("button", { name: "Try again" }).click();
+  await preview.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(preview.getByRole("button", { name: "Opening Google…" })).toBeDisabled();
+});

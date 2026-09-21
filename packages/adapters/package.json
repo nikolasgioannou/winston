@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./auth": "./src/auth/index.ts",
     "./database": "./src/database/index.ts"
   },
   "scripts": {
@@ -11,6 +12,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0"
   },

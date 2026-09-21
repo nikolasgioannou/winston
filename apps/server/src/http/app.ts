@@ -19,6 +19,8 @@ type RouteGroup = {
 };
 
 export type ApiOptions = {
+  authHandler?: (request: Request) => Promise<Response>;
+  ownerOrigin?: string;
   groups?: Partial<Record<Authority, RouteGroup>>;
   readiness?: (signal: AbortSignal) => Promise<boolean>;
   log?: (entry: RequestLog) => void;
@@ -66,6 +68,13 @@ export function createApi(options: ApiOptions = {}) {
   );
 
   app.get("/health/live", (context) => context.json({ status: "alive" }));
+  app.on(
+    ["GET", "POST"],
+    "/api/auth/*",
+    (context) =>
+      options.authHandler?.(context.req.raw) ??
+      errorResponse("not_found", context.get("requestId")),
+  );
   app.get("/health/ready", async (context) => {
     if (!lifecycle.started) {
       return errorResponse("unavailable", context.get("requestId"));
@@ -103,6 +112,14 @@ export function createApi(options: ApiOptions = {}) {
     const router = new Hono<HttpEnvironment>();
 
     router.use("*", async (context, next) => {
+      if (
+        authority === "owner" &&
+        !["GET", "HEAD", "OPTIONS"].includes(context.req.method) &&
+        (!options.ownerOrigin || context.req.header("Origin") !== options.ownerOrigin)
+      ) {
+        throw new RequestError("forbidden");
+      }
+
       const identity = await group?.authenticate(context.req.raw);
 
       if (!identity) {

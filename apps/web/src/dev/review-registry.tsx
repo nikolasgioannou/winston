@@ -1,6 +1,26 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { ComponentGallery } from "./component-gallery";
 import { FoundationShell } from "./foundation-shell";
+import { SignInView, type SignInState } from "../auth/sign-in-view";
+
+function SignInPreview({ initial }: { initial: SignInState }) {
+  const [state, setState] = useState(initial);
+
+  return (
+    <SignInView
+      state={state}
+      onSignIn={() => {
+        setState("redirecting");
+      }}
+      onSignOut={() => {
+        setState("signed-out");
+      }}
+      onRetry={() => {
+        setState("signed-out");
+      }}
+    />
+  );
+}
 
 export type ReviewState = {
   id: string;
@@ -19,6 +39,43 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "sign-in",
+    label: "Sign-in",
+    kind: "page",
+    states: [
+      {
+        id: "signed-out",
+        label: "Signed out",
+        fullWidth: true,
+        render: () => <SignInPreview initial="signed-out" />,
+      },
+      {
+        id: "loading",
+        label: "Loading",
+        fullWidth: true,
+        render: () => <SignInPreview initial="loading" />,
+      },
+      {
+        id: "redirecting",
+        label: "Opening Google",
+        fullWidth: true,
+        render: () => <SignInPreview initial="redirecting" />,
+      },
+      {
+        id: "error",
+        label: "Error",
+        fullWidth: true,
+        render: () => <SignInPreview initial="error" />,
+      },
+      {
+        id: "signed-in",
+        label: "Signed in",
+        fullWidth: true,
+        render: () => <SignInPreview initial="signed-in" />,
+      },
+    ],
+  },
   {
     id: "foundation",
     label: "Component foundation",

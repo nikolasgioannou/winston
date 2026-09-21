@@ -93,6 +93,7 @@ test("invalid bodies and internal errors produce safe correlated responses", asy
   });
 
   const { app } = createApi({
+    ownerOrigin: "http://127.0.0.1:5173",
     groups: {
       owner: { router, authenticate: () => Promise.resolve({ kind: "owner", ownerId: "owner-1" }) },
     },
@@ -104,7 +105,11 @@ test("invalid bodies and internal errors produce safe correlated responses", asy
   for (const body of ["{", '{"name":42}', '{"name":"ok","token":"secret-provider-token"}']) {
     const response = await app.request("/api/owner/example?token=secret-provider-token", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-request-id": "untrusted-id" },
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": "untrusted-id",
+        origin: "http://127.0.0.1:5173",
+      },
       body,
     });
 
@@ -116,7 +121,13 @@ test("invalid bodies and internal errors produce safe correlated responses", asy
   }
 
   assert.equal(
-    (await app.request("/api/owner/example", { method: "POST", body: "hello" })).status,
+    (
+      await app.request("/api/owner/example", {
+        method: "POST",
+        headers: { Origin: "http://127.0.0.1:5173" },
+        body: "hello",
+      })
+    ).status,
     415,
   );
   assert.equal(
@@ -138,7 +149,7 @@ test("invalid bodies and internal errors produce safe correlated responses", asy
 
   const valid = await app.request("/api/owner/example", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", Origin: "http://127.0.0.1:5173" },
     body: '{"name":"Winston"}',
   });
   assert.equal(valid.status, 200);

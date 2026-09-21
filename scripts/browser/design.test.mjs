@@ -91,9 +91,7 @@ test("mobile navigation works without horizontal overflow", async ({ page }) => 
   await dialog.getByRole("link", { name: "Pages & states" }).click();
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(/\/__dev\/design\/pages$/);
-  await expect(
-    page.getByRole("heading", { name: "No application pages to review yet" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pages & states", exact: true })).toBeVisible();
 
   const overflows = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,

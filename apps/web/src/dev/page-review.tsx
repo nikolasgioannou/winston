@@ -11,18 +11,15 @@ export function PageReview() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-semibold tracking-tight">Pages & states</h1>
-        <h2 className="text-sm text-muted">No application pages to review yet</h2>
-        {reviewPages
-          .filter((item) => item.kind === "foundation")
-          .map((item) => (
-            <a
-              key={item.id}
-              href={reviewLink(item.id, item.states[0].id)}
-              className="block rounded-lg border border-line p-5 hover:bg-hover"
-            >
-              {item.label}
-            </a>
-          ))}
+        {reviewPages.map((item) => (
+          <a
+            key={item.id}
+            href={reviewLink(item.id, item.states[0].id)}
+            className="block rounded-lg border border-line p-5 hover:bg-hover"
+          >
+            {item.label}
+          </a>
+        ))}
       </div>
     );
   }

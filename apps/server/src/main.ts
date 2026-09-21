@@ -1,18 +1,71 @@
-// Protected application composition root; implemented by the API host ticket.
+import { Hono } from "hono";
+import { createOwnerAuth } from "@winston/adapters/auth";
+import { createDatabase } from "@winston/adapters/database";
+import type { HttpEnvironment } from "./http/app";
+import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
 
+const config = readAuthConfig(process.env);
+const database = createDatabase({
+  connectionString: config.connectionString,
+  onConnectionError: () => {
+    console.error("Application database connection lost.");
+  },
+});
+
+try {
+  await database.assertCompatible();
+} catch {
+  await database.close();
+  console.error("Database startup failed. Check connectivity and apply the release migrations.");
+  process.exit(1);
+}
+
+const auth = createOwnerAuth(config.auth, config.connectionString);
+const owner = new Hono<HttpEnvironment>();
+
+owner.get("/session", (context) => context.json(context.get("identity")));
+
 const host = startServer(readConfig(process.env), {
+  readiness: async () => {
+    await database.assertCompatible();
+
+    return true;
+  },
+  authHandler: (request) => auth.handle(request),
+  ownerOrigin: config.auth.webOrigin,
+  groups: {
+    owner: {
+      router: owner,
+      async authenticate(request) {
+        const session = await auth.owner(request);
+
+        if (!session) {
+          return null;
+        }
+
+        await database.transaction(session.ownerId, (scope) => scope.owners.ensure());
+
+        return { kind: "owner", ownerId: session.ownerId };
+      },
+    },
+  },
   log: (entry) => {
     console.log(JSON.stringify(entry));
   },
 });
 
 function shutdown() {
-  host.stop().catch(() => {
-    console.error("Server shutdown failed.");
-    process.exitCode = 1;
-  });
+  host
+    .stop()
+    .then(async () => {
+      await Promise.all([auth.close(), database.close()]);
+    })
+    .catch(() => {
+      console.error("Server shutdown failed.");
+      process.exitCode = 1;
+    });
 }
 
 process.once("SIGINT", shutdown);

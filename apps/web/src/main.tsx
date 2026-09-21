@@ -32,5 +32,11 @@ if (import.meta.env.DEV && window.location.pathname === "/__dev/design/frame") {
     </StrictMode>,
   );
 } else {
-  root.render(<StrictMode>{null}</StrictMode>);
+  const { SignIn } = await import("./auth/sign-in");
+
+  root.render(
+    <StrictMode>
+      <SignIn />
+    </StrictMode>,
+  );
 }
