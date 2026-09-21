@@ -29,6 +29,13 @@
       "when": 1790000000003,
       "tag": "0003_owner_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790000000004,
+      "tag": "0004_events",
+      "breakpoints": true
     }
   ]
 }

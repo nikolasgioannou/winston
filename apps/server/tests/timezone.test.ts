@@ -7,7 +7,7 @@ import { createOwnerRouter } from "../src/http/owner";
 test("timezone routes reject unauthenticated calls and malformed updates before persistence", async () => {
   let updates = 0;
   const profile = { timezone: "UTC", revision: 0, observedAt: null, source: "default" as const };
-  const scope: OwnerTransaction = {
+  const scope: Pick<OwnerTransaction, "ownerId" | "owners"> = {
     ownerId: "fixture",
     owners: {
       find: () => Promise.resolve(undefined),
@@ -23,7 +23,10 @@ test("timezone routes reject unauthenticated calls and malformed updates before 
     },
   };
   const router = createOwnerRouter({
-    transaction<Result>(ownerId: string, work: (scope: OwnerTransaction) => Promise<Result>) {
+    transaction<Result>(
+      ownerId: string,
+      work: (scope: Pick<OwnerTransaction, "ownerId" | "owners">) => Promise<Result>,
+    ) {
       assert.equal(ownerId, "fixture");
 
       return work(scope);

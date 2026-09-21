@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./events": "./src/events.ts",
     "./messages": "./src/messages/index.ts",
     "./timezone": "./src/timezone.ts"
   },

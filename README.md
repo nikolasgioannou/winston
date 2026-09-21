@@ -124,6 +124,14 @@ Run `mise exec -- bun run test:models /absolute/path/to/synthetic.wav` from the 
 
 These opt-in checks are excluded from `test`, hooks, and CI. Ordinary unit tests exercise the actual SDK against synthetic HTTP responses, including provider errors and stale-response suppression, without network access. The revision fixture demonstrates the publication guard; durable coordination and Telegram delivery still require their production implementation.
 
+## Transactional events
+
+Owner transactions expose `events.publish` alongside domain repositories. An event ID is derived from the owner, event type and caller's stable idempotency key. Reusing that key with different payload or destinations fails; exact retries retain the original record. Events and per-destination outbox records commit with the caller's state changes. A later worker can discover pending work even if the publisher stopped before dispatch.
+
+`dispatchNext` processes one owner-scoped destination delivery. PostgreSQL row locks exclude competing claims; a random lease token fences acknowledgements after expiry. Claims expire after 60 seconds, delivery waits are bounded to 45 seconds, and failures retain a safe code with exponential backoff capped at five minutes. Worker hosts must poll continuously and pass their shutdown signal; this adapter does not start a background process. Delivery callbacks must honor cancellation and use event IDs for downstream idempotency because an expired or interrupted request can still have reached its destination.
+
+`events.consume` records its receipt and scoped handler writes in a savepoint within the same transaction, so failed handlers roll back even when their caller catches the exception. Duplicate receipts skip the handler. This guarantee applies to database writes on that transaction, not arbitrary HTTP calls: external effects require their own idempotency or reconciliation. `events.status` exposes attempts, next availability, delivery time and failure state without storing raw transport errors.
+
 ## Message envelopes
 
 `@winston/contracts/messages` defines versioned user-message and autonomous-event records and their canonical XML serializers. Ingress creates and persists a user record once with its first server receipt time, owner timezone snapshot, provider timestamps, stable message/event IDs, and unchanged original text. Serialization uses that stored instant and offset, never the current clock or owner profile. Batch context must preserve each original envelope. Provider edits should be recorded separately from the original receipt.

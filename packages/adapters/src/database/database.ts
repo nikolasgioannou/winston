@@ -3,11 +3,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { checkSchema } from "./migrations";
 import { ownerRepository, type OwnerRepository } from "./owners";
+import { eventRepository, type EventRepository } from "./events";
 import * as schema from "./schema";
 
 export type OwnerTransaction = {
   readonly ownerId: string;
   readonly owners: OwnerRepository;
+  readonly events: EventRepository;
 };
 
 export function createDatabase(options: {
@@ -45,6 +47,7 @@ export function createDatabase(options: {
         return work({
           ownerId,
           owners: ownerRepository(transaction, ownerId),
+          events: eventRepository(transaction, ownerId),
         });
       });
     },

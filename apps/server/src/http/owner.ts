@@ -7,7 +7,7 @@ import { parseJson, RequestError } from "./errors";
 type Database = {
   transaction<Result>(
     ownerId: string,
-    work: (scope: OwnerTransaction) => Promise<Result>,
+    work: (scope: Pick<OwnerTransaction, "ownerId" | "owners">) => Promise<Result>,
   ): Promise<Result>;
 };
 
