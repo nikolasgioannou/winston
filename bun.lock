@@ -38,6 +38,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@winston/adapters": "workspace:*",
+        "@winston/contracts": "workspace:*",
         "hono": "4.13.8",
         "zod": "4.6.5",
       },
@@ -51,6 +52,7 @@
       "name": "@winston/web",
       "version": "0.0.0",
       "dependencies": {
+        "@winston/contracts": "workspace:*",
         "@winston/ui": "workspace:*",
         "react": "19.3.0",
         "react-dom": "19.3.0",
@@ -80,6 +82,7 @@
       "name": "@winston/adapters",
       "version": "0.0.0",
       "dependencies": {
+        "@winston/contracts": "workspace:*",
         "better-auth": "1.7.5",
         "drizzle-orm": "0.45.2",
         "pg": "8.23.0",
@@ -95,6 +98,17 @@
       "name": "@winston/config",
       "version": "0.0.0",
     },
+    "packages/contracts": {
+      "name": "@winston/contracts",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "4.6.5",
+      },
+      "devDependencies": {
+        "@winston/config": "workspace:*",
+        "typescript": "6.0.3",
+      },
+    },
     "packages/testing": {
       "name": "@winston/testing",
       "version": "0.0.0",
@@ -108,6 +122,7 @@
         "@types/pg": "8.23.1",
         "@winston/adapters": "workspace:*",
         "@winston/config": "workspace:*",
+        "@winston/contracts": "workspace:*",
         "ai": "7.0.107",
         "pg": "8.23.0",
         "pg-boss": "12.33.2",
@@ -511,6 +526,8 @@
     "@winston/cli": ["@winston/cli@workspace:apps/cli"],
 
     "@winston/config": ["@winston/config@workspace:packages/config"],
+
+    "@winston/contracts": ["@winston/contracts@workspace:packages/contracts"],
 
     "@winston/server": ["@winston/server@workspace:apps/server"],
 

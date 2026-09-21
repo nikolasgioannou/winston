@@ -1,0 +1,19 @@
+{
+  "name": "@winston/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./timezone": "./src/timezone.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@winston/config": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

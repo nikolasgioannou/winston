@@ -1,7 +1,6 @@
-import { Hono } from "hono";
 import { createOwnerAuth } from "@winston/adapters/auth";
 import { createDatabase } from "@winston/adapters/database";
-import type { HttpEnvironment } from "./http/app";
+import { createOwnerRouter } from "./http/owner";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
@@ -23,9 +22,7 @@ try {
 }
 
 const auth = createOwnerAuth(config.auth, config.connectionString);
-const owner = new Hono<HttpEnvironment>();
-
-owner.get("/session", (context) => context.json(context.get("identity")));
+const owner = createOwnerRouter(database);
 
 const host = startServer(readConfig(process.env), {
   readiness: async () => {

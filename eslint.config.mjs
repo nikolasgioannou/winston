@@ -26,7 +26,7 @@ const dependencies = {
   workspace: ["contracts"],
   cli: ["contracts"],
   browser: ["contracts"],
-  testing: ["adapters"],
+  testing: ["adapters", "contracts"],
 };
 const apps = new Set(["server", "web", "workspace", "cli", "browser"]);
 

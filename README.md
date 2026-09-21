@@ -26,6 +26,12 @@ Better Auth requests only Google identity scopes. The server fixes the provider,
 
 The server build keeps `@winston/adapters` external so migrations resolve beside their package rather than beside the bundled server. Deployment must include that workspace, its migrations, and installed runtime dependencies.
 
+## Owner timezone
+
+The authenticated page synchronizes the browser's IANA timezone on opening and foreground return. This is a background operation; failures preserve the last valid profile and never block navigation. The owner API exposes `GET` and `PUT /api/owner/timezone`. Updates carry the profile revision; competing updates return 409 and the client makes a fresh observation before one bounded retry. Identical updates are idempotent and invalid timezone observations leave the profile untouched. New owners explicitly default to UTC.
+
+`@winston/contracts/timezone` contains shared API validation and timestamp snapshots with a UTC instant, timezone, and date-specific offset. Message ingestion will persist those snapshots rather than recomputing history from the current owner profile. The timezone API does not modify historical messages or scheduled instants. Contracts include standard web type definitions because Zod's declarations reference URL; they perform no I/O.
+
 For live model validation, copy `.env.example` to `.env.local` at the repository root and set `OPENROUTER_API_KEY` to a development key. `.env.local` is ignored by Git; `.env.example` contains placeholders only. The automated quality checks do not need this key. Keep provider credentials server-side and never expose them through `VITE_` variables. Additional environment variables will be documented as their integrations are implemented.
 
 ## Design principles

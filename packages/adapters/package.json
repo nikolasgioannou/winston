@@ -12,6 +12,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@winston/contracts": "workspace:*",
     "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0"

@@ -22,6 +22,7 @@
     "@types/pg": "8.23.1",
     "@winston/adapters": "workspace:*",
     "@winston/config": "workspace:*",
+    "@winston/contracts": "workspace:*",
     "ai": "7.0.107",
     "pg": "8.23.0",
     "pg-boss": "12.33.2",

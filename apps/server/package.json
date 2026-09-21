@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@winston/adapters": "workspace:*",
+    "@winston/contracts": "workspace:*",
     "hono": "4.13.8",
     "zod": "4.6.5"
   },

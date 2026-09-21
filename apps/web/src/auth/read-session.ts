@@ -1,4 +1,7 @@
 export async function readSession(signal: AbortSignal) {
+  // Let a synchronous effect cleanup cancel the check before starting a request.
+  await Promise.resolve();
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     signal.throwIfAborted();
 

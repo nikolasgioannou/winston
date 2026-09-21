@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { SignInView, type SignInState } from "./sign-in-view";
 import { readSession } from "./read-session";
+import { useTimezone } from "../timezone/use-timezone";
 
 export function SignIn() {
   const [state, setState] = useState<SignInState>("loading");
   const [failed] = useState(() => new URLSearchParams(window.location.search).has("error"));
+  useTimezone(state === "signed-in");
 
   useEffect(() => {
     const controller = new AbortController();

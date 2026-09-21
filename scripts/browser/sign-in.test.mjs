@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 401, json: {} }));
+});
+
 test("a temporary session failure recovers without repeating Google sign-in", async ({ page }) => {
   let reads = 0;
   let signIns = 0;
