@@ -20,7 +20,7 @@
     "hooks:install": "lefthook install",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
-    "test": "bun run test:tooling && bun run test:unit && bun run test:integration && bun run test:browser",
+    "test": "bun run test:tooling && bun run test:unit && bun run test:browser && bun run test:integration",
     "test:browser": "node scripts/test-browser.mjs",
     "test:browser:install": "node scripts/test-browser.mjs --install",
     "test:integration": "node scripts/test-integration.mjs",
