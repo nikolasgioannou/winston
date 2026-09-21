@@ -124,6 +124,14 @@ Run `mise exec -- bun run test:models /absolute/path/to/synthetic.wav` from the 
 
 These opt-in checks are excluded from `test`, hooks, and CI. Ordinary unit tests exercise the actual SDK against synthetic HTTP responses, including provider errors and stale-response suppression, without network access. The revision fixture demonstrates the publication guard; durable coordination and Telegram delivery still require their production implementation.
 
+## Message envelopes
+
+`@winston/contracts/messages` defines versioned user-message and autonomous-event records and their canonical XML serializers. Ingress creates and persists a user record once with its first server receipt time, owner timezone snapshot, provider timestamps, stable message/event IDs, and unchanged original text. Serialization uses that stored instant and offset, never the current clock or owner profile. Batch context must preserve each original envelope. Provider edits should be recorded separately from the original receipt.
+
+Model-facing user content is escaped inside `user_content`; application metadata appears in `system_event`, including one `sent_at`. Transcriptions carry machine provenance, and only staged attachments include paths, artifact/workspace IDs, checksums, and verification times. The scoped staging service must verify those facts before constructing metadata: schema validation cannot prove a file exists or authorize access. XML labels likewise grant no system-role authority or permissions. Consumers must use authenticated, owner-scoped structured records, never parse user-authored XML into trusted events. Invalid XML control characters are rejected rather than silently changing stored content.
+
+`acceptMessageRevision` preserves the immutable receipt, accepts exact retries, and rejects conflicting, stale, or skipped revisions. Persistence must enforce the same revision comparison atomically. These contracts do not yet ingest Telegram updates, stage files, or persist message revisions; those adapters consume this shared boundary.
+
 ## Git hooks
 
 Lefthook is a project dependency. Bun trusts its installation script to install hooks in this checkout; `bun run hooks:install` explicitly installs or repairs them. Run Git with the pinned runtimes available on PATH, for example `mise exec -- git commit`. No global hook configuration is changed.

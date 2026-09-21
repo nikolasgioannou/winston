@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./messages": "./src/messages/index.ts",
     "./timezone": "./src/timezone.ts"
   },
   "scripts": {
