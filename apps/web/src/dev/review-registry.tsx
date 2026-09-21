@@ -74,6 +74,12 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <SignInPreview initial="signed-in" />,
       },
+      {
+        id: "session-error",
+        label: "Session unavailable",
+        fullWidth: true,
+        render: () => <SignInPreview initial="session-error" />,
+      },
     ],
   },
   {

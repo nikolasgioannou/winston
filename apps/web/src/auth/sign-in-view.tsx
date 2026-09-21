@@ -1,6 +1,7 @@
 import { Button } from "@winston/ui";
 
-export type SignInState = "loading" | "signed-out" | "redirecting" | "signed-in" | "error";
+export type SignInState =
+  "loading" | "signed-out" | "redirecting" | "signed-in" | "error" | "session-error";
 
 export function SignInView({
   state,
@@ -28,10 +29,12 @@ export function SignInView({
             </p>
             <Button onClick={onSignOut}>Sign out</Button>
           </>
-        ) : state === "error" ? (
+        ) : state === "error" || state === "session-error" ? (
           <>
             <p role="alert" className="text-sm text-muted">
-              Unable to sign in. Please try again.
+              {state === "session-error"
+                ? "Unable to check your session. Please try again."
+                : "Unable to sign in. Please try again."}
             </p>
             <Button onClick={onRetry}>Try again</Button>
           </>

@@ -1,5 +1,53 @@
 import { expect, test } from "@playwright/test";
 
+test("a temporary session failure recovers without repeating Google sign-in", async ({ page }) => {
+  let reads = 0;
+  let signIns = 0;
+  await page.route("**/api/owner/session", (route) => {
+    reads += 1;
+
+    return route.fulfill({ status: reads === 1 ? 503 : 200, json: {} });
+  });
+  await page.route("**/api/auth/sign-in/social", (route) => {
+    signIns += 1;
+
+    return route.fulfill({ status: 500, json: {} });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("status")).toHaveText("You’re signed in.");
+  expect(reads).toBe(2);
+  expect(signIns).toBe(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("session retries are bounded and persistent failures have an accurate message", async ({
+  page,
+}) => {
+  let reads = 0;
+  await page.route("**/api/owner/session", (route) => {
+    reads += 1;
+
+    return route.fulfill({ status: 503, json: {} });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Unable to check your session. Please try again.",
+  );
+  expect(reads).toBe(2);
+});
+
+test("unauthorized sessions are not retried", async ({ page }) => {
+  let reads = 0;
+  await page.route("**/api/owner/session", (route) => {
+    reads += 1;
+
+    return route.fulfill({ status: 401, json: {} });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(reads).toBe(1);
+});
+
 test("sign-in failures offer retry and never redirect to an unexpected host", async ({ page }) => {
   await page.route("**/api/owner/session", (route) => route.fulfill({ status: 401, json: {} }));
   await page.route("**/api/auth/sign-in/social", (route) =>

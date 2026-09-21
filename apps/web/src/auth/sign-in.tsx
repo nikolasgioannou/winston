@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SignInView, type SignInState } from "./sign-in-view";
+import { readSession } from "./read-session";
 
 export function SignIn() {
   const [state, setState] = useState<SignInState>("loading");
@@ -12,17 +13,23 @@ export function SignIn() {
       window.history.replaceState(null, "", window.location.pathname);
     }
 
-    fetch("/api/owner/session", { signal: controller.signal })
+    readSession(controller.signal)
       .then((response) => {
         if (!controller.signal.aborted) {
           setState(
-            response.ok ? "signed-in" : response.status === 401 && !failed ? "signed-out" : "error",
+            response.ok
+              ? "signed-in"
+              : response.status === 401
+                ? failed
+                  ? "error"
+                  : "signed-out"
+                : "session-error",
           );
         }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setState("error");
+          setState("session-error");
         }
       });
 
