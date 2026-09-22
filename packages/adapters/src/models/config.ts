@@ -3,6 +3,7 @@ export const modelRoles = {
     model: "openai/gpt-5.6-luna",
     reasoning: "low",
     contextTokens: 1_050_000,
+    windowMessages: 1000,
     maxOutputTokens: 4096,
     timeoutMs: 45_000,
     promptVersion: "conversation-1",

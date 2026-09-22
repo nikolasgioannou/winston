@@ -11,6 +11,12 @@ import {
 import { modelRoles, type ModelRole } from "./config";
 
 export { modelRoles, type ModelRole } from "./config";
+export {
+  buildModelWindow,
+  textTokenBound,
+  type ConversationExchange,
+  type WindowResult,
+} from "./window";
 
 export type ModelFailure =
   | "canceled"
