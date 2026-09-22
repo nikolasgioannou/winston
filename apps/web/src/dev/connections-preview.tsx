@@ -52,6 +52,17 @@ export function ConnectionsPreview({
         onReconnect={() => {
           setBusy(true);
         }}
+        onDisconnect={(connection) => {
+          if (state.kind === "ready")
+            setState({
+              kind: "ready",
+              connections: state.connections.map((item) =>
+                item.id === connection.id
+                  ? { ...item, status: "disconnected", revision: item.revision + 1 }
+                  : item,
+              ),
+            });
+        }}
         onCalendars={() => {
           setShowCalendars(true);
         }}

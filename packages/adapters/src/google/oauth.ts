@@ -1,7 +1,10 @@
 import { createHash, createHmac } from "node:crypto";
 import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
+import { providerGrantSchema, type ProviderGrant } from "@winston/contracts/credentials";
+import { GoogleAccessError } from "./errors";
 import {
   googleGrantSchema,
+  googleOAuthErrorSchema,
   googleIdentitySchema,
   googleScopes,
   type GoogleService,
@@ -11,6 +14,7 @@ import {
 export type GoogleOAuth = {
   url(service: GoogleService, state: string): string;
   exchange(code: string, state: string, signal: AbortSignal): Promise<GoogleGrant>;
+  refresh(grant: ProviderGrant, signal: AbortSignal): Promise<ProviderGrant>;
 };
 
 export function createGoogleOAuth(config: {
@@ -39,6 +43,31 @@ export function createGoogleOAuth(config: {
     return oauth;
   }
   return {
+    async refresh(grant, signal) {
+      try {
+        const oauth = client(AbortSignal.any([signal, AbortSignal.timeout(20_000)]));
+        oauth.setCredentials({ refresh_token: grant.refreshToken });
+        let rotatedRefreshToken: string | undefined;
+        oauth.on("tokens", (tokens) => {
+          // Capture before the library restores the old refresh token on its result object.
+          if (tokens.refresh_token) rotatedRefreshToken = tokens.refresh_token;
+        });
+        const { credentials } = await oauth.refreshAccessToken();
+        return providerGrantSchema.parse({
+          accessToken: credentials.access_token,
+          refreshToken: rotatedRefreshToken ?? grant.refreshToken,
+          expiresAt: new Date(credentials.expiry_date ?? 0).toISOString(),
+          scopes: credentials.scope?.split(" ").filter(Boolean) ?? grant.scopes,
+        });
+      } catch (error) {
+        const parsed = googleOAuthErrorSchema.safeParse(error);
+        throw new GoogleAccessError(
+          parsed.success && parsed.data.response.data.error === "invalid_grant"
+            ? "reconnect"
+            : "unavailable",
+        );
+      }
+    },
     url(service, state) {
       const url = new URL(
         client().generateAuthUrl({

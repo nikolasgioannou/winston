@@ -10,6 +10,7 @@ export function ConnectionsView({
   result,
   onConnect,
   onReconnect,
+  onDisconnect,
   onCalendars,
   onRetry,
 }: {
@@ -18,12 +19,18 @@ export function ConnectionsView({
   result?: string;
   onConnect: (service: GoogleService) => void;
   onReconnect: (connection: Connection) => void;
+  onDisconnect: (connection: Connection) => void;
   onCalendars: (connection: Connection) => void;
   onRetry: () => void;
 }) {
   return (
     <section className="space-y-3 border-t border-line pt-5" aria-label="Connected apps">
       <h2 className="text-sm font-medium">Connected apps</h2>
+      {result === "disconnect-failed" ? (
+        <p role="alert" className="text-sm text-muted">
+          Could not disconnect. Try again.
+        </p>
+      ) : null}
       {result === "calendars-failed" ? (
         <p role="alert" className="text-sm text-muted">
           Could not load calendars. Try again or reconnect this account.
@@ -58,7 +65,9 @@ export function ConnectionsView({
                     ? "Connected"
                     : connection.status === "limited"
                       ? "Limited access"
-                      : "Reconnect"}
+                      : connection.status === "disconnected"
+                        ? "Disconnected"
+                        : "Reconnect"}
                 </Badge>
               </div>
               <p className="truncate text-sm text-muted" title={connection.email}>
@@ -74,7 +83,19 @@ export function ConnectionsView({
                 >
                   Reconnect
                 </Button>
-                {connection.service === "calendar" ? (
+                {connection.status !== "disconnected" ? (
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    title="Remove this connection from Winston. Google account permissions remain unchanged."
+                    onClick={() => {
+                      onDisconnect(connection);
+                    }}
+                  >
+                    Disconnect
+                  </Button>
+                ) : null}
+                {connection.service === "calendar" && connection.status === "connected" ? (
                   <Button
                     size="sm"
                     disabled={busy}

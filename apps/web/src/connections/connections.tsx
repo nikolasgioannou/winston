@@ -30,6 +30,7 @@ export function Connections() {
       if (!response.ok) throw new Error();
       const connections = connectionListSchema.parse(await response.json());
       if (current === revision.current) setState({ kind: "ready", connections });
+      return connections;
     } catch {
       if (current === revision.current) setState({ kind: "error" });
     }
@@ -85,6 +86,26 @@ export function Connections() {
       });
     } catch {
       setResult("calendars-failed");
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function disconnect(connection: Connection) {
+    setBusy(true);
+    setResult(undefined);
+    try {
+      const response = await fetch(`/api/owner/connections/${connection.id}/disconnect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: connection.revision }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error();
+      if (calendars?.connection.id === connection.id) setCalendars(null);
+      await refresh();
+    } catch {
+      setResult("disconnect-failed");
     } finally {
       setBusy(false);
     }
@@ -105,6 +126,11 @@ export function Connections() {
       await refresh();
     } catch {
       setCalendarError(true);
+      const latest = await refresh();
+      setCalendars((current) => {
+        const connection = latest?.find((item) => item.id === current?.connection.id);
+        return current && connection ? { ...current, connection } : current;
+      });
     } finally {
       setBusy(false);
     }
@@ -120,6 +146,9 @@ export function Connections() {
         }}
         onReconnect={(connection) => {
           connect({ service: connection.service, connectionId: connection.id }).catch(() => {});
+        }}
+        onDisconnect={(connection) => {
+          disconnect(connection).catch(() => {});
         }}
         onCalendars={(connection) => {
           showCalendars(connection).catch(() => {});

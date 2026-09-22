@@ -9,8 +9,11 @@ import {
 } from "@winston/contracts/connections";
 import type { GoogleOAuth } from "./oauth";
 import { readGoogleCalendars } from "./calendars";
+import { createGoogleGrants } from "./grants";
+import { GoogleAccessError } from "./errors";
 
 export { createGoogleOAuth, type GoogleOAuth } from "./oauth";
+export { GoogleAccessError } from "./errors";
 
 export function createGoogleConnections(options: {
   database: ReturnType<typeof createDatabase>;
@@ -19,6 +22,7 @@ export function createGoogleConnections(options: {
   calendars?: typeof readGoogleCalendars;
 }) {
   const { database, cipher, oauth } = options;
+  const grants = createGoogleGrants(options);
   async function calendars(ownerId: string, id: string, signal: AbortSignal) {
     const stored = await database.transaction(ownerId, async (scope) => ({
       connection: await scope.connections.find(id),
@@ -31,12 +35,18 @@ export function createGoogleConnections(options: {
       !stored.credential?.encrypted
     )
       throw new Error("Calendar connection unavailable.");
-    const grant = cipher.decrypt(stored.credential, stored.credential.encrypted);
-    if (Date.parse(grant.expiresAt) <= Date.now())
-      throw new Error("Calendar access expired. Reconnect to continue.");
-    return (options.calendars ?? readGoogleCalendars)(grant.accessToken, signal);
+    const access = await grants.access(ownerId, id, signal);
+    try {
+      return await (options.calendars ?? readGoogleCalendars)(access.grant.accessToken, signal);
+    } catch (error) {
+      if (error instanceof GoogleAccessError && error.kind === "reconnect")
+        await grants.rejected(ownerId, id, access.revision);
+      throw error;
+    }
   }
   return {
+    access: grants.access,
+    disconnect: grants.disconnect,
     calendars,
     async selectCalendars(
       ownerId: string,

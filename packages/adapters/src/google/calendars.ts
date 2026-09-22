@@ -1,4 +1,5 @@
 import { googleCalendarPageSchema, type GoogleCalendar } from "@winston/contracts/connections";
+import { GoogleAccessError } from "./errors";
 
 export async function readGoogleCalendars(accessToken: string, signal: AbortSignal) {
   const calendars: GoogleCalendar[] = [];
@@ -13,7 +14,8 @@ export async function readGoogleCalendars(accessToken: string, signal: AbortSign
         headers: { Authorization: `Bearer ${accessToken}` },
         signal: AbortSignal.any([deadline, AbortSignal.timeout(10_000)]),
       });
-      if (!response.ok) throw new Error();
+      if (response.status === 401) throw new GoogleAccessError("reconnect");
+      if (!response.ok) throw new GoogleAccessError("unavailable");
       const result = googleCalendarPageSchema.parse(await response.json());
       calendars.push(...(result.items ?? []));
       if (calendars.length > 1000) throw new Error();
@@ -21,7 +23,8 @@ export async function readGoogleCalendars(accessToken: string, signal: AbortSign
       if (!pageToken) return calendars;
     }
     throw new Error();
-  } catch {
-    throw new Error("Google calendars are unavailable. Reconnect if access has expired.");
+  } catch (error) {
+    if (error instanceof GoogleAccessError) throw error;
+    throw new GoogleAccessError("unavailable");
   }
 }

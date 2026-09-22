@@ -67,3 +67,14 @@ test("connection previews show real account states without network actions", asy
   await preview.getByRole("button", { name: "Connect Gmail", exact: true }).click();
   await expect(preview.getByRole("button", { name: "Connect Gmail", exact: true })).toBeDisabled();
 });
+
+test("disconnect preview affects only the selected account and keeps reconnect available", async ({
+  page,
+}) => {
+  await page.goto("/__dev/design/pages?page=connections&state=connected&viewport=mobile");
+  const preview = page.frameLocator("iframe");
+  await preview.getByRole("button", { name: "Disconnect", exact: true }).first().click();
+  await expect(preview.getByText("Disconnected", { exact: true })).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Disconnect", exact: true })).toHaveCount(1);
+  await expect(preview.getByRole("button", { name: "Reconnect", exact: true })).toHaveCount(2);
+});

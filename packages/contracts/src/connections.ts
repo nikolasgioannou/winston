@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 export const googleServiceSchema = z.enum(["gmail", "calendar"]);
+export const googleOAuthErrorSchema = z.object({
+  response: z.object({ data: z.object({ error: z.string() }) }),
+});
 export const connectionStartSchema = z.strictObject({
   service: googleServiceSchema,
   connectionId: z.uuid().optional(),
@@ -30,6 +33,9 @@ export const calendarListSchema = z.array(calendarSchema).max(1000);
 export const calendarSelectionSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
   ids: z.array(z.string().min(1).max(1024)).max(100),
+});
+export const disconnectConnectionSchema = z.strictObject({
+  revision: z.number().int().nonnegative(),
 });
 export const googleCalendarPageSchema = z.object({
   items: calendarListSchema.optional(),

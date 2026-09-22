@@ -34,6 +34,7 @@ test("Google connections preserve independent accounts, bind one-time state and 
       database,
       cipher,
       oauth: {
+        refresh: (current) => Promise.resolve(current),
         url: (_service, state) => `https://accounts.google.com/?state=${state}`,
         exchange: () => {
           exchanges += 1;

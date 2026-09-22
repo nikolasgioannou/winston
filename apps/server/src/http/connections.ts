@@ -4,12 +4,21 @@ import {
   connectionStartSchema,
   connectionSchema,
   calendarSelectionSchema,
+  disconnectConnectionSchema,
 } from "@winston/contracts/connections";
 import type { HttpEnvironment } from "./app";
 import { parseJson, RequestError } from "./errors";
 
 export function createConnectionOwnerRouter(store: GoogleConnections) {
   const router = new Hono<HttpEnvironment>();
+  router.post("/:id/disconnect", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const id = connectionSchema.shape.id.safeParse(context.req.param("id"));
+    if (!id.success) throw new RequestError("invalid_request");
+    const input = await parseJson(context, disconnectConnectionSchema);
+    return context.json(await store.disconnect(owner.ownerId, id.data, input.revision));
+  });
   router.get("/", async (context) => {
     const owner = context.get("identity");
     if (owner.kind !== "owner") throw new RequestError("unauthorized");

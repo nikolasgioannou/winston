@@ -43,6 +43,28 @@ export function connectionRepository(transaction: DatabaseTransaction, ownerId: 
   return {
     find,
     currentTask,
+    async tryRefreshLock(id: string) {
+      const result = await transaction.execute<{ acquired: boolean }>(sql`
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${`google-refresh:${ownerId}:${id}`}, 0)) AS acquired
+      `);
+      return result.rows[0]?.acquired === true;
+    },
+    async setHealth(id: string, revision: number, status: Connection["status"], scopes?: string[]) {
+      await lock();
+      const current = await find(id);
+      if (!current || current.revision !== revision) throw new Error("Connection changed.");
+      const updated = connectionSchema.parse({
+        ...current,
+        revision: revision + 1,
+        status,
+        scopes: scopes ?? current.scopes,
+      });
+      await transaction.execute(sql`
+        UPDATE winston.google_connections SET document = ${JSON.stringify(updated)}::jsonb
+        WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid
+      `);
+      return updated;
+    },
     async selectCalendars(id: string, revision: number, calendars: string[]) {
       await lock();
       const current = await find(id);

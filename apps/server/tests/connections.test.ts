@@ -14,6 +14,8 @@ test("Google connection routes require owner session and origin, and never refle
   let finishes = 0;
   const logs: RequestLog[] = [];
   const store: GoogleConnections = {
+    access: () => Promise.reject(new Error("unused")),
+    disconnect: () => Promise.reject(new Error("unused")),
     list: () => Promise.resolve([]),
     start: () => {
       starts += 1;

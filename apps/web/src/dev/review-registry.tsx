@@ -101,6 +101,19 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <ConnectionsPreview initial={{ kind: "loading" }} />,
       },
+      ...(["reconnect", "disconnected"] as const).map((status) => ({
+        id: status,
+        label: status === "reconnect" ? "Reconnect required" : "Disconnected",
+        fullWidth: true,
+        render: () => (
+          <ConnectionsPreview
+            initial={{
+              kind: "ready",
+              connections: previewConnections.map((connection) => ({ ...connection, status })),
+            }}
+          />
+        ),
+      })),
       {
         id: "error",
         label: "Unavailable",
