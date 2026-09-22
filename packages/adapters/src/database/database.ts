@@ -7,6 +7,7 @@ import { eventRepository, type EventRepository } from "./events";
 import { conversationRepository, type ConversationRepository } from "./conversations";
 import { taskRepository, type TaskRepository } from "./tasks";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
+import { memoryRepository, type MemoryRepository } from "./memory";
 import * as schema from "./schema";
 
 export type OwnerTransaction = {
@@ -16,6 +17,7 @@ export type OwnerTransaction = {
   readonly conversations: ConversationRepository;
   readonly tasks: TaskRepository;
   readonly telegramOutbound: TelegramOutboundRepository;
+  readonly memory: MemoryRepository;
 };
 
 export function createDatabase(options: {
@@ -57,6 +59,7 @@ export function createDatabase(options: {
           conversations: conversationRepository(transaction, ownerId),
           tasks: taskRepository(transaction, ownerId),
           telegramOutbound: telegramOutboundRepository(transaction, ownerId),
+          memory: memoryRepository(transaction, ownerId),
         });
       });
     },

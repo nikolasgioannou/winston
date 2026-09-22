@@ -6,6 +6,7 @@
   "exports": {
     "./events": "./src/events.ts",
     "./jobs": "./src/jobs.ts",
+    "./memory": "./src/memory.ts",
     "./messages": "./src/messages/index.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram": "./src/telegram.ts",
