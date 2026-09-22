@@ -189,7 +189,7 @@ export function createOwnerAuth(config: AuthConfig, connectionString: string) {
       const session = await auth.api.getSession({ headers: request.headers });
 
       return session && allowed(session.user.email, session.user.emailVerified)
-        ? { ownerId: session.user.id }
+        ? { ownerId: session.user.id, sessionId: session.session.id }
         : null;
     },
     close: () => pool.end(),

@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import { test } from "bun:test";
+import { createTelegramClient, verifyTelegramWebhook } from "@winston/adapters/telegram";
+
+test("Telegram transport errors never expose tokens or provider response bodies", async () => {
+  const original = globalThis.fetch;
+  const token = "123:synthetic-secret";
+  const client = createTelegramClient(token);
+
+  try {
+    globalThis.fetch = Object.assign(
+      () => Promise.reject(new Error(`Request failed https://api.telegram.org/bot${token}/getMe`)),
+      { preconnect: () => {} },
+    );
+    await assert.rejects(client.identity(), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "Telegram request failed.");
+      assert.ok(!error.stack?.includes(token));
+
+      return true;
+    });
+    globalThis.fetch = Object.assign(
+      () => Promise.resolve(Response.json({ ok: false, description: token }, { status: 401 })),
+      { preconnect: () => {} },
+    );
+    await assert.rejects(client.identity(), /Telegram request failed\./);
+  } finally {
+    globalThis.fetch = original;
+  }
+
+  assert.equal(verifyTelegramWebhook(null, "secret"), false);
+  assert.equal(verifyTelegramWebhook("wrong!", "secret"), false);
+  assert.equal(verifyTelegramWebhook("secret", "secret"), true);
+});

@@ -2,6 +2,31 @@ import { useState, type ComponentType } from "react";
 import { ComponentGallery } from "./component-gallery";
 import { FoundationShell } from "./foundation-shell";
 import { SignInView, type SignInState } from "../auth/sign-in-view";
+import { PairingView, type PairingState } from "../telegram/pairing-view";
+
+function PairingPreview({ initial }: { initial: PairingState }) {
+  const [state, setState] = useState(initial);
+
+  return (
+    <SignInView state="signed-in" onSignIn={() => {}} onSignOut={() => {}} onRetry={() => {}}>
+      <PairingView
+        state={state}
+        onConnect={() => {
+          setState({ kind: "waiting", id: "preview" });
+        }}
+        onConfirm={() => {
+          setState({ kind: "connected", userId: "123456" });
+        }}
+        onDisconnect={() => {
+          setState({ kind: "disconnected" });
+        }}
+        onRetry={() => {
+          setState({ kind: "disconnected" });
+        }}
+      />
+    </SignInView>
+  );
+}
 
 function SignInPreview({ initial }: { initial: SignInState }) {
   const [state, setState] = useState(initial);
@@ -39,6 +64,53 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "telegram",
+    label: "Telegram connection",
+    kind: "page",
+    states: [
+      {
+        id: "disconnected",
+        label: "Disconnected",
+        fullWidth: true,
+        render: () => <PairingPreview initial={{ kind: "disconnected" }} />,
+      },
+      {
+        id: "waiting",
+        label: "Waiting for Telegram",
+        fullWidth: true,
+        render: () => <PairingPreview initial={{ kind: "waiting", id: "preview" }} />,
+      },
+      {
+        id: "candidate",
+        label: "Confirm account",
+        fullWidth: true,
+        render: () => (
+          <PairingPreview
+            initial={{ kind: "candidate", id: "preview", userId: "123456", name: "Alex" }}
+          />
+        ),
+      },
+      {
+        id: "connected",
+        label: "Connected",
+        fullWidth: true,
+        render: () => <PairingPreview initial={{ kind: "connected", userId: "123456" }} />,
+      },
+      {
+        id: "loading",
+        label: "Loading",
+        fullWidth: true,
+        render: () => <PairingPreview initial={{ kind: "loading" }} />,
+      },
+      {
+        id: "error",
+        label: "Error",
+        fullWidth: true,
+        render: () => <PairingPreview initial={{ kind: "error" }} />,
+      },
+    ],
+  },
   {
     id: "sign-in",
     label: "Sign-in",

@@ -4,6 +4,12 @@ import { createOwnerRouter } from "./http/owner";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
+import {
+  createTelegramClient,
+  createTelegramStore,
+  verifyTelegramWebhook,
+} from "@winston/adapters/telegram";
+import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/telegram";
 
 const config = readAuthConfig(process.env);
 const database = createDatabase({
@@ -23,6 +29,18 @@ try {
 
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+let telegram: ReturnType<typeof createTelegramStore> | undefined;
+
+if (telegramToken || telegramSecret) {
+  if (!telegramToken || !telegramSecret || !/^[A-Za-z0-9_-]{32,256}$/.test(telegramSecret)) {
+    throw new Error("Telegram configuration is incomplete.");
+  }
+  const bot = await createTelegramClient(telegramToken).identity();
+  telegram = createTelegramStore(config.connectionString, bot.id);
+  owner.route("/telegram", createTelegramOwnerRouter(telegram, bot.username));
+}
 
 const host = startServer(readConfig(process.env), {
   readiness: async () => {
@@ -33,6 +51,23 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
+    ...(telegram && telegramSecret
+      ? {
+          callback: {
+            router: createTelegramCallbackRouter(telegram),
+            authenticate: (request: Request) =>
+              Promise.resolve(
+                new URL(request.url).pathname === "/callbacks/telegram" &&
+                  verifyTelegramWebhook(
+                    request.headers.get("X-Telegram-Bot-Api-Secret-Token"),
+                    telegramSecret,
+                  )
+                  ? { kind: "callback" as const, provider: "telegram" }
+                  : null,
+              ),
+          },
+        }
+      : {}),
     owner: {
       router: owner,
       async authenticate(request) {
@@ -44,7 +79,7 @@ const host = startServer(readConfig(process.env), {
 
         await database.transaction(session.ownerId, (scope) => scope.owners.ensure());
 
-        return { kind: "owner", ownerId: session.ownerId };
+        return { kind: "owner", ownerId: session.ownerId, sessionId: session.sessionId };
       },
     },
   },
@@ -57,7 +92,7 @@ function shutdown() {
   host
     .stop()
     .then(async () => {
-      await Promise.all([auth.close(), database.close()]);
+      await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })
     .catch(() => {
       console.error("Server shutdown failed.");

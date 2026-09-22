@@ -124,6 +124,16 @@ Run `mise exec -- bun run test:models /absolute/path/to/synthetic.wav` from the 
 
 These opt-in checks are excluded from `test`, hooks, and CI. Ordinary unit tests exercise the actual SDK against synthetic HTTP responses, including provider errors and stale-response suppression, without network access. The revision fixture demonstrates the publication guard; durable coordination and Telegram delivery still require their production implementation.
 
+## Telegram development
+
+Create a dedicated development bot with the official BotFather and put its `TELEGRAM_BOT_TOKEN` in `.env.local`. Set a separate random `TELEGRAM_WEBHOOK_SECRET` of 32–256 URL-safe characters. The API verifies the bot identity at startup. Secrets remain server-side; Telegram transport errors never include the credential-bearing request URL.
+
+Run `bun run dev:telegram` alongside the API and web app for local long polling. Use one poller per development bot and no configured webhook. Polling acknowledges each update only after the shared ingress handler commits it; restarting may redeliver updates, which the database deduplicates. Polling exits safely on transport errors instead of altering a webhook or silently dropping pending updates. Production uses `POST /callbacks/telegram` with Telegram's secret header and a public HTTPS endpoint; local polling refuses `NODE_ENV=production`.
+
+On the signed-in page, choose Connect Telegram, open the generated link, press Start in Telegram, and return to confirm the displayed account. Challenges expire after five minutes, store only a secret hash, and require confirmation in the initiating authenticated web session. Numeric sender/private-chat IDs determine authority; names and usernames do not. Disconnect invalidates pending challenges and future ingress. Re-pairing replaces the old identity, and database uniqueness prevents another owner from taking its binding.
+
+Authorized updates retain the original provider payload and first server receipt timestamp with its timezone snapshot. An outbox event is written in the same transaction. This integration receives messages; conversation execution, outgoing replies and file staging are separate consumers. The dev review includes disconnected, waiting, confirmation, connected, loading and error states with no live side effects.
+
 ## Transactional events
 
 Owner transactions expose `events.publish` alongside domain repositories. An event ID is derived from the owner, event type and caller's stable idempotency key. Reusing that key with different payload or destinations fails; exact retries retain the original record. Events and per-destination outbox records commit with the caller's state changes. A later worker can discover pending work even if the publisher stopped before dispatch.

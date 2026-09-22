@@ -1,4 +1,5 @@
 import { Button } from "@winston/ui";
+import type { ReactNode } from "react";
 
 export type SignInState =
   "loading" | "signed-out" | "redirecting" | "signed-in" | "error" | "session-error";
@@ -8,11 +9,13 @@ export function SignInView({
   onSignIn,
   onSignOut,
   onRetry,
+  children,
 }: {
   state: SignInState;
   onSignIn: () => void;
   onSignOut: () => void;
   onRetry: () => void;
+  children?: ReactNode;
 }) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-paper p-6 text-ink">
@@ -28,6 +31,7 @@ export function SignInView({
               You’re signed in.
             </p>
             <Button onClick={onSignOut}>Sign out</Button>
+            {children}
           </>
         ) : state === "error" || state === "session-error" ? (
           <>

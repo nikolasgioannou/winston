@@ -14,7 +14,13 @@ type Database = {
 export function createOwnerRouter(database: Database) {
   const router = new Hono<HttpEnvironment>();
 
-  router.get("/session", (context) => context.json(context.get("identity")));
+  router.get("/session", (context) => {
+    const identity = context.get("identity");
+
+    return context.json(
+      identity.kind === "owner" ? { kind: identity.kind, ownerId: identity.ownerId } : null,
+    );
+  });
   router.get("/timezone", async (context) => {
     const identity = context.get("identity");
 

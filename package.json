@@ -15,6 +15,7 @@
     "db:migrate": "bun packages/adapters/src/database/migrate.ts",
     "dev": "bun run --filter @winston/web dev",
     "dev:server": "bun --watch apps/server/src/main.ts",
+    "dev:telegram": "bun apps/server/src/telegram-poll.ts",
     "format": "sort-package-json 'package.json' 'apps/*/package.json' 'packages/*/package.json' && node scripts/format.mjs --write",
     "format:check": "sort-package-json 'package.json' 'apps/*/package.json' 'packages/*/package.json' --check && node scripts/format.mjs --check && node scripts/check-text.mjs",
     "hooks:install": "lefthook install",

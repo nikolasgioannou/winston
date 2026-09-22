@@ -6,6 +6,7 @@
   "exports": {
     "./events": "./src/events.ts",
     "./messages": "./src/messages/index.ts",
+    "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts"
   },
   "scripts": {

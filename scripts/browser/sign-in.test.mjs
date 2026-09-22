@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/owner/telegram", (route) => route.fulfill({ status: 401, json: {} }));
   await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 401, json: {} }));
 });
 
