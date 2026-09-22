@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./bursts": "./src/bursts.ts",
     "./events": "./src/events.ts",
     "./jobs": "./src/jobs.ts",
     "./memory": "./src/memory.ts",

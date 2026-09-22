@@ -18,7 +18,12 @@ type Conversation = {
   responseRevision: number;
   inputRevision: number;
 };
-type MessageRow = { envelope: unknown; sourceUpdateId: string; mediaGroupId: string | null };
+type MessageRow = {
+  envelope: unknown;
+  sourceUpdateId: string;
+  mediaGroupId: string | null;
+  conversationRevision: number;
+};
 
 export function conversationRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -57,7 +62,12 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
 
   return {
     async status() {
-      return { ...(await lock()), pending: await pending() };
+      const conversation = await lock();
+      const result = await transaction.execute<{ ready: boolean }>(sql`
+        SELECT COALESCE(collect_until <= clock_timestamp(), true) AS ready
+        FROM winston.conversations WHERE owner_id = ${ownerId}::uuid
+      `);
+      return { ...conversation, pending: await pending(), ready: result.rows[0]?.ready === true };
     },
     async consumeTelegram(eventId: string) {
       const conversation = await lock();
@@ -123,14 +133,19 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
           });
           await transaction.execute(sql`
           INSERT INTO winston.conversation_messages
-            (owner_id, id, bot_id, chat_id, provider_message_id, provider_sent_at, source_update_id, media_group_id, envelope)
+            (owner_id, id, bot_id, chat_id, provider_message_id, provider_sent_at, source_update_id, media_group_id, envelope, conversation_revision)
           VALUES (${ownerId}::uuid, ${envelope.messageId}::uuid, ${key.botId}, ${message.chat.id}, ${message.message_id},
-            ${envelope.provider.sentAt}::timestamptz, ${latest.updateId}::bigint, ${message.media_group_id ?? null}, ${JSON.stringify(envelope)}::jsonb)
+            ${envelope.provider.sentAt}::timestamptz, ${latest.updateId}::bigint, ${message.media_group_id ?? null}, ${JSON.stringify(envelope)}::jsonb, ${conversation.revision + 1})
           ON CONFLICT (owner_id, bot_id, chat_id, provider_message_id)
-          DO UPDATE SET source_update_id = EXCLUDED.source_update_id, envelope = EXCLUDED.envelope
+          DO UPDATE SET source_update_id = EXCLUDED.source_update_id, envelope = EXCLUDED.envelope, conversation_revision = EXCLUDED.conversation_revision
         `);
           await transaction.execute(sql`
-          UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1 WHERE owner_id = ${ownerId}::uuid
+          UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1,
+            burst_started_at = CASE WHEN response_revision >= input_revision THEN clock_timestamp()
+              ELSE COALESCE(burst_started_at, clock_timestamp()) END,
+            collect_until = CASE WHEN response_revision >= input_revision THEN clock_timestamp() + interval '120 milliseconds'
+              ELSE LEAST(COALESCE(burst_started_at, clock_timestamp()) + interval '600 milliseconds', clock_timestamp() + interval '240 milliseconds') END
+          WHERE owner_id = ${ownerId}::uuid
         `);
         },
       );
@@ -140,7 +155,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
         throw new Error("Conversation window must contain between 1 and 10000 messages.");
       const conversation = await lock();
       const rows = await transaction.execute<MessageRow>(sql`
-        SELECT envelope, source_update_id::text AS "sourceUpdateId", media_group_id AS "mediaGroupId"
+        SELECT envelope, source_update_id::text AS "sourceUpdateId", media_group_id AS "mediaGroupId", conversation_revision AS "conversationRevision"
         FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid
         ORDER BY provider_sent_at DESC, bot_id DESC, chat_id DESC, provider_message_id DESC LIMIT ${limit}
       `);
@@ -151,6 +166,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
           envelope,
           content: serializeUserMessage(envelope),
           mediaGroupId: row.mediaGroupId,
+          conversationRevision: row.conversationRevision,
         };
       });
 
@@ -163,7 +179,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
     },
     // Trusted staging/transcription services call this after verifying their output. No owner HTTP endpoint.
     async resolveMessage(nextInput: UserMessage) {
-      await lock();
+      const conversation = await lock();
       const next = userMessageSchema.parse(nextInput);
       if (next.ownerId !== ownerId || next.metadata.references.length)
         throw new Error("Message references require an authorized resolver.");
@@ -175,7 +191,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
       if (accepted.revision === current.revision) return false;
 
       await transaction.execute(sql`
-        UPDATE winston.conversation_messages SET envelope = ${JSON.stringify(accepted)}::jsonb
+        UPDATE winston.conversation_messages SET envelope = ${JSON.stringify(accepted)}::jsonb, conversation_revision = ${conversation.revision + 1}
         WHERE owner_id = ${ownerId}::uuid AND id = ${next.messageId}::uuid
       `);
       await transaction.execute(sql`

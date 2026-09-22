@@ -38,7 +38,7 @@ test("model adapter returns complete text with content-free attempt metadata", a
   assert.equal(result.ok, true);
   assert.equal(result.text, "Hello owner");
   assert.deepEqual(result.toolCalls, []);
-  assert.equal(result.attempt.promptVersion, "conversation-1");
+  assert.equal(result.attempt.promptVersion, "conversation-2");
   assert.ok(result.attempt.firstTextMs !== null);
   assert.equal(JSON.stringify(result.attempt).includes("Hello"), false);
 });

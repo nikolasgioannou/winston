@@ -8,6 +8,7 @@ import {
 } from "@winston/adapters/models";
 import { turnRoundSchema } from "@winston/contracts/turns";
 import { serializeMemoryContext } from "@winston/contracts/memory";
+import { serializeMessageBurst } from "@winston/contracts/bursts";
 import { conversationTools, executeConversationTool, toolContext } from "./tools";
 
 type Database = ReturnType<typeof createDatabase>;
@@ -114,7 +115,13 @@ export function createConversationLoop(options: {
         objectivePreview: task.objective.slice(0, 500),
         blocker: task.blocker,
       }));
-      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n${serializeMemoryContext(snapshot.memories)}`;
+      const burstIds = snapshot.messages
+        .filter((message) => message.conversationRevision > snapshot.responseRevision)
+        .map((message) => message.envelope.messageId);
+      const burst = burstIds.length
+        ? serializeMessageBurst({ revision, messageIds: burstIds })
+        : "";
+      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}`;
       const user = last.messages[0];
       if (user && typeof user.content === "string") user.content += `\n${context}`;
       const sourceMessageIds = snapshot.messages

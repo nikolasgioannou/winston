@@ -78,6 +78,13 @@
       "when": 1790000000010,
       "tag": "0010_conversation_turns",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790000000011,
+      "tag": "0011_message_bursts",
+      "breakpoints": true
     }
   ]
 }

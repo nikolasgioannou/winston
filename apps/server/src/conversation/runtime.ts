@@ -63,7 +63,7 @@ export async function startConversationRuntime(options: {
       const state = await database.transaction(ownerId, ({ conversations }) =>
         conversations.status(),
       );
-      if (!state.pending && state.responseRevision < state.inputRevision) {
+      if (state.ready && !state.pending && state.responseRevision < state.inputRevision) {
         const reference = { ownerId, referenceId: state.id, revision: state.revision };
         const job = await jobs.inspect("conversation", reference);
         if (job?.terminalFailure) {

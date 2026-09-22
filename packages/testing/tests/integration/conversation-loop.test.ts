@@ -191,6 +191,83 @@ test("conversation answers beside running work, replays tool receipts, and drops
       await run(() => Promise.resolve(answer("Replacement.")));
       assert.equal(await deliver(), "sent");
       assert.equal(sent.at(-1), "Replacement.");
+
+      await receive("Find a restaurant");
+      await receive("In Brooklyn");
+      await receive("For six people");
+      const burstState = await consume();
+      const timing = await sql<{ bounded: boolean }[]>`
+        SELECT collect_until <= burst_started_at + interval '600 milliseconds' AS bounded
+        FROM winston.conversations WHERE owner_id = ${ownerId}::uuid
+      `;
+      assert.equal(timing[0]?.bounded, true);
+      await sql`UPDATE winston.conversations SET collect_until = clock_timestamp() + interval '1 hour' WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(
+        (await database.transaction(ownerId, ({ conversations }) => conversations.status())).ready,
+        false,
+      );
+      await sql`UPDATE winston.conversations SET collect_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(
+        (await database.transaction(ownerId, ({ conversations }) => conversations.status())).ready,
+        true,
+      );
+      let restaurantCalls = 0;
+      await run((request) => {
+        const content = JSON.stringify(request.messages);
+        assert.match(content, /Find a restaurant/);
+        assert.match(content, /In Brooklyn/);
+        assert.match(content, /For six people/);
+        assert.match(content, /message_burst/);
+        for (const message of burstState.messages.slice(-3))
+          assert.match(content, new RegExp(message.envelope.messageId));
+        restaurantCalls += 1;
+        return Promise.resolve(
+          restaurantCalls === 1
+            ? {
+                ok: true,
+                text: "",
+                toolCalls: [
+                  {
+                    id: "restaurant",
+                    name: "create_task",
+                    input: { objective: "Find a restaurant in Brooklyn for six people" },
+                  },
+                ],
+                attempt,
+              }
+            : answer("Restaurant request queued."),
+        );
+      });
+      await deliver();
+      const restaurant = (
+        await database.transaction(ownerId, ({ tasks }) => tasks.listActive())
+      ).find((item) => item.objective.includes("Brooklyn"));
+      assert.ok(restaurant);
+      await receive("Separately, check my calendar tomorrow");
+      let calendarCalls = 0;
+      await run(() => {
+        calendarCalls += 1;
+        return Promise.resolve(
+          calendarCalls === 1
+            ? {
+                ok: true,
+                text: "",
+                toolCalls: [
+                  {
+                    id: "calendar",
+                    name: "create_task",
+                    input: { objective: "Check tomorrow's calendar" },
+                  },
+                ],
+                attempt,
+              }
+            : answer("Calendar request queued separately."),
+        );
+      });
+      assert.deepEqual(
+        await database.transaction(ownerId, ({ tasks }) => tasks.find(restaurant.id)),
+        restaurant,
+      );
     } finally {
       await Promise.all([database.close(), telegram.close()]);
     }
