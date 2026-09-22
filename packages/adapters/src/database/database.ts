@@ -4,12 +4,14 @@ import { sql } from "drizzle-orm";
 import { checkSchema } from "./migrations";
 import { ownerRepository, type OwnerRepository } from "./owners";
 import { eventRepository, type EventRepository } from "./events";
+import { conversationRepository, type ConversationRepository } from "./conversations";
 import * as schema from "./schema";
 
 export type OwnerTransaction = {
   readonly ownerId: string;
   readonly owners: OwnerRepository;
   readonly events: EventRepository;
+  readonly conversations: ConversationRepository;
 };
 
 export function createDatabase(options: {
@@ -48,6 +50,7 @@ export function createDatabase(options: {
           ownerId,
           owners: ownerRepository(transaction, ownerId),
           events: eventRepository(transaction, ownerId),
+          conversations: conversationRepository(transaction, ownerId),
         });
       });
     },

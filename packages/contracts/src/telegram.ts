@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const telegramEventKeySchema = z.object({ botId: integer, updateId: integer });
 export const telegramBotSchema = z.object({
   id: integer,
   is_bot: z.literal(true),
@@ -15,6 +16,32 @@ const messageSchema = z.looseObject({
   chat: z.object({ id: z.number().int(), type: z.string() }),
   text: z.string().optional(),
   caption: z.string().optional(),
+  media_group_id: z.string().optional(),
+  document: z
+    .looseObject({
+      file_id: z.string(),
+      file_name: z.string().optional(),
+      mime_type: z.string().optional(),
+    })
+    .optional(),
+  voice: z.looseObject({ file_id: z.string(), mime_type: z.string().optional() }).optional(),
+  audio: z
+    .looseObject({
+      file_id: z.string(),
+      file_name: z.string().optional(),
+      mime_type: z.string().optional(),
+    })
+    .optional(),
+  video: z
+    .looseObject({
+      file_id: z.string(),
+      file_name: z.string().optional(),
+      mime_type: z.string().optional(),
+    })
+    .optional(),
+  photo: z
+    .array(z.looseObject({ file_id: z.string(), width: integer, height: integer }))
+    .optional(),
 });
 
 export const telegramUpdateSchema = z.looseObject({
