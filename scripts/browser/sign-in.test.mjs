@@ -19,7 +19,7 @@ test("a temporary session failure recovers without repeating Google sign-in", as
     return route.fulfill({ status: 500, json: {} });
   });
   await page.goto("/");
-  await expect(page.getByRole("status")).toHaveText("You’re signed in.");
+  await expect(page.getByRole("status").filter({ hasText: /^You’re signed in\.$/ })).toBeVisible();
   expect(reads).toBe(2);
   expect(signIns).toBe(0);
   await expect(page.getByRole("alert")).toHaveCount(0);

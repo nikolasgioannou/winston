@@ -34,7 +34,7 @@ test("sign-in immediately renders while timezone synchronization handles a confl
     }
   });
   await page.goto("/");
-  await expect(page.getByRole("status")).toHaveText("You’re signed in.");
+  await expect(page.getByRole("status").filter({ hasText: /^You’re signed in\.$/ })).toBeVisible();
   await expect.poll(() => writes.length).toBe(2);
   expect(writes).toEqual([
     { timezone: "America/New_York", revision: 0 },
@@ -87,7 +87,7 @@ test("foreground return observes the current timezone again and ignores invalid 
     window.dispatchEvent(new Event("focus"));
   });
   await expect.poll(() => reads).toBeGreaterThan(readsBeforeInvalid);
-  await expect(page.getByRole("status")).toHaveText("You’re signed in.");
+  await expect(page.getByRole("status").filter({ hasText: /^You’re signed in\.$/ })).toBeVisible();
   expect(writes.length).toBe(2);
 });
 
@@ -95,6 +95,6 @@ test("timezone failures never block the signed-in screen", async ({ page }) => {
   await page.route("**/api/owner/session", (route) => route.fulfill({ json: { kind: "owner" } }));
   await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 503, json: {} }));
   await page.goto("/");
-  await expect(page.getByRole("status")).toHaveText("You’re signed in.");
+  await expect(page.getByRole("status").filter({ hasText: /^You’re signed in\.$/ })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
