@@ -14,6 +14,7 @@ import { connectionRepository, type ConnectionRepository } from "./connections";
 import { capabilityRepository, capabilityHash, type CapabilityRepository } from "./capabilities";
 import { serviceRequestSchema, type ServiceRequest } from "@winston/contracts/capabilities";
 import * as schema from "./schema";
+import { authorizationRepository, type AuthorizationRepository } from "./authorization";
 import { deviceRepository, deviceTokenHash, type DeviceRepository } from "./devices";
 import {
   deviceCredentialSchema,
@@ -33,6 +34,7 @@ export type OwnerTransaction = {
   readonly connections: ConnectionRepository;
   readonly capabilities: CapabilityRepository;
   readonly devices: DeviceRepository;
+  readonly authorization: AuthorizationRepository;
 };
 
 export function createDatabase(options: {
@@ -119,6 +121,7 @@ export function createDatabase(options: {
           connections: connectionRepository(transaction, ownerId),
           capabilities: capabilityRepository(transaction, ownerId),
           devices: deviceRepository(transaction, ownerId),
+          authorization: authorizationRepository(transaction, ownerId),
         });
       });
     },

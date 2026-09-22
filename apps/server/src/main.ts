@@ -16,6 +16,7 @@ import type { HttpEnvironment, Identity } from "./http/app";
 import { createGoogleConnections, createGoogleOAuth } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
+import { createAuthorizationOwnerRouter } from "./http/authorization";
 import {
   authenticateDevicePairing,
   createDeviceGroup,
@@ -43,6 +44,7 @@ const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
 const callbacks = new Hono<HttpEnvironment>();
 owner.route("/devices", createDeviceOwnerRouter(database));
+owner.route("/permissions", createAuthorizationOwnerRouter(database));
 callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 if (connectionConfig) {

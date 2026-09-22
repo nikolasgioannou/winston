@@ -56,6 +56,12 @@ Every visible element must earn its place. Include text, controls, icons, and co
 
 Device registration uses owner routes under `/api/owner/devices`: create or cancel a five-minute pairing challenge, list or rename installations, choose a default, and revoke an installation. A native client redeems the challenge once at `/callbacks/devices/pair` using a bearer pairing secret and validated registration metadata. It receives a distinct device credential that can authenticate `/api/devices/self`, never owner sessions or connector grants. Only credential hashes are stored. Names may repeat; IDs remain distinct, and replacements receive neither a default assignment nor permission grants. The native pairing screen and persistent connection transport are separate from this registry API.
 
+## Authorization
+
+Owner-managed authorization rules live under `/api/owner/permissions`. Known, available resources without a rule require confirmation; unknown capabilities, unavailable grants and revoked devices are denied. Calendar overrides cannot bypass an account-wide deny. Permission changes increment an owner policy revision, and evaluation snapshots also bind the target, operation and resource revision. Dispatch must re-evaluate the saved snapshot and separately validate the exact action approval; a preview result is not an execution credential. Policy evaluation is the same for scheduled and user-triggered work. Rule editing is not exposed to device credentials or model tools.
+
+Computer permissions are not a filesystem sandbox: unrestricted commands, file writes and desktop input can have broader effects than their direct operation names suggest. In particular, allowing shell execution does not preserve a folder-only restriction on another file tool. The policy response marks these broad capabilities for the management interface. Provider permissions and current calendar access must still be checked by connected-app execution adapters.
+
 ## Source layout
 
 | Directory            | Responsibility                                               |
