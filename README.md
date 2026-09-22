@@ -62,6 +62,10 @@ Owner-managed authorization rules live under `/api/owner/permissions`. Known, av
 
 Computer permissions are not a filesystem sandbox: unrestricted commands, file writes and desktop input can have broader effects than their direct operation names suggest. In particular, allowing shell execution does not preserve a folder-only restriction on another file tool. The policy response marks these broad capabilities for the management interface. Provider permissions and current calendar access must still be checked by connected-app execution adapters.
 
+## Connected-app targets
+
+Connected-app target resolution uses stable connection and calendar IDs, with independent defaults for reads, drafts, sends, modifications, and calendar writes. Owner-only `/api/owner/connection-targets` stores labels and defaults with revision checks. Tasks bind each operation to one target per task revision; changing it requires steering the task. Multi-account searches label each result with its source and never set a sender default. The resolver rechecks credentials, policy, selected calendars, and provider access roles before returning a target. Executors must revalidate target snapshots and action approvals immediately before effects; target selection does not itself grant permission or send anything.
+
 ## Source layout
 
 | Directory            | Responsibility                                               |

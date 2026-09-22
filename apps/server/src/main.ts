@@ -17,6 +17,7 @@ import { createGoogleConnections, createGoogleOAuth } from "@winston/adapters/go
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
 import { createAuthorizationOwnerRouter } from "./http/authorization";
+import { createTargetPreferencesRouter } from "./http/connection-targets";
 import {
   authenticateDevicePairing,
   createDeviceGroup,
@@ -45,6 +46,7 @@ const owner = createOwnerRouter(database);
 const callbacks = new Hono<HttpEnvironment>();
 owner.route("/devices", createDeviceOwnerRouter(database));
 owner.route("/permissions", createAuthorizationOwnerRouter(database));
+owner.route("/connection-targets", createTargetPreferencesRouter(database));
 callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 if (connectionConfig) {

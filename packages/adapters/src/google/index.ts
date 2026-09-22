@@ -14,6 +14,7 @@ import { GoogleAccessError } from "./errors";
 
 export { createGoogleOAuth, type GoogleOAuth } from "./oauth";
 export { GoogleAccessError } from "./errors";
+export { createConnectionTargets, labelSearchResults } from "./targets";
 
 export function createGoogleConnections(options: {
   database: ReturnType<typeof createDatabase>;

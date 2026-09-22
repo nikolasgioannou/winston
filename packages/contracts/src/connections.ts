@@ -26,7 +26,9 @@ export const connectionUrlSchema = z.strictObject({ url: z.url() });
 export const calendarSchema = z.object({
   id: z.string().min(1).max(1024),
   summary: z.string().max(1000).optional(),
-  accessRole: z.enum(["freeBusyReader", "reader", "writer", "owner"]),
+  accessRole: z.enum(["freeBusyReader", "reader", "writerWithoutPrivateAccess", "writer", "owner"]),
+  deleted: z.boolean().optional(),
+  summaryOverride: z.string().max(1000).optional(),
   primary: z.boolean().optional(),
 });
 export const calendarListSchema = z.array(calendarSchema).max(1000);
