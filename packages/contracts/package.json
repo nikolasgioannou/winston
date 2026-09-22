@@ -6,6 +6,7 @@
   "exports": {
     "./bursts": "./src/bursts.ts",
     "./capabilities": "./src/capabilities.ts",
+    "./connections": "./src/connections.ts",
     "./credentials": "./src/credentials.ts",
     "./events": "./src/events.ts",
     "./jobs": "./src/jobs.ts",

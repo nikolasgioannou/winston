@@ -3,6 +3,7 @@ import { SignInView, type SignInState } from "./sign-in-view";
 import { readSession } from "./read-session";
 import { useTimezone } from "../timezone/use-timezone";
 import { TelegramPairing } from "../telegram/pairing";
+import { Connections } from "../connections/connections";
 
 export function SignIn() {
   const [state, setState] = useState<SignInState>("loading");
@@ -106,7 +107,12 @@ export function SignIn() {
         window.location.reload();
       }}
     >
-      {state === "signed-in" ? <TelegramPairing /> : null}
+      {state === "signed-in" ? (
+        <>
+          <TelegramPairing />
+          <Connections />
+        </>
+      ) : null}
     </SignInView>
   );
 }

@@ -11,6 +11,11 @@ import {
 } from "@winston/adapters/telegram";
 import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/telegram";
 import { startConversationRuntime } from "./conversation/runtime";
+import { Hono } from "hono";
+import type { HttpEnvironment, Identity } from "./http/app";
+import { createGoogleConnections, createGoogleOAuth } from "@winston/adapters/google";
+import { readConnectionConfig } from "./connection-config";
+import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
 
 const config = readAuthConfig(process.env);
 const database = createDatabase({
@@ -30,6 +35,17 @@ try {
 
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
+const callbacks = new Hono<HttpEnvironment>();
+const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
+if (connectionConfig) {
+  const connections = createGoogleConnections({
+    database,
+    cipher: connectionConfig.cipher,
+    oauth: createGoogleOAuth(connectionConfig.oauth),
+  });
+  owner.route("/connections", createConnectionOwnerRouter(connections));
+  callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
+}
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 let telegram: ReturnType<typeof createTelegramStore> | undefined;
@@ -41,6 +57,7 @@ if (telegramToken || telegramSecret) {
   }
   const bot = await createTelegramClient(telegramToken).identity();
   telegram = createTelegramStore(config.connectionString, bot.id);
+  callbacks.route("/", createTelegramCallbackRouter(telegram));
   owner.route("/telegram", createTelegramOwnerRouter(telegram, bot.username));
   if (process.env.OPENROUTER_API_KEY) {
     const directConnectionString =
@@ -70,23 +87,33 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
-    ...(telegram && telegramSecret
-      ? {
-          callback: {
-            router: createTelegramCallbackRouter(telegram),
-            authenticate: (request: Request) =>
-              Promise.resolve(
-                new URL(request.url).pathname === "/callbacks/telegram" &&
-                  verifyTelegramWebhook(
-                    request.headers.get("X-Telegram-Bot-Api-Secret-Token"),
-                    telegramSecret,
-                  )
-                  ? { kind: "callback" as const, provider: "telegram" }
-                  : null,
-              ),
-          },
+    callback: {
+      router: callbacks,
+      async authenticate(request): Promise<Identity | null> {
+        const path = new URL(request.url).pathname;
+        if (
+          path === "/callbacks/telegram" &&
+          telegram &&
+          telegramSecret &&
+          verifyTelegramWebhook(
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token"),
+            telegramSecret,
+          )
+        )
+          return { kind: "callback", provider: "telegram" };
+        if (path === "/callbacks/google/connections" && connectionConfig) {
+          const session = await auth.owner(request);
+          if (session)
+            return {
+              kind: "callback",
+              provider: "google",
+              ownerId: session.ownerId,
+              sessionId: session.sessionId,
+            };
         }
-      : {}),
+        return null;
+      },
+    },
     owner: {
       router: owner,
       async authenticate(request) {

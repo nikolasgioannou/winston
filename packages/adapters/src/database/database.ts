@@ -10,6 +10,7 @@ import { telegramOutboundRepository, type TelegramOutboundRepository } from "./t
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
 import { credentialRepository, type CredentialRepository } from "./credentials";
+import { connectionRepository, type ConnectionRepository } from "./connections";
 import { capabilityRepository, capabilityHash, type CapabilityRepository } from "./capabilities";
 import { serviceRequestSchema, type ServiceRequest } from "@winston/contracts/capabilities";
 import * as schema from "./schema";
@@ -24,6 +25,7 @@ export type OwnerTransaction = {
   readonly memory: MemoryRepository;
   readonly turns: TurnRepository;
   readonly credentials: CredentialRepository;
+  readonly connections: ConnectionRepository;
   readonly capabilities: CapabilityRepository;
 };
 
@@ -90,6 +92,7 @@ export function createDatabase(options: {
           memory: memoryRepository(transaction, ownerId),
           turns: turnRepository(transaction, ownerId),
           credentials: credentialRepository(transaction, ownerId),
+          connections: connectionRepository(transaction, ownerId),
           capabilities: capabilityRepository(transaction, ownerId),
         });
       });

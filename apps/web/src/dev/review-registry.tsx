@@ -3,6 +3,7 @@ import { ComponentGallery } from "./component-gallery";
 import { FoundationShell } from "./foundation-shell";
 import { SignInView, type SignInState } from "../auth/sign-in-view";
 import { PairingView, type PairingState } from "../telegram/pairing-view";
+import { ConnectionsPreview, previewConnections } from "./connections-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -64,6 +65,75 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "connections",
+    label: "Connected apps",
+    kind: "page",
+    states: [
+      {
+        id: "empty",
+        label: "No accounts",
+        fullWidth: true,
+        render: () => <ConnectionsPreview initial={{ kind: "ready", connections: [] }} />,
+      },
+      ...(["ready", "empty", "saving", "error"] as const).map((calendarState) => ({
+        id: `calendars-${calendarState}`,
+        label: `Calendars · ${calendarState}`,
+        fullWidth: true,
+        render: () => (
+          <ConnectionsPreview
+            initial={{ kind: "ready", connections: previewConnections }}
+            calendarState={calendarState}
+          />
+        ),
+      })),
+      {
+        id: "connected",
+        label: "Multiple accounts",
+        fullWidth: true,
+        render: () => (
+          <ConnectionsPreview initial={{ kind: "ready", connections: previewConnections }} />
+        ),
+      },
+      {
+        id: "loading",
+        label: "Loading",
+        fullWidth: true,
+        render: () => <ConnectionsPreview initial={{ kind: "loading" }} />,
+      },
+      {
+        id: "error",
+        label: "Unavailable",
+        fullWidth: true,
+        render: () => <ConnectionsPreview initial={{ kind: "error" }} />,
+      },
+      {
+        id: "failed",
+        label: "Consent failed",
+        fullWidth: true,
+        render: () => (
+          <ConnectionsPreview initial={{ kind: "ready", connections: [] }} result="failed" />
+        ),
+      },
+      {
+        id: "limited",
+        label: "Limited access",
+        fullWidth: true,
+        render: () => (
+          <ConnectionsPreview
+            initial={{
+              kind: "ready",
+              connections: previewConnections.map((connection) => ({
+                ...connection,
+                status: "limited",
+              })),
+            }}
+            result="limited"
+          />
+        ),
+      },
+    ],
+  },
   {
     id: "telegram",
     label: "Telegram connection",

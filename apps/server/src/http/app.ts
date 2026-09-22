@@ -4,7 +4,7 @@ import { errorResponse, RequestError } from "./errors";
 
 export type Authority = "callback" | "owner" | "device" | "task";
 export type Identity =
-  | { kind: "callback"; provider: string }
+  | { kind: "callback"; provider: string; ownerId?: string; sessionId?: string }
   | { kind: "owner"; ownerId: string; sessionId?: string }
   | { kind: "device"; ownerId: string; deviceId: string }
   | { kind: "task"; ownerId: string; taskId: string; revision: number };
