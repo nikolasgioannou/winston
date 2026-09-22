@@ -26,6 +26,14 @@ Better Auth requests only Google identity scopes. The server fixes the provider,
 
 The server build keeps `@winston/adapters` external so migrations resolve beside their package rather than beside the bundled server. Deployment must include that workspace, its migrations, and installed runtime dependencies.
 
+## Credential storage
+
+Connector grants use `@winston/adapters/credentials`, separate from Better Auth login credentials. Trusted connector services read `CREDENTIAL_ACTIVE_KEY` and `CREDENTIAL_KEYS` (a JSON map of key IDs to independently generated 32-byte base64 keys). AES-256-GCM binds each encrypted record to its owner, credential ID, provider, revision and key version. Database records never contain plaintext provider tokens. Revocation removes the encrypted grant and advances its revision; stale refresh attempts cannot restore it.
+
+To rotate, deploy both old and new keys with the new key active, re-encrypt each live credential through the vault's revision-checked rotation method, verify all live records use the new key, then retire the old key from runtime configuration. Keep old keys separately protected for the retention period of backups that still need them. Losing a required key means reconnecting that account; it cannot be reconstructed from the database. Never log grants, keys or returned capability tokens.
+
+Service capabilities are random, hash-stored, revocable tokens limited to one subject kind, subject, operation, resource and current task lease. They expire within five minutes and become invalid when their task is steered, canceled or loses its lease, or when a bound credential changes. The trusted broker must verify resource ownership and permission policy before issuance and revalidate the capability immediately before dispatch. These primitives are not exposed through model tools or public issuance routes. Owner sessions, desktop pairing and service capabilities are separate credentials; a workspace token cannot authenticate as a worker or device. Winston's computer and desktop proxy must never receive database URLs, encryption keys, Google refresh tokens or Fly deployment credentials.
+
 ## Owner timezone
 
 The authenticated page synchronizes the browser's IANA timezone on opening and foreground return. This is a background operation; failures preserve the last valid profile and never block navigation. The owner API exposes `GET` and `PUT /api/owner/timezone`. Updates carry the profile revision; competing updates return 409 and the client makes a fresh observation before one bounded retry. Identical updates are idempotent and invalid timezone observations leave the profile untouched. New owners explicitly default to UTC.

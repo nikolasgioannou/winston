@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     "./bursts": "./src/bursts.ts",
+    "./capabilities": "./src/capabilities.ts",
+    "./credentials": "./src/credentials.ts",
     "./events": "./src/events.ts",
     "./jobs": "./src/jobs.ts",
     "./memory": "./src/memory.ts",
