@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./events": "./src/events.ts",
+    "./jobs": "./src/jobs.ts",
     "./messages": "./src/messages/index.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram": "./src/telegram.ts",

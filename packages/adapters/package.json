@@ -6,6 +6,7 @@
   "exports": {
     "./auth": "./src/auth/index.ts",
     "./database": "./src/database/index.ts",
+    "./jobs": "./src/jobs/index.ts",
     "./models": "./src/models/index.ts",
     "./telegram": "./src/telegram/index.ts"
   },
@@ -19,7 +20,8 @@
     "ai": "7.0.107",
     "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
-    "pg": "8.23.0"
+    "pg": "8.23.0",
+    "pg-boss": "12.33.2"
   },
   "devDependencies": {
     "@types/node": "24.13.6",

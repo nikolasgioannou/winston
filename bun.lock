@@ -88,6 +88,7 @@
         "better-auth": "1.7.5",
         "drizzle-orm": "0.45.2",
         "pg": "8.23.0",
+        "pg-boss": "12.33.2",
       },
       "devDependencies": {
         "@types/node": "24.13.6",
