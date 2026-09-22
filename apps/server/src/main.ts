@@ -10,6 +10,7 @@ import {
   verifyTelegramWebhook,
 } from "@winston/adapters/telegram";
 import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/telegram";
+import { startConversationRuntime } from "./conversation/runtime";
 
 const config = readAuthConfig(process.env);
 const database = createDatabase({
@@ -32,6 +33,7 @@ const owner = createOwnerRouter(database);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 let telegram: ReturnType<typeof createTelegramStore> | undefined;
+let conversation: Awaited<ReturnType<typeof startConversationRuntime>> | undefined;
 
 if (telegramToken || telegramSecret) {
   if (!telegramToken || !telegramSecret || !/^[A-Za-z0-9_-]{32,256}$/.test(telegramSecret)) {
@@ -40,6 +42,23 @@ if (telegramToken || telegramSecret) {
   const bot = await createTelegramClient(telegramToken).identity();
   telegram = createTelegramStore(config.connectionString, bot.id);
   owner.route("/telegram", createTelegramOwnerRouter(telegram, bot.username));
+  if (process.env.OPENROUTER_API_KEY) {
+    const directConnectionString =
+      process.env.DIRECT_DATABASE_URL ??
+      (process.env.NODE_ENV === "production" ? undefined : config.connectionString);
+    if (!directConnectionString)
+      throw new Error("Conversation workers require DIRECT_DATABASE_URL.");
+    conversation = await startConversationRuntime({
+      database,
+      directConnectionString,
+      apiKey: process.env.OPENROUTER_API_KEY,
+      botId: bot.id,
+      telegramToken,
+      notice: (code) => {
+        console.error(code);
+      },
+    });
+  }
 }
 
 const host = startServer(readConfig(process.env), {
@@ -92,6 +111,7 @@ function shutdown() {
   host
     .stop()
     .then(async () => {
+      await conversation?.stop();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })
     .catch(() => {

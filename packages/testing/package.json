@@ -23,6 +23,7 @@
     "@winston/adapters": "workspace:*",
     "@winston/config": "workspace:*",
     "@winston/contracts": "workspace:*",
+    "@winston/server": "workspace:*",
     "ai": "7.0.107",
     "pg": "8.23.0",
     "pg-boss": "12.33.2",

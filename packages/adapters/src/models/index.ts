@@ -47,7 +47,8 @@ export type ModelResult =
 
 // No execute callback or provider-executed tools: the application owns authorization and dispatch.
 export type ModelTools = Record<string, Pick<Tool, "description" | "inputSchema">>;
-type ModelRequest = {
+export type { ModelMessage } from "ai";
+export type ModelRequest = {
   role: ModelRole;
   messages: ModelMessage[];
   signal: AbortSignal;

@@ -83,6 +83,29 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
         `);
         return undefined;
       }
+      // A reply that has not begun delivery can still yield to newly arrived input.
+      // Once a part is acknowledged, preserve the remainder of that same response.
+      if (row.nextPart === 0) {
+        const stale = await transaction.execute(sql`
+          SELECT 1 FROM winston.conversation_turns t
+          JOIN winston.conversations c ON c.owner_id = t.owner_id
+          WHERE t.owner_id = ${ownerId}::uuid AND t.response_id = ${row.id}::uuid AND (
+            c.input_revision > t.revision OR EXISTS (
+              SELECT 1 FROM winston.events e WHERE e.owner_id = t.owner_id
+                AND e.type IN ('telegram.message-received', 'telegram.message-edited')
+                AND NOT EXISTS (SELECT 1 FROM winston.event_receipts r WHERE r.owner_id = e.owner_id
+                  AND r.event_id = e.id AND r.consumer = 'conversation-inbox')
+            )
+          )
+        `);
+        if (stale.rowCount) {
+          await transaction.execute(sql`
+            UPDATE winston.telegram_outbound SET state = 'canceled'
+            WHERE owner_id = ${ownerId}::uuid AND id = ${row.id}::uuid
+          `);
+          return undefined;
+        }
+      }
       const binding = await transaction.execute(sql`
         SELECT 1 FROM winston.telegram_bindings WHERE owner_id = ${ownerId}::uuid AND bot_id = ${botId} AND chat_id = ${row.chatId}::bigint
       `);

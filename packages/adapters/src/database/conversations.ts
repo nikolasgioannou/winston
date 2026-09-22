@@ -12,7 +12,12 @@ import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
 import { taskRepository } from "./tasks";
 
-type Conversation = { id: string; revision: number; responseRevision: number };
+type Conversation = {
+  id: string;
+  revision: number;
+  responseRevision: number;
+  inputRevision: number;
+};
 type MessageRow = { envelope: unknown; sourceUpdateId: string; mediaGroupId: string | null };
 
 export function conversationRepository(transaction: DatabaseTransaction, ownerId: string) {
@@ -28,7 +33,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
       ON CONFLICT DO NOTHING
     `);
     const result = await transaction.execute<Conversation>(sql`
-      SELECT id, revision, response_revision AS "responseRevision"
+      SELECT id, revision, response_revision AS "responseRevision", input_revision AS "inputRevision"
       FROM winston.conversations WHERE owner_id = ${ownerId}::uuid FOR UPDATE
     `);
     const conversation = result.rows[0];
@@ -51,6 +56,9 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
   }
 
   return {
+    async status() {
+      return { ...(await lock()), pending: await pending() };
+    },
     async consumeTelegram(eventId: string) {
       const conversation = await lock();
 
@@ -122,7 +130,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
           DO UPDATE SET source_update_id = EXCLUDED.source_update_id, envelope = EXCLUDED.envelope
         `);
           await transaction.execute(sql`
-          UPDATE winston.conversations SET revision = revision + 1 WHERE owner_id = ${ownerId}::uuid
+          UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1 WHERE owner_id = ${ownerId}::uuid
         `);
         },
       );
@@ -171,7 +179,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
         WHERE owner_id = ${ownerId}::uuid AND id = ${next.messageId}::uuid
       `);
       await transaction.execute(sql`
-        UPDATE winston.conversations SET revision = revision + 1 WHERE owner_id = ${ownerId}::uuid
+        UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1 WHERE owner_id = ${ownerId}::uuid
       `);
 
       return true;

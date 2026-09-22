@@ -8,6 +8,7 @@ import { conversationRepository, type ConversationRepository } from "./conversat
 import { taskRepository, type TaskRepository } from "./tasks";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
+import { turnRepository, type TurnRepository } from "./turns";
 import * as schema from "./schema";
 
 export type OwnerTransaction = {
@@ -18,6 +19,7 @@ export type OwnerTransaction = {
   readonly tasks: TaskRepository;
   readonly telegramOutbound: TelegramOutboundRepository;
   readonly memory: MemoryRepository;
+  readonly turns: TurnRepository;
 };
 
 export function createDatabase(options: {
@@ -43,6 +45,14 @@ export function createDatabase(options: {
   return {
     assertCompatible: () => checkSchema(pool),
     close: () => pool.end(),
+    // Trusted runtime enumeration only; never expose this cross-owner operation through owner HTTP routes.
+    async telegramOwners(botId: number, afterId = "00000000-0000-0000-0000-000000000000") {
+      const result = await pool.query<{ ownerId: string }>(
+        'SELECT owner_id AS "ownerId" FROM winston.telegram_bindings WHERE bot_id = $1 AND owner_id > $2::uuid ORDER BY owner_id LIMIT 100',
+        [botId, afterId],
+      );
+      return result.rows.map((row) => row.ownerId);
+    },
     async transaction<Result>(ownerId: string, work: (scope: OwnerTransaction) => Promise<Result>) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId)) {
         throw new Error("An explicit valid owner ID is required for a database transaction.");
@@ -60,6 +70,7 @@ export function createDatabase(options: {
           tasks: taskRepository(transaction, ownerId),
           telegramOutbound: telegramOutboundRepository(transaction, ownerId),
           memory: memoryRepository(transaction, ownerId),
+          turns: turnRepository(transaction, ownerId),
         });
       });
     },

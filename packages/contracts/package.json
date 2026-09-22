@@ -10,7 +10,8 @@
     "./messages": "./src/messages/index.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram": "./src/telegram.ts",
-    "./timezone": "./src/timezone.ts"
+    "./timezone": "./src/timezone.ts",
+    "./turns": "./src/turns.ts"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"

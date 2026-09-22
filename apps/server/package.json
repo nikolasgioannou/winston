@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./conversation": "./src/conversation/loop.ts"
+  },
   "scripts": {
     "build": "bun build ./src/main.ts --target=bun --outdir=dist --external '@winston/adapters/*'",
     "dev": "bun --watch src/main.ts",
