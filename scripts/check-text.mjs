@@ -15,6 +15,7 @@ const textExtensions = new Set([
   ".yml",
   ".yaml",
   ".toml",
+  ".swift",
 ]);
 
 const textNames = new Set([

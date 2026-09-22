@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "bun run --filter './apps/*' build",
-    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run test:device-protocol",
     "check:commits": "node scripts/check-commits.mjs",
     "check:staged": "node scripts/check-staged.mjs",
     "commitlint": "commitlint",
@@ -24,6 +24,7 @@
     "test": "bun run test:tooling && bun run test:unit && bun run test:browser && bun run test:integration",
     "test:browser": "node scripts/test-browser.mjs",
     "test:browser:install": "node scripts/test-browser.mjs --install",
+    "test:device-protocol": "node scripts/test-device-protocol.mjs",
     "test:integration": "node scripts/test-integration.mjs",
     "test:models": "bun packages/testing/tests/models/live.ts",
     "test:models:adapter": "bun packages/testing/tests/models/adapter-live.ts",

@@ -8,6 +8,7 @@
     "./capabilities": "./src/capabilities.ts",
     "./connections": "./src/connections.ts",
     "./credentials": "./src/credentials.ts",
+    "./devices": "./src/devices.ts",
     "./events": "./src/events.ts",
     "./jobs": "./src/jobs.ts",
     "./memory": "./src/memory.ts",

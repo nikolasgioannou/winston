@@ -4,6 +4,8 @@ coverage/
 test-results/
 playwright-report/
 *.tsbuildinfo
+.build/
+.swiftpm/
 .DS_Store
 .env
 .env.*
