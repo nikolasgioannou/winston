@@ -16,6 +16,12 @@ import type { HttpEnvironment, Identity } from "./http/app";
 import { createGoogleConnections, createGoogleOAuth } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
+import {
+  authenticateDevicePairing,
+  createDeviceGroup,
+  createDeviceOwnerRouter,
+  createDevicePairingRouter,
+} from "./http/devices";
 
 const config = readAuthConfig(process.env);
 const database = createDatabase({
@@ -36,6 +42,8 @@ try {
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
 const callbacks = new Hono<HttpEnvironment>();
+owner.route("/devices", createDeviceOwnerRouter(database));
+callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 if (connectionConfig) {
   const connections = createGoogleConnections({
@@ -87,6 +95,7 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
+    device: createDeviceGroup(database),
     callback: {
       router: callbacks,
       async authenticate(request): Promise<Identity | null> {
@@ -111,7 +120,7 @@ const host = startServer(readConfig(process.env), {
               sessionId: session.sessionId,
             };
         }
-        return null;
+        return authenticateDevicePairing(database, request);
       },
     },
     owner: {

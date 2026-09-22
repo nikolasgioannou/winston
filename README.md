@@ -52,6 +52,10 @@ For live model validation, copy `.env.example` to `.env.local` at the repository
 
 Every visible element must earn its place. Include text, controls, icons, and containers only when they support a user action, decision, navigation, or necessary status. Prefer clear labels and concise actionable feedback. Avoid redundant headings, obvious instructions, decorative filler, implementation commentary, and explanations of what the interface already shows. Apply this standard to product pages and development review surfaces alike; retain accessibility labels and useful error guidance.
 
+## Device registration
+
+Device registration uses owner routes under `/api/owner/devices`: create or cancel a five-minute pairing challenge, list or rename installations, choose a default, and revoke an installation. A native client redeems the challenge once at `/callbacks/devices/pair` using a bearer pairing secret and validated registration metadata. It receives a distinct device credential that can authenticate `/api/devices/self`, never owner sessions or connector grants. Only credential hashes are stored. Names may repeat; IDs remain distinct, and replacements receive neither a default assignment nor permission grants. The native pairing screen and persistent connection transport are separate from this registry API.
+
 ## Source layout
 
 | Directory            | Responsibility                                               |

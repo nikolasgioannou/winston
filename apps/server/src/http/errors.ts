@@ -5,6 +5,7 @@ const errors = {
   invalid_request: { status: 400, message: "The request is invalid." },
   unauthorized: { status: 401, message: "Authentication is required." },
   forbidden: { status: 403, message: "This credential cannot access this route." },
+  conflict: { status: 409, message: "The resource changed. Refresh and try again." },
   not_found: { status: 404, message: "The route does not exist." },
   body_too_large: { status: 413, message: "The request body is too large." },
   unsupported_media_type: { status: 415, message: "A JSON request body is required." },

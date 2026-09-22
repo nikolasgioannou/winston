@@ -14,6 +14,11 @@ import { connectionRepository, type ConnectionRepository } from "./connections";
 import { capabilityRepository, capabilityHash, type CapabilityRepository } from "./capabilities";
 import { serviceRequestSchema, type ServiceRequest } from "@winston/contracts/capabilities";
 import * as schema from "./schema";
+import { deviceRepository, deviceTokenHash, type DeviceRepository } from "./devices";
+import {
+  deviceCredentialSchema,
+  devicePairingTokenSchema,
+} from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
   readonly ownerId: string;
@@ -27,6 +32,7 @@ export type OwnerTransaction = {
   readonly credentials: CredentialRepository;
   readonly connections: ConnectionRepository;
   readonly capabilities: CapabilityRepository;
+  readonly devices: DeviceRepository;
 };
 
 export function createDatabase(options: {
@@ -52,6 +58,24 @@ export function createDatabase(options: {
   return {
     assertCompatible: () => checkSchema(pool),
     close: () => pool.end(),
+    async authenticateDevice(token: string) {
+      const parsed = deviceCredentialSchema.safeParse(token);
+      if (!parsed.success) return null;
+      const result = await pool.query<{ ownerId: string; deviceId: string }>(
+        'SELECT owner_id AS "ownerId", id AS "deviceId" FROM winston.devices WHERE token_hash = $1 AND revoked_at IS NULL',
+        [deviceTokenHash(parsed.data)],
+      );
+      return result.rows[0] ?? null;
+    },
+    async authenticateDevicePairing(token: string) {
+      const parsed = devicePairingTokenSchema.safeParse(token);
+      if (!parsed.success) return null;
+      const result = await pool.query<{ ownerId: string }>(
+        'SELECT owner_id AS "ownerId" FROM winston.device_pairing WHERE secret_hash = $1 AND expires_at > clock_timestamp()',
+        [deviceTokenHash(parsed.data)],
+      );
+      return result.rows[0] ?? null;
+    },
     async authenticateService(input: ServiceRequest) {
       const parsed = serviceRequestSchema.safeParse(input);
       if (!parsed.success) return null;
@@ -94,6 +118,7 @@ export function createDatabase(options: {
           credentials: credentialRepository(transaction, ownerId),
           connections: connectionRepository(transaction, ownerId),
           capabilities: capabilityRepository(transaction, ownerId),
+          devices: deviceRepository(transaction, ownerId),
         });
       });
     },
