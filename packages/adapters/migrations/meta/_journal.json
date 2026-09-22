@@ -50,6 +50,13 @@
       "when": 1790000000006,
       "tag": "0006_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790000000007,
+      "tag": "0007_tasks",
+      "breakpoints": true
     }
   ]
 }

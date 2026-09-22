@@ -5,6 +5,7 @@ import { checkSchema } from "./migrations";
 import { ownerRepository, type OwnerRepository } from "./owners";
 import { eventRepository, type EventRepository } from "./events";
 import { conversationRepository, type ConversationRepository } from "./conversations";
+import { taskRepository, type TaskRepository } from "./tasks";
 import * as schema from "./schema";
 
 export type OwnerTransaction = {
@@ -12,6 +13,7 @@ export type OwnerTransaction = {
   readonly owners: OwnerRepository;
   readonly events: EventRepository;
   readonly conversations: ConversationRepository;
+  readonly tasks: TaskRepository;
 };
 
 export function createDatabase(options: {
@@ -51,6 +53,7 @@ export function createDatabase(options: {
           owners: ownerRepository(transaction, ownerId),
           events: eventRepository(transaction, ownerId),
           conversations: conversationRepository(transaction, ownerId),
+          tasks: taskRepository(transaction, ownerId),
         });
       });
     },

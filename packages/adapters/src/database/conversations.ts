@@ -10,6 +10,7 @@ import { telegramEventKeySchema, telegramUpdateSchema } from "@winston/contracts
 import { telegramEnvelope } from "../telegram/envelope";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
+import { taskRepository } from "./tasks";
 
 type Conversation = { id: string; revision: number; responseRevision: number };
 type MessageRow = { envelope: unknown; sourceUpdateId: string; mediaGroupId: string | null };
@@ -145,7 +146,12 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
         };
       });
 
-      return { ...conversation, pending: await pending(), messages };
+      return {
+        ...conversation,
+        pending: await pending(),
+        messages,
+        activeTasks: await taskRepository(transaction, ownerId).listActive(),
+      };
     },
     // Trusted staging/transcription services call this after verifying their output. No owner HTTP endpoint.
     async resolveMessage(nextInput: UserMessage) {
