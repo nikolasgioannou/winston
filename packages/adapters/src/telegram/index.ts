@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { telegramBotSchema, telegramUpdateSchema } from "@winston/contracts/telegram";
 export { createTelegramStore, type TelegramStore } from "./store";
+export { createTelegramSender, type TelegramSendOutcome } from "./send";
+export { splitTelegramText } from "./text";
+export { deliverTelegramNext } from "./deliver";
 
 export function verifyTelegramWebhook(actual: string | null, expected: string) {
   if (!actual || !expected) return false;
