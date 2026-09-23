@@ -4,6 +4,7 @@ import { test } from "bun:test";
 import { createDatabase, migrateDatabase, type OwnerTransaction } from "@winston/adapters/database";
 import { withTestPostgres } from "../../src/postgres";
 import { createFileCommands } from "@winston/server/files";
+import { createDeliveryDownloadService } from "@winston/adapters/artifacts";
 
 test("file delivery receipts bind task intent and never retry ambiguous dispatch", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -50,6 +51,31 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
           return { task, input, delivery: await telegramFiles.enqueue(input) };
         });
       const first = await start();
+      let signed = 0;
+      let lifetime = 0;
+      const downloads = createDeliveryDownloadService(database, {
+        downloadUrl(owner, object, seconds, name) {
+          assert.equal(owner, ownerId);
+          assert.equal(object.ownerId, ownerId);
+          assert.equal(name, "fixture.txt");
+          signed++;
+          assert.ok(seconds);
+          lifetime = seconds;
+          return Promise.resolve("https://storage.invalid/signed");
+        },
+      });
+      const available = await downloads.inspect(ownerId, first.delivery.id);
+      assert.equal(available.kind, "ready");
+      assert.ok(!JSON.stringify(available).includes('"object"'));
+      assert.equal((await downloads.download(ownerId, first.delivery.id))?.expiresIn, 60);
+      await sql`UPDATE winston.telegram_files SET created_at = clock_timestamp() - interval '23 hours 59 minutes 40 seconds' WHERE id = ${first.delivery.id}::uuid`;
+      assert.ok(await downloads.download(ownerId, first.delivery.id));
+      assert.ok(lifetime > 0 && lifetime < 20);
+      await sql`UPDATE winston.telegram_files SET created_at = clock_timestamp() - interval '25 hours' WHERE id = ${first.delivery.id}::uuid`;
+      assert.deepEqual(await downloads.inspect(ownerId, first.delivery.id), { kind: "expired" });
+      assert.equal(await downloads.download(ownerId, first.delivery.id), null);
+      assert.equal(signed, 2);
+      await sql`UPDATE winston.telegram_files SET created_at = clock_timestamp() WHERE id = ${first.delivery.id}::uuid`;
       const files = createFileCommands(database, botId);
       const authority = await scope(({ capabilities }) =>
         capabilities.issue({
@@ -110,6 +136,10 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
       );
       const stranger = randomUUID();
       await database.transaction(stranger, ({ owners }) => owners.ensure());
+      assert.deepEqual(await downloads.inspect(stranger, first.delivery.id), {
+        kind: "unavailable",
+      });
+      assert.equal(await downloads.download(stranger, first.delivery.id), null);
       assert.equal(
         await database.transaction(stranger, ({ telegramFiles }) =>
           telegramFiles.find(first.delivery.id),
@@ -166,9 +196,11 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
 
       const canceled = await start();
       await scope(({ tasks }) => tasks.cancel(canceled.task.id, canceled.task.revision));
+      assert.equal(await downloads.download(ownerId, canceled.delivery.id), null);
       assert.equal(await scope(({ telegramFiles }) => telegramFiles.claim(botId)), undefined);
       const deleted = await start();
       await scope(({ artifacts }) => artifacts.beginDelete(deleted.input.artifactId, 1));
+      assert.equal(await downloads.download(ownerId, deleted.delivery.id), null);
       assert.equal(await scope(({ telegramFiles }) => telegramFiles.claim(botId)), undefined);
 
       const changedPermission = await start();
@@ -187,6 +219,7 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
         await scope(({ telegramFiles }) => telegramFiles.dispatch(permissionClaim)),
         false,
       );
+      assert.equal(await downloads.download(ownerId, first.delivery.id), null);
       await scope(({ authorization }) =>
         authorization.put({
           revision: 1,
@@ -214,6 +247,8 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
       const finalClaim = await scope(({ telegramFiles }) => telegramFiles.claim(botId));
       assert.ok(finalClaim);
       await sql`DELETE FROM winston.telegram_bindings WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await downloads.download(ownerId, retry.delivery.id), null);
+      assert.equal(signed, 2);
       assert.equal(await scope(({ telegramFiles }) => telegramFiles.dispatch(finalClaim)), false);
     } finally {
       await database.close();

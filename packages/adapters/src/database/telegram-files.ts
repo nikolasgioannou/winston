@@ -74,6 +74,23 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
 
   return {
     find,
+    async downloadAccess(id: string) {
+      await lock();
+      const row = await find(id);
+      if (!row || ["failed", "canceled"].includes(row.state) || !(await eligible(row)))
+        return { kind: "unavailable" as const };
+      const lifetime = await transaction.execute<{ expiresAt: string; remaining: number }>(sql`
+        SELECT created_at + interval '24 hours' AS "expiresAt",
+          floor(extract(epoch FROM (created_at + interval '24 hours' - clock_timestamp())))::integer AS remaining
+        FROM winston.telegram_files WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid
+      `);
+      const access = lifetime.rows[0];
+      if (!access || access.remaining <= 1) return { kind: "expired" as const };
+      // Keep deletion behind the local signing operation in this same transaction.
+      const artifact = await artifactRepository(transaction, ownerId).find(row.artifactId, true);
+      if (artifact?.state !== "ready") return { kind: "unavailable" as const };
+      return { kind: "ready" as const, artifact, ...access };
+    },
     async enqueue(input: {
       key: string;
       botId: number;

@@ -35,6 +35,7 @@ test("file workers verify before dispatch and preserve uncertain send receipts",
   let sendFails = false;
   const repository: OwnerTransaction["telegramFiles"] = {
     find: () => Promise.resolve(undefined),
+    downloadAccess: () => Promise.resolve({ kind: "unavailable" }),
     enqueue: () => Promise.reject(new Error("Not used")),
     claim: () => {
       events.push("claim");

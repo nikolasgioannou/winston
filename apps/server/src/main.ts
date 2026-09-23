@@ -10,6 +10,7 @@ import {
   createArtifactService,
   createWorkspaceFilePublisher,
   createArtifactReader,
+  createDeliveryDownloadService,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
 import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
@@ -18,6 +19,7 @@ import { startVoiceRuntime } from "./files/voice-runtime";
 import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
+import { createFileDeliveryOwnerRouter } from "./http/file-deliveries";
 import {
   createTelegramClient,
   createTelegramStore,
@@ -66,8 +68,13 @@ const owner = createOwnerRouter(database);
 const callbacks = new Hono<HttpEnvironment>();
 const storageConfig = readStorageConfig(process.env);
 const storage = storageConfig ? createObjectStorage(storageConfig) : undefined;
-if (storage)
+if (storage) {
   owner.route("/artifacts", createArtifactOwnerRouter(createArtifactService(database, storage)));
+  owner.route(
+    "/file-deliveries",
+    createFileDeliveryOwnerRouter(createDeliveryDownloadService(database, storage)),
+  );
+}
 owner.route("/devices", createDeviceOwnerRouter(database));
 owner.route("/permissions", createAuthorizationOwnerRouter(database));
 owner.route("/connection-targets", createTargetPreferencesRouter(database));

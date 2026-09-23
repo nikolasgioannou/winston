@@ -4,6 +4,7 @@ import { MissingStoredObject, UncertainObjectUpload, type createObjectStorage } 
 export { createWorkspaceFilePublisher } from "./workspace-files";
 export { createArtifactReader } from "./read";
 export { stageInboxFile } from "./stage-inbox";
+export { createDeliveryDownloadService } from "./delivery-downloads";
 
 type Store = {
   transaction<Result>(
