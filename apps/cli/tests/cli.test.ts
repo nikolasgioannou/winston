@@ -6,6 +6,27 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("file inspection accepts only an explicit path", () => {
+  assert.deepEqual(
+    parseCommand(["files", "inspect", "--path", "/data/home/artifacts/report.pdf", "--json"]),
+    {
+      kind: "request",
+      json: true,
+      request: { version: 1, command: "files.inspect", path: "/data/home/artifacts/report.pdf" },
+    },
+  );
+  assert.throws(() => parseCommand(["files", "inspect"]));
+  assert.throws(() =>
+    parseCommand([
+      "files",
+      "inspect",
+      "--path",
+      "/data/home/artifacts/report.pdf",
+      "--account",
+      id,
+    ]),
+  );
+});
 test("connected reads require explicit targets and reject unrelated or malformed flags", () => {
   const gmail = parseCommand([
     "gmail",

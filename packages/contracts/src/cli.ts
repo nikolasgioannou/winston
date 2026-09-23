@@ -4,6 +4,11 @@ import { cliReadRequestSchema } from "./cli-reads";
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  z.strictObject({
+    version: z.literal(1),
+    command: z.literal("files.inspect"),
+    path: z.string().min(1).max(4096),
+  }),
   ...cliReadRequestSchema.options,
   z.strictObject({ version: z.literal(1), command: z.literal("accounts.list") }),
   z.strictObject({

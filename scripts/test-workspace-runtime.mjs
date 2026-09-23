@@ -132,6 +132,11 @@ try {
   );
   await ready();
 
+  assert.equal(
+    evaluate(readFileSync("scripts/fixtures/workspace-files.mjs", "utf8"), "1000:1000"),
+    "Staged file inspection passed.",
+  );
+
   const commandFixture = JSON.parse(
     evaluate(readFileSync("scripts/fixtures/workspace-command-http.mjs", "utf8")),
   );

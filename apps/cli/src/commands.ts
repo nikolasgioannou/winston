@@ -2,6 +2,14 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "files.inspect",
+    description:
+      "Check a completed file in /data/home/artifacts and compute its size and checksum.",
+    id: false,
+    flags: ["path"],
+    usage: "--path <absolute-file-path>",
+  },
+  {
     command: "gmail.search",
     description: "Search an explicitly selected Gmail account.",
     id: false,
