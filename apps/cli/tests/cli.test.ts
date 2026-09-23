@@ -44,6 +44,39 @@ test("help and malformed arguments never call the gateway", async () => {
 });
 
 test("command routing produces validated versioned requests", () => {
+  assert.deepEqual(
+    parseCommand([
+      "accounts",
+      "connect",
+      "--service",
+      "gmail",
+      "--key",
+      "itinerary",
+      "--detail",
+      "Find the itinerary",
+      "--id",
+      id,
+    ]),
+    {
+      kind: "request",
+      json: false,
+      request: {
+        version: 1,
+        command: "accounts.connect",
+        service: "gmail",
+        key: "itinerary",
+        detail: "Find the itinerary",
+        id,
+      },
+    },
+  );
+  for (const args of [
+    ["accounts", "connect"],
+    ["accounts", "connect", "--service", "unknown", "--key", "x", "--detail", "x"],
+    ["accounts", "list", "--service", "gmail"],
+    ["help", "accounts", "--key", "x"],
+  ])
+    assert.throws(() => parseCommand(args));
   for (const command of ["devices.inspect", "operations.inspect", "operations.cancel"]) {
     assert.deepEqual(parseCommand([...command.split("."), "--id", id, "--json"]), {
       kind: "request",

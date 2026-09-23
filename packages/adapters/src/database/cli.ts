@@ -6,9 +6,49 @@ import { capabilityRepository } from "./capabilities";
 import { connectionRepository } from "./connections";
 import { deviceRepository } from "./devices";
 import { actionRepository } from "./actions";
+import { handoffRepository } from "./handoffs";
 
 export function cliRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
+    async connect(
+      credential: ServiceRequest,
+      input: Extract<CliRequest, { command: "accounts.connect" }>,
+    ): Promise<CliResult> {
+      const request = cliRequestSchema.parse(input);
+      if (request.command !== "accounts.connect") throw new Error("Invalid connection request.");
+      await transaction.execute(
+        sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,
+      );
+      const authority = await capabilityRepository(transaction, ownerId).authenticate(credential);
+      if (!authority || authority.operation !== "gateway:control")
+        return {
+          version: 1,
+          status: "denied",
+          message: "Task control authority is unavailable or expired.",
+        };
+      const handoff = await handoffRepository(transaction, ownerId).prepare({
+        key: `cli:${authority.taskId}:${request.key}`,
+        task: {
+          id: authority.taskId,
+          revision: authority.revision,
+          generation: authority.generation,
+        },
+        target: { kind: "connection", service: request.service, connectionId: request.id ?? null },
+        detail: request.detail,
+      });
+      if (handoff.state === "completed")
+        return {
+          version: 1,
+          status: "ok",
+          data: { handoffId: handoff.id, connectionId: handoff.resolutionId },
+        };
+      return {
+        version: 1,
+        status: "waiting",
+        referenceId: handoff.id,
+        message: "Waiting for the owner to complete account setup.",
+      };
+    },
     async cancel(credential: ServiceRequest, inputId: string): Promise<CliResult> {
       await transaction.execute(
         sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,

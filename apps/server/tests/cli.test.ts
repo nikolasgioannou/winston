@@ -14,6 +14,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let calls = 0;
   let cancellations = 0;
   const cli: OwnerTransaction["cli"] = {
+    connect: () => Promise.resolve({ version: 1, status: "waiting", message: "Connect account." }),
     cancel: () => {
       cancellations += 1;
       return Promise.resolve({ version: 1, status: "waiting", message: "Cancellation requested." });

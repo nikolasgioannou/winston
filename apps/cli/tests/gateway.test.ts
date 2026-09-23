@@ -18,6 +18,31 @@ function authority(): CliAuthority {
   };
 }
 
+test("connection setup uses control authority without falling back to discovery credentials", async () => {
+  const value = authority();
+  const request = {
+    version: 1,
+    command: "accounts.connect",
+    service: "gmail",
+    key: "fixture",
+    detail: "Connect Gmail",
+  } as const;
+  let calls = 0;
+  const controlToken = `wst_${"c".repeat(43)}`;
+  const send = (url: string, init: RequestInit) => {
+    calls += 1;
+    assert.equal(url, "https://winston-628.fly.dev/api/tasks/cli/control");
+    assert.equal(new Headers(init.headers).get("Authorization"), `Bearer ${controlToken}`);
+    return Promise.resolve(
+      Response.json({ version: 1, status: "waiting", message: "Connect account" }),
+    );
+  };
+  assert.equal((await callGateway(value, request, send)).status, "denied");
+  assert.equal(calls, 0);
+  assert.equal((await callGateway({ ...value, controlToken }, request, send)).status, "waiting");
+  assert.equal(calls, 1);
+});
+
 test("authority can be reread from an anonymous descriptor without using a path or stdin", () => {
   const directory = mkdtempSync(join(tmpdir(), "winston-cli-"));
   const path = join(directory, "authority");

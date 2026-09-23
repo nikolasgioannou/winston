@@ -32,9 +32,14 @@ export function createCliTaskGroup(database: Database) {
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
-    if (request.command !== "operations.cancel") throw new RequestError("invalid_request");
+    if (request.command !== "operations.cancel" && request.command !== "accounts.connect")
+      throw new RequestError("invalid_request");
     return context.json(
-      await database.transaction(identity.ownerId, ({ cli }) => cli.cancel(authority, request.id)),
+      await database.transaction(identity.ownerId, ({ cli }) =>
+        request.command === "accounts.connect"
+          ? cli.connect(authority, request)
+          : cli.cancel(authority, request.id),
+      ),
     );
   });
   router.post("/cli", async (context) => {

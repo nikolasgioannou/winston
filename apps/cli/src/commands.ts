@@ -2,6 +2,12 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "accounts.connect",
+    description:
+      "Pause this task for the owner to connect an account. Does not grant access. Reuse the same key when checking the same request.",
+    id: false,
+  },
+  {
     command: "accounts.list",
     description: "List connected accounts available to this task.",
     id: false,
@@ -32,7 +38,7 @@ export function help(topic?: string) {
   return {
     name: "winston",
     commands: selected.map((item) => ({
-      usage: `winston ${item.command.replace(".", " ")}${item.id ? " --id <uuid>" : ""} [--json]`,
+      usage: `winston ${item.command.replace(".", " ")}${item.command === "accounts.connect" ? " --service <gmail|calendar> --key <request-key> --detail <reason> [--id <account-uuid>]" : item.id ? " --id <uuid>" : ""} [--json]`,
       description: item.description,
     })),
   };

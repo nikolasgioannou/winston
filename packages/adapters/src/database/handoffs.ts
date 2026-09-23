@@ -64,6 +64,21 @@ export function handoffRepository(transaction: DatabaseTransaction, ownerId: str
   }
   return {
     find,
+    async completedForTask(inputId: string) {
+      const taskId = taskSchema.shape.id.parse(inputId);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT h.document FROM winston.handoffs h
+        JOIN winston.tasks t ON t.owner_id = h.owner_id AND t.id = h.task_id
+        WHERE h.owner_id = ${ownerId}::uuid AND h.task_id = ${taskId}::uuid
+          AND h.document->>'state' = 'completed'
+          AND (h.document->>'intentRevision')::integer = t.intent_revision
+        ORDER BY h.expires_at DESC, h.id LIMIT 20
+      `);
+      return rows.rows.map((row) => {
+        const handoff = handoffSchema.parse(row.document);
+        return { id: handoff.id, target: handoff.target, resolutionId: handoff.resolutionId };
+      });
+    },
     async prepare(input: HandoffRequest) {
       const request = handoffRequestSchema.parse(input);
       await lock();

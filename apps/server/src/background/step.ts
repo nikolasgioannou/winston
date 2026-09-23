@@ -66,11 +66,12 @@ export function createBackgroundStep(options: {
       combined.throwIfAborted();
       const snapshot = await database.transaction(
         reference.ownerId,
-        async ({ tasks, taskSteps, actions }) => ({
+        async ({ tasks, taskSteps, actions, handoffs }) => ({
           context: await tasks.context(worker),
           history: await taskSteps.recent(worker, 250),
           previous: await actions.unresolvedPriorEffect(worker),
           effects: await actions.taskEffects(worker.id),
+          completedHandoffs: await handoffs.completedForTask(worker.id),
         }),
       );
       if (snapshot.previous) {
@@ -184,6 +185,7 @@ export function createBackgroundStep(options: {
         resources: snapshot.context.resources,
         workspaces: snapshot.context.workspaces,
         effects: snapshot.effects,
+        completedHandoffs: snapshot.completedHandoffs,
       });
       const config = modelRoles.worker;
       const exchanges = [

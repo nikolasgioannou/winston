@@ -1,7 +1,16 @@
 import { z } from "zod";
+import { googleServiceSchema } from "./connections";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
   z.strictObject({ version: z.literal(1), command: z.literal("accounts.list") }),
+  z.strictObject({
+    version: z.literal(1),
+    command: z.literal("accounts.connect"),
+    service: googleServiceSchema,
+    id: z.uuid().optional(),
+    key: z.string().min(1).max(100),
+    detail: z.string().min(1).max(2000),
+  }),
   z.strictObject({ version: z.literal(1), command: z.literal("devices.list") }),
   z.strictObject({ version: z.literal(1), command: z.literal("devices.inspect"), id: z.uuid() }),
   z.strictObject({ version: z.literal(1), command: z.literal("operations.inspect"), id: z.uuid() }),
