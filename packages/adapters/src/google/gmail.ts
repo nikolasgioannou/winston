@@ -10,125 +10,25 @@ import {
   type GmailMessageRequest,
   type GmailSearch,
 } from "@winston/contracts/gmail";
-import type { ResolvedTarget } from "@winston/contracts/connection-targets";
-import type { createDatabase } from "../database";
-import type { GoogleConnections } from "./index";
-import { createConnectionTargets } from "./targets";
-import { sameResolvedTarget } from "./target-resolution";
+import {
+  createGoogleReadRequest,
+  GoogleReadError,
+  type GoogleReadFailure,
+  type GoogleReadOptions,
+} from "./read-request";
 import { attachmentMetadata, decodeGmailBody, gmailParts, readGmailMessage } from "./gmail-mime";
 
-export class GmailReadError extends Error {
-  constructor(
-    readonly kind: "denied" | "approval_required" | "stale" | "unavailable" | "too_large",
-  ) {
-    super(`Gmail read ${kind}.`);
+export class GmailReadError extends GoogleReadError {
+  constructor(kind: GoogleReadFailure) {
+    super(kind, "Gmail");
   }
 }
 
-async function boundedJson(response: Response) {
-  const limit = 40 * 1024 * 1024;
-  if (!response.body) throw new GmailReadError("unavailable");
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (size <= limit) {
-      const next = await reader.read();
-      if (next.done) break;
-      const chunk: unknown = next.value;
-      if (!(chunk instanceof Uint8Array)) throw new GmailReadError("unavailable");
-      size += chunk.length;
-      if (size > limit) throw new GmailReadError("too_large");
-      chunks.push(chunk);
-    }
-    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-}
-
-export function createGmailReader(options: {
-  database: ReturnType<typeof createDatabase>;
-  google: Pick<GoogleConnections, "list" | "calendars" | "access" | "rejected">;
-  fetch?: (url: URL, init: RequestInit) => Promise<Response>;
-}) {
-  const { database, google } = options;
-  const targets = createConnectionTargets(database, google);
-
-  async function request(
-    ownerId: string,
-    target: ResolvedTarget,
-    path: string,
-    query: URLSearchParams,
-    signal: AbortSignal,
-  ) {
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
-    const selected = await targets.resolve(
-      ownerId,
-      {
-        operation: "gmail.read",
-        ...(target.task
-          ? { task: target.task }
-          : {
-              explicit: { connectionId: target.connectionId, calendarId: null },
-            }),
-      },
-      deadline,
-    );
-    if (selected.status !== "resolved" || !sameResolvedTarget(selected.target, target))
-      throw new GmailReadError("stale");
-    const action = {
-      target: { kind: "connection" as const, id: target.connectionId, resource: null },
-      operation: "gmail.read" as const,
-    };
-    const initial = await database.transaction(ownerId, (scope) =>
-      scope.authorization.evaluate(action),
-    );
-    if (initial.decision === "ask") throw new GmailReadError("approval_required");
-    if (initial.decision !== "allow" || !initial.snapshot) throw new GmailReadError("denied");
-    const access = await google.access(ownerId, target.connectionId, deadline);
-    const allowed = await database.transaction(ownerId, async (scope) => {
-      const policy = await scope.authorization.evaluate(action, initial.snapshot ?? undefined);
-      const credential = await scope.credentials.find(target.connectionId);
-      const preferences = await scope.connectionTargets.preferences();
-      const currentTask = await scope.connectionTargets.currentTask({
-        operation: "gmail.read",
-        ...(target.task ? { task: target.task } : {}),
-      });
-      return (
-        policy.decision === "allow" &&
-        credential?.revision === access.revision &&
-        preferences.revision === target.preferencesRevision &&
-        currentTask
-      );
-    });
-    if (!allowed) throw new GmailReadError("stale");
-    deadline.throwIfAborted();
-    const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`);
-    url.search = query.toString();
-    try {
-      const response = await (options.fetch ?? fetch)(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${access.grant.accessToken}` },
-        redirect: "error",
-        cache: "no-store",
-        signal: deadline,
-      });
-      if (!response.ok) {
-        await response.body?.cancel();
-        if (response.status === 401)
-          await google.rejected(ownerId, target.connectionId, access.revision);
-        throw new GmailReadError("unavailable");
-      }
-      const data = await boundedJson(response);
-      return { source: selected.target, data };
-    } catch (error) {
-      if (error instanceof GmailReadError) throw error;
-      // Provider errors can contain credentials or message content; do not propagate them.
-      throw new GmailReadError("unavailable");
-    }
-  }
+export function createGmailReader(options: GoogleReadOptions) {
+  const request = createGoogleReadRequest(options, {
+    service: "gmail",
+    error: (kind) => new GmailReadError(kind),
+  });
 
   async function message(ownerId: string, input: GmailMessageRequest, signal: AbortSignal) {
     const parsed = gmailMessageRequestSchema.parse(input);

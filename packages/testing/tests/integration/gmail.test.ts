@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
-import { createConnectionTargets, createGmailReader } from "@winston/adapters/google";
+import {
+  createConnectionTargets,
+  createGmailReader,
+  GmailReadError,
+} from "@winston/adapters/google";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import { withTestPostgres } from "../../src/postgres";
 import { gmailReadTargetSchema } from "@winston/contracts/gmail";
@@ -232,6 +236,17 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
       );
       unauthorized = false;
       const beforePreferenceChange = requests;
+      duringAccess = () => Promise.reject(new Error("synthetic-private-provider-detail"));
+      await assert.rejects(
+        reader.message(owner, { target: second, id: "m1" }, signal),
+        (error: unknown) => {
+          assert.ok(error instanceof GmailReadError);
+          assert.equal(error.message, "Gmail read unavailable.");
+          assert.ok(!error.stack?.includes("synthetic-private-provider-detail"));
+          return true;
+        },
+      );
+      assert.equal(requests, beforePreferenceChange);
       duringAccess = async () => {
         await database.transaction(owner, (scope) =>
           scope.connectionTargets.put({ revision: 0, labels: [], defaults: [] }),
