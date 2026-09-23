@@ -225,6 +225,13 @@
       "when": 1790000000031,
       "tag": "0031_connected_read_results",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790000000032,
+      "tag": "0032_telegram_files",
+      "breakpoints": true
     }
   ]
 }
