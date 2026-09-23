@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/main.ts ./src/supervisor.ts ./src/processes.ts --target=bun --env=disable --outdir=dist",
+    "build": "bun build ./src/main.ts ./src/supervisor.ts ./src/processes.ts ./src/inbox.ts --target=bun --env=disable --outdir=dist",
     "test:unit": "bun test tests",
     "typecheck": "tsc --project tsconfig.json"
   },

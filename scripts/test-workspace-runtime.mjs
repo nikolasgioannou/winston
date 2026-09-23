@@ -133,6 +133,11 @@ try {
   await ready();
 
   assert.equal(
+    evaluate(readFileSync("scripts/fixtures/workspace-inbox.mjs", "utf8")),
+    "Protected inbox read and mutation boundaries passed.",
+  );
+
+  assert.equal(
     evaluate(readFileSync("scripts/fixtures/workspace-files.mjs", "utf8"), "1000:1000"),
     "Staged file inspection passed.",
   );

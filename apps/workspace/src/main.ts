@@ -6,6 +6,7 @@ import { openWorkspaceJournal } from "./journal";
 import { createCommandRunner } from "./processes";
 import { createCommandService } from "./commands";
 import { createCommandHandler } from "./command-http";
+import { openWorkspaceInbox } from "./inbox";
 
 if (
   process.platform !== "linux" ||
@@ -42,6 +43,7 @@ if (initialize) {
   process.exit(0);
 }
 journal.recoverInterrupted();
+openWorkspaceInbox("/data");
 const runner = createCommandRunner({
   home: journal.home,
   logsRoot: "/data/control/commands",
