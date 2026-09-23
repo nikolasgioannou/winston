@@ -2,6 +2,18 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "files.send",
+    description:
+      "Queue a published artifact for delivery to the owner in Telegram. Reuse the same key on retry.",
+    id: true,
+    usage: "--id <artifact-uuid> --key <request-key>",
+  },
+  {
+    command: "files.status",
+    description: "Inspect a file delivery receipt. Only delivered confirms a successful send.",
+    id: true,
+  },
+  {
     command: "files.publish",
     description:
       "Publish a completed staged file to private storage. Reuse the same key and unchanged file to recover its artifact reference.",

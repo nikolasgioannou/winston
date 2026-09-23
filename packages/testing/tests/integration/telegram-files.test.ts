@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase, type OwnerTransaction } from "@winston/adapters/database";
 import { withTestPostgres } from "../../src/postgres";
+import { createFileCommands } from "@winston/server/files";
 
 test("file delivery receipts bind task intent and never retry ambiguous dispatch", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -49,6 +50,54 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
           return { task, input, delivery: await telegramFiles.enqueue(input) };
         });
       const first = await start();
+      const files = createFileCommands(database, botId);
+      const authority = await scope(({ capabilities }) =>
+        capabilities.issue({
+          kind: "workspace",
+          subjectId: workspaceId,
+          resourceId: workspaceId,
+          resourceRevision: 1,
+          taskId: first.task.id,
+          revision: first.task.revision,
+          generation: first.task.generation,
+          operation: "gateway:control",
+          credential: null,
+        }),
+      );
+      const credential = {
+        token: authority.token,
+        kind: "workspace" as const,
+        subjectId: workspaceId,
+        resourceId: workspaceId,
+        operation: "gateway:control" as const,
+      };
+      const queuedResult = await files(credential, {
+        version: 1,
+        command: "files.send",
+        id: first.input.artifactId,
+        key: "file",
+      });
+      assert.equal(queuedResult.status, "ok");
+      assert.deepEqual(queuedResult.data, {
+        deliveryId: first.delivery.id,
+        artifactId: first.input.artifactId,
+        state: "pending",
+        messageId: null,
+      });
+      assert.equal(
+        (
+          await files(
+            { ...credential, operation: "gateway:read" },
+            {
+              version: 1,
+              command: "files.send",
+              id: first.input.artifactId,
+              key: "other",
+            },
+          )
+        ).status,
+        "denied",
+      );
       assert.equal(
         (await scope(({ telegramFiles }) => telegramFiles.enqueue(first.input))).id,
         first.delivery.id,

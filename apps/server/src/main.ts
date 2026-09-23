@@ -6,7 +6,13 @@ import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
 import { createObjectStorage } from "@winston/adapters/storage";
-import { createArtifactService, createWorkspaceFilePublisher } from "@winston/adapters/artifacts";
+import {
+  createArtifactService,
+  createWorkspaceFilePublisher,
+  createArtifactReader,
+} from "@winston/adapters/artifacts";
+import { startFileDeliveryRuntime } from "./files/runtime";
+import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
 import {
@@ -80,6 +86,8 @@ const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 let telegram: ReturnType<typeof createTelegramStore> | undefined;
 let conversation: Awaited<ReturnType<typeof startConversationRuntime>> | undefined;
+let fileDelivery: ReturnType<typeof startFileDeliveryRuntime> | undefined;
+let fileCommands: ReturnType<typeof createFileCommands> | undefined;
 
 if (telegramToken || telegramSecret) {
   if (!telegramToken || !telegramSecret || !/^[A-Za-z0-9_-]{32,256}$/.test(telegramSecret)) {
@@ -87,6 +95,18 @@ if (telegramToken || telegramSecret) {
   }
   const telegramClient = createTelegramClient(telegramToken);
   const bot = await telegramClient.identity();
+  if (storage) {
+    fileCommands = createFileCommands(database, bot.id);
+    fileDelivery = startFileDeliveryRuntime({
+      database,
+      botId: bot.id,
+      token: telegramToken,
+      read: createArtifactReader(database, storage),
+      notice: (code) => {
+        console.error(code);
+      },
+    });
+  }
   telegram = createTelegramStore(config.connectionString, bot.id);
   callbacks.route(
     "/",
@@ -126,6 +146,7 @@ const cliTasks = createCliTaskGroup(
         artifacts: createArtifactService(database, storage),
       })
     : undefined,
+  fileCommands,
 );
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
@@ -199,6 +220,7 @@ function shutdown() {
     .stop()
     .then(async () => {
       await conversation?.stop();
+      await fileDelivery?.stop();
       storage?.close();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })

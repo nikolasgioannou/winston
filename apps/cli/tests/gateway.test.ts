@@ -18,6 +18,29 @@ function authority(): CliAuthority {
   };
 }
 
+test("file delivery requires control authority while status uses read authority", async () => {
+  const value = { ...authority(), controlToken: `wst_${"c".repeat(43)}` };
+  for (const command of ["files.send", "files.status"] as const) {
+    const result = await callGateway(
+      value,
+      command === "files.send"
+        ? { version: 1, command, id: randomUUID(), key: "file" }
+        : { version: 1, command, id: randomUUID() },
+      (url, init) => {
+        assert.equal(url.endsWith("/control"), command === "files.send");
+        assert.equal(
+          new Headers(init.headers).get("Authorization"),
+          `Bearer ${command === "files.send" ? value.controlToken : value.token}`,
+        );
+        return Promise.resolve(
+          Response.json({ version: 1, status: "ok", data: { state: "pending" } }),
+        );
+      },
+    );
+    assert.equal(result.status, "ok");
+  }
+});
+
 test("keyed reads require control authority for approval parking", async () => {
   const value = authority();
   const request = {

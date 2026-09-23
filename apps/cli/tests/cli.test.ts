@@ -6,6 +6,23 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("file delivery commands require explicit artifact and stable request identities", () => {
+  assert.deepEqual(parseCommand(["files", "send", "--id", id, "--key", "report"]), {
+    kind: "request",
+    json: false,
+    request: { version: 1, command: "files.send", id, key: "report" },
+  });
+  assert.deepEqual(parseCommand(["files", "status", "--id", id]), {
+    kind: "request",
+    json: false,
+    request: { version: 1, command: "files.status", id },
+  });
+  assert.throws(() => parseCommand(["files", "send", "--id", id]));
+  assert.throws(() =>
+    parseCommand(["files", "send", "--id", id, "--key", "report", "--account", id]),
+  );
+});
+
 test("file inspection accepts only an explicit path", () => {
   assert.deepEqual(
     parseCommand(["files", "inspect", "--path", "/data/home/artifacts/report.pdf", "--json"]),

@@ -11,6 +11,7 @@ import type { createDatabase, OwnerTransaction } from "@winston/adapters/databas
 import type { HttpEnvironment, Identity } from "./app";
 import { parseJson, RequestError } from "./errors";
 import { publishFileResponse, type FilePublisher } from "./file-publication";
+import type { FileRequest } from "../files/cli";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -41,6 +42,7 @@ export function createCliTaskGroup(
     signal: AbortSignal,
   ) => Promise<CliResult>,
   publish?: FilePublisher,
+  files?: (credential: ServiceRequest, request: FileRequest) => Promise<CliResult>,
 ) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/publish", async (context) => {
@@ -54,6 +56,12 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "files.send")
+      return context.json(
+        files
+          ? await files(authority, request)
+          : { version: 1, status: "unavailable", message: "File delivery is not configured." },
+      );
     const connected = cliReadRequestSchema.safeParse(request);
     if (connected.success && "key" in connected.data && connected.data.key) {
       return context.json(
@@ -77,6 +85,12 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "files.status")
+      return context.json(
+        files
+          ? await files(authority, request)
+          : { version: 1, status: "unavailable", message: "File delivery is not configured." },
+      );
     const connected = cliReadRequestSchema.safeParse(request);
     if (connected.success) {
       return context.json(

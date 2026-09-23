@@ -6,7 +6,8 @@
   "exports": {
     "./background": "./src/background/step.ts",
     "./background-runtime": "./src/background/runtime.ts",
-    "./conversation": "./src/conversation/loop.ts"
+    "./conversation": "./src/conversation/loop.ts",
+    "./files": "./src/files/cli.ts"
   },
   "scripts": {
     "build": "bun build ./src/main.ts --target=bun --env=disable --outdir=dist --external '@winston/adapters/*'",

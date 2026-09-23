@@ -14,6 +14,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let calls = 0;
   let cancellations = 0;
   let reads = 0;
+  let fileCalls = 0;
   const cli: OwnerTransaction["cli"] = {
     connect: () => Promise.resolve({ version: 1, status: "waiting", message: "Connect account." }),
     cancel: () => {
@@ -54,12 +55,21 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   };
   const { app } = createApi({
     groups: {
-      task: createCliTaskGroup(database, (credential, input) => {
-        assert.equal(credential.token, "key" in input ? controlToken : token);
-        assert.equal(input.command, "gmail.search");
-        reads += 1;
-        return Promise.resolve({ version: 1, status: "ok", data: [] });
-      }),
+      task: createCliTaskGroup(
+        database,
+        (credential, input) => {
+          assert.equal(credential.token, "key" in input ? controlToken : token);
+          assert.equal(input.command, "gmail.search");
+          reads += 1;
+          return Promise.resolve({ version: 1, status: "ok", data: [] });
+        },
+        undefined,
+        (credential, request) => {
+          assert.equal(credential.token, request.command === "files.send" ? controlToken : token);
+          fileCalls++;
+          return Promise.resolve({ version: 1, status: "ok", data: { state: "pending" } });
+        },
+      ),
     },
   });
   const request = (
@@ -91,6 +101,14 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  const file = { version: 1, command: "files.send", id: randomUUID(), key: "file" };
+  assert.equal((await request(file, token, workspaceId, controlPath)).status, 401);
+  assert.equal((await request(file, controlToken, workspaceId, controlPath)).status, 200);
+  assert.equal(
+    (await request({ version: 1, command: "files.status", id: randomUUID() })).status,
+    200,
+  );
+  assert.equal(fileCalls, 2);
   assert.equal(
     (await request({ ...read, key: "read-fixture" }, controlToken, workspaceId, controlPath))
       .status,
