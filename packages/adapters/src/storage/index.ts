@@ -9,6 +9,7 @@ import {
   ListMultipartUploadsCommand,
   PutObjectCommand,
   S3Client,
+  S3ServiceException,
   UploadPartCommand,
   type CompletedPart,
 } from "@aws-sdk/client-s3";
@@ -31,6 +32,12 @@ function scoped(ownerId: string, object: StoredObject) {
 export class UncertainObjectUpload extends Error {
   constructor(readonly object: StoredObject) {
     super("Object completion is uncertain; verify the stored object before publishing it.");
+  }
+}
+
+export class MissingStoredObject extends Error {
+  constructor() {
+    super("Stored object is absent.");
   }
 }
 
@@ -64,11 +71,21 @@ export function createObjectStorage(options: {
 
   async function verify(ownerId: string, input: StoredObject) {
     const object = scoped(ownerId, input);
-    const result = await client.send(
-      new HeadObjectCommand({ Bucket: bucket, Key: key(object) }),
-      requestOptions(),
-    );
-    return result.ContentLength === object.size && result.Metadata?.sha256 === object.sha256;
+    try {
+      const result = await client.send(
+        new HeadObjectCommand({ Bucket: bucket, Key: key(object) }),
+        requestOptions(),
+      );
+      return result.ContentLength === object.size && result.Metadata?.sha256 === object.sha256;
+    } catch (error) {
+      if (
+        error instanceof S3ServiceException &&
+        error.$metadata.httpStatusCode === 404 &&
+        ["NotFound", "NoSuchKey"].includes(error.name)
+      )
+        throw new MissingStoredObject();
+      throw new Error("Object verification is unavailable.");
+    }
   }
 
   return {
