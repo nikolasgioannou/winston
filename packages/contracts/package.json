@@ -18,6 +18,7 @@
     "./jobs": "./src/jobs.ts",
     "./memory": "./src/memory.ts",
     "./messages": "./src/messages/index.ts",
+    "./storage": "./src/storage.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts",

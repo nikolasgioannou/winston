@@ -10,6 +10,7 @@
     "./google": "./src/google/index.ts",
     "./jobs": "./src/jobs/index.ts",
     "./models": "./src/models/index.ts",
+    "./storage": "./src/storage/index.ts",
     "./telegram": "./src/telegram/index.ts"
   },
   "scripts": {
@@ -17,6 +18,8 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1138.0",
+    "@aws-sdk/s3-request-presigner": "3.1138.0",
     "@openrouter/ai-sdk-provider": "3.1.0",
     "@winston/contracts": "workspace:*",
     "ai": "7.0.107",
