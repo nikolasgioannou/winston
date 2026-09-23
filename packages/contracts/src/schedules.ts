@@ -82,6 +82,10 @@ export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
 });
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;
 export type Schedule = z.infer<typeof scheduleSchema>;
+export const scheduleListSchema = z.strictObject({
+  items: z.array(scheduleSchema).max(100),
+  next: z.uuid().nullable(),
+});
 
 export const ownerScheduleCreateSchema = scheduleRequestSchema
   .omit({ sourceMessageIds: true })

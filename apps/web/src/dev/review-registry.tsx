@@ -9,6 +9,7 @@ import { DownloadPreview, previewDownload } from "./download-preview";
 import { ManagementPreview } from "./management-preview";
 import { ManagementShell } from "../management/shell";
 import { AccountView } from "../management/account-view";
+import { SchedulesPreview, previewSchedules } from "./schedules-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -74,6 +75,66 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "schedules",
+    label: "Schedules",
+    kind: "page",
+    states: [
+      {
+        id: "active",
+        label: "Active",
+        fullWidth: true,
+        render: () => <SchedulesPreview initial={{ kind: "ready", items: previewSchedules }} />,
+      },
+      {
+        id: "empty",
+        label: "Empty",
+        fullWidth: true,
+        render: () => <SchedulesPreview initial={{ kind: "ready", items: [] }} />,
+      },
+      {
+        id: "loading",
+        label: "Loading",
+        fullWidth: true,
+        render: () => <SchedulesPreview initial={{ kind: "loading" }} />,
+      },
+      {
+        id: "error",
+        label: "Unavailable",
+        fullWidth: true,
+        render: () => <SchedulesPreview initial={{ kind: "error" }} />,
+      },
+      {
+        id: "canceling",
+        label: "Canceling",
+        fullWidth: true,
+        render: () => (
+          <SchedulesPreview busy initial={{ kind: "ready", items: previewSchedules }} />
+        ),
+      },
+      {
+        id: "uncertain",
+        label: "Cancellation unconfirmed",
+        fullWidth: true,
+        render: () => (
+          <SchedulesPreview failed initial={{ kind: "ready", items: previewSchedules }} />
+        ),
+      },
+      ...(["canceled", "completed"] as const).map((state) => ({
+        id: state,
+        label: state === "completed" ? "No upcoming runs" : "Canceled",
+        fullWidth: true,
+        render: () => (
+          <SchedulesPreview
+            initial={{
+              kind: "ready",
+              items: previewSchedules.map((schedule) => ({ ...schedule, state, nextRunAt: null })),
+            }}
+          />
+        ),
+      })),
+    ],
+  },
   {
     id: "management",
     label: "Management",

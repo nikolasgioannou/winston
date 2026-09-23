@@ -2,11 +2,12 @@ import { readDownloadLocator, rememberDownload } from "../files/locator";
 import { readHandoffLocator, rememberHandoff } from "../handoffs/locator";
 
 const storageKey = "winston.pending-page";
+const paths = ["/connections", "/schedules"];
 
 export function rememberManagementPage() {
   try {
-    if (window.location.pathname === "/connections")
-      sessionStorage.setItem(storageKey, "/connections");
+    if (paths.includes(window.location.pathname))
+      sessionStorage.setItem(storageKey, window.location.pathname);
     else sessionStorage.removeItem(storageKey);
   } catch {
     // Direct links remain usable when browser storage is unavailable.
@@ -14,17 +15,15 @@ export function rememberManagementPage() {
 }
 
 export function restoreManagementPage() {
-  if (window.location.pathname === "/connections") clearPendingDestination();
+  if (paths.includes(window.location.pathname)) clearPendingDestination();
   if (readDownloadLocator() || readHandoffLocator()) return;
   const url = new URL(window.location.href);
   try {
     const saved = sessionStorage.getItem(storageKey);
     sessionStorage.removeItem(storageKey);
-    if (
-      url.pathname === "/" &&
-      (saved === "/connections" || url.searchParams.has("connection_result"))
-    ) {
-      window.history.replaceState(null, "", `/connections${url.search}`);
+    const destination = url.searchParams.has("connection_result") ? "/connections" : saved;
+    if (url.pathname === "/" && destination && paths.includes(destination)) {
+      window.history.replaceState(null, "", `${destination}${url.search}`);
     }
   } catch {
     // Restoring a destination never authorizes access to it.

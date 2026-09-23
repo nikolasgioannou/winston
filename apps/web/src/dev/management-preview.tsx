@@ -4,8 +4,9 @@ import { AccountView } from "../management/account-view";
 import { SignInView } from "../auth/sign-in-view";
 import { PairingView, type PairingState } from "../telegram/pairing-view";
 import { ConnectionsPreview } from "./connections-preview";
+import { SchedulesPreview, previewSchedules } from "./schedules-preview";
 
-export function ManagementPreview({ initial }: { initial: "/" | "/connections" }) {
+export function ManagementPreview({ initial }: { initial: "/" | "/connections" | "/schedules" }) {
   const [path, setPath] = useState(initial);
   const [signedIn, setSignedIn] = useState(true);
   const [telegram, setTelegram] = useState<PairingState>({ kind: "disconnected" });
@@ -25,10 +26,12 @@ export function ManagementPreview({ initial }: { initial: "/" | "/connections" }
       preview
       activeHref={path}
       onNavigate={(href) => {
-        setPath(href === "/connections" ? href : "/");
+        setPath(href === "/connections" || href === "/schedules" ? href : "/");
       }}
     >
-      {path === "/" ? (
+      {path === "/schedules" ? (
+        <SchedulesPreview embedded initial={{ kind: "ready", items: previewSchedules }} />
+      ) : path === "/" ? (
         <AccountView
           onSignOut={() => {
             setSignedIn(false);

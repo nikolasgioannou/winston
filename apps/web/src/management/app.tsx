@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
   createRoute,
@@ -15,14 +15,9 @@ import { DownloadPage } from "../files/download";
 import { HandoffPage } from "../handoffs/handoff";
 import { ManagementShell } from "./shell";
 import { AccountView } from "./account-view";
+import { queryClient } from "./query-client";
+import { Schedules } from "../schedules/schedules";
 import { clearPendingDestination, restoreManagementPage } from "./locator";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false, staleTime: 0 },
-    mutations: { retry: false },
-  },
-});
 
 const rootRoute = createRootRouteWithContext<{ signOut: () => void }>()({
   component: Layout,
@@ -37,7 +32,9 @@ function Layout() {
       activeHref={pathname}
       onNavigate={(href) => {
         clearPendingDestination();
-        navigate({ to: href === "/connections" ? "/connections" : "/" }).catch(() => {
+        navigate({
+          to: href === "/schedules" ? "/schedules" : href === "/connections" ? "/connections" : "/",
+        }).catch(() => {
           window.location.assign(href);
         });
       }}
@@ -77,6 +74,11 @@ const downloadRoute = createRoute({
   path: "/files/$id",
   component: DownloadRoute,
 });
+const schedulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/schedules",
+  component: Schedules,
+});
 function DownloadRoute() {
   return <DownloadPage id={downloadRoute.useParams().id} />;
 }
@@ -91,7 +93,13 @@ function HandoffRoute() {
 
 restoreManagementPage();
 const router = createRouter({
-  routeTree: rootRoute.addChildren([accountRoute, connectionsRoute, downloadRoute, handoffRoute]),
+  routeTree: rootRoute.addChildren([
+    accountRoute,
+    connectionsRoute,
+    schedulesRoute,
+    downloadRoute,
+    handoffRoute,
+  ]),
   context: { signOut: () => {} },
 });
 
