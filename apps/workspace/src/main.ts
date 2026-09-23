@@ -18,7 +18,7 @@ const identity = workspaceIdentitySchema.parse({
   ownerId: process.env.WORKSPACE_OWNER_ID,
   workspaceId: process.env.WORKSPACE_ID,
 });
-const authorize = createWorkspaceAuthority(process.env.WORKSPACE_AUTHORITY_ORIGIN ?? "");
+const authority = createWorkspaceAuthority(process.env.WORKSPACE_AUTHORITY_ORIGIN ?? "");
 
 // The entrypoint holds the volume lock. No previous execution process may outlive recovery.
 const killed = Bun.spawnSync(["/usr/bin/pkill", "-KILL", "-u", "1000"], {
@@ -45,7 +45,7 @@ const server = Bun.serve({
   port: 8080,
   maxRequestBodySize: 16_384,
   idleTimeout: 10,
-  fetch: createWorkspaceHandler({ identity, journal, authorize }),
+  fetch: createWorkspaceHandler({ identity, journal, authorize: authority.inspect }),
   error() {
     return Response.json({ error: "workspace_unavailable" }, { status: 503 });
   },

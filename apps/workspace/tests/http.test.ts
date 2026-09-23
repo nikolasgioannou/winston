@@ -57,7 +57,7 @@ function fixture() {
     fetch: createWorkspaceHandler({
       identity,
       journal,
-      authorize: createWorkspaceAuthority(authority.url.origin),
+      authorize: createWorkspaceAuthority(authority.url.origin).inspect,
     }),
   });
   cleanup.push(async () => {

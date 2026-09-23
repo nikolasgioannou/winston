@@ -3,6 +3,8 @@ import {
   type WorkspaceOperation,
 } from "@winston/contracts/workspace";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
+import { canonicalJson } from "@winston/contracts/json";
+import type { WorkspaceCommand } from "@winston/contracts/workspace-commands";
 import { boundedJson } from "./http-body";
 
 export function createWorkspaceAuthority(origin: string) {
@@ -18,9 +20,14 @@ export function createWorkspaceAuthority(origin: string) {
     throw new Error("Workspace authority requires an HTTPS origin or loopback development server.");
   }
 
-  return async (credential: ServiceRequest, operation: WorkspaceOperation) => {
+  async function authorize(
+    credential: ServiceRequest,
+    operation: WorkspaceOperation,
+    endpoint: string,
+    body: WorkspaceOperation | WorkspaceCommand,
+  ) {
     const response = await fetch(
-      new URL(`/api/tasks/workspaces/${operation.identity.workspaceId}/authorize`, url),
+      new URL(`/api/tasks/workspaces/${operation.identity.workspaceId}/${endpoint}`, url),
       {
         method: "POST",
         redirect: "error",
@@ -31,7 +38,7 @@ export function createWorkspaceAuthority(origin: string) {
           Authorization: `Bearer ${credential.token}`,
           "X-Winston-Worker": credential.subjectId,
         },
-        body: JSON.stringify(operation),
+        body: JSON.stringify(body),
       },
     );
     if (response.status === 401 || response.status === 403) {
@@ -43,6 +50,27 @@ export function createWorkspaceAuthority(origin: string) {
       throw new Error("Workspace authority unavailable.");
     }
     const result = workspaceAuthorizationSchema.parse(await boundedJson(response.body, 16_384));
-    return JSON.stringify(result.operation) === JSON.stringify(operation);
+    return canonicalJson(result.operation) === canonicalJson(operation);
+  }
+  return {
+    inspect: (credential: ServiceRequest, operation: WorkspaceOperation) => {
+      if (credential.operation !== "workspace:execute" || operation.kind !== "workspace:inspect")
+        return Promise.resolve(false);
+      return authorize(credential, operation, "authorize", operation);
+    },
+    command(credential: ServiceRequest, command: WorkspaceCommand) {
+      if (credential.operation !== "workspace:execute") return Promise.resolve(false);
+      return authorize(credential, command.operation, "authorize-command", command);
+    },
+    control(credential: ServiceRequest, operation: WorkspaceOperation) {
+      if (
+        credential.operation !== "workspace:observe" &&
+        credential.operation !== "workspace:cancel"
+      )
+        return Promise.resolve(false);
+      const endpoint =
+        credential.operation === "workspace:observe" ? "authorize-observe" : "authorize-cancel";
+      return authorize(credential, operation, endpoint, operation);
+    },
   };
 }
