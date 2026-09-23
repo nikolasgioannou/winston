@@ -1,0 +1,4 @@
+app = "winston-628-workspace"
+primary_region = "iad"
+
+# Build-only configuration. Existing owner machines are updated without replacing their volumes.
