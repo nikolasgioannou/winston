@@ -63,6 +63,9 @@ function fixture() {
   };
   const pending: ReturnType<typeof Promise.withResolvers<CommandResult>>[] = [];
   const runner = {
+    output() {
+      return new Blob([]).stream();
+    },
     start() {
       starts += 1;
       const next = Promise.withResolvers<CommandResult>();

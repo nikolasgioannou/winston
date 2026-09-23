@@ -12,8 +12,10 @@ import { dirname, join, relative } from "node:path";
 import {
   commandExitSchema,
   commandInputSchema,
+  commandOutputChannelSchema,
   type CommandInput,
   type CommandResult,
+  type CommandOutputChannel,
 } from "@winston/contracts/commands";
 import { commandOutput } from "./command-output";
 import { workspaceOperationSchema } from "@winston/contracts/workspace";
@@ -52,6 +54,22 @@ export function createCommandRunner(options: {
   let closing = false;
 
   return {
+    output(id: string, channel: CommandOutputChannel, bytes: number) {
+      workspaceOperationSchema.shape.operationId.parse(id);
+      commandOutputChannelSchema.parse(channel);
+      const path = join(options.logsRoot, id, channel);
+      const stat = lstatSync(path);
+      if (
+        !stat.isFile() ||
+        stat.isSymbolicLink() ||
+        stat.uid !== 0 ||
+        stat.nlink !== 1 ||
+        (stat.mode & 0o077) !== 0 ||
+        stat.size !== bytes
+      )
+        throw new Error("Command output is unavailable.");
+      return Bun.file(path).stream();
+    },
     start(id: string, input: CommandInput) {
       if (closing) throw new Error("Workspace command runner is stopping.");
       workspaceOperationSchema.shape.operationId.parse(id);

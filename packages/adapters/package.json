@@ -12,7 +12,8 @@
     "./jobs": "./src/jobs/index.ts",
     "./models": "./src/models/index.ts",
     "./storage": "./src/storage/index.ts",
-    "./telegram": "./src/telegram/index.ts"
+    "./telegram": "./src/telegram/index.ts",
+    "./workspace": "./src/workspace/index.ts"
   },
   "scripts": {
     "db:migrate": "bun src/database/migrate.ts",

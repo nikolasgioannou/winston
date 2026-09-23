@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
+import { commandResultSchema, type CommandOutputChannel } from "@winston/contracts/commands";
 import type { WorkspaceOperation } from "@winston/contracts/workspace";
 import { canonicalJson } from "@winston/contracts/json";
 import {
@@ -172,6 +173,22 @@ export function createCommandService(options: {
         if (entry) stop(entry);
       }
       return record;
+    },
+    async output(
+      credential: ServiceRequest,
+      operation: WorkspaceOperation,
+      channel: CommandOutputChannel,
+    ) {
+      if (credential.operation !== "workspace:observe") throw new CommandError("forbidden");
+      await authorize(() => options.authority.control(credential, operation));
+      const record = options.journal.read(operation);
+      if (record?.outcome?.state !== "completed") return null;
+      const result = commandResultSchema.parse(JSON.parse(record.outcome.result));
+      const output = result[channel];
+      return {
+        output,
+        stream: options.runner.output(operation.operationId, channel, output.bytes),
+      };
     },
     async close() {
       closing = true;

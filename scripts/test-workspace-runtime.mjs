@@ -132,7 +132,7 @@ try {
   );
   await ready();
 
-  const interruptedCommand = JSON.parse(
+  const commandFixture = JSON.parse(
     evaluate(readFileSync("scripts/fixtures/workspace-command-http.mjs", "utf8")),
   );
 
@@ -169,9 +169,24 @@ try {
   await ready();
   assert.equal(
     evaluate(
-      `const {Database}=await import("bun:sqlite");const db=new Database("/data/control/operations.sqlite");console.log(db.query("SELECT state FROM operations WHERE id = ?").get(${JSON.stringify(interruptedCommand.operationId)}).state);db.close();`,
+      `const {Database}=await import("bun:sqlite");const db=new Database("/data/control/operations.sqlite");console.log(db.query("SELECT state FROM operations WHERE id = ?").get(${JSON.stringify(commandFixture.interrupted.operationId)}).state);db.close();`,
     ),
     "unknown",
+  );
+  assert.equal(
+    evaluate(`
+    const operation = ${JSON.stringify(commandFixture.output)};
+    const authority = Bun.serve({hostname:"127.0.0.1",port:9090,fetch:()=>Response.json({version:1,allowed:true,operation,workspaceRevision:1})});
+    try {
+      const response = await fetch("http://127.0.0.1:8080/v1/commands/stdout",{method:"POST",headers:{Authorization:"Bearer wst_${"a".repeat(43)}","X-Winston-Worker":"${randomUUID()}"},body:JSON.stringify(operation)});
+      if(response.status!==200) throw new Error("Persisted output unavailable");
+      const body = new Uint8Array(await response.arrayBuffer());
+      const {createHash}=await import("node:crypto");
+      if(createHash("sha256").update(body).digest("hex")!==response.headers.get("X-Winston-Output-SHA256")) throw new Error("Persisted output changed");
+      console.log(body.byteLength);
+    } finally { await authority.stop(true); }
+  `),
+    "20000",
   );
   assert.equal(
     evaluate('console.log(await Bun.file("/data/home/persistent.txt").text());', "1000:1000"),

@@ -47,7 +47,7 @@ function command(source) {
     cwd: "/data/home",
     env: {},
     timeoutMs: 60_000,
-    maxOutputBytes: 4096,
+    maxOutputBytes: 32768,
   };
   return {
     operation: {
@@ -100,6 +100,24 @@ try {
   assert.equal(JSON.parse(result.outcome.result).stdout.preview.trim(), "1000");
   assert.deepEqual(await (await send("start", once)).json(), result);
   assert.equal(await Bun.file("/data/home/executions").text(), "1");
+  const large = command('process.stdout.write("x".repeat(20000))');
+  assert.equal((await send("start", large)).status, 200);
+  const largeResult = JSON.parse((await completed(large.operation)).outcome.result);
+  assert.equal(largeResult.stdout.truncated, true);
+  assert.equal(largeResult.stdout.preview.length, 1024);
+  assert.equal((await send("stdout", large.operation, tokens.cancel)).status, 403);
+  assert.equal(
+    (await send("stdout", { ...large.operation, path: "/etc/passwd" }, tokens.observe)).status,
+    400,
+  );
+  const output = await send("stdout", large.operation, tokens.observe);
+  assert.equal(output.status, 200);
+  const bytes = Buffer.from(await output.arrayBuffer());
+  assert.equal(bytes.length, 20000);
+  assert.equal(
+    output.headers.get("X-Winston-Output-SHA256"),
+    createHash("sha256").update(bytes).digest("hex"),
+  );
   const long = command("await Bun.sleep(60000)");
   assert.equal((await send("start", long)).status, 200);
   assert.equal((await send("renew", long)).status, 200);
@@ -108,7 +126,7 @@ try {
   assert.equal(JSON.parse((await completed(long.operation)).outcome.result).reason, "canceled");
   const interrupted = command("await Bun.sleep(60000)");
   assert.equal((await send("start", interrupted)).status, 200);
-  console.log(JSON.stringify(interrupted.operation));
+  console.log(JSON.stringify({ interrupted: interrupted.operation, output: large.operation }));
 } finally {
   await authority.stop(true);
 }

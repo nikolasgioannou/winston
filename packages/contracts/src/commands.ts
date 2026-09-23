@@ -43,15 +43,23 @@ export const commandExitSchema = z.strictObject({
 export type CommandInput = z.infer<typeof commandInputSchema>;
 export type CommandExit = z.infer<typeof commandExitSchema>;
 
-export type CommandOutput = {
-  bytes: number;
-  sha256: string;
-  preview: string;
-  truncated: boolean;
-};
-export type CommandResult = CommandExit & {
-  reason: "exited" | "canceled" | "timeout" | "output_limit" | "unknown";
-  durationMs: number;
-  stdout: CommandOutput;
-  stderr: CommandOutput;
-};
+export const commandOutputSchema = z.strictObject({
+  bytes: z
+    .number()
+    .int()
+    .min(0)
+    .max(256 * 1024 * 1024),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  preview: z.string().max(4096),
+  truncated: z.boolean(),
+});
+export const commandResultSchema = commandExitSchema.extend({
+  reason: z.enum(["exited", "canceled", "timeout", "output_limit", "unknown"]),
+  durationMs: z.number().int().nonnegative(),
+  stdout: commandOutputSchema,
+  stderr: commandOutputSchema,
+});
+export const commandOutputChannelSchema = z.enum(["stdout", "stderr"]);
+export type CommandOutput = z.infer<typeof commandOutputSchema>;
+export type CommandResult = z.infer<typeof commandResultSchema>;
+export type CommandOutputChannel = z.infer<typeof commandOutputChannelSchema>;
