@@ -19,6 +19,14 @@ export function parseCommand(args: string[]): ParsedCommand {
       service: { type: "string" },
       key: { type: "string" },
       detail: { type: "string" },
+      account: { type: "string" },
+      calendar: { type: "string" },
+      query: { type: "string" },
+      limit: { type: "string" },
+      cursor: { type: "string" },
+      from: { type: "string" },
+      until: { type: "string" },
+      timezone: { type: "string" },
     },
   });
   const flags = tokens.filter((token) => token.kind === "option").map((token) => token.name);
@@ -28,12 +36,42 @@ export function parseCommand(args: string[]): ParsedCommand {
   if (words.length > 2) throw new Error("Unexpected arguments. Run winston --help.");
   const topic = words.join(".");
   if (isHelp) {
-    if ([values.id, values.service, values.key, values.detail].some((value) => value !== undefined))
+    if (flags.some((flag) => flag !== "help" && flag !== "json"))
       throw new Error("Help does not accept command arguments.");
     return { kind: "help", json: values.json === true, content: help(topic || undefined) };
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if ("flags" in command) {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected command options.");
+    const result = cliRequestSchema.safeParse({
+      version: 1,
+      command: command.command,
+      accountId: values.account,
+      ...(values.calendar === undefined ? {} : { calendarId: values.calendar }),
+      ...(values.id === undefined ? {} : { id: values.id }),
+      ...(values.limit === undefined ? {} : { limit: Number(values.limit) }),
+      ...(values.cursor === undefined ? {} : { cursor: JSON.parse(values.cursor) as unknown }),
+      ...(command.command === "calendar.events"
+        ? {
+            window: {
+              timeMin: values.from,
+              timeMax: values.until,
+              timezone: values.timezone,
+              query: values.query ?? "",
+            },
+          }
+        : command.command === "gmail.search"
+          ? { query: values.query ?? "" }
+          : {}),
+    });
+    if (!result.success) throw new Error("Invalid read arguments. Run winston --help.");
+    return { kind: "request", json: values.json === true, request: result.data };
+  }
+  if (flags.some((flag) => !["json", "id", "service", "key", "detail"].includes(flag)))
+    throw new Error("Unexpected command options.");
   const connection = command.command === "accounts.connect";
   if (
     !connection &&

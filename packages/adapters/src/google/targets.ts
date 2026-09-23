@@ -30,7 +30,11 @@ export function createConnectionTargets(
     const service = selection.operation.startsWith("gmail.") ? "gmail" : "calendar";
     const catalog: TargetCatalog = [];
     // Provider calls happen outside the transaction; their connection versions are checked below.
-    for (const connection of listed.filter((entry) => entry.service === service)) {
+    for (const connection of listed.filter(
+      (entry) =>
+        entry.service === service &&
+        (!selection.explicit || entry.id === selection.explicit.connectionId),
+    )) {
       if (!["connected", "limited"].includes(connection.status)) continue;
       try {
         catalog.push({
@@ -95,10 +99,16 @@ export function createConnectionTargets(
       ownerId: string,
       operation: "gmail.read" | "calendar.read",
       signal: AbortSignal,
+      connectionId?: string,
     ) {
       if (!["gmail.read", "calendar.read"].includes(operation))
         throw new Error("Search requires a read operation.");
-      const result = await select(ownerId, { operation }, signal, true);
+      const result = await select(
+        ownerId,
+        { operation, ...(connectionId ? { explicit: { connectionId, calendarId: null } } : {}) },
+        signal,
+        true,
+      );
       return result.status === "search" ? result.targets : [];
     },
     async revalidate(ownerId: string, target: ResolvedTarget, signal: AbortSignal) {

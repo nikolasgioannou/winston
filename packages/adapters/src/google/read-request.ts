@@ -15,6 +15,7 @@ export class GoogleReadError extends Error {
   }
 }
 export type GoogleReadOptions = {
+  authorize?: () => Promise<boolean>;
   database: ReturnType<typeof createDatabase>;
   google: Pick<GoogleConnections, "list" | "calendars" | "access" | "rejected">;
   fetch?: (url: URL, init: RequestInit) => Promise<Response>;
@@ -71,6 +72,7 @@ export function createGoogleReadRequest(
     signal: AbortSignal,
   ) => {
     try {
+      if (options.authorize && !(await options.authorize())) throw fail("stale");
       if (
         target.operation !== operation ||
         (config.service === "gmail" ? target.calendarId !== null : !target.calendarId)
@@ -118,6 +120,7 @@ export function createGoogleReadRequest(
         );
       });
       if (!allowed) throw fail("stale");
+      if (options.authorize && !(await options.authorize())) throw fail("stale");
       deadline.throwIfAborted();
       const url = new URL(`${base}${path}`);
       if (!url.href.startsWith(base)) throw fail("unavailable");
@@ -136,6 +139,7 @@ export function createGoogleReadRequest(
         throw fail("unavailable");
       }
       const data = await boundedJson(response, limit, fail);
+      if (options.authorize && !(await options.authorize())) throw fail("stale");
       return { source: selected.target, data };
     } catch (error) {
       if (error instanceof GoogleReadError) throw error;

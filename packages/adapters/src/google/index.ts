@@ -17,6 +17,7 @@ export { GoogleAccessError } from "./errors";
 export { createConnectionTargets, labelSearchResults } from "./targets";
 export { createGmailReader, GmailReadError } from "./gmail";
 export { createCalendarReader, CalendarReadError } from "./calendar-events";
+export { createConnectedReadGateway } from "./cli-reads";
 
 export function createGoogleConnections(options: {
   database: ReturnType<typeof createDatabase>;

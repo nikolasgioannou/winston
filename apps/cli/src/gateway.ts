@@ -2,6 +2,7 @@ import {
   cliAuthoritySchema,
   cliRequestSchema,
   cliResultSchema,
+  cliReadRequestSchema,
   type CliAuthority,
   type CliRequest,
   type CliResult,
@@ -37,7 +38,9 @@ export async function callGateway(
     body: JSON.stringify(request),
     redirect: "error",
     credentials: "omit",
-    signal: AbortSignal.timeout(Math.min(15_000, remaining)),
+    signal: AbortSignal.timeout(
+      Math.min(cliReadRequestSchema.safeParse(request).success ? 45_000 : 15_000, remaining),
+    ),
   });
   if (response.status === 401 || response.status === 403) {
     await response.body?.cancel();

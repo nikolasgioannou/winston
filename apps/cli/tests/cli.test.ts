@@ -6,6 +6,54 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("connected reads require explicit targets and reject unrelated or malformed flags", () => {
+  const gmail = parseCommand([
+    "gmail",
+    "search",
+    "--account",
+    id,
+    "--query",
+    "from:fixture",
+    "--limit",
+    "2",
+  ]);
+  assert.equal(gmail.kind, "request");
+  assert.deepEqual(gmail.request, {
+    version: 1,
+    command: "gmail.search",
+    accountId: id,
+    query: "from:fixture",
+    limit: 2,
+  });
+  const calendar = parseCommand([
+    "calendar",
+    "events",
+    "--account",
+    id,
+    "--calendar",
+    "team@example.com",
+    "--from",
+    "2026-11-01T00:00:00-04:00",
+    "--until",
+    "2026-11-02T00:00:00-05:00",
+    "--timezone",
+    "America/New_York",
+  ]);
+  assert.equal(calendar.kind, "request");
+  assert.equal(calendar.request.command, "calendar.events");
+  assert.equal(calendar.request.calendarId, "team@example.com");
+  for (const args of [
+    ["gmail", "search"],
+    ["gmail", "search", "--account", id, "--limit", "NaN"],
+    ["gmail", "message", "--account", id, "--id", "msg", "--query", "ignored"],
+    ["accounts", "list", "--account", id],
+    ["calendar", "events", "--account", id, "--calendar", "team"],
+    ["gmail", "search", "--account", id, "--cursor", "bad-json"],
+    ["help", "calendar", "--account", id],
+  ])
+    assert.throws(() => parseCommand(args));
+});
+
 test("help and malformed arguments never call the gateway", async () => {
   let calls = 0;
   const execute = (): Promise<CliResult> => {

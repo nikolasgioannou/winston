@@ -1,5 +1,11 @@
 import { Hono } from "hono";
-import { cliRequestSchema } from "@winston/contracts/cli";
+import {
+  cliRequestSchema,
+  cliReadRequestSchema,
+  type CliReadRequest,
+  type CliResult,
+} from "@winston/contracts/cli";
+import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { serviceRequestSchema } from "@winston/contracts/capabilities";
 import type { createDatabase, OwnerTransaction } from "@winston/adapters/database";
 import type { HttpEnvironment, Identity } from "./app";
@@ -25,7 +31,14 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
   ): Promise<Result>;
 };
 
-export function createCliTaskGroup(database: Database) {
+export function createCliTaskGroup(
+  database: Database,
+  read?: (
+    credential: ServiceRequest,
+    request: CliReadRequest,
+    signal: AbortSignal,
+  ) => Promise<CliResult>,
+) {
   const router = new Hono<HttpEnvironment>();
   router.post("/cli/control", async (context) => {
     const identity = context.get("identity");
@@ -47,6 +60,14 @@ export function createCliTaskGroup(database: Database) {
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const connected = cliReadRequestSchema.safeParse(request);
+    if (connected.success) {
+      return context.json(
+        read
+          ? await read(authority, connected.data, context.req.raw.signal)
+          : { version: 1, status: "unavailable", message: "Connected reads are not configured." },
+      );
+    }
     const result = await database.transaction(identity.ownerId, ({ cli }) =>
       cli.execute(authority, request),
     );

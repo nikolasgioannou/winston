@@ -18,7 +18,11 @@ import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/
 import { startConversationRuntime } from "./conversation/runtime";
 import { Hono } from "hono";
 import type { HttpEnvironment, Identity } from "./http/app";
-import { createGoogleConnections, createGoogleOAuth } from "@winston/adapters/google";
+import {
+  createGoogleConnections,
+  createGoogleOAuth,
+  createConnectedReadGateway,
+} from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
 import { createAuthorizationOwnerRouter } from "./http/authorization";
@@ -60,12 +64,14 @@ owner.route("/permissions", createAuthorizationOwnerRouter(database));
 owner.route("/connection-targets", createTargetPreferencesRouter(database));
 callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
+let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
 if (connectionConfig) {
   const connections = createGoogleConnections({
     database,
     cipher: connectionConfig.cipher,
     oauth: createGoogleOAuth(connectionConfig.oauth),
   });
+  connectedReads = createConnectedReadGateway({ database, google: connections });
   owner.route("/connections", createConnectionOwnerRouter(connections));
   owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
   callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
@@ -111,7 +117,7 @@ const workspaceTasks = createWorkspaceTaskGroup(
   database,
   process.env.NODE_ENV === "production" ? "production" : "local",
 );
-const cliTasks = createCliTaskGroup(database);
+const cliTasks = createCliTaskGroup(database, connectedReads);
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);

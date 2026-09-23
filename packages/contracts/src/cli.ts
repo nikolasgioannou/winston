@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { googleServiceSchema } from "./connections";
+import { cliReadRequestSchema } from "./cli-reads";
+export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliReadRequestSchema.options,
   z.strictObject({ version: z.literal(1), command: z.literal("accounts.list") }),
   z.strictObject({
     version: z.literal(1),

@@ -13,6 +13,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const controlToken = `wst_${"b".repeat(43)}`;
   let calls = 0;
   let cancellations = 0;
+  let reads = 0;
   const cli: OwnerTransaction["cli"] = {
     connect: () => Promise.resolve({ version: 1, status: "waiting", message: "Connect account." }),
     cancel: () => {
@@ -51,7 +52,16 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
       return work({ cli });
     },
   };
-  const { app } = createApi({ groups: { task: createCliTaskGroup(database) } });
+  const { app } = createApi({
+    groups: {
+      task: createCliTaskGroup(database, (credential, input) => {
+        assert.equal(credential.token, token);
+        assert.equal(input.command, "gmail.search");
+        reads += 1;
+        return Promise.resolve({ version: 1, status: "ok", data: [] });
+      }),
+    },
+  });
   const request = (
     body: unknown,
     bearer = token,
@@ -76,6 +86,10 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request({ version: 1, command: "accounts.list", ownerId })).status, 400);
   assert.equal((await request({ version: 1, command: "invented" })).status, 400);
   const cancellation = { version: 1, command: "operations.cancel", id: randomUUID() };
+  const read = { version: 1, command: "gmail.search", accountId: randomUUID(), query: "fixture" };
+  assert.equal((await request(read)).status, 200);
+  assert.equal((await request(read, "bad")).status, 401);
+  assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
   assert.equal((await request(cancellation, token, workspaceId, controlPath)).status, 401);
   assert.equal((await request(cancellation, controlToken)).status, 401);
