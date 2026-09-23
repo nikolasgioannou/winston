@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SignInView, type SignInState } from "./sign-in-view";
 import { readSession } from "./read-session";
 import { useTimezone } from "../timezone/use-timezone";
 import { TelegramPairing } from "../telegram/pairing";
 import { Connections } from "../connections/connections";
 
-export function SignIn() {
+export function SignIn({ children }: { children?: ReactNode }) {
   const [state, setState] = useState<SignInState>("loading");
   const [failed] = useState(() => new URLSearchParams(window.location.search).has("error"));
   useTimezone(state === "signed-in");
@@ -107,12 +107,14 @@ export function SignIn() {
         window.location.reload();
       }}
     >
-      {state === "signed-in" ? (
-        <>
-          <TelegramPairing />
-          <Connections />
-        </>
-      ) : null}
+      {state === "signed-in"
+        ? (children ?? (
+            <>
+              <TelegramPairing />
+              <Connections />
+            </>
+          ))
+        : null}
     </SignInView>
   );
 }

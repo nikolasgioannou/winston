@@ -33,10 +33,13 @@ if (import.meta.env.DEV && window.location.pathname === "/__dev/design/frame") {
   );
 } else {
   const { SignIn } = await import("./auth/sign-in");
+  const { readHandoffLocator } = await import("./handoffs/locator");
+  const handoffId = readHandoffLocator();
+  const { HandoffPage } = await import("./handoffs/handoff");
 
   root.render(
     <StrictMode>
-      <SignIn />
+      <SignIn>{handoffId ? <HandoffPage id={handoffId} /> : undefined}</SignIn>
     </StrictMode>,
   );
 }

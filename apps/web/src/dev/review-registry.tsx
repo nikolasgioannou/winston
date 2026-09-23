@@ -4,6 +4,7 @@ import { FoundationShell } from "./foundation-shell";
 import { SignInView, type SignInState } from "../auth/sign-in-view";
 import { PairingView, type PairingState } from "../telegram/pairing-view";
 import { ConnectionsPreview, previewConnections } from "./connections-preview";
+import { HandoffPreview, previewHandoff } from "./handoff-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -65,6 +66,47 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "handoff",
+    label: "Task setup",
+    kind: "page",
+    states: [
+      {
+        id: "pending",
+        label: "Connect account",
+        fullWidth: true,
+        render: () => <HandoffPreview initial={{ kind: "ready", handoff: previewHandoff }} />,
+      },
+      ...(["completed", "expired", "abandoned", "invalidated"] as const).map((state) => ({
+        fullWidth: true,
+        id: state,
+        label: state,
+        render: () => (
+          <HandoffPreview initial={{ kind: "ready", handoff: { ...previewHandoff, state } }} />
+        ),
+      })),
+      ...(["loading", "error", "unavailable"] as const).map((kind) => ({
+        fullWidth: true,
+        id: kind,
+        label: kind,
+        render: () => <HandoffPreview initial={{ kind }} />,
+      })),
+      {
+        id: "busy",
+        label: "Opening Google",
+        fullWidth: true,
+        render: () => <HandoffPreview busy initial={{ kind: "ready", handoff: previewHandoff }} />,
+      },
+      {
+        id: "failed",
+        label: "Setup failed",
+        fullWidth: true,
+        render: () => (
+          <HandoffPreview failed initial={{ kind: "ready", handoff: previewHandoff }} />
+        ),
+      },
+    ],
+  },
   {
     id: "connections",
     label: "Connected apps",
