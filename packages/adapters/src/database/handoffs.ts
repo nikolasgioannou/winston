@@ -152,7 +152,7 @@ export function handoffRepository(transaction: DatabaseTransaction, ownerId: str
     async completeVerified(id: string, input: HandoffEvidence) {
       const evidence = handoffEvidenceSchema.parse(input);
       await lock();
-      const handoff = await find(id);
+      let handoff = await find(id);
       if (!handoff) return null;
       if (handoff.state !== "pending") return { handoff, resumed: false };
       let resolutionId: string;
@@ -163,8 +163,18 @@ export function handoffRepository(transaction: DatabaseTransaction, ownerId: str
         if (
           !connection ||
           connection.service !== handoff.target.service ||
+          (handoff.target.connectionId && handoff.target.connectionId !== connection.id)
+        )
+          return { handoff, resumed: false };
+        // OAuth verified this account even if the owner declined a required scope.
+        // A later attempt must reconnect it rather than add a duplicate account.
+        if (!handoff.target.connectionId)
+          handoff = await save({
+            ...handoff,
+            target: { ...handoff.target, connectionId: connection.id },
+          });
+        if (
           connection.status !== "connected" ||
-          (handoff.target.connectionId && handoff.target.connectionId !== connection.id) ||
           !googleScopes[connection.service].every((scope) => connection.scopes.includes(scope))
         )
           return { handoff, resumed: false };

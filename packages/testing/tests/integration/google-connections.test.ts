@@ -260,6 +260,32 @@ test("Google connections preserve independent accounts, bind one-time state and 
         );
         if (outcome === "connected") assert.equal(saved.resolutionId, linked.id);
         await assert.rejects(finish(state), /invalid or expired/);
+        if (outcome === "limited") {
+          assert.equal(
+            saved.target.kind === "connection" ? saved.target.connectionId : null,
+            linked.id,
+          );
+          const wrongAttempt = await store.startHandoff(ownerId, "session", handoff.id);
+          assert.ok(wrongAttempt);
+          const wrongState = new URL(wrongAttempt.url).searchParams.get("state");
+          assert.ok(wrongState);
+          const originalGrant = grant;
+          grant = { ...grant, subject: randomUUID() };
+          await assert.rejects(finish(wrongState), /original Google account/);
+          grant = originalGrant;
+          const retry = await store.startHandoff(ownerId, "session", handoff.id);
+          assert.ok(retry);
+          const retryState = new URL(retry.url).searchParams.get("state");
+          assert.ok(retryState);
+          grant = { ...grant, scopes: [...googleScopes.gmail] };
+          const reconnected = await finish(retryState);
+          assert.equal(reconnected.id, linked.id);
+          const completed = await database.transaction(ownerId, ({ handoffs }) =>
+            handoffs.find(handoff.id),
+          );
+          assert.equal(completed?.state, "completed");
+          assert.equal(completed.resolutionId, linked.id);
+        }
       }
     } finally {
       await database.close();
