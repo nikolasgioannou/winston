@@ -219,18 +219,27 @@ export function createObjectStorage(options: {
         clearTimeout(timeout);
       }
     },
-    async downloadUrl(ownerId: string, input: StoredObject, expiresIn = 60) {
+    async downloadUrl(ownerId: string, input: StoredObject, expiresIn = 60, filename?: string) {
       const object = scoped(ownerId, input);
       if (object.purpose !== "artifact") throw new Error("Only artifacts can be shared.");
       if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > 300)
         throw new Error("Download expiry must be between one and 300 seconds.");
+      if (filename && filename.length > 255) throw new Error("Download filename is too long.");
+      const encodedName = filename
+        ? encodeURIComponent(filename).replace(
+            /['()*]/g,
+            (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+          )
+        : null;
       return getSignedUrl(
         client,
         new GetObjectCommand({
           Bucket: bucket,
           Key: key(object),
           ResponseContentType: "application/octet-stream",
-          ResponseContentDisposition: "attachment",
+          ResponseContentDisposition: encodedName
+            ? `attachment; filename*=UTF-8''${encodedName}`
+            : "attachment",
         }),
         { expiresIn },
       );

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./artifacts": "./src/artifacts/index.ts",
     "./auth": "./src/auth/index.ts",
     "./credentials": "./src/credentials/index.ts",
     "./database": "./src/database/index.ts",

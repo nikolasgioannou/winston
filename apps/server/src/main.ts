@@ -4,6 +4,10 @@ import { createOwnerRouter } from "./http/owner";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
+import { createObjectStorage } from "@winston/adapters/storage";
+import { createArtifactService } from "@winston/adapters/artifacts";
+import { readStorageConfig } from "./storage-config";
+import { createArtifactOwnerRouter } from "./http/artifacts";
 import {
   createTelegramClient,
   createTelegramStore,
@@ -45,6 +49,10 @@ try {
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
 const callbacks = new Hono<HttpEnvironment>();
+const storageConfig = readStorageConfig(process.env);
+const storage = storageConfig ? createObjectStorage(storageConfig) : undefined;
+if (storage)
+  owner.route("/artifacts", createArtifactOwnerRouter(createArtifactService(database, storage)));
 owner.route("/devices", createDeviceOwnerRouter(database));
 owner.route("/permissions", createAuthorizationOwnerRouter(database));
 owner.route("/connection-targets", createTargetPreferencesRouter(database));
@@ -155,6 +163,7 @@ function shutdown() {
     .stop()
     .then(async () => {
       await conversation?.stop();
+      storage?.close();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })
     .catch(() => {

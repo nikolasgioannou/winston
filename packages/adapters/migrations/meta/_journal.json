@@ -141,6 +141,13 @@
       "when": 1790000000019,
       "tag": "0019_workspace_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790000000020,
+      "tag": "0020_artifacts",
+      "breakpoints": true
     }
   ]
 }
