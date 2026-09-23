@@ -18,6 +18,7 @@
     "./device-registry": "./src/device-registry.ts",
     "./events": "./src/events.ts",
     "./gmail": "./src/gmail.ts",
+    "./handoffs": "./src/handoffs.ts",
     "./jobs": "./src/jobs.ts",
     "./json": "./src/json.ts",
     "./memory": "./src/memory.ts",

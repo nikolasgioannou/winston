@@ -8,6 +8,7 @@ import { conversationRepository, type ConversationRepository } from "./conversat
 import { taskRepository, type TaskRepository } from "./tasks";
 import { taskStepRepository } from "./task-steps";
 import { taskUpdateRepository } from "./task-updates";
+import { handoffRepository } from "./handoffs";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
@@ -31,6 +32,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly handoffs: ReturnType<typeof handoffRepository>;
   readonly taskUpdates: ReturnType<typeof taskUpdateRepository>;
   readonly taskSteps: ReturnType<typeof taskStepRepository>;
   readonly workspaceRuntimes: ReturnType<typeof workspaceRuntimeRepository>;
@@ -127,6 +129,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          handoffs: handoffRepository(transaction, ownerId),
           taskUpdates: taskUpdateRepository(transaction, ownerId),
           taskSteps: taskStepRepository(transaction, ownerId),
           workspaceRuntimes: workspaceRuntimeRepository(transaction, ownerId),
