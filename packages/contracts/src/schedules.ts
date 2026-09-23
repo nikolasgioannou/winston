@@ -66,3 +66,19 @@ export const scheduleTimingSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type ScheduleTiming = z.infer<typeof scheduleTimingSchema>;
+
+export const scheduleRequestSchema = z.strictObject({
+  key: z.string().min(1).max(200),
+  objective: z.string().min(1).max(20_000),
+  sourceMessageIds: z.array(z.uuid()).max(100),
+  timing: scheduleTimingSchema,
+});
+export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
+  id: z.uuid(),
+  ownerId: z.uuid(),
+  revision: z.number().int().nonnegative(),
+  state: z.enum(["active", "completed", "canceled"]),
+  nextRunAt: z.iso.datetime().nullable(),
+});
+export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;
+export type Schedule = z.infer<typeof scheduleSchema>;

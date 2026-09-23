@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { scheduleRepository } from "./schedules";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { checkSchema } from "./migrations";
@@ -40,6 +41,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly schedules: ReturnType<typeof scheduleRepository>;
   readonly voice: ReturnType<typeof voiceRepository>;
   readonly inboxTransfers: ReturnType<typeof inboxTransferRepository>;
   readonly telegramIntake: ReturnType<typeof telegramIntakeRepository>;
@@ -157,6 +159,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          schedules: scheduleRepository(transaction, ownerId),
           voice: voiceRepository(transaction, ownerId),
           inboxTransfers: inboxTransferRepository(transaction, ownerId),
           telegramIntake: telegramIntakeRepository(transaction, ownerId),

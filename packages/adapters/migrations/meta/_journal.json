@@ -260,6 +260,13 @@
       "when": 1790000000036,
       "tag": "0036_file_download_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790000000037,
+      "tag": "0037_schedules",
+      "breakpoints": true
     }
   ]
 }
