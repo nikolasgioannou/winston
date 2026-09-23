@@ -85,6 +85,36 @@ test("commands require exact dispatch proof while recovery stays scoped after ca
           workspaces.authorizeCommand(request, value),
         );
       assert.ok(await authorize());
+      const cli = await database.transaction(ownerId, ({ workspaces }) =>
+        workspaces.issueCli(request, command, "local"),
+      );
+      assert.ok(cli);
+      assert.equal(cli.workspaceId, workspaceId);
+      const cliRequest = {
+        token: cli.token,
+        kind: "workspace" as const,
+        subjectId: workspaceId,
+        resourceId: workspaceId,
+        operation: "gateway:read" as const,
+      };
+      assert.ok(await database.authenticateService(cliRequest));
+      assert.equal(
+        await database.authenticateService({ ...cliRequest, operation: "connector:write" }),
+        null,
+      );
+      assert.equal(
+        await database.transaction(ownerId, ({ workspaces }) =>
+          workspaces.issueCli(
+            request,
+            {
+              ...command,
+              input: { ...input, argv: ["changed"] },
+            },
+            "local",
+          ),
+        ),
+        null,
+      );
       assert.equal(
         await database.transaction(ownerId, ({ workspaces }) =>
           workspaces.authorize(request, command.operation),

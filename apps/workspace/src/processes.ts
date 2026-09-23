@@ -19,6 +19,7 @@ import {
 } from "@winston/contracts/commands";
 import { commandOutput } from "./command-output";
 import { workspaceOperationSchema } from "@winston/contracts/workspace";
+import { cliAuthoritySchema, type CliAuthority } from "@winston/contracts/cli";
 
 function syncDirectory(path: string) {
   const descriptor = openSync(path, "r");
@@ -70,12 +71,13 @@ export function createCommandRunner(options: {
         throw new Error("Command output is unavailable.");
       return Bun.file(path).stream();
     },
-    start(id: string, input: CommandInput) {
+    start(id: string, input: CommandInput, inputAuthority?: CliAuthority) {
       if (closing) throw new Error("Workspace command runner is stopping.");
       workspaceOperationSchema.shape.operationId.parse(id);
       if (active.has(id)) throw new Error("Command identity unavailable.");
       if (active.size >= 4) throw new Error("Workspace command capacity reached.");
       const command = commandInputSchema.parse(input);
+      const authority = inputAuthority ? cliAuthoritySchema.parse(inputAuthority) : undefined;
       const cwd = realpathSync(command.cwd);
       const path = relative(home, cwd);
       if (path === ".." || path.startsWith("../") || path.startsWith("/"))
@@ -154,6 +156,7 @@ export function createCommandRunner(options: {
                       env: { HOME: home, PATH: "/usr/local/bin:/usr/bin:/bin", ...command.env },
                     },
                     receiptPath,
+                    authority,
                   }),
                 ]),
                 stdout: "pipe",

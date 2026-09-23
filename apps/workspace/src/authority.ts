@@ -6,6 +6,7 @@ import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { canonicalJson } from "@winston/contracts/json";
 import type { WorkspaceCommand } from "@winston/contracts/workspace-commands";
 import { boundedJson } from "./http-body";
+import { cliAuthoritySchema } from "@winston/contracts/cli";
 
 export function createWorkspaceAuthority(origin: string) {
   const url = new URL(origin);
@@ -53,6 +54,36 @@ export function createWorkspaceAuthority(origin: string) {
     return canonicalJson(result.operation) === canonicalJson(operation);
   }
   return {
+    async gateway(credential: ServiceRequest, command: WorkspaceCommand) {
+      if (credential.operation !== "workspace:execute")
+        throw new Error("Invalid command authority.");
+      const response = await fetch(
+        new URL(
+          `/api/tasks/workspaces/${command.operation.identity.workspaceId}/authorize-cli`,
+          url,
+        ),
+        {
+          method: "POST",
+          redirect: "error",
+          credentials: "omit",
+          signal: AbortSignal.timeout(5000),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${credential.token}`,
+            "X-Winston-Worker": credential.subjectId,
+          },
+          body: JSON.stringify(command),
+        },
+      );
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error("CLI authority unavailable.");
+      }
+      const result = cliAuthoritySchema.parse(await boundedJson(response.body, 4096));
+      if (result.workspaceId !== command.operation.identity.workspaceId)
+        throw new Error("CLI workspace mismatch.");
+      return result;
+    },
     inspect: (credential: ServiceRequest, operation: WorkspaceOperation) => {
       if (credential.operation !== "workspace:execute" || operation.kind !== "workspace:inspect")
         return Promise.resolve(false);

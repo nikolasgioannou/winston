@@ -88,6 +88,15 @@ function fixture() {
     runner,
     after: (ms, callback) => time.after(ms, callback),
     authority: {
+      gateway() {
+        return Promise.resolve({
+          version: 1 as const,
+          environment: "local" as const,
+          workspaceId: identity.workspaceId,
+          token: `wst_${"g".repeat(43)}`,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      },
       command(credential) {
         if (outage) return Promise.reject(new Error("Private authority detail"));
         return Promise.resolve(allowed && credential.operation === "workspace:execute");

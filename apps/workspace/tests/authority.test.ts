@@ -40,11 +40,21 @@ test("authority binds command and recovery responses without forwarding ambient 
       );
       expect(request.headers.get("Authorization")).toBe(`Bearer ${credential.token}`);
       expect(request.headers.get("Cookie")).toBeNull();
-      expect(await request.json()).toEqual(endpoint === "authorize-command" ? command : operation);
+      expect(await request.json()).toEqual(
+        ["authorize-command", "authorize-cli"].includes(endpoint) ? command : operation,
+      );
       if (mode === "deny") return new Response(null, { status: 403 });
       if (mode === "outage") return new Response(null, { status: 503 });
       if (mode === "redirect") return Response.redirect("https://example.com/", 307);
       if (mode === "oversized") return new Response("x".repeat(20_000));
+      if (endpoint === "authorize-cli")
+        return Response.json({
+          version: 1,
+          environment: "local",
+          workspaceId: mode === "mismatch" ? randomUUID() : operation.identity.workspaceId,
+          token: `wst_${"g".repeat(43)}`,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        });
       return Response.json({
         version: 1,
         allowed: true,
@@ -72,6 +82,15 @@ test("authority binds command and recovery responses without forwarding ambient 
     for (const state of ["outage", "redirect", "oversized"]) {
       mode = state;
       await assert.rejects(authority.command(credential, command));
+    }
+    endpoint = "authorize-cli";
+    mode = "allow";
+    expect((await authority.gateway(credential, command)).workspaceId).toBe(
+      operation.identity.workspaceId,
+    );
+    for (const state of ["deny", "outage", "redirect", "oversized", "mismatch"]) {
+      mode = state;
+      await assert.rejects(authority.gateway(credential, command));
     }
   } finally {
     await server.stop(true);

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serviceRequestSchema } from "@winston/contracts/capabilities";
 import { workspaceOperationSchema } from "@winston/contracts/workspace";
 import { workspaceCommandSchema } from "@winston/contracts/workspace-commands";
+import type { CliAuthority } from "@winston/contracts/cli";
 import type { createDatabase, OwnerTransaction } from "@winston/adapters/database";
 import type { HttpEnvironment, Identity } from "./app";
 import { parseJson, RequestError } from "./errors";
@@ -16,7 +17,7 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
   const match = path.match(
-    /^\/api\/tasks\/workspaces\/([^/]+)\/(authorize|authorize-command|authorize-observe|authorize-cancel)$/,
+    /^\/api\/tasks\/workspaces\/([^/]+)\/(authorize|authorize-command|authorize-cli|authorize-observe|authorize-cancel)$/,
   );
   if (!match) return null;
   const operation =
@@ -35,8 +36,22 @@ function credential(request: Request) {
   return result.success ? result.data : null;
 }
 
-export function createWorkspaceTaskGroup(database: Database) {
+export function createWorkspaceTaskGroup(
+  database: Database,
+  environment: CliAuthority["environment"] = "local",
+) {
   const router = new Hono<HttpEnvironment>();
+  router.post("/workspaces/:id/authorize-cli", async (context) => {
+    const identity = context.get("identity");
+    const request = credential(context.req.raw);
+    if (identity.kind !== "task" || !request) throw new RequestError("unauthorized");
+    const command = await parseJson(context, workspaceCommandSchema);
+    const result = await database.transaction(identity.ownerId, ({ workspaces }) =>
+      workspaces.issueCli(request, command, environment),
+    );
+    if (!result) throw new RequestError("forbidden");
+    return context.json(result);
+  });
   router.post("/workspaces/:id/authorize", async (context) => {
     const identity = context.get("identity");
     const request = credential(context.req.raw);

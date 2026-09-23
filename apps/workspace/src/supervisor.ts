@@ -1,6 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { writeFileSync, openSync, closeSync, unlinkSync } from "node:fs";
 import { commandInputSchema } from "@winston/contracts/commands";
 import { boundedJson } from "./http-body";
+import { cliAuthoritySchema } from "@winston/contracts/cli";
 
 // Only launched under the per-command namespace init, with fixed environment and /app cwd.
 if (process.platform !== "linux" || process.getuid?.() !== 0 || process.ppid !== 1)
@@ -17,6 +18,14 @@ try {
   )
     throw new Error("Invalid command envelope.");
   const command = commandInputSchema.parse(envelope.command);
+  let authorityFd: number | undefined;
+  if ("authority" in envelope && envelope.authority !== undefined) {
+    const authority = cliAuthoritySchema.parse(envelope.authority);
+    const path = `${envelope.receiptPath}.authority`;
+    writeFileSync(path, JSON.stringify(authority), { mode: 0o600, flag: "wx" });
+    authorityFd = openSync(path, "r");
+    unlinkSync(path);
+  }
   if (!process.setgroups) throw new Error("Cannot clear supplementary groups.");
   process.setgroups([]);
   const child = Bun.spawn(["/usr/bin/setpriv", "--no-new-privs", "--", ...command.argv], {
@@ -24,10 +33,12 @@ try {
     gid: 1000,
     cwd: command.cwd,
     env: command.env,
-    stdin: "ignore",
-    stdout: "inherit",
-    stderr: "inherit",
+    stdio:
+      authorityFd === undefined
+        ? ["ignore", "inherit", "inherit"]
+        : ["ignore", "inherit", "inherit", authorityFd],
   });
+  if (authorityFd !== undefined) closeSync(authorityFd);
   process.on("SIGTERM", () => {
     child.kill("SIGTERM");
   });

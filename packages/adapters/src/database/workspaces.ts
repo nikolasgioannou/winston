@@ -22,6 +22,7 @@ import { capabilityRepository } from "./capabilities";
 import { eventRepository } from "./events";
 import { actionRepository } from "./actions";
 import { findWorkspace } from "./workspace-record";
+import { cliAuthoritySchema, type CliAuthority } from "@winston/contracts/cli";
 
 export function workspaceRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -156,6 +157,36 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
       if (operation.kind !== "workspace:inspect") return null;
       await lock();
       return authorizeWorker(input, operation);
+    },
+    async issueCli(
+      input: ServiceRequest,
+      inputCommand: WorkspaceCommand,
+      environment: CliAuthority["environment"],
+    ) {
+      const command = workspaceCommandSchema.parse(inputCommand);
+      await lock();
+      const grant = await authorizeWorker(input, command.operation);
+      if (!grant || !(await actionRepository(transaction, ownerId).authorizeWorkspace(command)))
+        return null;
+      const operation = command.operation;
+      const credential = await capabilityRepository(transaction, ownerId).issue({
+        kind: "workspace",
+        subjectId: operation.identity.workspaceId,
+        resourceId: operation.identity.workspaceId,
+        resourceRevision: grant.workspaceRevision,
+        taskId: operation.taskId,
+        revision: operation.revision,
+        generation: operation.generation,
+        operation: "gateway:read",
+        credential: null,
+      });
+      return cliAuthoritySchema.parse({
+        version: 1,
+        environment,
+        workspaceId: operation.identity.workspaceId,
+        token: credential.token,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
     },
     async authorizeCommand(input: ServiceRequest, inputCommand: WorkspaceCommand) {
       const command = workspaceCommandSchema.parse(inputCommand);

@@ -28,6 +28,7 @@ test("workspace authorization has no owner issuance path and requires worker aut
     register: unused,
     setState: unused,
     issueExecution: unused,
+    issueCli: unused,
     issueControl: unused,
     authorizeCommand: unused,
     authorizeControl: unused,
@@ -140,6 +141,7 @@ test("command and recovery routes enforce distinct scopes and carry exact dispat
     issueExecution: unused,
     issueControl: unused,
     authorize: unused,
+    issueCli: unused,
     authorizeCommand(request, received) {
       expect(request.operation).toBe("workspace:execute");
       expect(received).toEqual(command);

@@ -40,7 +40,7 @@ function after(milliseconds: number, callback: () => void) {
 export function createCommandService(options: {
   journal: ReturnType<typeof openWorkspaceJournal>;
   runner: Runner;
-  authority: Pick<ReturnType<typeof createWorkspaceAuthority>, "command" | "control">;
+  authority: Pick<ReturnType<typeof createWorkspaceAuthority>, "command" | "control" | "gateway">;
   after?: typeof after;
 }) {
   const schedule = options.after ?? after;
@@ -112,7 +112,9 @@ export function createCommandService(options: {
       if (!claim.started) return claim.record;
       let handle: Handle;
       try {
-        handle = options.runner.start(operation.operationId, command.input);
+        const authority = await options.authority.gateway(credential, command);
+        if (closing) throw new CommandError("operation_unavailable");
+        handle = options.runner.start(operation.operationId, command.input, authority);
       } catch {
         options.journal.finish(operation, claim.completionToken, {
           state: "failed",

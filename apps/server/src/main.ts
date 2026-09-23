@@ -100,7 +100,10 @@ if (telegramToken || telegramSecret) {
   }
 }
 
-const workspaceTasks = createWorkspaceTaskGroup(database);
+const workspaceTasks = createWorkspaceTaskGroup(
+  database,
+  process.env.NODE_ENV === "production" ? "production" : "local",
+);
 const cliTasks = createCliTaskGroup(database);
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
