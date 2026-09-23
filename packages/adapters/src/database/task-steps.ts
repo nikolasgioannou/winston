@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { actionTaskSchema, actionRecordSchema, type ActionTask } from "@winston/contracts/actions";
 import { canonicalJson } from "@winston/contracts/json";
@@ -9,6 +9,8 @@ import {
   type TaskStepRequest,
 } from "@winston/contracts/task-steps";
 import type { DatabaseTransaction } from "./owners";
+import { workspaceCommandToolInputSchema } from "@winston/contracts/workspace-commands";
+import { actionRepository } from "./actions";
 
 export function taskStepRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function current(input: ActionTask) {
@@ -38,6 +40,50 @@ export function taskStepRepository(transaction: DatabaseTransaction, ownerId: st
   }
 
   return {
+    async prepareWorkspace(input: ActionTask, inputStepId: string, callId: string) {
+      const stepId = taskStepSchema.shape.id.parse(inputStepId);
+      const { worker, intentRevision } = await current(input);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.task_steps WHERE owner_id = ${ownerId}::uuid
+          AND task_id = ${worker.id}::uuid AND intent_revision = ${intentRevision} AND id = ${stepId}::uuid
+      `);
+      const model = rows.rows[0]
+        ? taskStepSchema.parse(rows.rows[0].document).request.payload
+        : null;
+      const call =
+        model?.kind === "model" ? model.calls.find((entry) => entry.id === callId) : undefined;
+      if (!call || call.name !== "workspace_command")
+        throw new Error("Workspace model call unavailable.");
+      const command = workspaceCommandToolInputSchema.parse(call.input);
+      const key = `step:${stepId}:${createHash("sha256").update(call.id).digest("hex")}`;
+      const previous = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.actions WHERE owner_id = ${ownerId}::uuid
+          AND task_id = ${worker.id}::uuid AND request_key = ${key}
+      `);
+      if (previous.rows[0]) {
+        const action = actionRecordSchema.parse(previous.rows[0].document);
+        if (
+          action.intentRevision !== intentRevision ||
+          action.request.authorization.target.kind !== "workspace" ||
+          action.request.authorization.target.id !== command.workspaceId ||
+          action.request.authorization.operation !== "workspace.command" ||
+          canonicalJson(action.request.arguments) !== canonicalJson(command.command)
+        )
+          throw new Error("Workspace action conflicts with its model call.");
+        return action;
+      }
+      // This record is committed before any dispatcher may contact the workspace. Its identity
+      // survives lease recovery; the immutable original request is never rewritten for a new worker.
+      return actionRepository(transaction, ownerId).prepare({
+        key,
+        task: worker,
+        authorization: {
+          target: { kind: "workspace", id: command.workspaceId, resource: null },
+          operation: "workspace.command",
+        },
+        arguments: command.command,
+      });
+    },
     async list(input: ActionTask, afterSequence = 0, limit = 100) {
       if (
         !Number.isInteger(afterSequence) ||
