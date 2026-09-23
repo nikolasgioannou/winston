@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./actions": "./src/actions.ts",
     "./authorization": "./src/authorization.ts",
     "./bursts": "./src/bursts.ts",
     "./capabilities": "./src/capabilities.ts",

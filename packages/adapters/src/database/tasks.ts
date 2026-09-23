@@ -14,6 +14,11 @@ import { eventRepository } from "./events";
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
 export function taskRepository(transaction: DatabaseTransaction, ownerId: string) {
+  async function lockOwner() {
+    await transaction.execute(
+      sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,
+    );
+  }
   async function row(id: string, lock = false) {
     const result = await transaction.execute<TaskRow>(sql`
       SELECT document, COALESCE(leased_until > clock_timestamp(), false) AS "leaseValid", request_hash AS "requestHash"
@@ -49,6 +54,8 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
   }
 
   async function current(id: string, revision: number) {
+    // Use the same owner → task ordering as action dispatch and policy changes.
+    await lockOwner();
     const stored = await row(id, true);
     if (!stored) throw new Error("Task is unavailable to this owner.");
     const task = taskSchema.parse(stored.document);
@@ -95,6 +102,7 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       return result.rows.map((entry) => taskSchema.parse(entry.document));
     },
     async create(input: TaskRequest) {
+      await lockOwner();
       const request = taskRequestSchema.parse(input);
       request.sourceMessageIds = [...new Set(request.sourceMessageIds)].sort();
       const hash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
@@ -173,6 +181,9 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
     async steer(id: string, revision: number, objective: string) {
       const { task } = await current(id, revision);
       active(task);
+      await transaction.execute(
+        sql`UPDATE winston.tasks SET intent_revision = intent_revision + 1 WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid`,
+      );
 
       return save({
         ...task,
