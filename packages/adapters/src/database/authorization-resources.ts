@@ -4,7 +4,7 @@ import type { DatabaseTransaction } from "./owners";
 import { connectionRepository } from "./connections";
 import { deviceRepository } from "./devices";
 import { credentialRepository } from "./credentials";
-import { workspaceRepository } from "./workspaces";
+import { findWorkspace } from "./workspace-record";
 
 const deviceCapabilities = {
   "device.command": "command",
@@ -52,7 +52,7 @@ export async function authorizationResource(
       !["workspace.command", "workspace.file.read", "workspace.file.write"].includes(operation)
     )
       return null;
-    const workspace = await workspaceRepository(transaction, ownerId).find(target.id, true);
+    const workspace = await findWorkspace(transaction, ownerId, target.id, true);
     return workspace && (!requireAvailable || workspace.state === "active")
       ? workspace.revision
       : null;

@@ -28,6 +28,9 @@ test("workspace authorization has no owner issuance path and requires worker aut
     register: unused,
     setState: unused,
     issueExecution: unused,
+    issueControl: unused,
+    authorizeCommand: unused,
+    authorizeControl: unused,
     authorize: (_request, input) =>
       Promise.resolve(
         current

@@ -16,17 +16,14 @@ import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
 import { eventRepository } from "./events";
+import { canonicalJson as canonical } from "@winston/contracts/json";
+import { commandInputSchema } from "@winston/contracts/commands";
+import { workspaceOperationSchema, type WorkspaceOperation } from "@winston/contracts/workspace";
+import {
+  workspaceCommandSchema,
+  type WorkspaceCommand,
+} from "@winston/contracts/workspace-commands";
 
-function canonical(value: ActionRequest["arguments"]): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonical(value[key] ?? null)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 type Row = { document: unknown; valid: boolean; tokenHash: string | null };
 
@@ -105,7 +102,62 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     );
   }
 
+  function matchesExecution(action: ActionRecord, operation: WorkspaceOperation) {
+    const command = commandInputSchema.safeParse(action.request.arguments);
+    return (
+      command.success &&
+      operation.kind === "command:execute" &&
+      operation.identity.ownerId === ownerId &&
+      action.operationId === operation.operationId &&
+      action.request.authorization.target.kind === "workspace" &&
+      action.request.authorization.target.id === operation.identity.workspaceId &&
+      action.request.authorization.target.resource === null &&
+      action.request.authorization.operation === "workspace.command" &&
+      action.dispatchTask?.id === operation.taskId &&
+      action.dispatchTask.revision === operation.revision &&
+      action.dispatchTask.generation === operation.generation &&
+      hash(canonical(command.data)) === operation.inputHash
+    );
+  }
+
   return {
+    // Trusted reconciliation resolves the original immutable execution, including after cancellation.
+    async workspaceExecution(input: WorkspaceOperation) {
+      const operation = workspaceOperationSchema.parse(input);
+      await lock();
+      const result = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.actions WHERE owner_id = ${ownerId}::uuid
+          AND document->>'operationId' = ${operation.operationId} FOR UPDATE
+      `);
+      if (!result.rows[0]) return null;
+      const action = actionRecordSchema.parse(result.rows[0].document);
+      return matchesExecution(action, operation) ? action : null;
+    },
+    async authorizeWorkspace(input: WorkspaceCommand) {
+      const command = workspaceCommandSchema.parse(input);
+      await lock();
+      const stored = await row(command.dispatch.id);
+      if (!stored || stored.tokenHash !== hash(command.dispatch.token)) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      if (
+        action.state !== "dispatching" ||
+        !matchesExecution(action, command.operation) ||
+        hash(canonical(command.input)) !== command.operation.inputHash
+      )
+        return false;
+      const current = await task(command.operation.taskId);
+      if (
+        !action.dispatchTask ||
+        !running(current, action.dispatchTask) ||
+        !sameIntent(current, action)
+      )
+        return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
     async find(id: string) {
       await lock();
       const stored = await row(id);

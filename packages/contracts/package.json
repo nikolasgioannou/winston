@@ -18,6 +18,7 @@
     "./events": "./src/events.ts",
     "./gmail": "./src/gmail.ts",
     "./jobs": "./src/jobs.ts",
+    "./json": "./src/json.ts",
     "./memory": "./src/memory.ts",
     "./messages": "./src/messages/index.ts",
     "./storage": "./src/storage.ts",
@@ -25,7 +26,8 @@
     "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts",
     "./turns": "./src/turns.ts",
-    "./workspace": "./src/workspace.ts"
+    "./workspace": "./src/workspace.ts",
+    "./workspace-commands": "./src/workspace-commands.ts"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"

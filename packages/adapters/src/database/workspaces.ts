@@ -8,26 +8,65 @@ import {
   type WorkspaceOperation,
   type WorkspaceWorker,
 } from "@winston/contracts/workspace";
-import { serviceRequestSchema, type ServiceRequest } from "@winston/contracts/capabilities";
+import {
+  serviceRequestSchema,
+  workspaceControlOperationSchema,
+  type ServiceRequest,
+} from "@winston/contracts/capabilities";
+import {
+  workspaceCommandSchema,
+  type WorkspaceCommand,
+} from "@winston/contracts/workspace-commands";
 import type { DatabaseTransaction } from "./owners";
 import { capabilityRepository } from "./capabilities";
 import { eventRepository } from "./events";
+import { actionRepository } from "./actions";
+import { findWorkspace } from "./workspace-record";
 
 export function workspaceRepository(transaction: DatabaseTransaction, ownerId: string) {
-  async function find(inputId: string, lock = false) {
-    const id = registeredWorkspaceSchema.shape.id.parse(inputId);
-    const result = await transaction.execute<RegisteredWorkspace>(sql`
-      SELECT id, name, state, revision FROM winston.workspaces
-      WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid
-      ${lock ? sql`FOR SHARE` : sql``}
-    `);
-    return result.rows[0] ? registeredWorkspaceSchema.parse(result.rows[0]) : null;
+  async function lock() {
+    const owner = await transaction.execute(
+      sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,
+    );
+    if (!owner.rowCount) throw new Error("Owner unavailable.");
+  }
+  function find(inputId: string, lock = false) {
+    return findWorkspace(transaction, ownerId, inputId, lock);
+  }
+
+  async function authorizeWorker(input: ServiceRequest, operation: WorkspaceOperation) {
+    const request = serviceRequestSchema.parse(input);
+    if (
+      request.kind !== "worker" ||
+      request.operation !== "workspace:execute" ||
+      operation.identity.ownerId !== ownerId ||
+      operation.identity.workspaceId !== request.resourceId
+    )
+      return null;
+    const workspace = await find(request.resourceId, true);
+    if (workspace?.state !== "active") return null;
+    const authority = await capabilityRepository(transaction, ownerId).authenticate(request);
+    if (
+      !authority ||
+      authority.resourceRevision !== workspace.revision ||
+      authority.taskId !== operation.taskId ||
+      authority.revision !== operation.revision ||
+      authority.generation !== operation.generation
+    )
+      return null;
+    return {
+      version: 1 as const,
+      allowed: true as const,
+      operation,
+      workspaceRevision: workspace.revision,
+    };
   }
 
   return {
     find,
     // Trusted provisioning only. Registration creates no execution authority.
     async register(inputId: string, inputName: string) {
+      await lock();
       const id = registeredWorkspaceSchema.shape.id.parse(inputId);
       const name = registeredWorkspaceSchema.shape.name.parse(inputName);
       await transaction.execute(sql`
@@ -44,6 +83,7 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
       inputRevision: number,
       inputState: RegisteredWorkspace["state"],
     ) {
+      await lock();
       const id = registeredWorkspaceSchema.shape.id.parse(inputId);
       const revision = registeredWorkspaceSchema.shape.revision.parse(inputRevision);
       const state = workspaceStateSchema.parse(inputState);
@@ -70,6 +110,7 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
     },
     // Worker orchestration calls this only after selecting the owner's workspace for the task.
     async issueExecution(input: WorkspaceWorker) {
+      await lock();
       const worker = workspaceWorkerSchema.parse(input);
       const workspace = await find(worker.workspaceId, true);
       if (workspace?.state !== "active") throw new Error("Workspace is unavailable.");
@@ -85,32 +126,63 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
         credential: null,
       });
     },
+    async issueControl(
+      subjectId: string,
+      inputOperation: WorkspaceOperation,
+      inputMode: "workspace:observe" | "workspace:cancel",
+    ) {
+      await lock();
+      const operation = workspaceOperationSchema.parse(inputOperation);
+      const mode = workspaceControlOperationSchema.parse(inputMode);
+      const execution = await actionRepository(transaction, ownerId).workspaceExecution(operation);
+      const workspace = await find(operation.identity.workspaceId, true);
+      if (!execution || !workspace || workspace.state === "retired")
+        throw new Error("Execution unavailable.");
+      return capabilityRepository(transaction, ownerId).issue({
+        kind: "worker",
+        subjectId,
+        taskId: operation.taskId,
+        revision: operation.revision,
+        generation: operation.generation,
+        operation: mode,
+        resourceId: workspace.id,
+        resourceRevision: workspace.revision,
+        executionId: operation.operationId,
+        credential: null,
+      });
+    },
     async authorize(input: ServiceRequest, inputOperation: WorkspaceOperation) {
+      const operation = workspaceOperationSchema.parse(inputOperation);
+      if (operation.kind !== "workspace:inspect") return null;
+      await lock();
+      return authorizeWorker(input, operation);
+    },
+    async authorizeCommand(input: ServiceRequest, inputCommand: WorkspaceCommand) {
+      const command = workspaceCommandSchema.parse(inputCommand);
+      await lock();
+      const grant = await authorizeWorker(input, command.operation);
+      if (!grant || !(await actionRepository(transaction, ownerId).authorizeWorkspace(command)))
+        return null;
+      return grant;
+    },
+    async authorizeControl(input: ServiceRequest, inputOperation: WorkspaceOperation) {
       const request = serviceRequestSchema.parse(input);
       const operation = workspaceOperationSchema.parse(inputOperation);
-      if (
-        request.kind !== "worker" ||
-        request.operation !== "workspace:execute" ||
-        operation.identity.ownerId !== ownerId ||
-        operation.identity.workspaceId !== request.resourceId
-      )
-        return null;
-      const workspace = await find(request.resourceId, true);
-      if (workspace?.state !== "active") return null;
+      if (!workspaceControlOperationSchema.safeParse(request.operation).success) return null;
+      await lock();
       const authority = await capabilityRepository(transaction, ownerId).authenticate(request);
       if (
         !authority ||
-        authority.resourceRevision !== workspace.revision ||
-        authority.taskId !== operation.taskId ||
-        authority.revision !== operation.revision ||
-        authority.generation !== operation.generation
+        authority.executionId !== operation.operationId ||
+        authority.resourceId !== operation.identity.workspaceId ||
+        !(await actionRepository(transaction, ownerId).workspaceExecution(operation))
       )
         return null;
       return {
         version: 1 as const,
         allowed: true as const,
         operation,
-        workspaceRevision: workspace.revision,
+        workspaceRevision: authority.resourceRevision,
       };
     },
   };

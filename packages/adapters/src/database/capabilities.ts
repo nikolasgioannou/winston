@@ -14,6 +14,29 @@ export function capabilityHash(token: string) {
 
 export function capabilityRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function live(scope: ServiceScope) {
+    if (scope.operation === "workspace:observe" || scope.operation === "workspace:cancel") {
+      if (
+        scope.kind !== "worker" ||
+        scope.credential !== null ||
+        !scope.executionId ||
+        scope.resourceRevision === undefined
+      )
+        return false;
+      const execution = await transaction.execute(sql`
+        SELECT a.id FROM winston.actions a JOIN winston.workspaces w
+          ON w.owner_id = a.owner_id AND w.id = ${scope.resourceId}::uuid
+        WHERE a.owner_id = ${ownerId}::uuid AND a.task_id = ${scope.taskId}::uuid
+          AND a.document->>'operationId' = ${scope.executionId}
+          AND a.document->>'state' IN ('dispatching', 'unknown', 'succeeded', 'failed')
+          AND a.document->'request'->'authorization'->'target'->>'kind' = 'workspace'
+          AND a.document->'request'->'authorization'->'target'->>'id' = ${scope.resourceId}
+          AND a.document->'request'->'authorization'->>'operation' = 'workspace.command'
+          AND a.document->'dispatchTask'->>'revision' = ${scope.revision}::text
+          AND a.document->'dispatchTask'->>'generation' = ${scope.generation}::text
+          AND w.state <> 'retired' AND w.revision = ${scope.resourceRevision}
+      `);
+      return execution.rowCount === 1;
+    }
     const task = await transaction.execute(sql`
       SELECT id FROM winston.tasks WHERE owner_id = ${ownerId}::uuid AND id = ${scope.taskId}::uuid
         AND document->>'state' = 'running' AND (document->>'revision')::integer = ${scope.revision}
