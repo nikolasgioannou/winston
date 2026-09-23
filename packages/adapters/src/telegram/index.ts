@@ -6,6 +6,11 @@ export { splitTelegramText } from "./text";
 export { deliverTelegramNext } from "./deliver";
 export { deliverTelegramFile } from "./deliver-file";
 export {
+  createTelegramDownloader,
+  TelegramDownloadError,
+  maximumTelegramDownloadBytes,
+} from "./download";
+export {
   createTelegramDocumentSender,
   maximumTelegramDocumentBytes,
   type TelegramDocument,

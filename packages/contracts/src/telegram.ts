@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const telegramFileResponseSchema = z.object({
+  ok: z.literal(true),
+  result: z.object({
+    file_id: z.string().min(1).max(2048),
+    file_size: integer.optional(),
+    file_path: z.string().min(1).max(2048),
+  }),
+});
 export const telegramApprovalCallbackSchema = z.strictObject({
   botId: integer,
   userId: integer,
