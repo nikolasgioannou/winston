@@ -1,6 +1,23 @@
 import { z } from "zod";
 
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const telegramKeyboardSchema = z.strictObject({
+  inline_keyboard: z
+    .array(
+      z
+        .array(
+          z.strictObject({
+            text: z.string().min(1).max(64),
+            callback_data: z.string().regex(/^[A-Za-z0-9:_-]{1,64}$/),
+          }),
+        )
+        .min(1)
+        .max(4),
+    )
+    .min(1)
+    .max(8),
+});
+export type TelegramKeyboard = z.infer<typeof telegramKeyboardSchema>;
 export const telegramEventKeySchema = z.object({ botId: integer, updateId: integer });
 export const telegramBotSchema = z.object({
   id: integer,

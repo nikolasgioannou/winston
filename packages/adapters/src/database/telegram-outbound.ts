@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { splitTelegramText } from "../telegram/text";
 import type { TelegramSendOutcome } from "../telegram/send";
 import type { DatabaseTransaction } from "./owners";
+import { telegramKeyboardSchema, type TelegramKeyboard } from "@winston/contracts/telegram";
 
 type OutboundRow = {
   id: string;
@@ -16,8 +17,15 @@ type OutboundRow = {
   leaseToken: string | null;
   expired: boolean;
   available: boolean;
+  keyboard: unknown;
 };
-export type TelegramDelivery = { id: string; token: string; chatId: string; text: string };
+export type TelegramDelivery = {
+  id: string;
+  token: string;
+  chatId: string;
+  text: string;
+  keyboard?: TelegramKeyboard;
+};
 
 export function telegramOutboundRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -28,14 +36,16 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
   }
 
   const fields = sql`id, chat_id::text AS "chatId", bot_id::text AS "botId", parts,
-    next_part AS "nextPart", sent_ids AS "sentIds", state, lease_token AS "leaseToken",
+    next_part AS "nextPart", sent_ids AS "sentIds", state, lease_token AS "leaseToken", reply_markup AS keyboard,
     COALESCE(leased_until <= clock_timestamp(), true) AS expired, available_at <= clock_timestamp() AS available`;
 
   return {
-    async enqueue(key: string, botId: number, text: string) {
+    async enqueue(key: string, botId: number, text: string, inputKeyboard?: TelegramKeyboard) {
       if (!key || key.length > 200 || !Number.isSafeInteger(botId))
         throw new Error("Invalid outbound identity.");
       const parts = splitTelegramText(text);
+      const keyboard =
+        inputKeyboard === undefined ? null : telegramKeyboardSchema.parse(inputKeyboard);
       await lock();
       const existing = await transaction.execute<OutboundRow>(sql`
         SELECT ${fields} FROM winston.telegram_outbound WHERE owner_id = ${ownerId}::uuid AND request_key = ${key}
@@ -43,7 +53,8 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
       if (existing.rows[0]) {
         if (
           existing.rows[0].botId !== String(botId) ||
-          !isDeepStrictEqual(parts, existing.rows[0].parts)
+          !isDeepStrictEqual(parts, existing.rows[0].parts) ||
+          !isDeepStrictEqual(keyboard, existing.rows[0].keyboard)
         )
           throw new Error("Outbound key conflicts with its original message.");
         return existing.rows[0].id;
@@ -55,8 +66,8 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
       if (!chatId) throw new Error("Telegram is not paired.");
       const id = randomUUID();
       await transaction.execute(sql`
-        INSERT INTO winston.telegram_outbound (owner_id, id, request_key, bot_id, chat_id, parts)
-        VALUES (${ownerId}::uuid, ${id}::uuid, ${key}, ${botId}, ${chatId}::bigint, ${JSON.stringify(parts)}::jsonb)
+        INSERT INTO winston.telegram_outbound (owner_id, id, request_key, bot_id, chat_id, parts, reply_markup)
+        VALUES (${ownerId}::uuid, ${id}::uuid, ${key}, ${botId}, ${chatId}::bigint, ${JSON.stringify(parts)}::jsonb, ${keyboard === null ? null : JSON.stringify(keyboard)}::jsonb)
       `);
 
       return id;
@@ -124,7 +135,15 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
         WHERE owner_id = ${ownerId}::uuid AND id = ${row.id}::uuid
       `);
 
-      return { id: row.id, token, chatId: row.chatId, text };
+      return {
+        id: row.id,
+        token,
+        chatId: row.chatId,
+        text,
+        ...(row.keyboard !== null && row.nextPart === row.parts.length - 1
+          ? { keyboard: telegramKeyboardSchema.parse(row.keyboard) }
+          : {}),
+      };
     },
     async settle(delivery: TelegramDelivery, outcome: TelegramSendOutcome) {
       await lock();

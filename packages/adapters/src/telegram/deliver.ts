@@ -1,5 +1,6 @@
 import type { OwnerTransaction } from "../database/database";
 import type { TelegramSendOutcome } from "./send";
+import type { TelegramKeyboard } from "@winston/contracts/telegram";
 
 export async function deliverTelegramNext(
   database: {
@@ -10,7 +11,12 @@ export async function deliverTelegramNext(
   },
   ownerId: string,
   botId: number,
-  send: (chatId: string, text: string, signal: AbortSignal) => Promise<TelegramSendOutcome>,
+  send: (
+    chatId: string,
+    text: string,
+    signal: AbortSignal,
+    keyboard?: TelegramKeyboard,
+  ) => Promise<TelegramSendOutcome>,
   signal: AbortSignal,
 ) {
   signal.throwIfAborted();
@@ -20,7 +26,7 @@ export async function deliverTelegramNext(
   if (!delivery) return "idle";
   let outcome: TelegramSendOutcome;
   try {
-    outcome = await send(delivery.chatId, delivery.text, signal);
+    outcome = await send(delivery.chatId, delivery.text, signal, delivery.keyboard);
   } catch {
     outcome = { state: "uncertain" };
   }

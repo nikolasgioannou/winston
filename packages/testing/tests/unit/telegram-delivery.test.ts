@@ -49,3 +49,38 @@ test("Telegram sending distinguishes explicit rejection, throttling, success and
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Telegram sends validated callback buttons without enabling text markup", async () => {
+  const originalFetch = globalThis.fetch;
+  const keyboard = { inline_keyboard: [[{ text: "Approve", callback_data: "approve_synthetic" }]] };
+  const requests: unknown[] = [];
+  try {
+    globalThis.fetch = Object.assign(
+      (_input: string | URL | Request, init?: RequestInit) => {
+        assert.ok(init && typeof init.body === "string");
+        requests.push(JSON.parse(init.body));
+        return Promise.resolve(Response.json({ ok: true, result: { message_id: 42 } }));
+      },
+      { preconnect: () => {} },
+    );
+    const send = createTelegramSender("123:synthetic");
+    assert.deepEqual(await send("123", "Exact proposal", new AbortController().signal, keyboard), {
+      state: "sent",
+      messageId: 42,
+    });
+    assert.deepEqual(requests, [
+      {
+        chat_id: "123",
+        text: "Exact proposal",
+        link_preview_options: { is_disabled: true },
+        reply_markup: keyboard,
+      },
+    ]);
+    await send("123", "Invalid", new AbortController().signal, {
+      inline_keyboard: [[{ text: "Approve", callback_data: "x".repeat(65) }]],
+    });
+    assert.equal(requests.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

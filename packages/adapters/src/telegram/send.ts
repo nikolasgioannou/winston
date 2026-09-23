@@ -1,3 +1,5 @@
+import { telegramKeyboardSchema, type TelegramKeyboard } from "@winston/contracts/telegram";
+
 export type TelegramSendOutcome =
   | { state: "sent"; messageId: number }
   | { state: "retry"; afterSeconds: number }
@@ -11,6 +13,7 @@ export function createTelegramSender(token: string) {
     chatId: string,
     text: string,
     signal: AbortSignal,
+    keyboard?: TelegramKeyboard,
   ): Promise<TelegramSendOutcome> => {
     if (signal.aborted) return { state: "retry", afterSeconds: 1 };
     try {
@@ -21,6 +24,7 @@ export function createTelegramSender(token: string) {
           chat_id: chatId,
           text,
           link_preview_options: { is_disabled: true },
+          ...(keyboard ? { reply_markup: telegramKeyboardSchema.parse(keyboard) } : {}),
         }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
       });

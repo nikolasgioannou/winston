@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase, type OwnerTransaction } from "@winston/adapters/database";
 import { deliverTelegramNext } from "@winston/adapters/telegram";
+import type { TelegramKeyboard } from "@winston/contracts/telegram";
 import { withTestPostgres } from "../../src/postgres";
 
 test("Telegram outbox serializes whole replies and never retries ambiguous sends", async () => {
@@ -17,12 +18,25 @@ test("Telegram outbox serializes whole replies and never retries ambiguous sends
       await scope(({ owners }) => owners.ensure());
       await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, ${botId}, 123, 123)`;
       const text = "word ".repeat(1000);
+      const keyboard: TelegramKeyboard = {
+        inline_keyboard: [[{ text: "Approve", callback_data: "approve_synthetic" }]],
+      };
       const first = await scope(({ telegramOutbound }) =>
-        telegramOutbound.enqueue("first", botId, text),
+        telegramOutbound.enqueue("first", botId, text, keyboard),
       );
       assert.equal(
-        await scope(({ telegramOutbound }) => telegramOutbound.enqueue("first", botId, text)),
+        await scope(({ telegramOutbound }) =>
+          telegramOutbound.enqueue("first", botId, text, keyboard),
+        ),
         first,
+      );
+      await assert.rejects(
+        scope(({ telegramOutbound }) =>
+          telegramOutbound.enqueue("first", botId, text, {
+            inline_keyboard: [[{ text: "Approve", callback_data: "different" }]],
+          }),
+        ),
+        /conflicts/,
       );
       await assert.rejects(
         scope(({ telegramOutbound }) => telegramOutbound.enqueue("first", botId, "different")),
@@ -39,6 +53,7 @@ test("Telegram outbox serializes whole replies and never retries ambiguous sends
       assert.ok(claimed);
       assert.equal(claims.filter(Boolean).length, 1);
       assert.equal(claimed.id, first);
+      assert.equal(claimed.keyboard, undefined);
       await scope(({ telegramOutbound }) =>
         telegramOutbound.settle(claimed, { state: "retry", afterSeconds: 20 }),
       );
@@ -47,12 +62,26 @@ test("Telegram outbox serializes whole replies and never retries ambiguous sends
 
       let messageId = 100;
       const texts: string[] = [];
-      const send = (_chatId: string, part: string) => {
+      const keyboards: (TelegramKeyboard | undefined)[] = [];
+      const send = (
+        _chatId: string,
+        part: string,
+        _signal: AbortSignal,
+        markup?: TelegramKeyboard,
+      ) => {
         texts.push(part);
+        keyboards.push(markup);
         return Promise.resolve({ state: "sent" as const, messageId: messageId++ });
       };
       const signal = new AbortController().signal;
       assert.equal(await deliverTelegramNext(database, ownerId, botId, send, signal), "sent");
+      const finalPart = await scope(({ telegramOutbound }) => telegramOutbound.claim(botId));
+      assert.ok(finalPart);
+      assert.deepEqual(finalPart.keyboard, keyboard);
+      await scope(({ telegramOutbound }) =>
+        telegramOutbound.settle(finalPart, { state: "retry", afterSeconds: 1 }),
+      );
+      await sql`UPDATE winston.telegram_outbound SET available_at = clock_timestamp() WHERE id = ${first}::uuid`;
       assert.equal(await deliverTelegramNext(database, ownerId, botId, send, signal), "sent");
       assert.equal(
         (await scope(({ telegramOutbound }) => telegramOutbound.find(first)))?.state,
@@ -63,6 +92,7 @@ test("Telegram outbox serializes whole replies and never retries ambiguous sends
         "pending",
       );
       assert.equal(texts.length, 2);
+      assert.deepEqual(keyboards, [undefined, keyboard]);
       assert.deepEqual(
         (await scope(({ telegramOutbound }) => telegramOutbound.find(first)))?.sentIds,
         [100, 101],
