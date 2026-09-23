@@ -5,7 +5,7 @@ import {
   type createArtifactService,
 } from "@winston/adapters/artifacts";
 import { createTelegramDownloader, intakeTelegramFile } from "@winston/adapters/telegram";
-import { startOwnerFileLoop } from "./runtime";
+import { startOwnerFileLoop } from "./owner-loop";
 
 export function startFileIntakeRuntime(options: {
   database: ReturnType<typeof createDatabase>;

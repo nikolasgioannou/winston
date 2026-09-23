@@ -1,7 +1,7 @@
 import type { createDatabase } from "@winston/adapters/database";
 import type { createArtifactReader } from "@winston/adapters/artifacts";
 import { createVoiceTranscriber, transcribeNextVoice } from "@winston/adapters/models";
-import { startOwnerFileLoop } from "./runtime";
+import { startOwnerFileLoop } from "./owner-loop";
 
 export function startVoiceRuntime(options: {
   database: ReturnType<typeof createDatabase>;
