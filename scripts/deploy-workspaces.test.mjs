@@ -143,3 +143,49 @@ test("concurrent configuration changes abort before updating a workspace", async
     false,
   );
 });
+
+test("successful image updates wait for transient state without another mutation", async () => {
+  const f = fixture();
+  let pauses = 0;
+  const run = (args) => {
+    const result = f.options.run(args);
+    if (args[1] === "update")
+      f.machines.find((machine) => machine.id === args[2]).state = "starting";
+    return result;
+  };
+  await deployWorkspaces({
+    ...f.options,
+    run,
+    pause: async (ms) => {
+      assert.equal(ms, 1000);
+      pauses += 1;
+      for (const machine of f.machines) machine.state = "started";
+    },
+  });
+  assert.equal(pauses, 2);
+  assert.equal(f.calls.filter((args) => args[1] === "update").length, 2);
+});
+
+test("state waiting remains bounded and rejects configuration drift", async () => {
+  for (const fault of ["stuck", "drift"]) {
+    const f = fixture();
+    let pauses = 0;
+    const run = (args) => {
+      const result = f.options.run(args);
+      if (args[1] === "update") f.machines[0].state = "replacing";
+      return result;
+    };
+    await assert.rejects(
+      deployWorkspaces({
+        ...f.options,
+        run,
+        pause: async () => {
+          pauses += 1;
+          if (fault === "drift") f.machines[0].config.mounts[0].volume = "changed";
+        },
+      }),
+    );
+    assert.equal(pauses, fault === "stuck" ? 30 : 1);
+    assert.equal(f.calls.filter((args) => args[1] === "update").length, 1);
+  }
+});

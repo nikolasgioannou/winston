@@ -103,7 +103,14 @@ export async function deployWorkspaces({
         log(`Workspace ${id} remains unchanged; retrying the image update.`);
       }
     }
-    const after = list().find((machine) => machine.id === id);
+    let after;
+    for (let attempt = 0; attempt <= 30; attempt += 1) {
+      after = list().find((machine) => machine.id === id);
+      if (!after?.config || !isDeepStrictEqual(retained(after.config), retained(previous.config)))
+        throw new Error("Workspace configuration changed unexpectedly; inspect before proceeding.");
+      if (after.state === "started") break;
+      if (attempt < 30) await pause(1000);
+    }
     validate(after);
     if (!isDeepStrictEqual(retained(after.config), retained(previous.config)))
       throw new Error("Workspace configuration changed unexpectedly; inspect before proceeding.");
