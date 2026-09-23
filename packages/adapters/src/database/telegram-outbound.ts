@@ -94,6 +94,25 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
         `);
         return undefined;
       }
+      const staleApproval = await transaction.execute(sql`
+        SELECT 1 FROM winston.telegram_approvals p
+        JOIN winston.actions a ON a.owner_id = p.owner_id AND a.id = p.action_id
+        JOIN winston.tasks t ON t.owner_id = a.owner_id AND t.id = a.task_id
+        WHERE p.owner_id = ${ownerId}::uuid AND p.outbound_id = ${row.id}::uuid AND (
+          a.document->>'state' <> 'pending' OR a.expires_at <= clock_timestamp()
+          OR (a.document->>'revision')::integer <> p.revision OR a.document->>'hash' <> p.action_hash
+          OR (a.document->>'intentRevision')::integer <> t.intent_revision
+          OR t.document->>'state' <> 'waiting' OR t.document->'blocker'->>'kind' <> 'approval'
+          OR t.document->'blocker'->>'referenceId' <> a.id::text
+        )
+      `);
+      if (staleApproval.rowCount) {
+        await transaction.execute(sql`
+          UPDATE winston.telegram_outbound SET state = 'canceled'
+          WHERE owner_id = ${ownerId}::uuid AND id = ${row.id}::uuid
+        `);
+        return undefined;
+      }
       // A reply that has not begun delivery can still yield to newly arrived input.
       // Once a part is acknowledged, preserve the remainder of that same response.
       if (row.nextPart === 0) {

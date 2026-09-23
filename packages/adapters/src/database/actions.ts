@@ -296,6 +296,15 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const stored = await row(id);
       return stored ? actionRecordSchema.parse(stored.document) : null;
     },
+    async expirePending(id: string) {
+      await lock();
+      const stored = await row(id);
+      if (!stored) return null;
+      const action = actionRecordSchema.parse(stored.document);
+      return action.state === "pending" && !stored.valid
+        ? save(action, { state: "invalidated" })
+        : action;
+    },
     async prepare(input: ActionRequest) {
       const request = actionRequestSchema.parse(input);
       const digest = hash(canonical(request));

@@ -38,25 +38,33 @@ export async function startBackgroundRuntime(options: {
     cursor = owners.length === 100 ? owners.at(-1) : undefined;
     for (const ownerId of owners) {
       if (stopping()) return;
-      const ready = await database.transaction(ownerId, async ({ tasks, actions }) => {
-        await tasks.wakeDue();
-        for (const task of await tasks.listActive()) {
-          if (
-            task.state !== "waiting" ||
-            !task.blocker ||
-            !["approval", "execution"].includes(task.blocker.kind)
-          )
-            continue;
-          const action = await actions.find(task.blocker.referenceId);
-          const resolved =
-            task.blocker.kind === "approval"
-              ? ["approved", "denied", "invalidated", "succeeded", "failed"]
-              : ["denied", "invalidated", "succeeded", "failed"];
-          if (action?.request.task.id === task.id && resolved.includes(action.state))
-            await tasks.resume(task.id, task.revision, task.blocker.referenceId);
-        }
-        return tasks.runnable();
-      });
+      const ready = await database.transaction(
+        ownerId,
+        async ({ tasks, actions, telegramApprovals }) => {
+          await tasks.wakeDue();
+          for (const task of await tasks.listActive()) {
+            if (
+              task.state !== "waiting" ||
+              !task.blocker ||
+              !["approval", "execution"].includes(task.blocker.kind)
+            )
+              continue;
+            const action =
+              task.blocker.kind === "approval"
+                ? await actions.expirePending(task.blocker.referenceId)
+                : await actions.find(task.blocker.referenceId);
+            if (action?.state === "pending" && task.blocker.kind === "approval")
+              await telegramApprovals.prepare(action.id, options.botId);
+            const resolved =
+              task.blocker.kind === "approval"
+                ? ["approved", "denied", "invalidated", "succeeded", "failed"]
+                : ["denied", "invalidated", "succeeded", "failed"];
+            if (action?.request.task.id === task.id && resolved.includes(action.state))
+              await tasks.resume(task.id, task.revision, task.blocker.referenceId);
+          }
+          return tasks.runnable();
+        },
+      );
       for (const task of ready) {
         if (stopping()) return;
         const reference = { ownerId, referenceId: task.id, revision: task.revision };
