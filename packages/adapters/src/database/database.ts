@@ -15,6 +15,7 @@ import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
 import { telegramIntakeRepository } from "./telegram-intake";
 import { inboxTransferRepository } from "./inbox-transfers";
+import { voiceRepository } from "./voice";
 import { inboxTransferTokenSchema } from "@winston/contracts/artifacts";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
@@ -39,6 +40,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly voice: ReturnType<typeof voiceRepository>;
   readonly inboxTransfers: ReturnType<typeof inboxTransferRepository>;
   readonly telegramIntake: ReturnType<typeof telegramIntakeRepository>;
   readonly telegramFiles: ReturnType<typeof telegramFileRepository>;
@@ -155,6 +157,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          voice: voiceRepository(transaction, ownerId),
           inboxTransfers: inboxTransferRepository(transaction, ownerId),
           telegramIntake: telegramIntakeRepository(transaction, ownerId),
           telegramFiles: telegramFileRepository(transaction, ownerId),

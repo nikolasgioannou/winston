@@ -14,6 +14,7 @@ import {
 import { startFileDeliveryRuntime } from "./files/runtime";
 import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
 import { createInboxTransferGroup } from "./http/inbox-transfers";
+import { startVoiceRuntime } from "./files/voice-runtime";
 import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
@@ -91,6 +92,7 @@ let conversation: Awaited<ReturnType<typeof startConversationRuntime>> | undefin
 let fileDelivery: ReturnType<typeof startFileDeliveryRuntime> | undefined;
 let fileIntake: ReturnType<typeof startFileIntakeRuntime> | undefined;
 let inboxStaging: ReturnType<typeof startInboxStagingRuntime> | undefined;
+let voiceRuntime: ReturnType<typeof startVoiceRuntime> | undefined;
 let fileCommands: ReturnType<typeof createFileCommands> | undefined;
 
 if (telegramToken || telegramSecret) {
@@ -100,6 +102,17 @@ if (telegramToken || telegramSecret) {
   const telegramClient = createTelegramClient(telegramToken);
   const bot = await telegramClient.identity();
   if (storage) {
+    if (process.env.OPENROUTER_API_KEY) {
+      voiceRuntime = startVoiceRuntime({
+        database,
+        botId: bot.id,
+        apiKey: process.env.OPENROUTER_API_KEY,
+        read: createArtifactReader(database, storage),
+        notice: (code) => {
+          console.error(code);
+        },
+      });
+    }
     inboxStaging = startInboxStagingRuntime({
       database,
       botId: bot.id,
@@ -245,6 +258,7 @@ function shutdown() {
       await fileDelivery?.stop();
       await fileIntake?.stop();
       await inboxStaging?.stop();
+      await voiceRuntime?.stop();
       storage?.close();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })

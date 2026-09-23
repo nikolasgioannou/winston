@@ -12,6 +12,7 @@ import { modelRoles, type ModelRole } from "./config";
 
 export { modelRoles, type ModelRole } from "./config";
 export { createVoiceTranscriber, TranscriptionError, transcriptionModel } from "./transcription";
+export { transcribeNextVoice } from "./transcribe-next";
 export {
   buildModelWindow,
   textTokenBound,
