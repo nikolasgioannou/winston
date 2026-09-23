@@ -7,9 +7,13 @@ import { connectionRepository } from "./connections";
 import { deviceRepository } from "./devices";
 import { actionRepository } from "./actions";
 import { handoffRepository } from "./handoffs";
+import { executeScheduleCommand } from "./cli-schedules";
+import type { CliScheduleRequest } from "@winston/contracts/cli";
 
 export function cliRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
+    schedule: (credential: ServiceRequest, request: CliScheduleRequest) =>
+      executeScheduleCommand(transaction, ownerId, credential, request),
     async connect(
       credential: ServiceRequest,
       input: Extract<CliRequest, { command: "accounts.connect" }>,

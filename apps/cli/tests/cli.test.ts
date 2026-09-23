@@ -6,6 +6,51 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("schedule commands require explicit timing and revision-checked edits", () => {
+  assert.deepEqual(
+    parseCommand([
+      "schedules",
+      "create",
+      "--key",
+      "plants",
+      "--objective",
+      "Water plants",
+      "--at",
+      "2030-01-01T14:00:00.000Z",
+    ]),
+    {
+      kind: "request",
+      json: false,
+      request: {
+        version: 1,
+        command: "schedules.create",
+        key: "plants",
+        objective: "Water plants",
+        startAt: "2030-01-01T14:00:00.000Z",
+      },
+    },
+  );
+  assert.deepEqual(parseCommand(["schedules", "cancel", "--id", id, "--revision", "2"]), {
+    kind: "request",
+    json: false,
+    request: { version: 1, command: "schedules.cancel", id, revision: 2 },
+  });
+  assert.throws(() => parseCommand(["schedules", "cancel", "--id", id]));
+  assert.throws(() => parseCommand(["schedules", "list", "--rule", "FREQ=DAILY"]));
+  assert.throws(() =>
+    parseCommand([
+      "schedules",
+      "create",
+      "--key",
+      "plants",
+      "--objective",
+      "Water plants",
+      "--at",
+      "tomorrow",
+    ]),
+  );
+});
+
 test("file delivery commands require explicit artifact and stable request identities", () => {
   assert.deepEqual(parseCommand(["files", "send", "--id", id, "--key", "report"]), {
     kind: "request",

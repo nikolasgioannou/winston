@@ -18,6 +18,25 @@ function authority(): CliAuthority {
   };
 }
 
+test("schedule cancellation requires control authority without a request key", async () => {
+  const value = { ...authority(), controlToken: `wst_${"c".repeat(43)}` };
+  const result = await callGateway(
+    value,
+    {
+      version: 1,
+      command: "schedules.cancel",
+      id: randomUUID(),
+      revision: 0,
+    },
+    (url, init) => {
+      assert.equal(url.endsWith("/control"), true);
+      assert.equal(new Headers(init.headers).get("Authorization"), `Bearer ${value.controlToken}`);
+      return Promise.resolve(Response.json({ version: 1, status: "ok", data: {} }));
+    },
+  );
+  assert.equal(result.status, "ok");
+});
+
 test("file delivery requires control authority while status uses read authority", async () => {
   const value = { ...authority(), controlToken: `wst_${"c".repeat(43)}` };
   for (const command of ["files.send", "files.status"] as const) {

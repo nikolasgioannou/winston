@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   cliRequestSchema,
   cliReadRequestSchema,
+  cliScheduleRequestSchema,
   type CliReadRequest,
   type CliResult,
 } from "@winston/contracts/cli";
@@ -56,6 +57,13 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const schedule = cliScheduleRequestSchema.safeParse(request);
+    if (schedule.success)
+      return context.json(
+        await database.transaction(identity.ownerId, ({ cli }) =>
+          cli.schedule(authority, schedule.data),
+        ),
+      );
     if (request.command === "files.send")
       return context.json(
         files
@@ -85,6 +93,13 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const schedule = cliScheduleRequestSchema.safeParse(request);
+    if (schedule.success)
+      return context.json(
+        await database.transaction(identity.ownerId, ({ cli }) =>
+          cli.schedule(authority, schedule.data),
+        ),
+      );
     if (request.command === "files.status")
       return context.json(
         files

@@ -2,6 +2,44 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "schedules.create",
+    description:
+      "Create a durable reminder or recurring task. Reuse the same key after interruption.",
+    id: false,
+    flags: ["key", "objective", "at", "timezone", "rule"],
+    usage:
+      "--key <stable-key> --objective <task> --at <UTC-timestamp> [--timezone <IANA-zone>] [--rule <RRULE>]",
+  },
+  {
+    command: "schedules.list",
+    description: "List schedules and their revisions.",
+    id: false,
+    flags: ["after"],
+    usage: "[--after <uuid>]",
+  },
+  {
+    command: "schedules.inspect",
+    description: "Inspect a schedule before changing it or recovering an interrupted request.",
+    id: true,
+    flags: ["id"],
+  },
+  {
+    command: "schedules.update",
+    description:
+      "Replace a schedule using its current revision. Cancels outstanding work from the previous schedule.",
+    id: true,
+    flags: ["id", "revision", "objective", "at", "timezone", "rule"],
+    usage:
+      "--id <uuid> --revision <number> --objective <task> --at <UTC-timestamp> [--timezone <IANA-zone>] [--rule <RRULE>]",
+  },
+  {
+    command: "schedules.cancel",
+    description: "Cancel a schedule and its outstanding work using its current revision.",
+    id: true,
+    flags: ["id", "revision"],
+    usage: "--id <uuid> --revision <number>",
+  },
+  {
     command: "files.send",
     description:
       "Queue a published artifact for delivery to the owner in Telegram. Reuse the same key on retry.",

@@ -67,6 +67,12 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
   }
   return {
     find,
+    async findByKey(key: string) {
+      const result = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.schedules WHERE owner_id = ${ownerId}::uuid AND request_key = ${key}
+      `);
+      return result.rows[0] ? scheduleSchema.parse(result.rows[0].document) : undefined;
+    },
     async list(afterId?: string) {
       if (afterId) scheduleSchema.shape.id.parse(afterId);
       const result = await transaction.execute<{ document: unknown }>(sql`

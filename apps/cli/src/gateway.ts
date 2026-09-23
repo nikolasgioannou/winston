@@ -3,6 +3,7 @@ import {
   cliRequestSchema,
   cliResultSchema,
   cliReadRequestSchema,
+  isScheduleMutation,
   type CliAuthority,
   type CliRequest,
   type CliResult,
@@ -22,7 +23,9 @@ export async function callGateway(
   const authority = cliAuthoritySchema.parse(inputAuthority);
   const request = cliRequestSchema.parse(input);
   const control =
-    request.command === "operations.cancel" || ("key" in request && request.key !== undefined);
+    request.command === "operations.cancel" ||
+    isScheduleMutation(request.command) ||
+    ("key" in request && request.key !== undefined);
   const token = control ? authority.controlToken : authority.token;
   if (!token)
     return { version: 1, status: "denied", message: "Task control authority is unavailable." };

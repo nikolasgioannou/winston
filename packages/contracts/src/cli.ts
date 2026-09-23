@@ -1,9 +1,16 @@
 import { z } from "zod";
 import { googleServiceSchema } from "./connections";
 import { cliReadRequestSchema } from "./cli-reads";
+import { cliScheduleRequestSchema } from "./cli-schedules";
+export {
+  cliScheduleRequestSchema,
+  isScheduleMutation,
+  type CliScheduleRequest,
+} from "./cli-schedules";
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliScheduleRequestSchema.options,
   z.strictObject({
     version: z.literal(1),
     command: z.literal("files.send"),

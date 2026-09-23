@@ -29,6 +29,11 @@ export function parseCommand(args: string[]): ParsedCommand {
       timezone: { type: "string" },
       path: { type: "string" },
       type: { type: "string" },
+      objective: { type: "string" },
+      at: { type: "string" },
+      rule: { type: "string" },
+      revision: { type: "string" },
+      after: { type: "string" },
     },
   });
   const flags = tokens.filter((token) => token.kind === "option").map((token) => token.name);
@@ -44,6 +49,29 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (command.command.startsWith("schedules.") && "flags" in command) {
+    if (values.revision !== undefined && !/^\d+$/.test(values.revision))
+      throw new Error("Invalid schedule revision.");
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected schedule options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        ...(values.id === undefined ? {} : { id: values.id }),
+        ...(values.key === undefined ? {} : { key: values.key }),
+        ...(values.objective === undefined ? {} : { objective: values.objective }),
+        ...(values.at === undefined ? {} : { startAt: values.at }),
+        ...(values.rule === undefined ? {} : { rule: values.rule }),
+        ...(values.timezone === undefined ? {} : { timezone: values.timezone }),
+        ...(values.revision === undefined ? {} : { revision: Number(values.revision) }),
+        ...(values.after === undefined ? {} : { after: values.after }),
+      }),
+    };
+  }
   if (command.command === "files.send") {
     if (flags.some((flag) => !["json", "id", "key"].includes(flag)))
       throw new Error("Unexpected command options.");
