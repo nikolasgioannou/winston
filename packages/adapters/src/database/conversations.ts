@@ -11,6 +11,7 @@ import { telegramEnvelope } from "../telegram/envelope";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
 import { taskRepository } from "./tasks";
+import { taskResourceRepository } from "./task-resources";
 
 type Conversation = {
   id: string;
@@ -170,19 +171,27 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
         };
       });
 
+      const activeTasks = await taskRepository(transaction, ownerId).listActive();
       return {
         ...conversation,
         pending: await pending(),
         messages,
-        activeTasks: await taskRepository(transaction, ownerId).listActive(),
+        activeTasks,
+        taskResources: await taskResourceRepository(transaction, ownerId).context(
+          activeTasks.map((task) => task.id),
+        ),
       };
     },
     // Trusted staging/transcription services call this after verifying their output. No owner HTTP endpoint.
     async resolveMessage(nextInput: UserMessage) {
       const conversation = await lock();
       const next = userMessageSchema.parse(nextInput);
-      if (next.ownerId !== ownerId || next.metadata.references.length)
+      if (next.ownerId !== ownerId || next.metadata.references.some((ref) => ref.kind !== "task"))
         throw new Error("Message references require an authorized resolver.");
+      await taskResourceRepository(transaction, ownerId).validateReferences(
+        next.messageId,
+        next.metadata.references.map((ref) => ref.id),
+      );
       const result = await transaction.execute<{ envelope: unknown }>(sql`
         SELECT envelope FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid AND id = ${next.messageId}::uuid
       `);

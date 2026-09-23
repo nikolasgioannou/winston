@@ -186,7 +186,7 @@ test("inbox keeps provider order, pending media and immutable receipt metadata a
             metadata: { ...resolved.metadata, references: [{ kind: "task", id: randomUUID() }] },
           }),
         ),
-        /authorized resolver/,
+        /unrelated or unavailable/,
       );
       const otherOwner = randomUUID();
       await database.transaction(otherOwner, ({ owners }) => owners.ensure());

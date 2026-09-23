@@ -121,7 +121,7 @@ export function createConversationLoop(options: {
       const burst = burstIds.length
         ? serializeMessageBurst({ revision, messageIds: burstIds })
         : "";
-      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}`;
+      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n<system_event kind="task_resources">${xml(JSON.stringify(snapshot.taskResources))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}`;
       const user = last.messages[0];
       if (user && typeof user.content === "string") user.content += `\n${context}`;
       const sourceMessageIds = snapshot.messages

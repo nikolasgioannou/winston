@@ -50,7 +50,13 @@ export const transcriptSchema = z.discriminatedUnion("state", [
 export const metadataSchema = z.strictObject({
   attachments: z.array(attachmentSchema),
   transcript: transcriptSchema.optional(),
-  references: z.array(z.strictObject({ kind: z.enum(["task", "context"]), id })),
+  references: z
+    .array(z.strictObject({ kind: z.enum(["task", "context"]), id }))
+    .max(100)
+    .refine(
+      (refs) => new Set(refs.map((ref) => `${ref.kind}:${ref.id}`)).size === refs.length,
+      "References must be unique.",
+    ),
 });
 
 export const userMessageSchema = z

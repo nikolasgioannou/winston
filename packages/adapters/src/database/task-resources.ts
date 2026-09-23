@@ -40,6 +40,40 @@ export function taskResourceRepository(transaction: DatabaseTransaction, ownerId
     return rows.rows[0] ? taskResourceBindingSchema.parse(rows.rows[0].document) : undefined;
   }
   return {
+    async context(inputTaskIds: string[]) {
+      const taskIds = taskResourceScopeSchema.shape.id.array().max(100).parse(inputTaskIds);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT b.document FROM winston.task_resource_bindings b
+        JOIN winston.tasks t ON t.owner_id = b.owner_id AND t.id = b.task_id
+          AND t.intent_revision = b.intent_revision
+        WHERE b.owner_id = ${ownerId}::uuid
+          AND b.task_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(taskIds)}::jsonb)::uuid)
+        ORDER BY b.task_id, b.binding_key LIMIT 101
+      `);
+      return {
+        bindings: rows.rows
+          .slice(0, 100)
+          .map((row) => taskResourceBindingSchema.parse(row.document)),
+        truncated: rows.rows.length > 100,
+      };
+    },
+    async validateReferences(inputMessageId: string, inputTaskIds: string[]) {
+      const messageId = taskResourceScopeSchema.shape.id.parse(inputMessageId);
+      const taskIds = taskResourceScopeSchema.shape.id.array().max(100).parse(inputTaskIds);
+      if (new Set(taskIds).size !== taskIds.length)
+        throw new Error("Task references must be unique.");
+      const message = await transaction.execute(sql`
+        SELECT id FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid AND id = ${messageId}::uuid
+      `);
+      if (!message.rowCount) throw new Error("Message is unavailable to this owner.");
+      const tasks = await transaction.execute(sql`
+        SELECT id FROM winston.tasks WHERE owner_id = ${ownerId}::uuid
+          AND id IN (SELECT jsonb_array_elements_text(${JSON.stringify(taskIds)}::jsonb)::uuid)
+          AND document->'sourceMessageIds' ? ${messageId}
+      `);
+      if (tasks.rowCount !== taskIds.length)
+        throw new Error("Task references are unrelated or unavailable to this message.");
+    },
     async find(scope: TaskResourceScope, inputKey: string) {
       const key = taskResourceKeySchema.parse(inputKey);
       const { task, intentRevision } = await current(scope);

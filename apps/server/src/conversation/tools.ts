@@ -58,7 +58,12 @@ export async function executeConversationTool(
   }
   if (call.name === "task_status") {
     const input = status.parse(call.input);
-    return (await scope.tasks.find(input.id)) ?? { error: "Task unavailable." };
+    const task = await scope.tasks.find(input.id);
+    if (!task) return { error: "Task unavailable." };
+    return {
+      ...task,
+      resources: await scope.taskResources.list({ id: task.id, revision: task.revision }),
+    };
   }
   if (call.name === "steer_task") {
     const input = steer.parse(call.input);
