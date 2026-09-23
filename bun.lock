@@ -98,6 +98,7 @@
         "google-auth-library": "11.1.0",
         "pg": "8.23.0",
         "pg-boss": "12.33.2",
+        "rrule-temporal": "2.2.6",
       },
       "devDependencies": {
         "@types/node": "24.13.6",

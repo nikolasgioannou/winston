@@ -11,6 +11,7 @@
     "./google": "./src/google/index.ts",
     "./jobs": "./src/jobs/index.ts",
     "./models": "./src/models/index.ts",
+    "./schedules": "./src/schedules/index.ts",
     "./storage": "./src/storage/index.ts",
     "./telegram": "./src/telegram/index.ts",
     "./workspace": "./src/workspace/index.ts"
@@ -29,7 +30,8 @@
     "drizzle-orm": "0.45.2",
     "google-auth-library": "11.1.0",
     "pg": "8.23.0",
-    "pg-boss": "12.33.2"
+    "pg-boss": "12.33.2",
+    "rrule-temporal": "2.2.6"
   },
   "devDependencies": {
     "@types/node": "24.13.6",

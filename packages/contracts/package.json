@@ -24,6 +24,7 @@
     "./json": "./src/json.ts",
     "./memory": "./src/memory.ts",
     "./messages": "./src/messages/index.ts",
+    "./schedules": "./src/schedules.ts",
     "./storage": "./src/storage.ts",
     "./tasks": "./src/tasks.ts",
     "./task-resources": "./src/task-resources.ts",
