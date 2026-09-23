@@ -27,3 +27,12 @@ if (result.error) {
 }
 
 process.exitCode = result.status ?? 1;
+
+if (process.exitCode === 0) {
+  const workspace = spawnSync(process.execPath, ["scripts/test-workspace-runtime.mjs"], {
+    stdio: "inherit",
+    env: { ...process.env, DOCKER_HOST: endpoint },
+  });
+  if (workspace.error) throw workspace.error;
+  process.exitCode = workspace.status ?? 1;
+}

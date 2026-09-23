@@ -23,7 +23,14 @@ export function createWorkspaceHandler(options: Options) {
   const identity = workspaceIdentitySchema.parse(options.identity);
   return async (request: Request) => {
     const path = new URL(request.url).pathname;
-    if (request.method === "GET" && path === "/health") return json({ status: "ok" });
+    if (request.method === "GET" && path === "/health") {
+      try {
+        options.journal.assertPresent();
+        return json({ status: "ok" });
+      } catch {
+        return json({ error: "storage_unavailable" }, 503);
+      }
+    }
     if (request.method !== "POST" || !["/v1/inspect", "/v1/status"].includes(path)) {
       return json({ error: "not_found" }, 404);
     }

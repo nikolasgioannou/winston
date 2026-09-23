@@ -88,6 +88,9 @@ export function openWorkspaceJournal(options: {
 
   return {
     home: volume.home,
+    assertPresent() {
+      volume.assertPresent();
+    },
     start(
       input: WorkspaceOperation,
     ): { started: true; completionToken: string } | { started: false; record: WorkspaceRecord } {

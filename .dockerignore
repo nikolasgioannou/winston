@@ -9,6 +9,10 @@ apps/*/**
 !apps/*/package.json
 !apps/server/src/
 !apps/server/src/**
+!apps/workspace/Dockerfile
+!apps/workspace/entrypoint.sh
+!apps/workspace/src/
+!apps/workspace/src/**
 !apps/web/src/
 !apps/web/src/**
 !apps/web/index.html
