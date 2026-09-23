@@ -25,6 +25,18 @@ export const artifactSchema = z.strictObject({
 export type ArtifactMetadata = z.infer<typeof artifactMetadataSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
 
+export const inboxTransferTokenSchema = z.string().regex(/^wit_[A-Za-z0-9_-]{43}$/);
+export const inboxTransferSchema = z.strictObject({
+  ownerId: z.uuid(),
+  intakeId: z.uuid(),
+  workspaceId: z.uuid(),
+  workspaceRevision: z.number().int().nonnegative(),
+  artifactId: z.uuid(),
+  size: z.number().int().min(0).max(20_000_000),
+  sha256: storedObjectSchema.shape.sha256,
+});
+export type InboxTransfer = z.infer<typeof inboxTransferSchema>;
+
 export const maximumPublicationSize = 50 * 1024 * 1024;
 export const filePublicationSchema = artifactMetadataSchema.omit({ source: true }).extend({
   version: z.literal(1),

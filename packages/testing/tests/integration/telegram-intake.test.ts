@@ -194,6 +194,55 @@ test("attachment intake is durable, leased, edit-safe and owner scoped", async (
       assert.ok(storedMessage);
       // A private object is not yet a path the model can use.
       assert.equal(storedMessage.metadata.attachments[0]?.state, "pending");
+      const workspaceId = randomUUID();
+      await scope(async ({ workspaces, workspaceRuntimes }) => {
+        await workspaces.register(workspaceId, "Fixture workspace");
+        await workspaces.setState(workspaceId, 0, "active");
+        await workspaceRuntimes.configure({
+          workspaceId,
+          revision: 1,
+          origin: "http://fixture.flycast",
+        });
+      });
+      const transfer = await scope(({ inboxTransfers }) => inboxTransfers.claim(botId));
+      assert.ok(transfer);
+      assert.equal(await scope(({ inboxTransfers }) => inboxTransfers.claim(botId)), null);
+      assert.deepEqual(await database.authenticateInboxTransfer(transfer.token), transfer.transfer);
+      assert.equal(
+        await database.transaction(stranger, ({ inboxTransfers }) =>
+          inboxTransfers.authenticate(transfer.token),
+        ),
+        null,
+      );
+      await sql`UPDATE winston.telegram_bindings SET chat_id = 999 WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await database.authenticateInboxTransfer(transfer.token), null);
+      await sql`UPDATE winston.telegram_bindings SET chat_id = 456 WHERE owner_id = ${ownerId}::uuid`;
+      await scope(({ workspaces }) => workspaces.setState(workspaceId, 2, "paused"));
+      assert.equal(await database.authenticateInboxTransfer(transfer.token), null);
+      await scope(({ workspaces }) => workspaces.setState(workspaceId, 3, "active"));
+      assert.equal(await database.authenticateInboxTransfer(transfer.token), null);
+      await sql`UPDATE winston.inbox_transfers SET expires_at = clock_timestamp() WHERE owner_id = ${ownerId}::uuid`;
+      const renewed = await scope(({ inboxTransfers }) => inboxTransfers.claim(botId));
+      assert.ok(renewed);
+      assert.notEqual(renewed.token, transfer.token);
+      assert.equal(
+        await scope(({ inboxTransfers }) => inboxTransfers.complete(transfer.token)),
+        false,
+      );
+      assert.equal(
+        await scope(({ inboxTransfers }) => inboxTransfers.complete(renewed.token)),
+        true,
+      );
+      assert.equal(
+        await scope(({ inboxTransfers }) => inboxTransfers.complete(renewed.token)),
+        false,
+      );
+      assert.equal(await database.authenticateInboxTransfer(renewed.token), null);
+      const staged = (await scope(({ conversations }) => conversations.snapshot(10))).messages[0]
+        ?.envelope;
+      assert.equal(staged?.metadata.attachments[0]?.state, "staged");
+      assert.equal(staged.input.text, "Recover this upload");
+      assert.deepEqual(staged.sentAt, storedMessage.sentAt);
 
       await receive(6, "file-five", "Too large");
       assert.equal(
@@ -227,6 +276,30 @@ test("attachment intake is durable, leased, edit-safe and owner scoped", async (
         "canceled",
       );
       assert.equal(uploads.length, 2);
+      assert.equal(
+        await intakeTelegramFile(
+          database,
+          ownerId,
+          botId,
+          () =>
+            Promise.resolve({
+              bytes: Buffer.from("abc"),
+              size: 3,
+              sha256: createHash("sha256").update("abc").digest("hex"),
+            }),
+          service,
+          new AbortController().signal,
+        ),
+        "stored",
+      );
+      const obsolete = await scope(({ inboxTransfers }) => inboxTransfers.claim(botId));
+      assert.ok(obsolete);
+      await receive(9, "file-eight", "Replace before publication");
+      assert.equal(await database.authenticateInboxTransfer(obsolete.token), null);
+      assert.equal(
+        await scope(({ inboxTransfers }) => inboxTransfers.complete(obsolete.token)),
+        false,
+      );
     } finally {
       await Promise.all([database.close(), telegram.close()]);
     }

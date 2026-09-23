@@ -239,6 +239,13 @@
       "when": 1790000000033,
       "tag": "0033_telegram_intake",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790000000034,
+      "tag": "0034_inbox_transfers",
+      "breakpoints": true
     }
   ]
 }

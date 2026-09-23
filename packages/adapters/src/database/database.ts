@@ -14,6 +14,8 @@ import { connectedReadRepository } from "./connected-reads";
 import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
 import { telegramIntakeRepository } from "./telegram-intake";
+import { inboxTransferRepository } from "./inbox-transfers";
+import { inboxTransferTokenSchema } from "@winston/contracts/artifacts";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
@@ -37,6 +39,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly inboxTransfers: ReturnType<typeof inboxTransferRepository>;
   readonly telegramIntake: ReturnType<typeof telegramIntakeRepository>;
   readonly telegramFiles: ReturnType<typeof telegramFileRepository>;
   readonly filePublications: ReturnType<typeof filePublicationRepository>;
@@ -90,6 +93,19 @@ export function createDatabase(options: {
   return {
     assertCompatible: () => checkSchema(pool),
     close: () => pool.end(),
+    async authenticateInboxTransfer(token: string) {
+      if (!inboxTransferTokenSchema.safeParse(token).success) return null;
+      const rows = await pool.query<{ ownerId: string }>(
+        'SELECT owner_id AS "ownerId" FROM winston.inbox_transfers WHERE token_hash = $1 AND expires_at > clock_timestamp()',
+        [capabilityHash(token)],
+      );
+      const ownerId = rows.rows[0]?.ownerId;
+      return ownerId
+        ? database.transaction((transaction) =>
+            inboxTransferRepository(transaction, ownerId).authenticate(token),
+          )
+        : null;
+    },
     async authenticateDevice(token: string) {
       const parsed = deviceCredentialSchema.safeParse(token);
       if (!parsed.success) return null;
@@ -139,6 +155,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          inboxTransfers: inboxTransferRepository(transaction, ownerId),
           telegramIntake: telegramIntakeRepository(transaction, ownerId),
           telegramFiles: telegramFileRepository(transaction, ownerId),
           telegramApprovals: telegramApprovalRepository(transaction, ownerId),
