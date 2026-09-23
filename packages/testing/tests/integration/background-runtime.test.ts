@@ -16,6 +16,7 @@ test("background runtime advances durable steps independently and stops queue ad
     const unpairedOwner = randomUUID();
     let runtime: Awaited<ReturnType<typeof startBackgroundRuntime>> | undefined;
     let generations = 0;
+    let sawScheduledContext = false;
     const create = (owner = ownerId) =>
       database.transaction(owner, ({ tasks }) =>
         tasks.create({ key: randomUUID(), objective: "Queue fixture", sourceMessageIds: [] }),
@@ -34,6 +35,18 @@ test("background runtime advances durable steps independently and stops queue ad
       await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, 123, 1, 1)`;
       const queued = await create();
       const unpaired = await create(unpairedOwner);
+      const schedule = await database.transaction(ownerId, ({ schedules }) =>
+        schedules.create({
+          key: "scheduled-fixture",
+          objective: "Scheduled fixture",
+          sourceMessageIds: [],
+          timing: {
+            kind: "once",
+            startAt: "2026-01-01T09:00:00.000Z",
+            timezone: "America/New_York",
+          },
+        }),
+      );
       const failed = await create();
       const due = await database.transaction(ownerId, async ({ tasks }) => {
         const task = await tasks.create({
@@ -68,8 +81,16 @@ test("background runtime advances durable steps independently and stops queue ad
         jobs,
         botId: 123,
         notice: () => {},
-        generate: () => {
+        generate: (request) => {
           generations += 1;
+          const context = JSON.stringify(request.messages);
+          if (context.includes(schedule.id)) {
+            sawScheduledContext = true;
+            assert.match(context, /task_context/);
+            assert.match(context, /2026-01-01T09:00:00.000Z/);
+            assert.match(context, /America\/New_York/);
+            assert.match(context, /observedAt/);
+          }
           return Promise.resolve({
             ok: true,
             text: "",
@@ -105,7 +126,16 @@ test("background runtime advances durable steps independently and stops queue ad
           (await database.transaction(ownerId, ({ tasks }) => tasks.find(due.id)))?.state ===
           "succeeded",
       );
-      assert.equal(generations, 2);
+      await until(async () => {
+        const rows = await sql<{ state: string }[]>`
+          SELECT t.document->>'state' AS state FROM winston.schedule_occurrences o
+          JOIN winston.tasks t ON t.owner_id = o.owner_id AND t.id = o.task_id
+          WHERE o.owner_id = ${ownerId}::uuid AND o.schedule_id = ${schedule.id}::uuid
+        `;
+        return rows.length === 1 && rows[0]?.state === "succeeded";
+      });
+      assert.equal(generations, 3);
+      assert.equal(sawScheduledContext, true);
       assert.equal(
         (await database.transaction(unpairedOwner, ({ tasks }) => tasks.find(unpaired.id)))?.state,
         "queued",

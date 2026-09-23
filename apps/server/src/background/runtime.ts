@@ -40,7 +40,8 @@ export async function startBackgroundRuntime(options: {
       if (stopping()) return;
       const ready = await database.transaction(
         ownerId,
-        async ({ tasks, actions, telegramApprovals }) => {
+        async ({ tasks, actions, telegramApprovals, schedules }) => {
+          await schedules.claimDue();
           await tasks.wakeDue();
           for (const task of await tasks.listActive()) {
             if (

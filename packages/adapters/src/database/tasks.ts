@@ -133,8 +133,28 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
         JOIN winston.workspace_runtimes r ON r.owner_id = w.owner_id AND r.workspace_id = w.id
         WHERE w.owner_id = ${ownerId}::uuid AND w.state = 'active' ORDER BY w.id LIMIT 100
       `);
+      const occurrences = await transaction.execute<{
+        scheduleId: string;
+        dueAt: string;
+        observedAt: string;
+        timezone: string;
+      }>(sql`
+        SELECT o.schedule_id AS "scheduleId", o.due_at AS "dueAt", clock_timestamp() AS "observedAt",
+          s.document->'timing'->>'timezone' AS timezone
+        FROM winston.schedule_occurrences o JOIN winston.schedules s
+          ON s.owner_id = o.owner_id AND s.id = o.schedule_id
+        WHERE o.owner_id = ${ownerId}::uuid AND o.task_id = ${task.id}::uuid
+      `);
+      const occurrence = occurrences.rows[0];
       return {
         task,
+        scheduled: occurrence
+          ? {
+              ...occurrence,
+              dueAt: new Date(occurrence.dueAt).toISOString(),
+              observedAt: new Date(occurrence.observedAt).toISOString(),
+            }
+          : null,
         messages: rows.rows.map((row) => {
           const envelope = userMessageSchema.parse(row.envelope);
           return { id: envelope.messageId, content: serializeUserMessage(envelope) };
