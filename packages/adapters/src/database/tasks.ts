@@ -48,7 +48,8 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
     const parsed = taskSchema.parse(task);
     await transaction.execute(sql`
       UPDATE winston.tasks SET document = ${JSON.stringify(parsed)}::jsonb,
-        leased_until = ${parsed.state === "running" ? sql`clock_timestamp() + interval '60 seconds'` : sql`NULL`}
+        leased_until = ${parsed.state === "running" ? sql`clock_timestamp() + interval '60 seconds'` : sql`NULL`},
+        retry_at = ${parsed.state === "waiting" ? sql`retry_at` : sql`NULL`}
       WHERE owner_id = ${ownerId}::uuid AND id = ${parsed.id}::uuid
     `);
     await record(parsed);
@@ -73,6 +74,25 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
   }
 
   return {
+    async wakeDue(limit = 100) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+        throw new Error("Invalid retry page.");
+      await lockOwner();
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.tasks WHERE owner_id = ${ownerId}::uuid
+          AND retry_at <= clock_timestamp() AND document->>'state' = 'waiting'
+          AND document->'blocker'->>'kind' IN ('workspace', 'execution')
+        ORDER BY retry_at, id LIMIT ${limit} FOR UPDATE
+      `);
+      const tasks: Task[] = [];
+      for (const row of rows.rows) {
+        const task = taskSchema.parse(row.document);
+        tasks.push(
+          await save({ ...task, state: "queued", revision: task.revision + 1, blocker: null }),
+        );
+      }
+      return tasks;
+    },
     async runnable(limit = 100, inputId?: string) {
       const id = inputId === undefined ? undefined : taskSchema.shape.id.parse(inputId);
       if (!Number.isInteger(limit) || limit < 1 || limit > 100)
@@ -226,6 +246,26 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       if (task.state !== "running" || !leaseValid || task.generation !== generation)
         throw new Error("Worker lease is stale or expired.");
 
+      if (
+        outcome.state === "waiting" &&
+        ["workspace", "execution"].includes(outcome.blocker.kind)
+      ) {
+        const key = `${outcome.blocker.kind}:${outcome.blocker.referenceId}`;
+        await transaction.execute(sql`
+          UPDATE winston.tasks SET
+            retry_at = clock_timestamp() + make_interval(secs => LEAST(3600, 30 * power(2,
+              CASE WHEN retry_key = ${key} THEN LEAST(retry_attempt, 7) ELSE 0 END))),
+            retry_attempt = CASE WHEN retry_key = ${key} THEN LEAST(retry_attempt + 1, 8) ELSE 1 END,
+            retry_key = ${key}
+          WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid
+        `);
+      } else {
+        await transaction.execute(sql`
+          UPDATE winston.tasks SET retry_at = NULL, retry_key = NULL, retry_attempt = 0
+          WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid
+        `);
+      }
+
       return save({
         ...task,
         state: outcome.state,
@@ -238,7 +278,9 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       const { task } = await current(id, revision);
       active(task);
       await transaction.execute(
-        sql`UPDATE winston.tasks SET intent_revision = intent_revision + 1 WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid`,
+        sql`UPDATE winston.tasks SET intent_revision = intent_revision + 1,
+          retry_at = NULL, retry_key = NULL, retry_attempt = 0
+          WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid`,
       );
 
       return save({
