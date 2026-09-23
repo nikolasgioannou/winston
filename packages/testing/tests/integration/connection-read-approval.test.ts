@@ -56,9 +56,34 @@ test("connected read proofs bind exact arguments, current workers and live polic
           target: { kind: "connection" as const, id: accountId, resource: null },
           operation: "gmail.read" as const,
         },
-        arguments: { command: "gmail.search", query: "subject:fixture", limit: 1 },
+        arguments: {
+          version: 1 as const,
+          command: "gmail.search" as const,
+          accountId,
+          query: "subject:fixture",
+          limit: 1,
+        },
       };
-      const action = await database.transaction(ownerId, ({ actions }) => actions.prepare(request));
+      const prepare = (worker = request.task, input = request.arguments) =>
+        database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.prepare(worker, request.key, input),
+        );
+      await database.transaction(ownerId, ({ connectionTargets }) =>
+        connectionTargets.bind(
+          {
+            operation: "gmail.read",
+            task: { id: task.id, revision: task.revision },
+            explicit: { connectionId: accountId, calendarId: null },
+          },
+          { connectionId: accountId, calendarId: null },
+        ),
+      );
+      const { action } = await prepare();
+      assert.equal((await prepare()).action.id, action.id);
+      await assert.rejects(
+        prepare(request.task, { ...request.arguments, query: "different" }),
+        /conflicts/,
+      );
       assert.equal(action.state, "pending");
       task = await database.transaction(ownerId, ({ tasks }) =>
         tasks.finishStep(task.id, task.revision, task.generation, {
@@ -79,6 +104,8 @@ test("connected read proofs bind exact arguments, current workers and live polic
         return tasks.claim(queued.id, queued.revision);
       });
       const worker = { id: task.id, revision: task.revision, generation: task.generation };
+      assert.equal((await prepare(worker)).action.id, action.id);
+      await assert.rejects(prepare(), /stale/);
       const claimed = await database.transaction(ownerId, ({ actions }) =>
         actions.claim(action.id, action.hash, worker),
       );
@@ -121,12 +148,48 @@ test("connected read proofs bind exact arguments, current workers and live polic
         authorization.put({ ...request.authorization, decision: "deny", revision: 0 }),
       );
       assert.equal(await check(), false);
-      await database.transaction(ownerId, ({ actions }) =>
-        actions.report(action.id, claimed.token, {
-          state: "failed",
-          detail: "Policy changed before provider read",
-          providerReference: null,
-        }),
+      const result = {
+        version: 1 as const,
+        status: "unavailable" as const,
+        message: "Policy changed.",
+      };
+      assert.equal(
+        await database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.complete(action.id, "wrong", result),
+        ),
+        null,
+      );
+      assert.deepEqual(
+        await database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.complete(action.id, claimed.token, result),
+        ),
+        result,
+      );
+      assert.deepEqual((await prepare(worker)).result, result);
+      assert.deepEqual(
+        await database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.complete(action.id, claimed.token, result),
+        ),
+        result,
+      );
+      assert.equal(
+        await database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.complete(action.id, claimed.token, {
+            ...result,
+            message: "Changed receipt",
+          }),
+        ),
+        null,
+      );
+      await assert.rejects(
+        database.transaction(ownerId, ({ connectedReads }) =>
+          connectedReads.complete(action.id, claimed.token, {
+            version: 1,
+            status: "ok",
+            data: "x".repeat(900_001),
+          }),
+        ),
+        /receipt/,
       );
       assert.equal(await check(), false);
     } finally {

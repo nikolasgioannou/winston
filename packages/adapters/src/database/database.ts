@@ -10,6 +10,7 @@ import { taskStepRepository } from "./task-steps";
 import { taskUpdateRepository } from "./task-updates";
 import { handoffRepository } from "./handoffs";
 import { telegramApprovalRepository } from "./telegram-approvals";
+import { connectedReadRepository } from "./connected-reads";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
@@ -33,6 +34,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly connectedReads: ReturnType<typeof connectedReadRepository>;
   readonly telegramApprovals: ReturnType<typeof telegramApprovalRepository>;
   readonly handoffs: ReturnType<typeof handoffRepository>;
   readonly taskUpdates: ReturnType<typeof taskUpdateRepository>;
@@ -132,6 +134,7 @@ export function createDatabase(options: {
 
         return work({
           telegramApprovals: telegramApprovalRepository(transaction, ownerId),
+          connectedReads: connectedReadRepository(transaction, ownerId),
           handoffs: handoffRepository(transaction, ownerId),
           taskUpdates: taskUpdateRepository(transaction, ownerId),
           taskSteps: taskStepRepository(transaction, ownerId),

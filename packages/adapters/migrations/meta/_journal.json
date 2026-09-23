@@ -218,6 +218,13 @@
       "when": 1790000000030,
       "tag": "0030_telegram_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790000000031,
+      "tag": "0031_connected_read_results",
+      "breakpoints": true
     }
   ]
 }
