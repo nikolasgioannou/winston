@@ -18,6 +18,12 @@ mise exec -- bun run dev
 
 The API exposes `/health/live` for process liveness and `/health/ready` for startup and dependency readiness. Startup requires a compatible migrated database and complete authentication configuration. Callback, owner, device, and task route groups have separate authenticators and reject access by default. Owner routes validate database sessions and the verified email allowlist on every request; mutations also require the configured web origin. Other authority implementations arrive separately. Request errors use stable codes and server-generated correlation IDs. Request logs contain only correlation ID, status, and duration, excluding request content and raw exceptions. SIGINT/SIGTERM stop new connections and drain active requests, forcing closure after the configured timeout.
 
+## Production container
+
+Build the web app and API together with `docker build -t winston .`. The pinned Bun image installs frozen dependencies and runs as a non-root user on port 8080. The build context excludes local environment files, Git metadata, and installed dependencies. Supply runtime secrets through the deployment environment; never add them to the image.
+
+Apply migrations before starting the server with `bun packages/adapters/src/database/migrate.ts` inside the image, using `DIRECT_DATABASE_URL`. The container sets `WEB_ASSET_DIRECTORY=/app/public` to serve the built web app and API from one origin. Keep this variable unset during local Vite development. Application pages use the SPA entrypoint; missing assets, reserved API paths, and development review URLs return their own errors rather than the page. Fingerprinted assets have immutable caching; HTML remains uncached. Infrastructure provisioning and automated deployment are configured separately.
+
 ## Google sign-in
 
 Set `DATABASE_URL`, `DIRECT_DATABASE_URL`, `BETTER_AUTH_URL`, `WEB_ORIGIN`, `BETTER_AUTH_SECRET` (at least 32 random characters), `OWNER_EMAIL`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` in the root `.env.local`. Use a local database and a development Google Web application client. Register `http://127.0.0.1:3001/api/auth/callback/google` as its redirect URI. Run `bun run db:migrate`, then `bun run dev:server` and `bun run dev` in separate terminals. Open `http://127.0.0.1:5173`; Vite proxies `/api` to the local API. Use `127.0.0.1` consistently for local cookies and redirects. Production requires HTTPS origins, a separate OAuth client, and same-origin API routing.

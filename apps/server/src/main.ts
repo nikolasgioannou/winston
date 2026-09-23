@@ -91,6 +91,7 @@ if (telegramToken || telegramSecret) {
 }
 
 const host = startServer(readConfig(process.env), {
+  ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),
   readiness: async () => {
     await database.assertCompatible();
 

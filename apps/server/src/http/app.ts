@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { errorResponse, RequestError } from "./errors";
+import { createWebRouter } from "./web";
 
 export type Authority = "callback" | "owner" | "device" | "task";
 export type Identity =
@@ -19,6 +20,7 @@ type RouteGroup = {
 };
 
 export type ApiOptions = {
+  webRoot?: string;
   authHandler?: (request: Request) => Promise<Response>;
   ownerOrigin?: string;
   groups?: Partial<Record<Authority, RouteGroup>>;
@@ -141,6 +143,7 @@ export function createApi(options: ApiOptions = {}) {
     app.route(prefixes[authority], router);
   }
 
+  if (options.webRoot) app.route("/", createWebRouter(options.webRoot));
   app.notFound((context) => errorResponse("not_found", context.get("requestId")));
   app.onError((error, context) =>
     errorResponse(
