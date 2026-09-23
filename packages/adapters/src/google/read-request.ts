@@ -81,9 +81,8 @@ export function createGoogleReadRequest(
         ownerId,
         {
           operation,
-          ...(target.task
-            ? { task: target.task }
-            : { explicit: { connectionId: target.connectionId, calendarId: target.calendarId } }),
+          explicit: { connectionId: target.connectionId, calendarId: target.calendarId },
+          ...(target.task ? { task: target.task } : {}),
         },
         deadline,
       );

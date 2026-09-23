@@ -106,6 +106,9 @@ export function createConnectionTargets(
         ownerId,
         {
           operation: target.operation,
+          ...(["gmail.read", "calendar.read"].includes(target.operation)
+            ? { explicit: { connectionId: target.connectionId, calendarId: target.calendarId } }
+            : {}),
           ...(target.task
             ? { task: target.task }
             : {

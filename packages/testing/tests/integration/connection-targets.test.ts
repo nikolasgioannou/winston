@@ -175,6 +175,33 @@ test("target resolution isolates senders, binds task revisions and never substit
         undefined,
       );
       const bound = await resolve(selection);
+      const readScope = { id: task.id, revision: task.revision };
+      const implicitRead = await resolve({ operation: "gmail.read", task: readScope });
+      assert.equal(implicitRead.status, "resolved");
+      inventory.set(calendar.connectionId, [
+        { id: "one", accessRole: "reader" },
+        { id: "two", accessRole: "reader" },
+      ]);
+      const explicitReads = [];
+      for (const target of [
+        first,
+        second,
+        { ...calendar, calendarId: "one" },
+        { ...calendar, calendarId: "two" },
+      ]) {
+        const result = await resolve({
+          operation: target.calendarId === null ? "gmail.read" : "calendar.read",
+          explicit: target,
+          task: readScope,
+        });
+        assert.equal(result.status, "resolved");
+        explicitReads.push(result.target);
+      }
+      for (const target of explicitReads)
+        assert.equal(await targets.revalidate(owner, target, signal), true);
+      const stillImplicit = await resolve({ operation: "gmail.read", task: readScope });
+      assert.equal(stillImplicit.status, "resolved");
+      assert.equal(stillImplicit.target.connectionId, first.connectionId);
       assert.equal(bound.status, "resolved");
       assert.equal(await targets.revalidate(owner, bound.target, signal), true);
       await assert.rejects(resolve({ ...selection, explicit: second }));
@@ -186,6 +213,16 @@ test("target resolution isolates senders, binds task revisions and never substit
         scope.tasks.claim(task.id, running.revision),
       );
       const renewed = { ...selection, task: { id: task.id, revision: running.revision } };
+      for (const target of explicitReads) {
+        const result = await resolve({
+          operation: target.operation,
+          explicit: { connectionId: target.connectionId, calendarId: target.calendarId },
+          task: renewed.task,
+        });
+        assert.equal(result.status, "resolved");
+        assert.equal(result.target.connectionId, target.connectionId);
+        assert.equal(result.target.calendarId, target.calendarId);
+      }
       const retained = await resolve(renewed);
       assert.equal(retained.status, "resolved");
       assert.equal(retained.target.connectionId, first.connectionId);
@@ -194,6 +231,8 @@ test("target resolution isolates senders, binds task revisions and never substit
         scope.tasks.steer(task.id, running.revision, "Use my other account"),
       );
       assert.equal(await targets.revalidate(owner, bound.target, signal), false);
+      for (const target of explicitReads)
+        assert.equal(await targets.revalidate(owner, target, signal), false);
       assert.equal(
         (
           await resolve({

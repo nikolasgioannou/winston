@@ -10,6 +10,7 @@ import type { DatabaseTransaction } from "./owners";
 import { connectionRepository } from "./connections";
 import { taskRepository } from "./tasks";
 import { taskResourceRepository } from "./task-resources";
+import { connectionTargetKey } from "./connection-target-key";
 
 export function connectionTargetRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -85,7 +86,7 @@ export function connectionTargetRepository(transaction: DatabaseTransaction, own
       if (!(await currentTask(selection))) throw new Error("Task changed.");
       const binding = await taskResourceRepository(transaction, ownerId).find(
         selection.task,
-        selection.operation,
+        connectionTargetKey(selection),
       );
       if (!binding) return undefined;
       if (
@@ -98,14 +99,14 @@ export function connectionTargetRepository(transaction: DatabaseTransaction, own
         calendarId: binding.authorization.target.resource,
       };
     },
-    // Worker renewal preserves the selection; changing accounts requires a new task intent.
+    // Explicit reads bind each resource independently. Implicit selections and mutations stay pinned.
     async bind(selection: TargetSelection, target: ConnectionTarget) {
       await lock();
       if (!selection.task || !(await currentTask(selection))) throw new Error("Task changed.");
       const parsed = connectionTargetSchema.parse(target);
       await taskResourceRepository(transaction, ownerId).bind({
         task: selection.task,
-        key: selection.operation,
+        key: connectionTargetKey(selection),
         authorization: {
           operation: selection.operation,
           target: { kind: "connection", id: parsed.connectionId, resource: parsed.calendarId },
