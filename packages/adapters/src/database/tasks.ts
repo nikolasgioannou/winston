@@ -73,11 +73,13 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
   }
 
   return {
-    async runnable(limit = 100) {
+    async runnable(limit = 100, inputId?: string) {
+      const id = inputId === undefined ? undefined : taskSchema.shape.id.parse(inputId);
       if (!Number.isInteger(limit) || limit < 1 || limit > 100)
         throw new Error("Invalid runnable task page.");
       const rows = await transaction.execute<{ document: unknown }>(sql`
         SELECT document FROM winston.tasks WHERE owner_id = ${ownerId}::uuid
+          ${id ? sql`AND id = ${id}::uuid` : sql``}
           AND (document->>'state' = 'queued' OR (document->>'state' = 'running' AND leased_until <= clock_timestamp()))
         ORDER BY id LIMIT ${limit}
       `);

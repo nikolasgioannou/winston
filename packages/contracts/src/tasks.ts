@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const taskBlockerSchema = z.strictObject({
-  kind: z.enum(["approval", "connection", "browser", "device"]),
+  kind: z.enum(["approval", "connection", "browser", "device", "workspace", "execution"]),
   referenceId: z.uuid(),
   detail: z.string().min(1).max(2000),
 });

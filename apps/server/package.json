@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./background": "./src/background/step.ts",
     "./conversation": "./src/conversation/loop.ts"
   },
   "scripts": {
