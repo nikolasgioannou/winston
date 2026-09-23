@@ -139,6 +139,25 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    // Trusted workspace adapter only: the caller must verify the complete returned operation.
+    // This records evidence and never grants permission to dispatch or repeat an effect.
+    async reconcileWorkspace(input: WorkspaceOperation, value: ActionOutcome) {
+      const operation = workspaceOperationSchema.parse(input);
+      const outcome = actionOutcomeSchema.parse(value);
+      if (outcome.state === "unknown" || outcome.providerReference !== operation.operationId)
+        return null;
+      await lock();
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.actions WHERE owner_id = ${ownerId}::uuid
+          AND document->>'operationId' = ${operation.operationId} FOR UPDATE
+      `);
+      if (!rows.rows[0]) return null;
+      const action = actionRecordSchema.parse(rows.rows[0].document);
+      if (!matchesExecution(action, operation)) return null;
+      if (action.outcome && canonical(action.outcome) === canonical(outcome)) return action;
+      if (!["dispatching", "unknown"].includes(action.state)) return null;
+      return save(action, { state: outcome.state, outcome });
+    },
     async cancellationRequested(id: string) {
       await lock();
       return (await row(id))?.cancellationRequested ?? false;
