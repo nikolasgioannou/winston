@@ -7,7 +7,7 @@
     "./conversation": "./src/conversation/loop.ts"
   },
   "scripts": {
-    "build": "bun build ./src/main.ts --target=bun --outdir=dist --external '@winston/adapters/*'",
+    "build": "bun build ./src/main.ts --target=bun --env=disable --outdir=dist --external '@winston/adapters/*'",
     "dev": "bun --watch src/main.ts",
     "start": "bun dist/main.js",
     "test:unit": "bun test ./tests",
