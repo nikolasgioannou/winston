@@ -4,6 +4,7 @@ import { userMessageSchema, type UserMessage } from "./schema";
 export { autonomousEventSchema, metadataSchema, userMessageSchema } from "./schema";
 export type { AutonomousEvent, MessageMetadata, UserMessage } from "./schema";
 export { serializeAutonomousEvent, serializeUserMessage } from "./serialize";
+export { isXmlText } from "./xml";
 
 type MessageReceipt = Omit<UserMessage, "version" | "kind" | "revision" | "sentAt">;
 

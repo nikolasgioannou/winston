@@ -11,6 +11,7 @@ import {
 import { modelRoles, type ModelRole } from "./config";
 
 export { modelRoles, type ModelRole } from "./config";
+export { createVoiceTranscriber, TranscriptionError, transcriptionModel } from "./transcription";
 export {
   buildModelWindow,
   textTokenBound,
