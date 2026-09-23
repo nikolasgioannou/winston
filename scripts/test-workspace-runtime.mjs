@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 // This creates only disposable resources on the developer or CI host's local Docker engine.
 const endpoint =
@@ -72,6 +73,37 @@ try {
       stdio: "inherit",
     });
   }
+  execFileSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--name",
+      `${name}-commands`,
+      "--interactive",
+      "--network",
+      "none",
+      "--read-only",
+      "--tmpfs",
+      "/tmp",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "no-new-privileges",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--entrypoint",
+      "bun",
+      image,
+      "run",
+      "-",
+    ],
+    {
+      input: readFileSync("scripts/fixtures/workspace-commands.mjs"),
+      stdio: ["pipe", "inherit", "inherit"],
+      timeout: 30_000,
+    },
+  );
   docker("volume", "create", volume);
   docker("volume", "create", empty);
   assert.throws(() => run(empty), "Missing storage must not initialize itself.");
@@ -154,6 +186,7 @@ try {
 } finally {
   for (const arguments_ of [
     ["rm", "--force", name],
+    ["rm", "--force", `${name}-commands`],
     ["volume", "rm", volume, empty],
     ...(!process.argv[2] ? [["image", "rm", image]] : []),
   ]) {
