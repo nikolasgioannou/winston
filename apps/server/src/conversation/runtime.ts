@@ -3,6 +3,7 @@ import { createJobRuntime } from "@winston/adapters/jobs";
 import { createOpenRouterAdapter } from "@winston/adapters/models";
 import { createTelegramSender, deliverTelegramNext } from "@winston/adapters/telegram";
 import { createConversationLoop } from "./loop";
+import { startBackgroundRuntime } from "../background/runtime";
 
 export async function startConversationRuntime(options: {
   database: ReturnType<typeof createDatabase>;
@@ -27,6 +28,7 @@ export async function startConversationRuntime(options: {
   const send = createTelegramSender(options.telegramToken);
   const deliveries = new Map<string, Promise<void>>();
   await jobs.start();
+  let background: Awaited<ReturnType<typeof startBackgroundRuntime>> | undefined;
   try {
     await jobs.work("conversation", async (reference, signal) => {
       await conversation(
@@ -34,6 +36,13 @@ export async function startConversationRuntime(options: {
         reference.revision,
         AbortSignal.any([signal, shutdown.signal]),
       );
+    });
+    background = await startBackgroundRuntime({
+      database,
+      jobs,
+      botId,
+      generate: (request) => model.generate(request),
+      notice: options.notice,
     });
   } catch (error) {
     await jobs.stop();
@@ -113,6 +122,7 @@ export async function startConversationRuntime(options: {
       clearInterval(timer);
       shutdown.abort();
       await active;
+      await background.stop();
       await jobs.stop();
       await Promise.all(deliveries.values());
     },

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./background": "./src/background/step.ts",
+    "./background-runtime": "./src/background/runtime.ts",
     "./conversation": "./src/conversation/loop.ts"
   },
   "scripts": {

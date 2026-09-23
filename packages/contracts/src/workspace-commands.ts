@@ -11,5 +11,6 @@ export type WorkspaceCommand = z.infer<typeof workspaceCommandSchema>;
 
 export const workspaceCommandToolInputSchema = z.strictObject({
   workspaceId: z.uuid(),
-  command: commandInputSchema,
+  // Leave a minute for dispatch and reconciliation inside a maximum 24-hour background job.
+  command: commandInputSchema.safeExtend({ timeoutMs: z.number().int().min(1).max(86_340_000) }),
 });

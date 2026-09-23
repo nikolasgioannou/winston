@@ -4,7 +4,7 @@ import { jobReferenceSchema, type JobReference } from "@winston/contracts/jobs";
 
 export const workloads = {
   conversation: { concurrency: 4, expireInSeconds: 90 },
-  background: { concurrency: 2, expireInSeconds: 300 },
+  background: { concurrency: 2, expireInSeconds: 86400 },
   transcription: { concurrency: 2, expireInSeconds: 120 },
   maintenance: { concurrency: 1, expireInSeconds: 300 },
 } as const;
@@ -66,6 +66,11 @@ export function createJobRuntime(options: {
             retryDelayMax: 60,
             deadLetter: "winston-failed",
             deleteAfterSeconds: 7 * 86400,
+          });
+          // createQueue leaves existing queues intact; reconcile changed runtime settings too.
+          await boss.updateQueue(queue(workload), {
+            heartbeatSeconds: 20,
+            expireInSeconds: workloads[workload].expireInSeconds,
           });
         }
       } catch {
