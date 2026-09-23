@@ -4,6 +4,7 @@ import type { DatabaseTransaction } from "./owners";
 import { connectionRepository } from "./connections";
 import { deviceRepository } from "./devices";
 import { credentialRepository } from "./credentials";
+import { workspaceRepository } from "./workspaces";
 
 const deviceCapabilities = {
   "device.command": "command",
@@ -44,6 +45,18 @@ export async function authorizationResource(
   requireAvailable = true,
 ): Promise<number | null> {
   const { target, operation } = request;
+
+  if (target.kind === "workspace") {
+    if (
+      target.resource !== null ||
+      !["workspace.command", "workspace.file.read", "workspace.file.write"].includes(operation)
+    )
+      return null;
+    const workspace = await workspaceRepository(transaction, ownerId).find(target.id, true);
+    return workspace && (!requireAvailable || workspace.state === "active")
+      ? workspace.revision
+      : null;
+  }
 
   if (target.kind === "device") {
     if (target.resource !== null || !(operation in deviceCapabilities)) return null;

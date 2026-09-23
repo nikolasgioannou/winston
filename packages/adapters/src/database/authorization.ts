@@ -91,8 +91,12 @@ export function authorizationRepository(transaction: DatabaseTransaction, ownerI
     const exact =
       request.target.resource === null ? parent : await rule(request, request.target.resource);
     // A resource exception cannot bypass a deny on its enclosing account.
-    const decision = parent === "deny" ? "deny" : (exact ?? parent ?? "ask");
-    return { ...base, decision, reason: exact || parent ? "rule" : "confirmation_required" };
+    const ownWorkspace = request.target.kind === "workspace";
+    const decision =
+      parent === "deny" ? "deny" : (exact ?? parent ?? (ownWorkspace ? "allow" : "ask"));
+    const reason =
+      exact || parent ? "rule" : ownWorkspace ? "workspace_default" : "confirmation_required";
+    return { ...base, decision, reason };
   }
 
   return {

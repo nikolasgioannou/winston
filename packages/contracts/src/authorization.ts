@@ -14,9 +14,12 @@ export const authorizationOperationSchema = z.enum([
   "device.observe",
   "device.input",
   "device.application",
+  "workspace.command",
+  "workspace.file.read",
+  "workspace.file.write",
 ]);
 export const authorizationTargetSchema = z.strictObject({
-  kind: z.enum(["connection", "device"]),
+  kind: z.enum(["connection", "device", "workspace"]),
   id: z.uuid(),
   resource: z.string().min(1).max(1024).nullable(),
 });
@@ -36,7 +39,14 @@ export const authorizationSnapshotSchema = authorizationRequestSchema.extend({
 });
 export const authorizationEvaluationSchema = z.strictObject({
   decision: z.enum(["allow", "ask", "deny"]),
-  reason: z.enum(["rule", "confirmation_required", "unavailable", "unsupported", "stale"]),
+  reason: z.enum([
+    "rule",
+    "workspace_default",
+    "confirmation_required",
+    "unavailable",
+    "unsupported",
+    "stale",
+  ]),
   revision: z.number().int().nonnegative(),
   resourceRevision: z.number().int().nonnegative().nullable(),
   broadAuthority: z.boolean(),
