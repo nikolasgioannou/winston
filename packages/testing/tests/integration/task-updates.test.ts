@@ -15,6 +15,39 @@ test("task completions retain presentation receipts without duplicating uncertai
     try {
       await database.transaction(ownerId, ({ owners }) => owners.ensure());
       await database.transaction(other, ({ owners }) => owners.ensure());
+      for (const type of ["connection.connected", "connection.health", "memory.changed"]) {
+        const event = await database.transaction(ownerId, ({ events }) =>
+          events.publish({
+            key: randomUUID(),
+            type,
+            payload:
+              type === "memory.changed"
+                ? { memoryId: randomUUID() }
+                : {
+                    connectionId: randomUUID(),
+                    service: "gmail",
+                    revision: 1,
+                    status: "connected",
+                  },
+            destinations: ["conversation-updates", "connection-runtime"],
+          }),
+        );
+        assert.equal(
+          await database.transaction(ownerId, ({ taskUpdates }) => taskUpdates.consume(event.id)),
+          true,
+        );
+        assert.equal(
+          await database.transaction(ownerId, ({ taskUpdates }) => taskUpdates.consume(event.id)),
+          false,
+        );
+        const receipts = await sql<
+          { consumer: string }[]
+        >`SELECT consumer FROM winston.event_receipts WHERE owner_id = ${ownerId}::uuid AND event_id = ${event.id}`;
+        assert.deepEqual(
+          receipts.map((receipt) => receipt.consumer),
+          ["conversation-updates"],
+        );
+      }
       const challenge = await telegram.challenge(ownerId, "fixture");
       await telegram.receive({
         update_id: 1,

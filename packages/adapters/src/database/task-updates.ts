@@ -34,6 +34,10 @@ export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: 
         eventId,
         "conversation-updates",
         async (event) => {
+          // These changes are already durable and read by subsequent turns.
+          // Their connection-runtime destination is independent of this receipt.
+          if (["connection.connected", "connection.health", "memory.changed"].includes(event.type))
+            return;
           if (event.type !== "task.changed") throw new Error("Unsupported task update event.");
           const update = taskChangedSchema.parse(event.payload);
           if (update.state !== "succeeded" && update.state !== "failed") return;
