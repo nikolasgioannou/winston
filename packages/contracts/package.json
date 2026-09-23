@@ -13,6 +13,7 @@
     "./devices": "./src/devices.ts",
     "./device-registry": "./src/device-registry.ts",
     "./events": "./src/events.ts",
+    "./gmail": "./src/gmail.ts",
     "./jobs": "./src/jobs.ts",
     "./memory": "./src/memory.ts",
     "./messages": "./src/messages/index.ts",

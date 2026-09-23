@@ -66,6 +66,10 @@ Computer permissions are not a filesystem sandbox: unrestricted commands, file w
 
 Connected-app target resolution uses stable connection and calendar IDs, with independent defaults for reads, drafts, sends, modifications, and calendar writes. Owner-only `/api/owner/connection-targets` stores labels and defaults with revision checks. Tasks bind each operation to one target per task revision; changing it requires steering the task. Multi-account searches label each result with its source and never set a sender default. The resolver rechecks credentials, policy, selected calendars, and provider access roles before returning a target. Executors must revalidate target snapshots and action approvals immediately before effects; target selection does not itself grant permission or send anything.
 
+## Gmail reads
+
+The Gmail reader provides typed search, message, thread, and attachment operations for the trusted backend. Search returns at most 100 references per page; message text is capped at 64,000 characters, threads return at most 20 decoded messages with remaining IDs, and responses are capped at 40 MiB. Attachment bodies are capped at 25 MiB and decoded from Gmail's JSON/base64url representation before being exposed as a chunked stream. Attachment filenames are untrusted display metadata, never filesystem paths. Account and read permission checks run before provider access, and `ask` requires the separate approval flow rather than granting access. These adapters do not expose an unauthenticated HTTP endpoint or read mail on startup; CLI dispatch and artifact persistence are separate integrations.
+
 ## Source layout
 
 | Directory            | Responsibility                                               |

@@ -15,6 +15,7 @@ import { GoogleAccessError } from "./errors";
 export { createGoogleOAuth, type GoogleOAuth } from "./oauth";
 export { GoogleAccessError } from "./errors";
 export { createConnectionTargets, labelSearchResults } from "./targets";
+export { createGmailReader, GmailReadError } from "./gmail";
 
 export function createGoogleConnections(options: {
   database: ReturnType<typeof createDatabase>;
@@ -47,6 +48,7 @@ export function createGoogleConnections(options: {
   }
   return {
     access: grants.access,
+    rejected: grants.rejected,
     disconnect: grants.disconnect,
     calendars,
     async selectCalendars(
