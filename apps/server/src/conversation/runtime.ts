@@ -70,9 +70,22 @@ export async function startConversationRuntime(options: {
         );
         if (result !== "delivered") break;
       }
-      const state = await database.transaction(ownerId, ({ conversations }) =>
-        conversations.status(),
-      );
+      for (let count = 0; count < 100; count += 1) {
+        const result = await dispatchNext(
+          database,
+          ownerId,
+          "conversation-updates",
+          async (event) => {
+            await database.transaction(ownerId, ({ taskUpdates }) => taskUpdates.consume(event.id));
+          },
+          shutdown.signal,
+        );
+        if (result !== "delivered") break;
+      }
+      const state = await database.transaction(ownerId, async ({ conversations }) => {
+        await conversations.admitTaskUpdates();
+        return conversations.status();
+      });
       if (state.ready && !state.pending && state.responseRevision < state.inputRevision) {
         const reference = { ownerId, referenceId: state.id, revision: state.revision };
         const job = await jobs.inspect("conversation", reference);

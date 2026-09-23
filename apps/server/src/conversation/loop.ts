@@ -74,6 +74,14 @@ export function createConversationLoop(options: {
           ...snapshot.history
             .filter((turn) => turn.anchorId === message.envelope.messageId)
             .flatMap((turn): ModelMessage[] => [
+              ...(turn.updates.length
+                ? [
+                    {
+                      role: "user" as const,
+                      content: `<system_event kind="delivered_task_completions">${xml(JSON.stringify(turn.updates))}</system_event>`,
+                    },
+                  ]
+                : []),
               ...turn.steps.flatMap(({ round, results }): ModelMessage[] => {
                 if (!round.calls.length) return [];
                 return [
@@ -121,7 +129,10 @@ export function createConversationLoop(options: {
       const burst = burstIds.length
         ? serializeMessageBurst({ revision, messageIds: burstIds })
         : "";
-      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n<system_event kind="task_resources">${xml(JSON.stringify(snapshot.taskResources))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}`;
+      const completions = snapshot.taskUpdates.length
+        ? `<system_event kind="task_completions">${xml(JSON.stringify(snapshot.taskUpdates))}</system_event>`
+        : "";
+      const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n<system_event kind="task_resources">${xml(JSON.stringify(snapshot.taskResources))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}\n${completions}`;
       const user = last.messages[0];
       if (user && typeof user.content === "string") user.content += `\n${context}`;
       const sourceMessageIds = snapshot.messages
@@ -137,6 +148,10 @@ export function createConversationLoop(options: {
             text,
           );
           await scope.turns.finish(revision, id);
+          await scope.taskUpdates.link(
+            snapshot.taskUpdates.map((update) => update.id),
+            id,
+          );
         });
 
       for (let step = 0; step < 4; step += 1) {

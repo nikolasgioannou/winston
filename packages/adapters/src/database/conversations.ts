@@ -12,6 +12,7 @@ import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
 import { taskRepository } from "./tasks";
 import { taskResourceRepository } from "./task-resources";
+import { taskUpdateRepository } from "./task-updates";
 
 type Conversation = {
   id: string;
@@ -62,6 +63,22 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
   }
 
   return {
+    async admitTaskUpdates() {
+      const conversation = await lock();
+      if (conversation.responseRevision < conversation.inputRevision || (await pending()))
+        return false;
+      const outgoing = await transaction.execute(sql`
+        SELECT 1 FROM winston.telegram_outbound WHERE owner_id = ${ownerId}::uuid
+          AND state IN ('pending', 'sending', 'uncertain') LIMIT 1
+      `);
+      if (outgoing.rowCount || !(await taskUpdateRepository(transaction, ownerId).pending()).length)
+        return false;
+      await transaction.execute(sql`
+        UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1,
+          collect_until = NULL, burst_started_at = NULL WHERE owner_id = ${ownerId}::uuid
+      `);
+      return true;
+    },
     async status() {
       const conversation = await lock();
       const result = await transaction.execute<{ ready: boolean }>(sql`
@@ -177,6 +194,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
         pending: await pending(),
         messages,
         activeTasks,
+        taskUpdates: await taskUpdateRepository(transaction, ownerId).pending(),
         taskResources: await taskResourceRepository(transaction, ownerId).context(
           activeTasks.map((task) => task.id),
         ),

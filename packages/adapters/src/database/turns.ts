@@ -6,6 +6,7 @@ import {
   type TurnValue,
 } from "@winston/contracts/turns";
 import type { DatabaseTransaction } from "./owners";
+import { taskUpdateSchema } from "@winston/contracts/task-updates";
 
 export function turnRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
@@ -58,8 +59,12 @@ export function turnRepository(transaction: DatabaseTransaction, ownerId: string
         revision: number;
         anchorId: string;
         parts: string[];
+        updates: unknown[];
       }>(sql`
-        SELECT t.revision, t.anchor_id AS "anchorId", o.parts FROM winston.conversation_turns t
+        SELECT t.revision, t.anchor_id AS "anchorId", o.parts,
+          COALESCE((SELECT jsonb_agg(u.document ORDER BY u.created_at, u.event_id)
+            FROM winston.task_updates u WHERE u.owner_id = t.owner_id AND u.response_id = t.response_id), '[]'::jsonb) AS updates
+        FROM winston.conversation_turns t
         JOIN winston.telegram_outbound o ON o.owner_id = t.owner_id AND o.id = t.response_id AND o.state = 'delivered'
         WHERE t.owner_id = ${ownerId}::uuid AND t.anchor_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(anchorIds)}::jsonb)::uuid)
         ORDER BY t.revision DESC LIMIT 1000
@@ -81,6 +86,7 @@ export function turnRepository(transaction: DatabaseTransaction, ownerId: string
 
       return rows.rows.reverse().map((row) => ({
         ...row,
+        updates: row.updates.map((update) => taskUpdateSchema.parse(update)),
         steps: steps.rows
           .filter((step) => step.revision === row.revision)
           .map((step) => ({
