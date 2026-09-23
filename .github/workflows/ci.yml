@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   device-protocol:
@@ -58,3 +58,35 @@ jobs:
 
       - name: Build applications
         run: bun run build
+
+  deploy:
+    name: Deploy production
+    needs: [quality, device-protocol]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'nikolasgioannou/winston'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://winston-628.fly.dev
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Check out the verified commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: "0.4.102"
+
+      - name: Deploy verified source and run release migrations
+        run: flyctl deploy --remote-only --depot=true --ha=false --image-label "$IMAGE_LABEL"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          IMAGE_LABEL: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify production readiness
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors --max-time 20 https://winston-628.fly.dev/health/ready
