@@ -162,6 +162,13 @@
       "when": 1790000000022,
       "tag": "0022_task_resources",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790000000023,
+      "tag": "0023_workspace_runtimes",
+      "breakpoints": true
     }
   ]
 }

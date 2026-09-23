@@ -22,12 +22,14 @@ import { actionRepository, type ActionRepository } from "./actions";
 import { artifactRepository, type ArtifactRepository } from "./artifacts";
 import { taskResourceRepository, type TaskResourceRepository } from "./task-resources";
 import { cliRepository } from "./cli";
+import { workspaceRuntimeRepository } from "./workspace-runtimes";
 import {
   deviceCredentialSchema,
   devicePairingTokenSchema,
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly workspaceRuntimes: ReturnType<typeof workspaceRuntimeRepository>;
   readonly cli: ReturnType<typeof cliRepository>;
   readonly ownerId: string;
   readonly owners: OwnerRepository;
@@ -121,6 +123,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          workspaceRuntimes: workspaceRuntimeRepository(transaction, ownerId),
           cli: cliRepository(transaction, ownerId),
           ownerId,
           owners: ownerRepository(transaction, ownerId),

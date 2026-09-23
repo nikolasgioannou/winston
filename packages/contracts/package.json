@@ -29,7 +29,8 @@
     "./timezone": "./src/timezone.ts",
     "./turns": "./src/turns.ts",
     "./workspace": "./src/workspace.ts",
-    "./workspace-commands": "./src/workspace-commands.ts"
+    "./workspace-commands": "./src/workspace-commands.ts",
+    "./workspace-runtime": "./src/workspace-runtime.ts"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"
