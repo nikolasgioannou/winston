@@ -7,6 +7,11 @@ import { canonicalJson } from "@winston/contracts/json";
 import type { WorkspaceCommand } from "@winston/contracts/workspace-commands";
 import { boundedJson } from "./http-body";
 import { cliAuthoritySchema } from "@winston/contracts/cli";
+import {
+  inboxTransferSchema,
+  inboxTransferTokenSchema,
+  type InboxTransfer,
+} from "@winston/contracts/artifacts";
 
 export function createWorkspaceAuthority(origin: string) {
   const url = new URL(origin);
@@ -54,6 +59,25 @@ export function createWorkspaceAuthority(origin: string) {
     return canonicalJson(result.operation) === canonicalJson(operation);
   }
   return {
+    async inbox(token: string, transfer: InboxTransfer) {
+      inboxTransferTokenSchema.parse(token);
+      const response = await fetch(new URL("/api/transfers/inbox/authorize", url), {
+        method: "POST",
+        redirect: "error",
+        credentials: "omit",
+        signal: AbortSignal.timeout(5000),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(inboxTransferSchema.parse(transfer)),
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        return false;
+      }
+      return (
+        canonicalJson(inboxTransferSchema.parse(await boundedJson(response.body, 4096))) ===
+        canonicalJson(transfer)
+      );
+    },
     async gateway(credential: ServiceRequest, command: WorkspaceCommand) {
       if (credential.operation !== "workspace:execute")
         throw new Error("Invalid command authority.");

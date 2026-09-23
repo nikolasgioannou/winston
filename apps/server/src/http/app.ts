@@ -3,11 +3,12 @@ import { bodyLimit } from "hono/body-limit";
 import { errorResponse, RequestError } from "./errors";
 import { createWebRouter } from "./web";
 
-export type Authority = "callback" | "owner" | "device" | "task";
+export type Authority = "callback" | "owner" | "device" | "task" | "transfer";
 export type Identity =
   | { kind: "callback"; provider: string; ownerId?: string; sessionId?: string }
   | { kind: "owner"; ownerId: string; sessionId?: string }
   | { kind: "device"; ownerId: string; deviceId: string }
+  | { kind: "transfer"; ownerId: string; workspaceId: string }
   | { kind: "task"; ownerId: string; taskId: string; revision: number };
 
 export type HttpEnvironment = { Variables: { requestId: string; identity: Identity } };
@@ -33,6 +34,7 @@ const prefixes = {
   owner: "/api/owner",
   device: "/api/devices",
   task: "/api/tasks",
+  transfer: "/api/transfers",
 } as const;
 
 export function createApi(options: ApiOptions = {}) {

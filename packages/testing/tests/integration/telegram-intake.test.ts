@@ -8,6 +8,7 @@ import {
   TelegramDownloadError,
 } from "@winston/adapters/telegram";
 import { withTestPostgres } from "../../src/postgres";
+import { stageInboxFile } from "@winston/adapters/artifacts";
 
 test("attachment intake is durable, leased, edit-safe and owner scoped", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -229,10 +230,51 @@ test("attachment intake is durable, leased, edit-safe and owner scoped", async (
         await scope(({ inboxTransfers }) => inboxTransfers.complete(transfer.token)),
         false,
       );
-      assert.equal(
-        await scope(({ inboxTransfers }) => inboxTransfers.complete(renewed.token)),
-        true,
-      );
+      await scope(({ inboxTransfers }) => inboxTransfers.retry(renewed.token));
+      let attempts = 0;
+      const receiver = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        async fetch(request) {
+          const token = request.headers.get("Authorization")?.slice(7) ?? "";
+          const grant = await database.authenticateInboxTransfer(token);
+          assert.ok(grant);
+          assert.equal(await request.text(), "abc");
+          attempts += 1;
+          return attempts === 1
+            ? new Response(null, { status: 503 })
+            : Response.json({
+                path: `/data/inbox/${grant.artifactId}`,
+                size: grant.size,
+                sha256: grant.sha256,
+              });
+        },
+      });
+      try {
+        await scope(({ workspaceRuntimes }) =>
+          workspaceRuntimes.configure({ workspaceId, revision: 4, origin: receiver.url.origin }),
+        );
+        const stage = () =>
+          stageInboxFile(
+            database,
+            ownerId,
+            botId,
+            async (_owner, id) => {
+              const artifact = await scope(({ artifacts }) => artifacts.find(id));
+              assert.ok(artifact);
+              return { artifact, bytes: Buffer.from("abc") };
+            },
+            new AbortController().signal,
+          );
+        await sql`UPDATE winston.telegram_intake SET available_at = clock_timestamp() WHERE owner_id = ${ownerId}::uuid`;
+        assert.equal(await stage(), "retry");
+        assert.equal(await stage(), "idle");
+        await sql`UPDATE winston.telegram_intake SET available_at = clock_timestamp() WHERE owner_id = ${ownerId}::uuid`;
+        assert.equal(await stage(), "staged");
+        assert.equal(attempts, 2);
+      } finally {
+        await receiver.stop(true);
+      }
       assert.equal(
         await scope(({ inboxTransfers }) => inboxTransfers.complete(renewed.token)),
         false,

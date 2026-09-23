@@ -1,5 +1,9 @@
 import type { createDatabase } from "@winston/adapters/database";
-import type { createArtifactService } from "@winston/adapters/artifacts";
+import {
+  stageInboxFile,
+  type createArtifactReader,
+  type createArtifactService,
+} from "@winston/adapters/artifacts";
 import { createTelegramDownloader, intakeTelegramFile } from "@winston/adapters/telegram";
 import { startOwnerFileLoop } from "./runtime";
 
@@ -24,6 +28,22 @@ export function startFileIntakeRuntime(options: {
       ),
     failed: () => {
       options.notice("telegram-file-intake-failed");
+    },
+  });
+}
+
+export function startInboxStagingRuntime(options: {
+  database: ReturnType<typeof createDatabase>;
+  botId: number;
+  read: ReturnType<typeof createArtifactReader>;
+  notice: (code: string) => void;
+}) {
+  return startOwnerFileLoop({
+    ...options,
+    run: (ownerId, signal) =>
+      stageInboxFile(options.database, ownerId, options.botId, options.read, signal),
+    failed: () => {
+      options.notice("inbox-staging-failed");
     },
   });
 }

@@ -12,7 +12,8 @@ import {
   createArtifactReader,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
-import { startFileIntakeRuntime } from "./files/intake-runtime";
+import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
+import { createInboxTransferGroup } from "./http/inbox-transfers";
 import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
@@ -89,6 +90,7 @@ let telegram: ReturnType<typeof createTelegramStore> | undefined;
 let conversation: Awaited<ReturnType<typeof startConversationRuntime>> | undefined;
 let fileDelivery: ReturnType<typeof startFileDeliveryRuntime> | undefined;
 let fileIntake: ReturnType<typeof startFileIntakeRuntime> | undefined;
+let inboxStaging: ReturnType<typeof startInboxStagingRuntime> | undefined;
 let fileCommands: ReturnType<typeof createFileCommands> | undefined;
 
 if (telegramToken || telegramSecret) {
@@ -98,6 +100,14 @@ if (telegramToken || telegramSecret) {
   const telegramClient = createTelegramClient(telegramToken);
   const bot = await telegramClient.identity();
   if (storage) {
+    inboxStaging = startInboxStagingRuntime({
+      database,
+      botId: bot.id,
+      read: createArtifactReader(database, storage),
+      notice: (code) => {
+        console.error(code);
+      },
+    });
     fileIntake = startFileIntakeRuntime({
       database,
       botId: bot.id,
@@ -173,6 +183,7 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
+    transfer: createInboxTransferGroup(database),
     task: {
       router: taskRouter,
       authenticate: async (request) =>
@@ -233,6 +244,7 @@ function shutdown() {
       await conversation?.stop();
       await fileDelivery?.stop();
       await fileIntake?.stop();
+      await inboxStaging?.stop();
       storage?.close();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })

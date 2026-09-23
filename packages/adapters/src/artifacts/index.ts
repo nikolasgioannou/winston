@@ -3,6 +3,7 @@ import type { OwnerTransaction } from "../database";
 import { MissingStoredObject, UncertainObjectUpload, type createObjectStorage } from "../storage";
 export { createWorkspaceFilePublisher } from "./workspace-files";
 export { createArtifactReader } from "./read";
+export { stageInboxFile } from "./stage-inbox";
 
 type Store = {
   transaction<Result>(

@@ -7,6 +7,7 @@ import { createCommandRunner } from "./processes";
 import { createCommandService } from "./commands";
 import { createCommandHandler } from "./command-http";
 import { openWorkspaceInbox } from "./inbox";
+import { createInboxHandler } from "./inbox-http";
 
 if (
   process.platform !== "linux" ||
@@ -43,7 +44,12 @@ if (initialize) {
   process.exit(0);
 }
 journal.recoverInterrupted();
-openWorkspaceInbox("/data");
+const inbox = openWorkspaceInbox("/data");
+const inboxHandler = createInboxHandler({
+  identity,
+  inbox,
+  authorize: (token, transfer) => authority.inbox(token, transfer),
+});
 const runner = createCommandRunner({
   home: journal.home,
   logsRoot: "/data/control/commands",
@@ -60,9 +66,13 @@ const inspectionHandler = createWorkspaceHandler({
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: 8080,
-  maxRequestBodySize: 16_384,
+  maxRequestBodySize: 20_000_000,
   idleTimeout: 10,
-  async fetch(request) {
+  async fetch(request, server) {
+    if (new URL(request.url).pathname === "/v1/inbox") {
+      server.timeout(request, 65);
+      return (await inboxHandler(request)) ?? new Response(null, { status: 404 });
+    }
     return (await commandHandler(request)) ?? inspectionHandler(request);
   },
   error() {
