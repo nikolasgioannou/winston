@@ -1,6 +1,7 @@
 import type { ArtifactMetadata } from "@winston/contracts/artifacts";
 import type { OwnerTransaction } from "../database";
 import { UncertainObjectUpload, type createObjectStorage } from "../storage";
+export { createWorkspaceFilePublisher } from "./workspace-files";
 
 type Store = {
   transaction<Result>(

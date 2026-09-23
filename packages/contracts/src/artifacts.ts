@@ -24,3 +24,11 @@ export const artifactSchema = z.strictObject({
 });
 export type ArtifactMetadata = z.infer<typeof artifactMetadataSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
+
+export const maximumPublicationSize = 50 * 1024 * 1024;
+export const filePublicationSchema = artifactMetadataSchema.omit({ source: true }).extend({
+  version: z.literal(1),
+  key: z.string().min(1).max(100),
+  size: z.number().int().min(0).max(maximumPublicationSize),
+});
+export type FilePublication = z.infer<typeof filePublicationSchema>;

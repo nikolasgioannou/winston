@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { maximumPublicationSize } from "@winston/contracts/artifacts";
 
 const stagingRoot = "/data/home/artifacts";
-const maximumSize = 50 * 1024 * 1024;
 
 function contained(root: string, path: string) {
   const child = relative(root, path);
@@ -28,7 +28,7 @@ export async function snapshotPublishFile(input: string) {
       throw new Error("File links cannot be published.");
   }
   const expected = await lstat(path, { bigint: true });
-  if (!expected.isFile() || expected.size > BigInt(maximumSize))
+  if (!expected.isFile() || expected.size > BigInt(maximumPublicationSize))
     throw new Error("Publish a regular file no larger than 50 MiB.");
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
@@ -39,7 +39,7 @@ export async function snapshotPublishFile(input: string) {
       !before.isFile() ||
       before.dev !== expected.dev ||
       before.ino !== expected.ino ||
-      before.size > BigInt(maximumSize)
+      before.size > BigInt(maximumPublicationSize)
     )
       throw new Error("The staged file changed before it could be read.");
     const bytes = Buffer.alloc(Number(before.size));
