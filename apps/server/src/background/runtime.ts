@@ -41,12 +41,18 @@ export async function startBackgroundRuntime(options: {
       const ready = await database.transaction(ownerId, async ({ tasks, actions }) => {
         await tasks.wakeDue();
         for (const task of await tasks.listActive()) {
-          if (task.state !== "waiting" || task.blocker?.kind !== "approval") continue;
-          const action = await actions.find(task.blocker.referenceId);
           if (
-            action?.request.task.id === task.id &&
-            ["approved", "denied", "invalidated", "succeeded", "failed"].includes(action.state)
+            task.state !== "waiting" ||
+            !task.blocker ||
+            !["approval", "execution"].includes(task.blocker.kind)
           )
+            continue;
+          const action = await actions.find(task.blocker.referenceId);
+          const resolved =
+            task.blocker.kind === "approval"
+              ? ["approved", "denied", "invalidated", "succeeded", "failed"]
+              : ["denied", "invalidated", "succeeded", "failed"];
+          if (action?.request.task.id === task.id && resolved.includes(action.state))
             await tasks.resume(task.id, task.revision, task.blocker.referenceId);
         }
         return tasks.runnable();

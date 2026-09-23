@@ -120,6 +120,16 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     );
   }
 
+  async function priorEffect(taskId: string, intentRevision: number) {
+    const rows = await transaction.execute<{ document: unknown }>(sql`
+      SELECT document FROM winston.actions WHERE owner_id = ${ownerId}::uuid AND task_id = ${taskId}::uuid
+        AND document->>'state' IN ('dispatching', 'unknown')
+        AND (document->>'intentRevision')::integer <> ${intentRevision}
+      ORDER BY id LIMIT 1
+    `);
+    return rows.rows[0] ? actionRecordSchema.parse(rows.rows[0].document) : null;
+  }
+
   function matchesExecution(action: ActionRecord, operation: WorkspaceOperation) {
     const command = commandInputSchema.safeParse(action.request.arguments);
     return (
@@ -139,6 +149,14 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    async unresolvedPriorEffect(input: ActionTask) {
+      const worker = actionTaskSchema.parse(input);
+      await lock();
+      const current = await task(worker.id);
+      if (!current || !running(current, worker))
+        throw new Error("Worker lease is stale or expired.");
+      return priorEffect(worker.id, current.intentRevision);
+    },
     async taskEffects(inputId: string) {
       const id = actionTaskSchema.shape.id.parse(inputId);
       const counts = await transaction.execute<{ unresolved: number }>(sql`
@@ -373,7 +391,7 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       if (stored.cancellationRequested)
         return { claimed: false as const, action: await save(action, { state: "invalidated" }) };
       const current = await task(worker.id);
-      if (!running(current, worker)) return null;
+      if (!current || !running(current, worker)) return null;
       const evaluation = await policy(action);
       if (
         !stored.valid ||
@@ -384,6 +402,8 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         return { claimed: false as const, action: await save(action, { state: "invalidated" }) };
       }
       // The commit of this transition is the cancel-versus-dispatch linearization point.
+      if (await priorEffect(worker.id, current.intentRevision))
+        return { claimed: false as const, action };
       // Callers MUST commit before contacting any external executor/provider.
       const token = `wda_${randomBytes(32).toString("base64url")}`;
       await transaction.execute(

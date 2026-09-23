@@ -66,11 +66,25 @@ export function createBackgroundStep(options: {
       combined.throwIfAborted();
       const snapshot = await database.transaction(
         reference.ownerId,
-        async ({ tasks, taskSteps }) => ({
+        async ({ tasks, taskSteps, actions }) => ({
           context: await tasks.context(worker),
           history: await taskSteps.recent(worker, 250),
+          previous: await actions.unresolvedPriorEffect(worker),
+          effects: await actions.taskEffects(worker.id),
         }),
       );
+      if (snapshot.previous) {
+        await finish({
+          state: "waiting",
+          blocker: {
+            kind: "execution",
+            referenceId: snapshot.previous.id,
+            detail:
+              "Waiting to verify the previous action's outcome before applying the correction.",
+          },
+        });
+        return;
+      }
       const history = checkpointContext(snapshot.history.steps);
       const sequence = snapshot.history.steps.at(-1)?.sequence ?? 0;
       if (history.pending) {
@@ -169,6 +183,7 @@ export function createBackgroundStep(options: {
         task: snapshot.context.task,
         resources: snapshot.context.resources,
         workspaces: snapshot.context.workspaces,
+        effects: snapshot.effects,
       });
       const config = modelRoles.worker;
       const exchanges = [

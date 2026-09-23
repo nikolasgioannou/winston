@@ -5,11 +5,16 @@ import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createWorkspaceCancellation, createWorkspaceSessions } from "@winston/adapters/workspace";
 import type { WorkspaceRecord } from "@winston/contracts/workspace";
 import { withTestPostgres } from "../../src/postgres";
+import { createBackgroundStep } from "@winston/server/background";
+import { startBackgroundRuntime } from "@winston/server/background-runtime";
+import { createJobRuntime } from "@winston/adapters/jobs";
 
 test("cancellation reconciles original commands without claiming unavailable or already completed work stopped", async () => {
-  await withTestPostgres(async (_sql, connectionString) => {
+  await withTestPostgres(async (sql, connectionString) => {
     await migrateDatabase(connectionString);
     const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    const jobs = createJobRuntime({ directConnectionString: connectionString, onNotice: () => {} });
+    let runtime: Awaited<ReturnType<typeof startBackgroundRuntime>> | undefined;
     const ownerId = randomUUID();
     const otherOwner = randomUUID();
     const workspaceId = randomUUID();
@@ -104,6 +109,51 @@ test("cancellation reconciles original commands without claiming unavailable or 
         await actions.requestCancellation(requested.action.id, requested.worker, workspaceId);
         await tasks.cancel(finished.worker.id, finished.worker.revision);
       });
+      const replacement = await database.transaction(ownerId, async ({ tasks, actions }) => {
+        const current = await tasks.find(steered.worker.id);
+        assert.ok(current);
+        const task = await tasks.claim(current.id, current.revision);
+        const worker = { id: task.id, revision: task.revision, generation: task.generation };
+        const next = await actions.prepare({
+          ...steered.action.request,
+          key: randomUUID(),
+          task: worker,
+        });
+        assert.equal((await actions.claim(next.id, next.hash, worker))?.claimed, false);
+        assert.equal((await actions.unresolvedPriorEffect(worker))?.id, steered.action.id);
+        return tasks.yield(worker);
+      });
+      let generated = 0;
+      const generate: Parameters<typeof createBackgroundStep>[0]["generate"] = (request) => {
+        generated += 1;
+        assert.ok(JSON.stringify(request.messages).includes(steered.action.id));
+        return Promise.resolve({
+          ok: true,
+          text: "",
+          toolCalls: [
+            {
+              id: "finish",
+              name: "finish_task",
+              input: { state: "succeeded", result: "Correction applied after settlement." },
+            },
+          ],
+          attempt: {
+            role: "worker",
+            model: "fixture",
+            promptVersion: "fixture",
+            elapsedMs: 1,
+            firstTextMs: null,
+          },
+        });
+      };
+      const step = createBackgroundStep({ database, generate });
+      await step({ ownerId, referenceId: replacement.id, revision: replacement.revision }, signal);
+      assert.equal(generated, 0, "Replacement reasoning waits for the old effect");
+      const waiting = await database.transaction(ownerId, ({ tasks }) =>
+        tasks.find(replacement.id),
+      );
+      assert.equal(waiting?.state, "waiting");
+      assert.equal(waiting.blocker?.referenceId, steered.action.id);
       const output = {
         bytes: 0,
         sha256: createHash("sha256").update("").digest("hex"),
@@ -191,7 +241,32 @@ test("cancellation reconciles original commands without claiming unavailable or 
       );
       await reconcile(ownerId, undefined, signal);
       assert.equal(controls, 12, "Settled effects must not be canceled again");
+      await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, 123, 123, 123)`;
+      await jobs.start();
+      runtime = await startBackgroundRuntime({
+        database,
+        directConnectionString: connectionString,
+        jobs,
+        botId: 123,
+        generate,
+        notice: () => {},
+      });
+      const deadline = performance.now() + 10000;
+      let state;
+      do {
+        state = await database.transaction(ownerId, ({ tasks }) => tasks.find(waiting.id));
+        if (state?.state === "succeeded") break;
+        await Bun.sleep(25);
+      } while (performance.now() < deadline);
+      assert.equal(
+        state?.state,
+        "succeeded",
+        "Settlement wakes work before the delayed retry deadline",
+      );
+      assert.equal(generated, 1, "Verified settlement allows the corrected task to continue");
     } finally {
+      await runtime?.stop();
+      await jobs.stop();
       await database.close();
     }
   });

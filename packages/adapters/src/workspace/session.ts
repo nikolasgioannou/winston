@@ -44,6 +44,9 @@ export function createWorkspaceSessions(options: {
       signal.throwIfAborted();
       const workerId = randomUUID();
       const prepared = await database.transaction(input.ownerId, async (scope) => {
+        const previous = await scope.actions.unresolvedPriorEffect(input.task);
+        if (previous)
+          return { status: { kind: "blocked", actionId: previous.id, reason: "unknown" } as const };
         let action = await scope.taskSteps.prepareWorkspace(
           input.task,
           input.modelStepId,
