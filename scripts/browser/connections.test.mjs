@@ -46,7 +46,7 @@ test("connected accounts retain separate identities and calendar selection uses 
       json: [{ id: "calendar-a", summary: "Personal", accessRole: "owner" }],
     });
   });
-  await page.goto("/");
+  await page.goto("/connections");
   await expect(page.getByText("a@example.com")).toBeVisible();
   await expect(page.getByText("b@example.com")).toBeVisible();
   await page.getByRole("button", { name: "Calendars", exact: true }).click();

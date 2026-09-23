@@ -24,8 +24,7 @@ export function ConnectionsView({
   onRetry: () => void;
 }) {
   return (
-    <section className="space-y-3 border-t border-line pt-5" aria-label="Connected apps">
-      <h2 className="text-sm font-medium">Connected apps</h2>
+    <section className="space-y-3" aria-label="Connected apps">
       {result === "disconnect-failed" ? (
         <p role="alert" className="text-sm text-muted">
           Could not disconnect. Try again.

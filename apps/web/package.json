@@ -9,6 +9,8 @@
     "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.node.json"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.103.2",
+    "@tanstack/react-router": "1.170.39",
     "@winston/contracts": "workspace:*",
     "@winston/ui": "workspace:*",
     "react": "19.3.0",

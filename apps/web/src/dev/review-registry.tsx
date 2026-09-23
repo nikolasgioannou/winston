@@ -6,6 +6,7 @@ import { PairingView, type PairingState } from "../telegram/pairing-view";
 import { ConnectionsPreview, previewConnections } from "./connections-preview";
 import { HandoffPreview, previewHandoff } from "./handoff-preview";
 import { DownloadPreview, previewDownload } from "./download-preview";
+import { ManagementPreview } from "./management-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -67,6 +68,25 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "management",
+    label: "Management",
+    kind: "page",
+    states: [
+      {
+        id: "account",
+        label: "Account",
+        fullWidth: true,
+        render: () => <ManagementPreview initial="/" />,
+      },
+      {
+        id: "connections",
+        label: "Connections",
+        fullWidth: true,
+        render: () => <ManagementPreview initial="/connections" />,
+      },
+    ],
+  },
   {
     id: "download",
     label: "File download",

@@ -1,48 +1,49 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SignInView, type SignInState } from "./sign-in-view";
 import { readSession } from "./read-session";
 import { useTimezone } from "../timezone/use-timezone";
-import { TelegramPairing } from "../telegram/pairing";
-import { Connections } from "../connections/connections";
+import { rememberManagementPage, clearPendingDestination } from "../management/locator";
 
-export function SignIn({ children }: { children?: ReactNode }) {
-  const [state, setState] = useState<SignInState>("loading");
+export function SignIn({
+  renderAuthenticated,
+}: {
+  renderAuthenticated: (signOut: () => void) => ReactNode;
+}) {
+  const [action, setState] = useState<SignInState | null>(null);
   const [failed] = useState(() => new URLSearchParams(window.location.search).has("error"));
+  const queryClient = useQueryClient();
+  const session = useQuery({
+    queryKey: ["owner-session"],
+    enabled: action === null,
+    queryFn: async ({ signal }) => {
+      const response = await readSession(signal);
+      return { ok: response.ok, status: response.status };
+    },
+  });
+  const state: SignInState =
+    action ??
+    (session.isError
+      ? "session-error"
+      : !session.data
+        ? "loading"
+        : session.data.ok
+          ? "signed-in"
+          : session.data.status === 401
+            ? failed
+              ? "error"
+              : "signed-out"
+            : "session-error");
   useTimezone(state === "signed-in");
 
   useEffect(() => {
-    const controller = new AbortController();
-
     if (failed) {
       window.history.replaceState(null, "", window.location.pathname);
     }
-
-    readSession(controller.signal)
-      .then((response) => {
-        if (!controller.signal.aborted) {
-          setState(
-            response.ok
-              ? "signed-in"
-              : response.status === 401
-                ? failed
-                  ? "error"
-                  : "signed-out"
-                : "session-error",
-          );
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setState("session-error");
-        }
-      });
-
-    return () => {
-      controller.abort();
-    };
   }, [failed]);
 
   async function signIn() {
+    rememberManagementPage();
     setState("redirecting");
 
     try {
@@ -84,11 +85,21 @@ export function SignIn({ children }: { children?: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      clearPendingDestination();
       setState(response.ok ? "signed-out" : "error");
     } catch {
       setState("error");
     }
   }
+
+  const handleSignOut = () => {
+    signOut().catch(() => {
+      setState("error");
+    });
+  };
+  if (state === "signed-in") return renderAuthenticated(handleSignOut);
 
   return (
     <SignInView
@@ -98,23 +109,10 @@ export function SignIn({ children }: { children?: ReactNode }) {
           setState("error");
         });
       }}
-      onSignOut={() => {
-        signOut().catch(() => {
-          setState("error");
-        });
-      }}
+      onSignOut={handleSignOut}
       onRetry={() => {
         window.location.reload();
       }}
-    >
-      {state === "signed-in"
-        ? (children ?? (
-            <>
-              <TelegramPairing />
-              <Connections />
-            </>
-          ))
-        : null}
-    </SignInView>
+    />
   );
 }

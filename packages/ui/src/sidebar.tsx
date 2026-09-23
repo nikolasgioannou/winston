@@ -79,6 +79,14 @@ export function Sidebar({
             key={item.href}
             href={item.href}
             onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
               setOpen(false);
 
               if (onNavigate) {

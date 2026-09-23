@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Connection } from "@winston/contracts/connections";
 import { ConnectionsView, type ConnectionsState } from "../connections/connections-view";
-import { SignInView } from "../auth/sign-in-view";
+import { ManagementShell } from "../management/shell";
 import { CalendarSelectionView } from "../connections/calendar-selection-view";
 
 export const previewConnections: Connection[] = [
@@ -31,17 +31,19 @@ export function ConnectionsPreview({
   initial,
   result,
   calendarState,
+  embedded = false,
 }: {
   initial: ConnectionsState;
   result?: string;
   calendarState?: "ready" | "empty" | "saving" | "error";
+  embedded?: boolean;
 }) {
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [showCalendars, setShowCalendars] = useState(Boolean(calendarState));
   const [selected, setSelected] = useState(["primary"]);
-  return (
-    <SignInView state="signed-in" onSignIn={() => {}} onSignOut={() => {}} onRetry={() => {}}>
+  const content = (
+    <>
       <ConnectionsView
         state={state}
         busy={busy}
@@ -98,6 +100,14 @@ export function ConnectionsPreview({
           }}
         />
       ) : null}
-    </SignInView>
+    </>
+  );
+  return embedded ? (
+    content
+  ) : (
+    <ManagementShell preview activeHref="/connections" onNavigate={() => {}}>
+      <h1 className="text-xl font-medium">Connections</h1>
+      {content}
+    </ManagementShell>
   );
 }
