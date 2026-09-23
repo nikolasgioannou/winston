@@ -98,6 +98,8 @@ export function telegramApprovalRepository(transaction: DatabaseTransaction, own
         SELECT p.action_id AS "actionId", p.revision, p.action_hash AS "actionHash",
           p.approve_hash = ${digest} AS approve, p.result
         FROM winston.telegram_approvals p
+        JOIN winston.actions a ON a.owner_id = p.owner_id AND a.id = p.action_id
+        JOIN winston.tasks t ON t.owner_id = a.owner_id AND t.id = a.task_id
         JOIN winston.telegram_bindings b ON b.owner_id = p.owner_id AND b.bot_id = p.bot_id
           AND b.user_id = p.user_id AND b.chat_id = p.chat_id
         JOIN winston.telegram_outbound o ON o.owner_id = p.owner_id AND o.id = p.outbound_id
@@ -106,6 +108,10 @@ export function telegramApprovalRepository(transaction: DatabaseTransaction, own
           AND (p.approve_hash = ${digest} OR p.reject_hash = ${digest})
           AND o.bot_id = p.bot_id AND o.chat_id = p.chat_id AND o.state = 'delivered'
           AND o.sent_ids->>-1 = ${String(callback.messageId)}
+          AND (p.result IS NOT NULL OR (
+            t.document->>'state' = 'waiting' AND t.document->'blocker'->>'kind' = 'approval'
+            AND t.document->'blocker'->>'referenceId' = p.action_id::text
+          ))
         FOR UPDATE OF p
       `);
       const proposal = rows.rows[0];

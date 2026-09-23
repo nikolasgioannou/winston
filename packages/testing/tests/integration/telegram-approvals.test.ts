@@ -137,6 +137,7 @@ test("Telegram approval requires the exact delivered card and current authority"
         "canceled",
         "denied",
         "unpaired",
+        "resumed",
         "reject",
       ] as const) {
         const next = await prepare();
@@ -159,6 +160,10 @@ test("Telegram approval requires the exact delivered card and current authority"
           );
         if (change === "unpaired")
           await sql`DELETE FROM winston.telegram_bindings WHERE owner_id = ${ownerId}::uuid`;
+        if (change === "resumed")
+          await database.transaction(ownerId, ({ tasks }) =>
+            tasks.resume(next.task.id, next.task.revision, next.action.id),
+          );
         if (change === "reject") {
           assert.deepEqual(
             await store.receive({
@@ -185,6 +190,13 @@ test("Telegram approval requires the exact delivered card and current authority"
         if (change === "unpaired") {
           assert.equal(result, null);
           await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, ${botId}, ${userId}, ${userId})`;
+        } else if (["resumed", "steered", "canceled"].includes(change)) {
+          assert.equal(result, null);
+          assert.equal(
+            (await database.transaction(ownerId, ({ actions }) => actions.find(next.action.id)))
+              ?.state,
+            "pending",
+          );
         } else
           assert.deepEqual(result, {
             state: change === "reject" ? "denied" : "invalidated",
