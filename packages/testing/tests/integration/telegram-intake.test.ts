@@ -1,0 +1,150 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { test } from "bun:test";
+import { createDatabase, migrateDatabase, type OwnerTransaction } from "@winston/adapters/database";
+import { createTelegramStore } from "@winston/adapters/telegram";
+import { withTestPostgres } from "../../src/postgres";
+
+test("attachment intake is durable, leased, edit-safe and owner scoped", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    const botId = 123;
+    const telegram = createTelegramStore(connectionString, botId);
+    const ownerId = randomUUID();
+    const scope = <Result>(work: (scope: OwnerTransaction) => Promise<Result>) =>
+      database.transaction(ownerId, work);
+    const receive = async (updateId: number, fileId: string, caption: string) => {
+      const message = {
+        message_id: 10,
+        date: 1_790_000_000,
+        chat: { id: 456, type: "private" },
+        from: { id: 456, is_bot: false, first_name: "Fixture" },
+        caption,
+        document: {
+          file_id: fileId,
+          file_unique_id: fileId,
+          file_size: 3,
+          file_name: "fixture.txt",
+          mime_type: "text/plain",
+        },
+      };
+      await telegram.receive(
+        updateId === 1
+          ? { update_id: updateId, message }
+          : {
+              update_id: updateId,
+              edited_message: { ...message, edit_date: 1_790_000_000 + updateId },
+            },
+      );
+      const events = await sql<
+        { id: string }[]
+      >`SELECT id FROM winston.events WHERE owner_id = ${ownerId}::uuid AND type IN ('telegram.message-received', 'telegram.message-edited')`;
+      for (const event of events)
+        await scope(({ conversations }) => conversations.consumeTelegram(event.id));
+    };
+    try {
+      await scope(({ owners }) => owners.ensure());
+      await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, ${botId}, 456, 456)`;
+      await receive(1, "file-one", "Original caption");
+      const first = (await scope(({ conversations }) => conversations.snapshot(10))).messages[0]
+        ?.envelope;
+      assert.ok(first);
+      const attachmentId = first.metadata.attachments[0]?.id;
+      assert.ok(attachmentId);
+      const saved = await scope(({ telegramIntake }) => telegramIntake.find(attachmentId));
+      assert.equal(saved?.fileId, "file-one");
+      assert.equal(saved.expectedSize, "3");
+      assert.equal(await scope(({ telegramIntake }) => telegramIntake.discover(botId)), 0);
+      const claims = await Promise.all([
+        scope(({ telegramIntake }) => telegramIntake.claim(botId)),
+        scope(({ telegramIntake }) => telegramIntake.claim(botId)),
+      ]);
+      assert.equal(claims.filter(Boolean).length, 1);
+      const claim = claims.find(Boolean);
+      assert.ok(claim);
+      await receive(2, "file-one", "Use the second tab");
+      assert.equal(
+        (await scope(({ telegramIntake }) => telegramIntake.find(attachmentId)))?.token,
+        claim.token,
+      );
+      const artifact = await scope(async ({ artifacts }) => {
+        const prepared = await artifacts.prepare("fixture", {
+          name: "fixture.txt",
+          mediaType: "text/plain",
+          size: 3,
+          sha256: createHash("sha256").update("abc").digest("hex"),
+          source: {
+            kind: "telegram",
+            reference: `message:${first.messageId}/attachment:${attachmentId}`,
+          },
+        });
+        await artifacts.ready(prepared.artifact.id, 0);
+        return prepared.artifact;
+      });
+      assert.equal(
+        await scope(({ telegramIntake }) => telegramIntake.stored(claim, artifact.id)),
+        true,
+      );
+      await receive(3, "file-two", "Replacement");
+      assert.equal(
+        (await scope(({ telegramIntake }) => telegramIntake.find(attachmentId)))?.state,
+        "canceled",
+      );
+      assert.equal(
+        await scope(({ telegramIntake }) => telegramIntake.stored(claim, artifact.id)),
+        false,
+      );
+      const replacement = await scope(({ telegramIntake }) => telegramIntake.claim(botId));
+      assert.ok(replacement);
+      assert.notEqual(replacement.id, attachmentId);
+      await sql`UPDATE winston.telegram_intake SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ${replacement.id}::uuid`;
+      const reclaimed = await scope(({ telegramIntake }) => telegramIntake.claim(botId));
+      assert.ok(reclaimed);
+      assert.notEqual(reclaimed.token, replacement.token);
+      assert.equal(
+        await scope(({ telegramIntake }) => telegramIntake.fail(replacement, "too_large")),
+        false,
+      );
+      assert.equal(
+        await scope(({ telegramIntake }) => telegramIntake.fail(reclaimed, "too_large")),
+        true,
+      );
+      const failed = (await scope(({ conversations }) => conversations.snapshot(10))).messages[0];
+      assert.ok(failed);
+      assert.equal(failed.envelope.input.text, "Replacement");
+      assert.equal(failed.envelope.metadata.attachments[0]?.state, "failed");
+      assert.match(failed.content, /too large/);
+      assert.deepEqual(failed.envelope.sentAt, first.sentAt);
+
+      await receive(4, "file-three", "Another file");
+      const next = (await scope(({ conversations }) => conversations.snapshot(10))).messages[0]
+        ?.envelope.metadata.attachments[0];
+      assert.ok(next);
+      await sql`DELETE FROM winston.telegram_intake WHERE owner_id = ${ownerId}::uuid AND id = ${next.id}::uuid`;
+      assert.equal(await scope(({ telegramIntake }) => telegramIntake.discover(botId)), 1);
+      const stranger = randomUUID();
+      await database.transaction(stranger, ({ owners }) => owners.ensure());
+      assert.equal(
+        await database.transaction(stranger, ({ telegramIntake }) => telegramIntake.find(next.id)),
+        undefined,
+      );
+      assert.equal(
+        await database.transaction(stranger, ({ telegramIntake }) => telegramIntake.claim(botId)),
+        undefined,
+      );
+      const retry = await scope(({ telegramIntake }) => telegramIntake.claim(botId));
+      assert.ok(retry);
+      assert.equal(await scope(({ telegramIntake }) => telegramIntake.retry(retry)), true);
+      assert.equal(await scope(({ telegramIntake }) => telegramIntake.claim(botId)), undefined);
+      await sql`UPDATE winston.telegram_intake SET attempts = 5, available_at = clock_timestamp() WHERE id = ${next.id}::uuid`;
+      assert.equal(await scope(({ telegramIntake }) => telegramIntake.claim(botId)), undefined);
+      assert.equal(
+        (await scope(({ telegramIntake }) => telegramIntake.find(next.id)))?.state,
+        "failed",
+      );
+    } finally {
+      await Promise.all([database.close(), telegram.close()]);
+    }
+  });
+});

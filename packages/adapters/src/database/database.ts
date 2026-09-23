@@ -13,6 +13,7 @@ import { telegramApprovalRepository } from "./telegram-approvals";
 import { connectedReadRepository } from "./connected-reads";
 import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
+import { telegramIntakeRepository } from "./telegram-intake";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
@@ -36,6 +37,7 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly telegramIntake: ReturnType<typeof telegramIntakeRepository>;
   readonly telegramFiles: ReturnType<typeof telegramFileRepository>;
   readonly filePublications: ReturnType<typeof filePublicationRepository>;
   readonly connectedReads: ReturnType<typeof connectedReadRepository>;
@@ -137,6 +139,7 @@ export function createDatabase(options: {
         await transaction.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
         return work({
+          telegramIntake: telegramIntakeRepository(transaction, ownerId),
           telegramFiles: telegramFileRepository(transaction, ownerId),
           telegramApprovals: telegramApprovalRepository(transaction, ownerId),
           connectedReads: connectedReadRepository(transaction, ownerId),

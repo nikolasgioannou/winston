@@ -8,6 +8,7 @@ import {
 } from "@winston/contracts/messages";
 import { telegramEventKeySchema, telegramUpdateSchema } from "@winston/contracts/telegram";
 import { telegramEnvelope } from "../telegram/envelope";
+import { reserveTelegramAttachment } from "./telegram-intake-reservation";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
 import { taskRepository } from "./tasks";
@@ -161,6 +162,7 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
           ON CONFLICT (owner_id, bot_id, chat_id, provider_message_id)
           DO UPDATE SET source_update_id = EXCLUDED.source_update_id, envelope = EXCLUDED.envelope, conversation_revision = EXCLUDED.conversation_revision
         `);
+          await reserveTelegramAttachment(transaction, ownerId, key.botId, latest.update, envelope);
           await transaction.execute(sql`
           UPDATE winston.conversations SET revision = revision + 1, input_revision = revision + 1,
             burst_started_at = CASE WHEN response_revision >= input_revision THEN clock_timestamp()
