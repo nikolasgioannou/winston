@@ -25,6 +25,7 @@
     "./storage": "./src/storage.ts",
     "./tasks": "./src/tasks.ts",
     "./task-resources": "./src/task-resources.ts",
+    "./task-steps": "./src/task-steps.ts",
     "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts",
     "./turns": "./src/turns.ts",
