@@ -5,6 +5,7 @@ import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import { withTestPostgres } from "../../src/postgres";
+import { createConnectedReadGateway } from "@winston/adapters/google";
 
 test("connected read proofs bind exact arguments, current workers and live policy", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -144,9 +145,132 @@ test("connected read proofs bind exact arguments, current workers and live polic
         ),
         false,
       );
+      const workspaceId = randomUUID();
+      let cliTask = await database.transaction(ownerId, async ({ workspaces, tasks }) => {
+        await workspaces.register(workspaceId, "Approval fixture");
+        await workspaces.setState(workspaceId, 0, "active");
+        const queued = await tasks.create({
+          key: randomUUID(),
+          objective: "Read through CLI",
+          sourceMessageIds: [],
+        });
+        return tasks.claim(queued.id, queued.revision);
+      });
+      const issue = async () => {
+        const capability = await database.transaction(ownerId, ({ capabilities }) =>
+          capabilities.issue({
+            kind: "workspace",
+            subjectId: workspaceId,
+            resourceId: workspaceId,
+            resourceRevision: 1,
+            taskId: cliTask.id,
+            revision: cliTask.revision,
+            generation: cliTask.generation,
+            operation: "gateway:control",
+            credential: null,
+          }),
+        );
+        return {
+          token: capability.token,
+          kind: "workspace" as const,
+          subjectId: workspaceId,
+          resourceId: workspaceId,
+          operation: "gateway:control" as const,
+        };
+      };
+      let fetches = 0;
+      const fetchCount = () => fetches;
+      const gateway = createConnectedReadGateway({
+        database,
+        google: {
+          list: (owner) => database.transaction(owner, ({ connections }) => connections.list()),
+          calendars: () => Promise.resolve([]),
+          access: () =>
+            Promise.resolve({
+              kind: "ready" as const,
+              revision: 0,
+              grant: {
+                accessToken: "synthetic",
+                refreshToken: "synthetic",
+                expiresAt: "2030-01-01T00:00:00.000Z",
+                scopes: [...googleScopes.gmail],
+              },
+            }),
+          rejected: () => Promise.resolve(),
+        },
+        fetch: () => {
+          fetches += 1;
+          return Promise.resolve(Response.json({ messages: [{ id: "m1", threadId: "t1" }] }));
+        },
+      });
+      const keyed = { ...request.arguments, key: "read-fixture" };
+      const signal = new AbortController().signal;
+      const waiting = await gateway(await issue(), keyed, signal);
+      assert.equal(waiting.status, "waiting");
+      assert.notEqual(waiting.status, "ok");
+      assert.ok(waiting.referenceId);
+      const approvalId = waiting.referenceId;
+      assert.equal(fetchCount(), 0);
+      const waitingTask = await database.transaction(ownerId, ({ tasks }) =>
+        tasks.find(cliTask.id),
+      );
+      assert.equal(waitingTask?.state, "waiting");
+      const proposal = await database.transaction(ownerId, ({ actions }) =>
+        actions.find(approvalId),
+      );
+      assert.ok(proposal);
+      await database.transaction(ownerId, ({ actions }) =>
+        actions.decide({
+          id: proposal.id,
+          revision: proposal.revision,
+          hash: proposal.hash,
+          approve: true,
+        }),
+      );
+      cliTask = await database.transaction(ownerId, async ({ tasks }) => {
+        const queued = await tasks.resume(cliTask.id, waitingTask.revision, proposal.id);
+        return tasks.claim(queued.id, queued.revision);
+      });
+      const resumed = await issue();
+      const first = await gateway(resumed, keyed, signal);
+      assert.equal(first.status, "ok");
+      assert.equal(fetchCount(), 1);
+      assert.deepEqual(await gateway(resumed, keyed, signal), first);
+      assert.equal(fetchCount(), 1);
+      assert.equal(
+        (await gateway(resumed, { ...keyed, query: "changed" }, signal)).status,
+        "unavailable",
+      );
+      assert.equal(fetchCount(), 1);
+      const rejectedRequest = { ...keyed, key: "rejected-read" };
+      const rejectionWait = await gateway(resumed, rejectedRequest, signal);
+      assert.equal(rejectionWait.status, "waiting");
+      assert.ok(rejectionWait.referenceId);
+      const rejectionId = rejectionWait.referenceId;
+      await database.transaction(ownerId, async ({ actions }) => {
+        const pending = await actions.find(rejectionId);
+        assert.ok(pending);
+        await actions.decide({
+          id: pending.id,
+          revision: pending.revision,
+          hash: pending.hash,
+          approve: false,
+        });
+      });
+      cliTask = await database.transaction(ownerId, async ({ tasks }) => {
+        const paused = await tasks.find(cliTask.id);
+        assert.ok(paused);
+        const queued = await tasks.resume(paused.id, paused.revision, rejectionId);
+        return tasks.claim(queued.id, queued.revision);
+      });
+      const afterRejection = await issue();
+      assert.equal((await gateway(afterRejection, rejectedRequest, signal)).status, "denied");
+      assert.equal(fetchCount(), 1);
       await database.transaction(ownerId, ({ authorization }) =>
         authorization.put({ ...request.authorization, decision: "deny", revision: 0 }),
       );
+      assert.equal((await gateway(afterRejection, keyed, signal)).status, "unavailable");
+      assert.equal(fetchCount(), 1);
       assert.equal(await check(), false);
       const result = {
         version: 1 as const,

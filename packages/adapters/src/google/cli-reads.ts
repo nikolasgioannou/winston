@@ -11,6 +11,7 @@ import { createGmailReader } from "./gmail";
 import { createCalendarReader } from "./calendar-events";
 import { createConnectionTargets } from "./targets";
 import { GoogleReadError, type GoogleReadOptions } from "./read-request";
+import { prepareReadApproval, completeRead, type ReadDispatch } from "./read-approval";
 
 export function createConnectedReadGateway(options: GoogleReadOptions) {
   return async (
@@ -20,7 +21,8 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
   ): Promise<CliResult> => {
     const request = cliReadRequestSchema.parse(input);
     const authority = await options.database.authenticateService(credential);
-    if (!authority || authority.operation !== "gateway:read")
+    const keyed = "key" in request && request.key !== undefined;
+    if (!authority || authority.operation !== (keyed ? "gateway:control" : "gateway:read"))
       return {
         version: 1,
         status: "denied",
@@ -35,7 +37,18 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
         current.generation === authority.generation
       );
     };
-    const bound = { ...options, authorize };
+    let dispatch: ReadDispatch | undefined;
+    const bound: GoogleReadOptions = {
+      ...options,
+      authorize,
+      approved: async (authorization) => {
+        if (!dispatch) return false;
+        const proof = dispatch;
+        return options.database.transaction(authority.ownerId, ({ actions }) =>
+          actions.authorizeConnectionRead({ ...proof, authorization }),
+        );
+      },
+    };
     const targets = createConnectionTargets(options.database, options.google);
     try {
       let data: unknown;
@@ -66,6 +79,16 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
             status: "unavailable",
             message: "The requested account or calendar is unavailable.",
           };
+        if ("key" in request && request.key) {
+          const approval = await prepareReadApproval(
+            options.database,
+            authority.ownerId,
+            credential,
+            { ...request, key: request.key },
+          );
+          if (approval.kind === "result") return approval.result;
+          dispatch = approval;
+        }
         switch (request.command) {
           case "gmail.search":
             data = await createGmailReader(bound).search(
@@ -108,19 +131,30 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
         }
       }
       if (!(await authorize()))
-        return {
+        return await completeRead(options.database, authority.ownerId, dispatch, {
           version: 1,
-          status: "denied",
+          status: "unavailable",
           message: "Task read authority expired before completion.",
-        };
+        });
       if (Buffer.byteLength(JSON.stringify(data)) > 900_000)
-        return {
+        return await completeRead(options.database, authority.ownerId, dispatch, {
           version: 1,
           status: "unavailable",
           message: "The read result is too large. Narrow the query or request fewer results.",
-        };
-      return cliResultSchema.parse({ version: 1, status: "ok", data });
+        });
+      return await completeRead(
+        options.database,
+        authority.ownerId,
+        dispatch,
+        cliResultSchema.parse({ version: 1, status: "ok", data }),
+      );
     } catch (error) {
+      if (dispatch)
+        return await completeRead(options.database, authority.ownerId, dispatch, {
+          version: 1,
+          status: "unknown",
+          message: "The approved read did not produce a confirmed reusable result.",
+        });
       if (!(await authorize()))
         return {
           version: 1,
@@ -135,7 +169,7 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
             : "unavailable",
         message:
           error instanceof GoogleReadError && error.kind === "approval_required"
-            ? "This read requires approval and was not performed."
+            ? "This read requires approval and was not performed. Retry with a stable --key to request approval."
             : "The requested read could not be completed.",
       };
     }

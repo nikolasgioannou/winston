@@ -5,15 +5,16 @@ export const commands = [
     command: "gmail.search",
     description: "Search an explicitly selected Gmail account.",
     id: false,
-    flags: ["account", "query", "limit", "cursor"],
-    usage: "--account <uuid> --query <search> [--limit <1-100>] [--cursor <json>]",
+    flags: ["account", "query", "limit", "cursor", "key"],
+    usage:
+      "--account <uuid> [--query <search>] [--limit <1-100>] [--cursor <json>] [--key <request-key>]",
   },
   {
     command: "gmail.message",
     description: "Read one message from an explicitly selected Gmail account.",
     id: true,
-    flags: ["account", "id"],
-    usage: "--account <uuid> --id <message-id>",
+    flags: ["account", "id", "key"],
+    usage: "--account <uuid> --id <message-id> [--key <request-key>]",
   },
   {
     command: "calendars.list",
@@ -26,16 +27,16 @@ export const commands = [
     command: "calendar.events",
     description: "Read a bounded event window, preserving all-day dates and cancellations.",
     id: false,
-    flags: ["account", "calendar", "from", "until", "timezone", "query", "limit", "cursor"],
+    flags: ["account", "calendar", "from", "until", "timezone", "query", "limit", "cursor", "key"],
     usage:
-      "--account <uuid> --calendar <calendar-id> --from <timestamp> --until <timestamp> --timezone <IANA-zone> [--query <search>] [--limit <1-100>] [--cursor <json>]",
+      "--account <uuid> --calendar <calendar-id> --from <timestamp> --until <timestamp> --timezone <IANA-zone> [--query <search>] [--limit <1-100>] [--cursor <json>] [--key <request-key>]",
   },
   {
     command: "calendar.event",
     description: "Read one event from an explicitly selected calendar.",
     id: true,
-    flags: ["account", "calendar", "id"],
-    usage: "--account <uuid> --calendar <calendar-id> --id <event-id>",
+    flags: ["account", "calendar", "id", "key"],
+    usage: "--account <uuid> --calendar <calendar-id> --id <event-id> [--key <request-key>]",
   },
   {
     command: "accounts.connect",

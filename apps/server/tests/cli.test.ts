@@ -55,7 +55,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const { app } = createApi({
     groups: {
       task: createCliTaskGroup(database, (credential, input) => {
-        assert.equal(credential.token, token);
+        assert.equal(credential.token, "key" in input ? controlToken : token);
         assert.equal(input.command, "gmail.search");
         reads += 1;
         return Promise.resolve({ version: 1, status: "ok", data: [] });
@@ -91,6 +91,15 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  assert.equal(
+    (await request({ ...read, key: "read-fixture" }, controlToken, workspaceId, controlPath))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await request({ ...read, key: "read-fixture" }, token, workspaceId, controlPath)).status,
+    401,
+  );
   assert.equal((await request(cancellation, token, workspaceId, controlPath)).status, 401);
   assert.equal((await request(cancellation, controlToken)).status, 401);
   assert.equal(

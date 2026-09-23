@@ -18,6 +18,32 @@ function authority(): CliAuthority {
   };
 }
 
+test("keyed reads require control authority for approval parking", async () => {
+  const value = authority();
+  const request = {
+    version: 1 as const,
+    command: "gmail.search" as const,
+    accountId: randomUUID(),
+    query: "fixture",
+    limit: 1,
+    key: "read-fixture",
+  };
+  const controlToken = `wst_${"c".repeat(43)}`;
+  let called = false;
+  const send = (url: string, init: RequestInit) => {
+    called = true;
+    assert.equal(url, "https://winston-628.fly.dev/api/tasks/cli/control");
+    assert.equal(new Headers(init.headers).get("Authorization"), `Bearer ${controlToken}`);
+    return Promise.resolve(
+      Response.json({ version: 1, status: "waiting", message: "Approve read" }),
+    );
+  };
+  assert.equal((await callGateway(value, request, send)).status, "denied");
+  assert.equal(called, false);
+  assert.equal((await callGateway({ ...value, controlToken }, request, send)).status, "waiting");
+  assert.equal(called, true);
+});
+
 test("connection setup uses control authority without falling back to discovery credentials", async () => {
   const value = authority();
   const request = {

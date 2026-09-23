@@ -21,7 +21,8 @@ export async function callGateway(
 ): Promise<CliResult> {
   const authority = cliAuthoritySchema.parse(inputAuthority);
   const request = cliRequestSchema.parse(input);
-  const control = request.command === "operations.cancel" || request.command === "accounts.connect";
+  const control =
+    request.command === "operations.cancel" || ("key" in request && request.key !== undefined);
   const token = control ? authority.controlToken : authority.token;
   if (!token)
     return { version: 1, status: "denied", message: "Task control authority is unavailable." };

@@ -50,6 +50,7 @@ export function parseCommand(args: string[]): ParsedCommand {
       version: 1,
       command: command.command,
       accountId: values.account,
+      ...(values.key === undefined ? {} : { key: values.key }),
       ...(values.calendar === undefined ? {} : { calendarId: values.calendar }),
       ...(values.id === undefined ? {} : { id: values.id }),
       ...(values.limit === undefined ? {} : { limit: Number(values.limit) }),

@@ -1,4 +1,5 @@
 import type { ResolvedTarget } from "@winston/contracts/connection-targets";
+import type { AuthorizationRequest } from "@winston/contracts/authorization";
 import type { createDatabase } from "../database";
 import type { GoogleConnections } from "./index";
 import { createConnectionTargets } from "./targets";
@@ -15,6 +16,7 @@ export class GoogleReadError extends Error {
   }
 }
 export type GoogleReadOptions = {
+  approved?: (request: AuthorizationRequest) => Promise<boolean>;
   authorize?: () => Promise<boolean>;
   database: ReturnType<typeof createDatabase>;
   google: Pick<GoogleConnections, "list" | "calendars" | "access" | "rejected">;
@@ -90,7 +92,7 @@ export function createGoogleReadRequest(
       );
       if (selected.status !== "resolved" || !sameResolvedTarget(selected.target, target))
         throw fail("stale");
-      const action = {
+      const action: AuthorizationRequest = {
         target: {
           kind: "connection" as const,
           id: target.connectionId,
@@ -101,8 +103,9 @@ export function createGoogleReadRequest(
       const initial = await database.transaction(ownerId, (scope) =>
         scope.authorization.evaluate(action),
       );
-      if (initial.decision === "ask") throw fail("approval_required");
-      if (initial.decision !== "allow" || !initial.snapshot) throw fail("denied");
+      if (initial.decision === "ask" && !(await options.approved?.(action)))
+        throw fail("approval_required");
+      if (initial.decision === "deny" || !initial.snapshot) throw fail("denied");
       const access = await google.access(ownerId, target.connectionId, deadline);
       const allowed = await database.transaction(ownerId, async (scope) => {
         const policy = await scope.authorization.evaluate(action, initial.snapshot ?? undefined);
@@ -113,13 +116,14 @@ export function createGoogleReadRequest(
           ...(target.task ? { task: target.task } : {}),
         });
         return (
-          policy.decision === "allow" &&
+          policy.decision !== "deny" &&
           credential?.revision === access.revision &&
           preferences.revision === target.preferencesRevision &&
           currentTask
         );
       });
       if (!allowed) throw fail("stale");
+      if (initial.decision === "ask" && !(await options.approved?.(action))) throw fail("stale");
       if (options.authorize && !(await options.authorize())) throw fail("stale");
       deadline.throwIfAborted();
       const url = new URL(`${base}${path}`);
@@ -139,6 +143,7 @@ export function createGoogleReadRequest(
         throw fail("unavailable");
       }
       const data = await boundedJson(response, limit, fail);
+      if (initial.decision === "ask" && !(await options.approved?.(action))) throw fail("stale");
       if (options.authorize && !(await options.authorize())) throw fail("stale");
       return { source: selected.target, data };
     } catch (error) {

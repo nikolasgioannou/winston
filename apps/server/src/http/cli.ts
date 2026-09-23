@@ -45,6 +45,14 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const connected = cliReadRequestSchema.safeParse(request);
+    if (connected.success && "key" in connected.data && connected.data.key) {
+      return context.json(
+        read
+          ? await read(authority, connected.data, context.req.raw.signal)
+          : { version: 1, status: "unavailable", message: "Connected reads are not configured." },
+      );
+    }
     if (request.command !== "operations.cancel" && request.command !== "accounts.connect")
       throw new RequestError("invalid_request");
     return context.json(
