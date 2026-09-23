@@ -196,7 +196,24 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
       assert.equal((await execute(credential(), request, signal)).status, "denied");
       assert.equal(requestCount(), before + 1);
       assert.equal((await execute(credential(), request, signal)).status, "denied");
-      assert.equal(requestCount(), before + 1);
+      capability = await issue();
+      duringFetch = async () => {
+        await database.transaction(ownerId, ({ authorization }) =>
+          authorization.put({
+            target: { kind: "connection", id: accountId, resource: null },
+            operation: "gmail.read",
+            decision: "deny",
+            revision: 2,
+          }),
+        );
+      };
+      const revoked = await execute(credential(), request, signal);
+      assert.equal(revoked.status, "unavailable");
+      assert.ok(!("data" in revoked));
+      assert.equal(requestCount(), before + 2);
+      duringFetch = undefined;
+      assert.equal((await execute(credential(), request, signal)).status, "unavailable");
+      assert.equal(requestCount(), before + 2);
     } finally {
       await database.close();
     }

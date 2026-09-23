@@ -107,22 +107,23 @@ export function createGoogleReadRequest(
         throw fail("approval_required");
       if (initial.decision === "deny" || !initial.snapshot) throw fail("denied");
       const access = await google.access(ownerId, target.connectionId, deadline);
-      const allowed = await database.transaction(ownerId, async (scope) => {
-        const policy = await scope.authorization.evaluate(action, initial.snapshot ?? undefined);
-        const credential = await scope.credentials.find(target.connectionId);
-        const preferences = await scope.connectionTargets.preferences();
-        const currentTask = await scope.connectionTargets.currentTask({
-          operation,
-          ...(target.task ? { task: target.task } : {}),
+      const allowed = () =>
+        database.transaction(ownerId, async (scope) => {
+          const policy = await scope.authorization.evaluate(action, initial.snapshot ?? undefined);
+          const credential = await scope.credentials.find(target.connectionId);
+          const preferences = await scope.connectionTargets.preferences();
+          const currentTask = await scope.connectionTargets.currentTask({
+            operation,
+            ...(target.task ? { task: target.task } : {}),
+          });
+          return (
+            policy.decision !== "deny" &&
+            credential?.revision === access.revision &&
+            preferences.revision === target.preferencesRevision &&
+            currentTask
+          );
         });
-        return (
-          policy.decision !== "deny" &&
-          credential?.revision === access.revision &&
-          preferences.revision === target.preferencesRevision &&
-          currentTask
-        );
-      });
-      if (!allowed) throw fail("stale");
+      if (!(await allowed())) throw fail("stale");
       if (initial.decision === "ask" && !(await options.approved?.(action))) throw fail("stale");
       if (options.authorize && !(await options.authorize())) throw fail("stale");
       deadline.throwIfAborted();
@@ -143,6 +144,7 @@ export function createGoogleReadRequest(
         throw fail("unavailable");
       }
       const data = await boundedJson(response, limit, fail);
+      if (!(await allowed())) throw fail("stale");
       if (initial.decision === "ask" && !(await options.approved?.(action))) throw fail("stale");
       if (options.authorize && !(await options.authorize())) throw fail("stale");
       return { source: selected.target, data };
