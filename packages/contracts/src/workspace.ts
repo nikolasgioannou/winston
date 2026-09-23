@@ -50,6 +50,11 @@ export const workspaceAuthorizationSchema = z.strictObject({
   workspaceRevision: z.number().int().nonnegative(),
 });
 
+export const workspaceInspectionSchema = z.strictObject({
+  operation: workspaceOperationSchema.extend({ kind: z.literal("workspace:inspect") }),
+  input: z.strictObject({}),
+});
+
 export type WorkspaceIdentity = z.infer<typeof workspaceIdentitySchema>;
 export type WorkspaceOperation = z.infer<typeof workspaceOperationSchema>;
 export type WorkspaceOutcome = z.infer<typeof workspaceOutcomeSchema>;
