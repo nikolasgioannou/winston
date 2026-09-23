@@ -162,6 +162,7 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
       input: ServiceRequest,
       inputCommand: WorkspaceCommand,
       environment: CliAuthority["environment"],
+      includeControl = false,
     ) {
       const command = workspaceCommandSchema.parse(inputCommand);
       await lock();
@@ -169,22 +170,30 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
       if (!grant || !(await actionRepository(transaction, ownerId).authorizeWorkspace(command)))
         return null;
       const operation = command.operation;
-      const credential = await capabilityRepository(transaction, ownerId).issue({
-        kind: "workspace",
+      const scope = {
+        kind: "workspace" as const,
         subjectId: operation.identity.workspaceId,
         resourceId: operation.identity.workspaceId,
         resourceRevision: grant.workspaceRevision,
         taskId: operation.taskId,
         revision: operation.revision,
         generation: operation.generation,
-        operation: "gateway:read",
+        operation: "gateway:read" as const,
         credential: null,
-      });
+      };
+      const credential = await capabilityRepository(transaction, ownerId).issue(scope);
+      const control = includeControl
+        ? await capabilityRepository(transaction, ownerId).issue({
+            ...scope,
+            operation: "gateway:control",
+          })
+        : undefined;
       return cliAuthoritySchema.parse({
         version: 1,
         environment,
         workspaceId: operation.identity.workspaceId,
         token: credential.token,
+        ...(control ? { controlToken: control.token } : {}),
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       });
     },

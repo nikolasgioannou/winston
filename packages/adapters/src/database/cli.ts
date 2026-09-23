@@ -9,6 +9,45 @@ import { actionRepository } from "./actions";
 
 export function cliRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
+    async cancel(credential: ServiceRequest, inputId: string): Promise<CliResult> {
+      await transaction.execute(
+        sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,
+      );
+      const authority = await capabilityRepository(transaction, ownerId).authenticate(credential);
+      if (!authority || authority.operation !== "gateway:control")
+        return {
+          version: 1,
+          status: "denied",
+          message: "Task control authority is unavailable or expired.",
+        };
+      const action = await actionRepository(transaction, ownerId).requestCancellation(
+        inputId,
+        {
+          id: authority.taskId,
+          revision: authority.revision,
+          generation: authority.generation,
+        },
+        authority.resourceId,
+      );
+      if (!action)
+        return {
+          version: 1,
+          status: "denied",
+          message: "Operation unavailable to this task and workspace.",
+        };
+      if (["dispatching", "unknown"].includes(action.state))
+        return {
+          version: 1,
+          status: "waiting",
+          message: "Cancellation requested; the execution outcome is not yet confirmed.",
+          referenceId: action.id,
+        };
+      return {
+        version: 1,
+        status: "ok",
+        data: { id: action.id, state: action.state, outcome: action.outcome },
+      };
+    },
     async execute(credential: ServiceRequest, input: CliRequest): Promise<CliResult> {
       const request = cliRequestSchema.parse(input);
       await transaction.execute(
@@ -61,6 +100,10 @@ export function cliRepository(transaction: DatabaseTransaction, ownerId: string)
             operationId: action.operationId,
             state: action.state,
             outcome: action.outcome,
+            cancellationRequested: await actionRepository(
+              transaction,
+              ownerId,
+            ).cancellationRequested(action.id),
           },
         };
       }

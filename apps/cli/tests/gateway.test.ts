@@ -80,3 +80,27 @@ test("gateway rejects oversized and malformed responses and maps authentication 
     await assert.rejects(callGateway(value, request, () => Promise.resolve(response)));
   }
 });
+
+test("cancellation uses a separate control credential and never falls back to read authority", async () => {
+  const value = authority();
+  const request = { version: 1, command: "operations.cancel", id: randomUUID() } as const;
+  let calls = 0;
+  const controlToken = `wst_${"c".repeat(43)}`;
+  const send = (url: string, init: RequestInit) => {
+    calls += 1;
+    assert.equal(url, "https://winston-628.fly.dev/api/tasks/cli/control");
+    assert.equal(new Headers(init.headers).get("Authorization"), `Bearer ${controlToken}`);
+    return Promise.resolve(
+      Response.json({
+        version: 1,
+        status: "waiting",
+        message: "Cancellation requested",
+        referenceId: request.id,
+      }),
+    );
+  };
+  assert.equal((await callGateway(value, request, send)).status, "denied");
+  assert.equal(calls, 0);
+  assert.equal((await callGateway({ ...value, controlToken }, request, send)).status, "waiting");
+  assert.equal(calls, 1);
+});

@@ -11,6 +11,7 @@ export const serviceOperationSchema = z.enum([
   "connector:write",
   "device:execute",
   "gateway:read",
+  "gateway:control",
 ]);
 export const workspaceControlOperationSchema = z.enum(["workspace:observe", "workspace:cancel"]);
 export const serviceScopeSchema = z

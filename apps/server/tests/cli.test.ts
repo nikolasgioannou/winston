@@ -10,8 +10,14 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const workspaceId = randomUUID();
   const ownerId = randomUUID();
   const token = `wst_${"a".repeat(43)}`;
+  const controlToken = `wst_${"b".repeat(43)}`;
   let calls = 0;
+  let cancellations = 0;
   const cli: OwnerTransaction["cli"] = {
+    cancel: () => {
+      cancellations += 1;
+      return Promise.resolve({ version: 1, status: "waiting", message: "Cancellation requested." });
+    },
     execute: () => {
       calls += 1;
       return Promise.resolve({ version: 1, status: "ok", data: [] });
@@ -20,10 +26,10 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const database = {
     authenticateService: (input: ServiceRequest) =>
       Promise.resolve(
-        input.token === token &&
+        ((input.token === token && input.operation === "gateway:read") ||
+          (input.token === controlToken && input.operation === "gateway:control")) &&
           input.subjectId === workspaceId &&
           input.resourceId === workspaceId &&
-          input.operation === "gateway:read" &&
           input.kind === "workspace"
           ? {
               ...input,
@@ -45,8 +51,13 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
     },
   };
   const { app } = createApi({ groups: { task: createCliTaskGroup(database) } });
-  const request = (body: unknown, bearer = token, workspace = workspaceId) =>
-    app.request("/api/tasks/cli", {
+  const request = (
+    body: unknown,
+    bearer = token,
+    workspace = workspaceId,
+    path = "/api/tasks/cli",
+  ) =>
+    app.request(path, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -63,5 +74,22 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   );
   assert.equal((await request({ version: 1, command: "accounts.list", ownerId })).status, 400);
   assert.equal((await request({ version: 1, command: "invented" })).status, 400);
+  const cancellation = { version: 1, command: "operations.cancel", id: randomUUID() };
+  const controlPath = "/api/tasks/cli/control";
+  assert.equal((await request(cancellation, token, workspaceId, controlPath)).status, 401);
+  assert.equal((await request(cancellation, controlToken)).status, 401);
+  assert.equal(
+    (await request({ version: 1, command: "devices.list" }, controlToken, workspaceId, controlPath))
+      .status,
+    400,
+  );
+  const response = await request(cancellation, controlToken, workspaceId, controlPath);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    version: 1,
+    status: "waiting",
+    message: "Cancellation requested.",
+  });
+  assert.equal(cancellations, 1);
   assert.equal(calls, 1);
 });

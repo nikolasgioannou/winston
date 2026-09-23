@@ -71,6 +71,7 @@ export function createWorkspaceAuthority(origin: string) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${credential.token}`,
             "X-Winston-Worker": credential.subjectId,
+            "X-Winston-CLI-Control": "1",
           },
           body: JSON.stringify(command),
         },

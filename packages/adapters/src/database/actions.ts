@@ -26,7 +26,12 @@ import {
 } from "@winston/contracts/workspace-commands";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
-type Row = { document: unknown; valid: boolean; tokenHash: string | null };
+type Row = {
+  document: unknown;
+  valid: boolean;
+  tokenHash: string | null;
+  cancellationRequested: boolean;
+};
 
 export function actionRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -38,7 +43,8 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   async function row(inputId: string) {
     const id = actionRecordSchema.shape.id.parse(inputId);
     const result = await transaction.execute<Row>(sql`
-      SELECT document, expires_at > clock_timestamp() AS valid, dispatch_token_hash AS "tokenHash"
+      SELECT document, expires_at > clock_timestamp() AS valid, dispatch_token_hash AS "tokenHash",
+        cancellation_requested AS "cancellationRequested"
       FROM winston.actions WHERE owner_id = ${ownerId}::uuid AND id = ${id}::uuid FOR UPDATE
     `);
     return result.rows[0];
@@ -133,6 +139,38 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    async cancellationRequested(id: string) {
+      await lock();
+      return (await row(id))?.cancellationRequested ?? false;
+    },
+    async requestCancellation(id: string, inputTask: ActionTask, workspaceId: string) {
+      const worker = actionTaskSchema.parse(inputTask);
+      await lock();
+      const stored = await row(id);
+      if (!stored) return null;
+      const action = actionRecordSchema.parse(stored.document);
+      if (
+        action.request.task.id !== worker.id ||
+        action.request.authorization.target.kind !== "workspace" ||
+        action.request.authorization.target.id !== workspaceId ||
+        action.request.authorization.operation !== "workspace.command" ||
+        !running(await task(worker.id), worker)
+      )
+        return null;
+      if (
+        stored.cancellationRequested ||
+        !["pending", "approved", "dispatching", "unknown"].includes(action.state)
+      )
+        return action;
+      await transaction.execute(sql`
+        UPDATE winston.actions SET cancellation_requested = true
+        WHERE owner_id = ${ownerId}::uuid AND id = ${action.id}::uuid
+      `);
+      return save(
+        action,
+        ["pending", "approved"].includes(action.state) ? { state: "invalidated" } : {},
+      );
+    },
     // Trusted reconciliation resolves the original immutable execution, including after cancellation.
     async workspaceExecution(input: WorkspaceOperation) {
       const operation = workspaceOperationSchema.parse(input);
@@ -149,7 +187,12 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const command = workspaceCommandSchema.parse(input);
       await lock();
       const stored = await row(command.dispatch.id);
-      if (!stored || stored.tokenHash !== hash(command.dispatch.token)) return false;
+      if (
+        !stored ||
+        stored.cancellationRequested ||
+        stored.tokenHash !== hash(command.dispatch.token)
+      )
+        return false;
       const action = actionRecordSchema.parse(stored.document);
       if (
         action.state !== "dispatching" ||
@@ -267,6 +310,8 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const action = actionRecordSchema.parse(stored.document);
       if (action.hash !== expectedHash || action.request.task.id !== worker.id) return null;
       if (action.state !== "approved") return { claimed: false as const, action };
+      if (stored.cancellationRequested)
+        return { claimed: false as const, action: await save(action, { state: "invalidated" }) };
       const current = await task(worker.id);
       if (!running(current, worker)) return null;
       const evaluation = await policy(action);

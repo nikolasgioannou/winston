@@ -20,14 +20,18 @@ export async function callGateway(
 ): Promise<CliResult> {
   const authority = cliAuthoritySchema.parse(inputAuthority);
   const request = cliRequestSchema.parse(input);
+  const control = request.command === "operations.cancel";
+  const token = control ? authority.controlToken : authority.token;
+  if (!token)
+    return { version: 1, status: "denied", message: "Task control authority is unavailable." };
   const remaining = Date.parse(authority.expiresAt) - Date.now();
   if (remaining <= 0 || remaining > 300_000)
     return { version: 1, status: "denied", message: "Task authority is expired or invalid." };
-  const response = await send(endpoints[authority.environment], {
+  const response = await send(`${endpoints[authority.environment]}${control ? "/control" : ""}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authority.token}`,
+      Authorization: `Bearer ${token}`,
       "X-Winston-Workspace": authority.workspaceId,
     },
     body: JSON.stringify(request),

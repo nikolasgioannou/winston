@@ -47,7 +47,12 @@ export function createWorkspaceTaskGroup(
     if (identity.kind !== "task" || !request) throw new RequestError("unauthorized");
     const command = await parseJson(context, workspaceCommandSchema);
     const result = await database.transaction(identity.ownerId, ({ workspaces }) =>
-      workspaces.issueCli(request, command, environment),
+      workspaces.issueCli(
+        request,
+        command,
+        environment,
+        context.req.header("X-Winston-CLI-Control") === "1",
+      ),
     );
     if (!result) throw new RequestError("forbidden");
     return context.json(result);

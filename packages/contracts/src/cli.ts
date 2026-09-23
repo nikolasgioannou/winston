@@ -31,6 +31,10 @@ export const cliAuthoritySchema = z.strictObject({
   environment: z.enum(["production", "local"]),
   workspaceId: z.uuid(),
   token: z.string().regex(/^wst_[A-Za-z0-9_-]{43}$/),
+  controlToken: z
+    .string()
+    .regex(/^wst_[A-Za-z0-9_-]{43}$/)
+    .optional(),
   expiresAt: z.iso.datetime(),
 });
 export type CliAuthority = z.infer<typeof cliAuthoritySchema>;

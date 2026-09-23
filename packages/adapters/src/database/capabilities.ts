@@ -14,7 +14,7 @@ export function capabilityHash(token: string) {
 
 export function capabilityRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function live(scope: ServiceScope) {
-    if (scope.operation === "gateway:read") {
+    if (scope.operation === "gateway:read" || scope.operation === "gateway:control") {
       if (
         scope.kind !== "workspace" ||
         scope.subjectId !== scope.resourceId ||
