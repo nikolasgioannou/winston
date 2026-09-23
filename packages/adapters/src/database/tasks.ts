@@ -281,9 +281,22 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
         result: outcome.state === "waiting" ? null : outcome.result,
       });
     },
-    async steer(id: string, revision: number, objective: string) {
+    async steer(id: string, revision: number, objective: string, inputSources: string[] = []) {
       const { task } = await current(id, revision);
       active(task);
+      const added = taskRequestSchema.shape.sourceMessageIds.parse(inputSources);
+      let sourceMessageIds = task.sourceMessageIds;
+      if (added.length) {
+        const ids = [...new Set([...task.sourceMessageIds, ...added])];
+        const sources = await transaction.execute<{ id: string }>(sql`
+          SELECT id FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid
+            AND id IN (SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb)::uuid)
+          ORDER BY provider_sent_at, bot_id, chat_id, provider_message_id
+        `);
+        if (sources.rowCount !== ids.length)
+          throw new Error("Task source messages are unavailable to this owner.");
+        sourceMessageIds = sources.rows.slice(-100).map((row) => row.id);
+      }
       await transaction.execute(
         sql`UPDATE winston.tasks SET intent_revision = intent_revision + 1,
           retry_at = NULL, retry_key = NULL, retry_attempt = 0
@@ -293,6 +306,7 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       return save({
         ...task,
         objective: taskRequestSchema.shape.objective.parse(objective),
+        sourceMessageIds,
         state: "queued",
         revision: task.revision + 1,
         generation: task.generation + 1,

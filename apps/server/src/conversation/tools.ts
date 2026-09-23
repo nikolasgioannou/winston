@@ -76,7 +76,7 @@ export async function executeConversationTool(
       !["queued", "running", "waiting"].includes(task.state)
     )
       return { error: "Task unavailable, finished, or changed. Read its current status first." };
-    return scope.tasks.steer(input.id, input.revision, input.objective);
+    return scope.tasks.steer(input.id, input.revision, input.objective, sourceMessageIds);
   }
   if (call.name === "cancel_task") {
     const input = cancel.parse(call.input);
