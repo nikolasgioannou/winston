@@ -77,7 +77,7 @@ export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
   id: z.uuid(),
   ownerId: z.uuid(),
   revision: z.number().int().nonnegative(),
-  state: z.enum(["active", "completed", "canceled"]),
+  state: z.enum(["active", "paused", "completed", "canceled"]),
   nextRunAt: z.iso.datetime().nullable(),
 });
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;

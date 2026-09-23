@@ -46,6 +46,10 @@ export async function executeScheduleCommand(
   }
   if (request.command === "schedules.cancel")
     return { version: 1, status: "ok", data: await schedules.cancel(request.id, request.revision) };
+  if (request.command === "schedules.pause")
+    return { version: 1, status: "ok", data: await schedules.pause(request.id, request.revision) };
+  if (request.command === "schedules.resume")
+    return { version: 1, status: "ok", data: await schedules.resume(request.id, request.revision) };
   const context = await taskRepository(transaction, ownerId).context({
     id: authority.taskId,
     revision: authority.revision,

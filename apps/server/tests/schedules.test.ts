@@ -60,6 +60,16 @@ test("schedule management checks sessions, origins, revisions and owner provenan
                     return Promise.resolve({ ...current, state: "canceled", nextRunAt: null });
                   },
                   claimDue: () => Promise.resolve(undefined),
+                  pause: (id, revision) => {
+                    assert.equal(id, current.id);
+                    assert.equal(revision, current.revision);
+                    return Promise.resolve({ ...current, state: "paused", nextRunAt: null });
+                  },
+                  resume: (id, revision) => {
+                    assert.equal(id, current.id);
+                    assert.equal(revision, current.revision);
+                    return Promise.resolve(current);
+                  },
                 },
               });
             },
@@ -103,4 +113,6 @@ test("schedule management checks sessions, origins, revisions and owner provenan
   assert.equal((await mutate(`/${current.id}/cancel`, "POST", { revision: 1 })).status, 409);
   assert.equal((await mutate(`/${randomUUID()}/cancel`, "POST", { revision: 2 })).status, 404);
   assert.equal((await mutate(`/${current.id}/cancel`, "POST", { revision: 2 })).status, 200);
+  assert.equal((await mutate(`/${current.id}/pause`, "POST", { revision: 2 })).status, 200);
+  assert.equal((await mutate(`/${current.id}/resume`, "POST", { revision: 2 })).status, 200);
 });

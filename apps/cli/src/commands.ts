@@ -2,6 +2,20 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "schedules.pause",
+    description: "Pause future runs and cancel outstanding scheduled work.",
+    id: true,
+    flags: ["id", "revision"],
+    usage: "--id <uuid> --revision <current-revision>",
+  },
+  {
+    command: "schedules.resume",
+    description: "Resume a paused schedule without replaying missed recurring runs.",
+    id: true,
+    flags: ["id", "revision"],
+    usage: "--id <uuid> --revision <current-revision>",
+  },
+  {
     command: "schedules.create",
     description:
       "Create a durable reminder or recurring task. Reuse the same key after interruption.",

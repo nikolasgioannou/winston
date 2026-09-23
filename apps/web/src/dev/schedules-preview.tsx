@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { Schedule } from "@winston/contracts/schedules";
-import { SchedulesView, type SchedulesState } from "../schedules/schedules-view";
+import {
+  SchedulesView,
+  type SchedulesState,
+  type ScheduleAction,
+} from "../schedules/schedules-view";
 import { ManagementShell } from "../management/shell";
 
 export const previewSchedules: Schedule[] = [
@@ -24,11 +28,13 @@ export const previewSchedules: Schedule[] = [
 export function SchedulesPreview({
   initial,
   busy = false,
+  action = "cancel",
   failed = false,
   embedded = false,
 }: {
   initial: SchedulesState;
   busy?: boolean;
+  action?: ScheduleAction;
   failed?: boolean;
   embedded?: boolean;
 }) {
@@ -38,13 +44,40 @@ export function SchedulesPreview({
     <SchedulesView
       state={state}
       busy={busy}
-      canceling={busy}
+      pendingAction={busy ? action : null}
       failure={failure}
       onRefresh={() => {
         setState({ kind: "ready", items: previewSchedules });
         setFailure(false);
       }}
       onMore={() => {}}
+      onPause={(schedule) => {
+        if (state.kind === "ready")
+          setState({
+            kind: "ready",
+            items: state.items.map((item) =>
+              item.id === schedule.id
+                ? { ...item, state: "paused", nextRunAt: null, revision: item.revision + 1 }
+                : item,
+            ),
+          });
+      }}
+      onResume={(schedule) => {
+        if (state.kind === "ready")
+          setState({
+            kind: "ready",
+            items: state.items.map((item) =>
+              item.id === schedule.id
+                ? {
+                    ...item,
+                    state: "active",
+                    nextRunAt: item.timing.startAt,
+                    revision: item.revision + 1,
+                  }
+                : item,
+            ),
+          });
+      }}
       onCancel={(schedule) => {
         if (state.kind === "ready")
           setState({

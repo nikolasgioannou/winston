@@ -85,5 +85,16 @@ export function createScheduleOwnerRouter(database: {
       await transact(owner.ownerId, (scope) => scope.schedules.cancel(id, input.revision)),
     );
   });
+  for (const action of ["pause", "resume"] as const) {
+    router.post(`/:id/${action}`, async (context) => {
+      const owner = context.get("identity");
+      if (owner.kind !== "owner") throw new RequestError("unauthorized");
+      const id = identifier(context.req.param("id"));
+      const input = await parseJson(context, ownerScheduleCancelSchema);
+      return context.json(
+        await transact(owner.ownerId, (scope) => scope.schedules[action](id, input.revision)),
+      );
+    });
+  }
   return router;
 }

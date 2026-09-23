@@ -51,6 +51,17 @@ test("schedule commands require explicit timing and revision-checked edits", () 
   );
 });
 
+test("pause and resume require the current schedule revision", () => {
+  for (const action of ["pause", "resume"] as const) {
+    assert.deepEqual(parseCommand(["schedules", action, "--id", id, "--revision", "2"]), {
+      kind: "request",
+      json: false,
+      request: { version: 1, command: `schedules.${action}`, id, revision: 2 },
+    });
+    assert.throws(() => parseCommand(["schedules", action, "--id", id]));
+  }
+});
+
 test("file delivery commands require explicit artifact and stable request identities", () => {
   assert.deepEqual(parseCommand(["files", "send", "--id", id, "--key", "report"]), {
     kind: "request",

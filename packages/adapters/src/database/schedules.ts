@@ -124,6 +124,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     },
     async update(id: string, revision: number, input: Omit<ScheduleRequest, "key">) {
       const schedule = await current(id, revision);
+      if (schedule.state === "canceled") throw new ScheduleWriteError("conflict");
       const { request, nextRunAt } = await validate({ ...input, key: "update" });
       await cancelOutstanding(id);
       return save({
@@ -132,7 +133,32 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
         sourceMessageIds: request.sourceMessageIds,
         timing: request.timing,
         revision: revision + 1,
-        state: "active",
+        state: schedule.state === "paused" ? "paused" : "active",
+        nextRunAt: schedule.state === "paused" ? null : nextRunAt,
+      });
+    },
+    async pause(id: string, revision: number) {
+      const schedule = await current(id, revision);
+      if (schedule.state !== "active") throw new ScheduleWriteError("conflict");
+      await cancelOutstanding(id);
+      return save({ ...schedule, revision: revision + 1, state: "paused", nextRunAt: null });
+    },
+    async resume(id: string, revision: number) {
+      const schedule = await current(id, revision);
+      if (schedule.state !== "paused") throw new ScheduleWriteError("conflict");
+      const clock = await transaction.execute<{ now: string }>(
+        sql`SELECT clock_timestamp() AS now`,
+      );
+      const now = clock.rows[0]?.now;
+      if (!now) throw new Error("Database clock is unavailable.");
+      const nextRunAt =
+        schedule.timing.kind === "once"
+          ? schedule.timing.startAt
+          : nextScheduleOccurrence(schedule.timing, now);
+      return save({
+        ...schedule,
+        revision: revision + 1,
+        state: nextRunAt ? "active" : "completed",
         nextRunAt,
       });
     },

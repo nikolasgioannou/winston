@@ -96,6 +96,24 @@ test("schedule CLI fences authority, preserves retry identity and requires curre
       });
       assert.equal(updated.status, "ok");
       assert.equal(scheduleSchema.parse(updated.data).timing.timezone, "America/New_York");
+      const pause = {
+        version: 1 as const,
+        command: "schedules.pause" as const,
+        id: schedule.id,
+        revision: 1,
+      };
+      assert.equal((await execute(pause, currentRead)).status, "denied");
+      const paused = await execute(pause);
+      assert.equal(paused.status, "ok");
+      assert.equal(scheduleSchema.parse(paused.data).state, "paused");
+      const resumed = await execute({
+        version: 1,
+        command: "schedules.resume",
+        id: schedule.id,
+        revision: 2,
+      });
+      assert.equal(resumed.status, "ok");
+      assert.equal(scheduleSchema.parse(resumed.data).state, "active");
       await assert.rejects(
         execute({ version: 1, command: "schedules.cancel", id: schedule.id, revision: 0 }),
         /stale/,
@@ -104,7 +122,7 @@ test("schedule CLI fences authority, preserves retry identity and requires curre
         version: 1,
         command: "schedules.cancel",
         id: schedule.id,
-        revision: 1,
+        revision: 3,
       });
       assert.equal(canceled.status, "ok");
       assert.equal(scheduleSchema.parse(canceled.data).state, "canceled");

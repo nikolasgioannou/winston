@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { scheduleListSchema, scheduleSchema, type Schedule } from "@winston/contracts/schedules";
 import { ownerJson } from "../management/api";
-import { SchedulesView } from "./schedules-view";
+import { SchedulesView, type ScheduleAction } from "./schedules-view";
 
 const key = ["owner-schedules"] as const;
 type Page = ReturnType<typeof scheduleListSchema.parse>;
@@ -24,9 +24,9 @@ export function Schedules() {
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next,
   });
-  const cancellation = useMutation({
-    mutationFn: (schedule: Schedule) =>
-      ownerJson(`/api/owner/schedules/${schedule.id}/cancel`, scheduleSchema, {
+  const change = useMutation({
+    mutationFn: ({ schedule, action }: { schedule: Schedule; action: ScheduleAction }) =>
+      ownerJson(`/api/owner/schedules/${schedule.id}/${action}`, scheduleSchema, {
         method: "POST",
         body: { revision: schedule.revision },
       }),
@@ -60,15 +60,15 @@ export function Schedules() {
               }
             : { kind: "loading" }
       }
-      busy={list.isFetching || cancellation.isPending}
-      canceling={cancellation.isPending}
-      failure={cancellation.isError}
+      busy={list.isFetching || change.isPending}
+      pendingAction={change.isPending ? change.variables.action : null}
+      failure={change.isError}
       more={list.hasNextPage}
       onRefresh={() => {
         list
           .refetch()
           .then((result) => {
-            if (result.isSuccess) cancellation.reset();
+            if (result.isSuccess) change.reset();
           })
           .catch(() => {});
       }}
@@ -76,7 +76,13 @@ export function Schedules() {
         if (!list.isFetching) list.fetchNextPage().catch(() => {});
       }}
       onCancel={(schedule) => {
-        cancellation.mutate(schedule);
+        change.mutate({ schedule, action: "cancel" });
+      }}
+      onPause={(schedule) => {
+        change.mutate({ schedule, action: "pause" });
+      }}
+      onResume={(schedule) => {
+        change.mutate({ schedule, action: "resume" });
       }}
     />
   );

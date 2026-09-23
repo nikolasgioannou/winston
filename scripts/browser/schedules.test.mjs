@@ -65,7 +65,7 @@ test("a lost cancellation response requires a read before another attempt", asyn
   await page.goto("/schedules");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: "Cancel schedule", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Could not confirm cancellation");
+  await expect(page.getByRole("alert")).toContainText("Could not confirm the change");
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("Canceled", { exact: true })).toBeVisible();
@@ -127,6 +127,35 @@ test("schedule pages load by cursor and an expired session removes private resul
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await expect(page.getByText("Water the plants", { exact: true })).toHaveCount(0);
+});
+
+test("pause and resume use current revisions and retain the schedule timezone", async ({
+  page,
+}) => {
+  let current = fixture;
+  const revisions = [];
+  await page.route("**/api/owner/schedules", (route) =>
+    route.fulfill({ json: { items: [current], next: null } }),
+  );
+  await page.route(`**/api/owner/schedules/${id}/*`, (route) => {
+    revisions.push(route.request().postDataJSON().revision);
+    const pause = route.request().url().endsWith("/pause");
+    current = {
+      ...current,
+      revision: current.revision + 1,
+      state: pause ? "paused" : "active",
+      nextRunAt: pause ? null : fixture.nextRunAt,
+    };
+    return route.fulfill({ json: current });
+  });
+  await page.goto("/schedules");
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByText("Paused", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByText("Active", { exact: true })).toBeVisible();
+  await expect(page.getByText("America/New_York", { exact: true })).toBeVisible();
+  expect(revisions).toEqual([2, 3]);
 });
 
 test("schedule review states are interactive and fit mobile", async ({ page }, testInfo) => {

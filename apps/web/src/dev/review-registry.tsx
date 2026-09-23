@@ -120,9 +120,29 @@ export const reviewPages: readonly ReviewPage[] = [
           <SchedulesPreview failed initial={{ kind: "ready", items: previewSchedules }} />
         ),
       },
-      ...(["canceled", "completed"] as const).map((state) => ({
+      ...(["pause", "resume"] as const).map((action) => ({
+        id: `${action}-pending`,
+        label: action === "pause" ? "Pausing" : "Resuming",
+        fullWidth: true,
+        render: () => (
+          <SchedulesPreview
+            busy
+            action={action}
+            initial={{
+              kind: "ready",
+              items: previewSchedules.map((schedule) => ({
+                ...schedule,
+                state: action === "resume" ? "paused" : "active",
+                nextRunAt: action === "resume" ? null : schedule.nextRunAt,
+              })),
+            }}
+          />
+        ),
+      })),
+      ...(["paused", "canceled", "completed"] as const).map((state) => ({
         id: state,
-        label: state === "completed" ? "No upcoming runs" : "Canceled",
+        label:
+          state === "completed" ? "No upcoming runs" : state === "paused" ? "Paused" : "Canceled",
         fullWidth: true,
         render: () => (
           <SchedulesPreview

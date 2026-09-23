@@ -3,25 +3,30 @@ import { Badge, Button } from "@winston/ui";
 import type { Schedule } from "@winston/contracts/schedules";
 
 export type SchedulesState = { kind: "loading" | "error" } | { kind: "ready"; items: Schedule[] };
+export type ScheduleAction = "cancel" | "pause" | "resume";
 
 export function SchedulesView({
   state,
   busy = false,
-  canceling = false,
+  pendingAction = null,
   failure = false,
   more = false,
   onRefresh,
   onMore,
   onCancel,
+  onPause,
+  onResume,
 }: {
   state: SchedulesState;
   busy?: boolean;
-  canceling?: boolean;
+  pendingAction?: ScheduleAction | null;
   failure?: boolean;
   more?: boolean;
   onRefresh: () => void;
   onMore: () => void;
   onCancel: (schedule: Schedule) => void;
+  onPause: (schedule: Schedule) => void;
+  onResume: (schedule: Schedule) => void;
 }) {
   const [confirmation, setConfirmation] = useState<Schedule | null>(null);
   return (
@@ -42,14 +47,18 @@ export function SchedulesView({
           Unable to load schedules. Refresh to try again.
         </p>
       ) : null}
-      {canceling ? (
+      {pendingAction ? (
         <p role="status" className="text-sm text-muted">
-          Canceling schedule…
+          {pendingAction === "cancel"
+            ? "Canceling schedule…"
+            : pendingAction === "pause"
+              ? "Pausing schedule…"
+              : "Resuming schedule…"}
         </p>
       ) : null}
       {failure ? (
         <p role="alert" className="text-sm text-muted">
-          Could not confirm cancellation. Refresh to check the current status.
+          Could not confirm the change. Refresh to check the current status.
         </p>
       ) : null}
       {state.kind === "ready" && state.items.length === 0 ? (
@@ -70,9 +79,11 @@ export function SchedulesView({
                 <Badge tone={schedule.state === "active" ? "success" : "neutral"}>
                   {schedule.state === "active"
                     ? "Active"
-                    : schedule.state === "canceled"
-                      ? "Canceled"
-                      : "No upcoming runs"}
+                    : schedule.state === "paused"
+                      ? "Paused"
+                      : schedule.state === "canceled"
+                        ? "Canceled"
+                        : "No upcoming runs"}
                 </Badge>
                 <span className="text-xs text-muted">
                   {schedule.timing.kind === "once" ? "Once" : "Repeating"}
@@ -96,43 +107,67 @@ export function SchedulesView({
                   <dd>{schedule.timing.timezone}</dd>
                 </div>
               </dl>
-              {schedule.state !== "canceled" ? (
-                confirmation?.id === schedule.id ? (
-                  <div className="space-y-2">
-                    <p className="text-sm">Cancel this schedule?</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        disabled={busy || failure}
-                        onClick={() => {
-                          onCancel(confirmation);
-                          setConfirmation(null);
-                        }}
-                      >
-                        Cancel schedule
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        disabled={busy}
-                        onClick={() => {
-                          setConfirmation(null);
-                        }}
-                      >
-                        Keep schedule
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
+              <div className="flex flex-wrap items-start gap-2 empty:hidden">
+                {confirmation?.id !== schedule.id && schedule.state === "active" ? (
                   <Button
                     disabled={busy || failure}
                     variant="quiet"
                     onClick={() => {
-                      setConfirmation(schedule);
+                      onPause(schedule);
                     }}
                   >
-                    Cancel
+                    Pause
                   </Button>
-                )
-              ) : null}
+                ) : null}
+                {confirmation?.id !== schedule.id && schedule.state === "paused" ? (
+                  <Button
+                    disabled={busy || failure}
+                    variant="quiet"
+                    onClick={() => {
+                      onResume(schedule);
+                    }}
+                  >
+                    Resume
+                  </Button>
+                ) : null}
+                {schedule.state !== "canceled" ? (
+                  confirmation?.id === schedule.id ? (
+                    <div className="space-y-2">
+                      <p className="text-sm">Cancel this schedule?</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={busy || failure}
+                          onClick={() => {
+                            onCancel(confirmation);
+                            setConfirmation(null);
+                          }}
+                        >
+                          Cancel schedule
+                        </Button>
+                        <Button
+                          variant="quiet"
+                          disabled={busy}
+                          onClick={() => {
+                            setConfirmation(null);
+                          }}
+                        >
+                          Keep schedule
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      disabled={busy || failure}
+                      variant="quiet"
+                      onClick={() => {
+                        setConfirmation(schedule);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )
+                ) : null}
+              </div>
             </section>
           ))}
         </div>

@@ -22,9 +22,17 @@ export const cliScheduleRequestSchema = z.discriminatedUnion("command", [
   z.strictObject({ ...base, ...identity, command: z.literal("schedules.inspect") }),
   z.strictObject({ ...base, ...revision, ...timing, command: z.literal("schedules.update") }),
   z.strictObject({ ...base, ...revision, command: z.literal("schedules.cancel") }),
+  z.strictObject({ ...base, ...revision, command: z.literal("schedules.pause") }),
+  z.strictObject({ ...base, ...revision, command: z.literal("schedules.resume") }),
 ]);
 export type CliScheduleRequest = z.infer<typeof cliScheduleRequestSchema>;
 
 export function isScheduleMutation(command: string) {
-  return ["schedules.create", "schedules.update", "schedules.cancel"].includes(command);
+  return [
+    "schedules.create",
+    "schedules.update",
+    "schedules.cancel",
+    "schedules.pause",
+    "schedules.resume",
+  ].includes(command);
 }
