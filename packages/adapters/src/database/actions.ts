@@ -16,6 +16,7 @@ import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
 import { eventRepository } from "./events";
+import { taskResourceRepository } from "./task-resources";
 import { canonicalJson as canonical } from "@winston/contracts/json";
 import { commandInputSchema } from "@winston/contracts/commands";
 import { workspaceOperationSchema, type WorkspaceOperation } from "@winston/contracts/workspace";
@@ -61,10 +62,21 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         sql`SELECT id FROM winston.credentials WHERE owner_id = ${ownerId}::uuid AND id = ${action.request.authorization.target.id}::uuid FOR SHARE`,
       );
     }
-    return authorizationRepository(transaction, ownerId).evaluate(
+    const evaluation = await authorizationRepository(transaction, ownerId).evaluate(
       action.request.authorization,
       action.snapshot ?? undefined,
     );
+    if (
+      action.request.bindingKey &&
+      !(await taskResourceRepository(transaction, ownerId).matches(
+        action.request.task.id,
+        action.intentRevision,
+        action.request.bindingKey,
+        action.request.authorization,
+      ))
+    )
+      return { ...evaluation, decision: "deny" as const, reason: "stale" as const };
+    return evaluation;
   }
   async function publish(action: ActionRecord) {
     await eventRepository(transaction, ownerId).publish({
@@ -179,6 +191,16 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const current = await task(request.task.id);
       if (!running(current, request.task) || !current)
         throw new Error("Action task lease is stale.");
+      if (
+        request.bindingKey &&
+        !(await taskResourceRepository(transaction, ownerId).matches(
+          request.task.id,
+          current.intentRevision,
+          request.bindingKey,
+          request.authorization,
+        ))
+      )
+        throw new Error("Action does not match its task resource binding.");
       const decision = await authorizationRepository(transaction, ownerId).evaluate(
         request.authorization,
       );

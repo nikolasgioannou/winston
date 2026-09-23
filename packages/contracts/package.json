@@ -23,6 +23,7 @@
     "./messages": "./src/messages/index.ts",
     "./storage": "./src/storage.ts",
     "./tasks": "./src/tasks.ts",
+    "./task-resources": "./src/task-resources.ts",
     "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts",
     "./turns": "./src/turns.ts",

@@ -9,6 +9,7 @@ import {
 import type { DatabaseTransaction } from "./owners";
 import { connectionRepository } from "./connections";
 import { taskRepository } from "./tasks";
+import { taskResourceRepository } from "./task-resources";
 
 export function connectionTargetRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -82,28 +83,34 @@ export function connectionTargetRepository(transaction: DatabaseTransaction, own
       await lock();
       if (!selection.task) return undefined;
       if (!(await currentTask(selection))) throw new Error("Task changed.");
-      const rows = await transaction.execute<{ document: unknown }>(sql`
-        SELECT document FROM winston.task_connection_targets WHERE owner_id = ${ownerId}::uuid
-          AND task_id = ${selection.task.id}::uuid AND task_revision = ${selection.task.revision}
-          AND operation = ${selection.operation}
-      `);
-      return rows.rows[0] ? connectionTargetSchema.parse(rows.rows[0].document) : undefined;
+      const binding = await taskResourceRepository(transaction, ownerId).find(
+        selection.task,
+        selection.operation,
+      );
+      if (!binding) return undefined;
+      if (
+        binding.authorization.target.kind !== "connection" ||
+        binding.authorization.operation !== selection.operation
+      )
+        throw new Error("Task resource binding does not match operation.");
+      return {
+        connectionId: binding.authorization.target.id,
+        calendarId: binding.authorization.target.resource,
+      };
     },
-    // Bind once per task revision. Changing accounts requires steering the task to a new revision.
+    // Worker renewal preserves the selection; changing accounts requires a new task intent.
     async bind(selection: TargetSelection, target: ConnectionTarget) {
       await lock();
       if (!selection.task || !(await currentTask(selection))) throw new Error("Task changed.");
       const parsed = connectionTargetSchema.parse(target);
-      const rows = await transaction.execute<{ document: unknown }>(sql`
-        INSERT INTO winston.task_connection_targets (owner_id, task_id, task_revision, operation, document)
-        VALUES (${ownerId}::uuid, ${selection.task.id}::uuid, ${selection.task.revision}, ${selection.operation}, ${JSON.stringify(parsed)}::jsonb)
-        ON CONFLICT (owner_id, task_id, task_revision, operation) DO UPDATE
-          SET document = winston.task_connection_targets.document
-        RETURNING document
-      `);
-      const stored = connectionTargetSchema.parse(rows.rows[0]?.document);
-      if (stored.connectionId !== parsed.connectionId || stored.calendarId !== parsed.calendarId)
-        throw new Error("Steer the task before changing its target.");
+      await taskResourceRepository(transaction, ownerId).bind({
+        task: selection.task,
+        key: selection.operation,
+        authorization: {
+          operation: selection.operation,
+          target: { kind: "connection", id: parsed.connectionId, resource: parsed.calendarId },
+        },
+      });
     },
   };
 }

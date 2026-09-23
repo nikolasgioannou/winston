@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { authorizationRequestSchema, authorizationSnapshotSchema } from "./authorization";
+import { taskResourceKeySchema } from "./task-resources";
 
 export const actionTaskSchema = z.strictObject({
   id: z.uuid(),
@@ -10,6 +11,7 @@ export const actionRequestSchema = z.strictObject({
   key: z.string().min(1).max(200),
   task: actionTaskSchema,
   authorization: authorizationRequestSchema,
+  bindingKey: taskResourceKeySchema.optional(),
   arguments: z.json().refine((value) => JSON.stringify(value).length <= 100_000),
 });
 export const actionStateSchema = z.enum([

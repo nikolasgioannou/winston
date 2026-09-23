@@ -20,6 +20,7 @@ import { deviceRepository, deviceTokenHash, type DeviceRepository } from "./devi
 import { workspaceRepository, type WorkspaceRepository } from "./workspaces";
 import { actionRepository, type ActionRepository } from "./actions";
 import { artifactRepository, type ArtifactRepository } from "./artifacts";
+import { taskResourceRepository, type TaskResourceRepository } from "./task-resources";
 import {
   deviceCredentialSchema,
   devicePairingTokenSchema,
@@ -43,6 +44,7 @@ export type OwnerTransaction = {
   readonly workspaces: WorkspaceRepository;
   readonly actions: ActionRepository;
   readonly artifacts: ArtifactRepository;
+  readonly taskResources: TaskResourceRepository;
 };
 
 export function createDatabase(options: {
@@ -134,6 +136,7 @@ export function createDatabase(options: {
           workspaces: workspaceRepository(transaction, ownerId),
           actions: actionRepository(transaction, ownerId),
           artifacts: artifactRepository(transaction, ownerId),
+          taskResources: taskResourceRepository(transaction, ownerId),
         });
       });
     },

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
@@ -157,12 +158,40 @@ test("target resolution isolates senders, binds task revisions and never substit
         explicit: first,
         task: { id: task.id, revision: task.revision },
       };
+      await sql`INSERT INTO winston.task_connection_targets (owner_id, task_id, task_revision, operation, document)
+        VALUES (${owner}::uuid, ${task.id}::uuid, ${task.revision}, 'gmail.draft', ${JSON.stringify(first)}::text::jsonb),
+          (${owner}::uuid, ${task.id}::uuid, ${task.revision + 1}, 'gmail.read', ${JSON.stringify(second)}::text::jsonb)`;
+      const migration = await readFile(
+        new URL("../../../adapters/migrations/0022_task_resources.sql", import.meta.url),
+        "utf8",
+      );
+      const backfill = migration.split("--> statement-breakpoint")[1];
+      assert.ok(backfill);
+      await sql.unsafe(backfill);
+      assert.equal(
+        await database.transaction(owner, ({ taskResources }) =>
+          taskResources.find({ id: task.id, revision: task.revision }, "gmail.read"),
+        ),
+        undefined,
+      );
       const bound = await resolve(selection);
       assert.equal(bound.status, "resolved");
       assert.equal(await targets.revalidate(owner, bound.target, signal), true);
       await assert.rejects(resolve({ ...selection, explicit: second }));
+      let running = await database.transaction(owner, (scope) =>
+        scope.tasks.claim(task.id, task.revision),
+      );
+      await sql`UPDATE winston.tasks SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ${task.id}::uuid`;
+      running = await database.transaction(owner, (scope) =>
+        scope.tasks.claim(task.id, running.revision),
+      );
+      const renewed = { ...selection, task: { id: task.id, revision: running.revision } };
+      const retained = await resolve(renewed);
+      assert.equal(retained.status, "resolved");
+      assert.equal(retained.target.connectionId, first.connectionId);
+      await assert.rejects(resolve({ ...renewed, explicit: second }));
       const steered = await database.transaction(owner, (scope) =>
-        scope.tasks.steer(task.id, task.revision, "Use my other account"),
+        scope.tasks.steer(task.id, running.revision, "Use my other account"),
       );
       assert.equal(await targets.revalidate(owner, bound.target, signal), false);
       assert.equal(
