@@ -10,6 +10,8 @@ import {
   type ConnectionStart,
 } from "@winston/contracts/connections";
 import { withTestPostgres } from "../../src/postgres";
+import { createApi } from "../../../../apps/server/src/http/app";
+import { createHandoffOwnerRouter } from "../../../../apps/server/src/http/handoffs";
 
 test("Google connections preserve independent accounts, bind one-time state and reject account replacement", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -52,6 +54,20 @@ test("Google connections preserve independent accounts, bind one-time state and 
     };
     const finish = (state: string) =>
       store.finish(ownerId, "session", state, "fixture-code", new AbortController().signal);
+    const handoffApi = createApi({
+      ownerOrigin: "https://winston.example",
+      groups: {
+        owner: {
+          router: createHandoffOwnerRouter(database, store),
+          authenticate: (request) =>
+            Promise.resolve(
+              request.headers.get("Authorization") === "fixture"
+                ? { kind: "owner" as const, ownerId, sessionId: "session" }
+                : null,
+            ),
+        },
+      },
+    }).app;
     try {
       await database.transaction(ownerId, ({ owners }) => owners.ensure());
       await database.transaction(stranger, ({ owners }) => owners.ensure());
@@ -171,6 +187,80 @@ test("Google connections preserve independent accounts, bind one-time state and 
         undefined,
         "A canceled waiting task cannot be resumed by an old connection callback",
       );
+      for (const outcome of ["connected", "limited", "canceled", "expired"] as const) {
+        const handoff = await database.transaction(ownerId, async ({ tasks, handoffs }) => {
+          const queued = await tasks.create({
+            key: randomUUID(),
+            objective: "Connect Gmail",
+            sourceMessageIds: [],
+          });
+          const worker = await tasks.claim(queued.id, queued.revision);
+          return handoffs.prepare({
+            key: randomUUID(),
+            task: { id: worker.id, revision: worker.revision, generation: worker.generation },
+            target: { kind: "connection", service: "gmail", connectionId: null },
+            detail: "Connect Gmail",
+          });
+        });
+        assert.equal(await store.startHandoff(stranger, "session", handoff.id), null);
+        const path = `/api/owner/${handoff.id}`;
+        assert.equal((await handoffApi.request(path)).status, 401);
+        assert.equal(
+          (await handoffApi.request(path, { headers: { Authorization: "fixture" } })).status,
+          200,
+        );
+        assert.equal(
+          (
+            await handoffApi.request(`${path}/connect`, {
+              method: "POST",
+              headers: { Authorization: "fixture" },
+            })
+          ).status,
+          403,
+        );
+        assert.equal(
+          (
+            await handoffApi.request("/api/owner/invalid/connect", {
+              method: "POST",
+              headers: { Authorization: "fixture", Origin: "https://winston.example" },
+            })
+          ).status,
+          400,
+        );
+        const attempt = await store.startHandoff(ownerId, "session", handoff.id);
+        assert.ok(attempt);
+        const state = new URL(attempt.url).searchParams.get("state");
+        assert.ok(state);
+        if (outcome === "canceled")
+          await database.transaction(ownerId, ({ tasks }) =>
+            tasks.cancel(handoff.taskId, handoff.taskRevision),
+          );
+        if (outcome === "expired") {
+          await sql`UPDATE winston.handoffs SET expires_at = clock_timestamp() - interval '1 second' WHERE id = ${handoff.id}::uuid`;
+          assert.equal(await store.startHandoff(ownerId, "session", handoff.id), null);
+        }
+        grant = {
+          ...grant,
+          subject: randomUUID(),
+          scopes: outcome === "limited" ? ["openid"] : [...googleScopes.gmail],
+        };
+        const linked = await finish(state);
+        const saved = await database.transaction(ownerId, ({ handoffs }) =>
+          handoffs.find(handoff.id),
+        );
+        assert.equal(
+          saved?.state,
+          outcome === "connected"
+            ? "completed"
+            : outcome === "canceled"
+              ? "invalidated"
+              : outcome === "expired"
+                ? "expired"
+                : "pending",
+        );
+        if (outcome === "connected") assert.equal(saved.resolutionId, linked.id);
+        await assert.rejects(finish(state), /invalid or expired/);
+      }
     } finally {
       await database.close();
     }

@@ -1,6 +1,7 @@
 import { createOwnerAuth } from "@winston/adapters/auth";
 import { createDatabase } from "@winston/adapters/database";
 import { createOwnerRouter } from "./http/owner";
+import { createHandoffOwnerRouter } from "./http/handoffs";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
@@ -66,6 +67,7 @@ if (connectionConfig) {
     oauth: createGoogleOAuth(connectionConfig.oauth),
   });
   owner.route("/connections", createConnectionOwnerRouter(connections));
+  owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
   callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
 }
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;

@@ -67,6 +67,19 @@ export function createGoogleConnections(options: {
     },
     list: (ownerId: string) =>
       database.transaction(ownerId, ({ connections }) => connections.list()),
+    async startHandoff(ownerId: string, sessionId: string, id: string) {
+      const attempt = await database.transaction(ownerId, async ({ handoffs, connections }) => {
+        const handoff = await handoffs.find(id);
+        if (handoff?.state !== "pending" || handoff.target.kind !== "connection") return null;
+        const state = await connections.start(sessionId, {
+          service: handoff.target.service,
+          ...(handoff.target.connectionId ? { connectionId: handoff.target.connectionId } : {}),
+          task: { id: handoff.taskId, revision: handoff.taskRevision, blockerId: handoff.id },
+        });
+        return { service: handoff.target.service, state };
+      });
+      return attempt ? { url: oauth.url(attempt.service, attempt.state) } : null;
+    },
     async start(ownerId: string, sessionId: string, intent: ConnectionStart) {
       const state = await database.transaction(ownerId, ({ connections }) =>
         connections.start(sessionId, intent),
@@ -126,6 +139,11 @@ export function createGoogleConnections(options: {
         };
         await scope.connections.complete(challenge, connection);
         const task = await scope.connections.currentTask(challenge.intent.task);
+        if (task)
+          await scope.handoffs.completeVerified(task.blockerId, {
+            kind: "connection",
+            connectionId: id,
+          });
         await scope.events.publish({
           key: `${id}:${String(connection.revision)}`,
           type: "connection.connected",
