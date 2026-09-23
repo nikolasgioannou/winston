@@ -7,33 +7,39 @@ import { ConnectionsPreview, previewConnections } from "./connections-preview";
 import { HandoffPreview, previewHandoff } from "./handoff-preview";
 import { DownloadPreview, previewDownload } from "./download-preview";
 import { ManagementPreview } from "./management-preview";
+import { ManagementShell } from "../management/shell";
+import { AccountView } from "../management/account-view";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
 
   return (
-    <SignInView state="signed-in" onSignIn={() => {}} onSignOut={() => {}} onRetry={() => {}}>
-      <PairingView
-        state={state}
-        onConnect={() => {
-          setState({ kind: "waiting", id: "preview" });
-        }}
-        onConfirm={() => {
-          setState({ kind: "connected", userId: "123456" });
-        }}
-        onDisconnect={() => {
-          setState({ kind: "disconnected" });
-        }}
-        onRetry={() => {
-          setState({ kind: "disconnected" });
-        }}
-      />
-    </SignInView>
+    <ManagementShell preview activeHref="/" onNavigate={() => {}}>
+      <AccountView onSignOut={() => {}}>
+        <PairingView
+          state={state}
+          onConnect={() => {
+            setState({ kind: "waiting", id: "preview" });
+          }}
+          onConfirm={() => {
+            setState({ kind: "connected", userId: "123456" });
+          }}
+          onDisconnect={() => {
+            setState({ kind: "disconnected" });
+          }}
+          onRetry={() => {
+            setState({ kind: "disconnected" });
+          }}
+        />
+      </AccountView>
+    </ManagementShell>
   );
 }
 
 function SignInPreview({ initial }: { initial: SignInState }) {
   const [state, setState] = useState(initial);
+
+  if (state === "signed-in") return <ManagementPreview initial="/" />;
 
   return (
     <SignInView

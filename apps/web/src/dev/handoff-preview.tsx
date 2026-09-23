@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { HandoffView, type HandoffState } from "../handoffs/handoff-view";
 import type { Handoff } from "@winston/contracts/handoffs";
-import { SignInView } from "../auth/sign-in-view";
+import { ManagementShell } from "../management/shell";
 
 export const previewHandoff: Handoff = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -26,7 +26,7 @@ export function HandoffPreview({
 }) {
   const [state, setState] = useState(initial);
   return (
-    <SignInView state="signed-in" onSignIn={() => {}} onSignOut={() => {}} onRetry={() => {}}>
+    <ManagementShell preview activeHref="/handoffs/preview" onNavigate={() => {}}>
       <HandoffView
         state={state}
         busy={busy}
@@ -45,6 +45,6 @@ export function HandoffPreview({
           });
         }}
       />
-    </SignInView>
+    </ManagementShell>
   );
 }

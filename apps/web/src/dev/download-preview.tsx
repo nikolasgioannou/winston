@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DownloadView, type DownloadState } from "../files/download-view";
-import { SignInView } from "../auth/sign-in-view";
+import { ManagementShell } from "../management/shell";
 
 export const previewDownload = {
   kind: "ready" as const,
@@ -22,7 +22,7 @@ export function DownloadPreview({
   const [state, setState] = useState(initial);
   const [downloading, setDownloading] = useState(busy);
   return (
-    <SignInView state="signed-in" onSignIn={() => {}} onSignOut={() => {}} onRetry={() => {}}>
+    <ManagementShell preview activeHref="/files/preview" onNavigate={() => {}}>
       <DownloadView
         state={state}
         busy={downloading}
@@ -34,6 +34,6 @@ export function DownloadPreview({
           setState(previewDownload);
         }}
       />
-    </SignInView>
+    </ManagementShell>
   );
 }
