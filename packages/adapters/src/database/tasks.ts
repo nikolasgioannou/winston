@@ -10,6 +10,9 @@ import {
 } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
+import { actionTaskSchema, type ActionTask } from "@winston/contracts/actions";
+import { serializeUserMessage, userMessageSchema } from "@winston/contracts/messages";
+import { taskResourceRepository } from "./task-resources";
 
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
@@ -70,6 +73,57 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
   }
 
   return {
+    async runnable(limit = 100) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+        throw new Error("Invalid runnable task page.");
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.tasks WHERE owner_id = ${ownerId}::uuid
+          AND (document->>'state' = 'queued' OR (document->>'state' = 'running' AND leased_until <= clock_timestamp()))
+        ORDER BY id LIMIT ${limit}
+      `);
+      return rows.rows.map((row) => taskSchema.parse(row.document));
+    },
+    async context(input: ActionTask) {
+      const worker = actionTaskSchema.parse(input);
+      const { task, leaseValid } = await current(worker.id, worker.revision);
+      if (!leaseValid || task.state !== "running" || task.generation !== worker.generation)
+        throw new Error("Worker lease is stale or expired.");
+      const rows = await transaction.execute<{ envelope: unknown }>(sql`
+        SELECT envelope FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid
+          AND id IN (SELECT jsonb_array_elements_text(${JSON.stringify(task.sourceMessageIds)}::jsonb)::uuid)
+        ORDER BY provider_sent_at, bot_id, chat_id, provider_message_id
+      `);
+      if (rows.rows.length !== task.sourceMessageIds.length)
+        throw new Error("Task source messages unavailable.");
+      const workspaces = await transaction.execute<{
+        id: string;
+        name: string;
+        revision: number;
+      }>(sql`
+        SELECT w.id, w.name, w.revision FROM winston.workspaces w
+        JOIN winston.workspace_runtimes r ON r.owner_id = w.owner_id AND r.workspace_id = w.id
+        WHERE w.owner_id = ${ownerId}::uuid AND w.state = 'active' ORDER BY w.id LIMIT 100
+      `);
+      return {
+        task,
+        messages: rows.rows.map((row) => {
+          const envelope = userMessageSchema.parse(row.envelope);
+          return { id: envelope.messageId, content: serializeUserMessage(envelope) };
+        }),
+        resources: await taskResourceRepository(transaction, ownerId).list({
+          id: task.id,
+          revision: task.revision,
+        }),
+        workspaces: workspaces.rows,
+      };
+    },
+    async yield(input: ActionTask) {
+      const worker = actionTaskSchema.parse(input);
+      const { task, leaseValid } = await current(worker.id, worker.revision);
+      if (!leaseValid || task.state !== "running" || task.generation !== worker.generation)
+        throw new Error("Worker lease is stale or expired.");
+      return save({ ...task, state: "queued", revision: task.revision + 1 });
+    },
     async find(id: string) {
       const stored = await row(id);
 

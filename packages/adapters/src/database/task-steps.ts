@@ -40,6 +40,24 @@ export function taskStepRepository(transaction: DatabaseTransaction, ownerId: st
   }
 
   return {
+    async recent(input: ActionTask, limit = 100) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+        throw new Error("Invalid checkpoint window.");
+      const { worker, intentRevision } = await current(input);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.task_steps WHERE owner_id = ${ownerId}::uuid
+          AND task_id = ${worker.id}::uuid AND intent_revision = ${intentRevision}
+        ORDER BY sequence DESC LIMIT ${limit + 1}
+      `);
+      return {
+        intentRevision,
+        steps: rows.rows
+          .slice(0, limit)
+          .reverse()
+          .map((row) => taskStepSchema.parse(row.document)),
+        hasEarlier: rows.rows.length > limit,
+      };
+    },
     async prepareWorkspace(input: ActionTask, inputStepId: string, callId: string) {
       const stepId = taskStepSchema.shape.id.parse(inputStepId);
       const { worker, intentRevision } = await current(input);
