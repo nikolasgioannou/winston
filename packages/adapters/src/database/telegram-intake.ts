@@ -101,6 +101,10 @@ export function telegramIntakeRepository(transaction: DatabaseTransaction, owner
   }
   return {
     find,
+    async active(input: TelegramIntake) {
+      const row = await current(input);
+      return Boolean(row && (await message(row)));
+    },
     async discover(botId: number) {
       await lock();
       const rows = await transaction.execute<{ envelope: unknown; payload: unknown }>(sql`

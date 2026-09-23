@@ -12,6 +12,7 @@ import {
   createArtifactReader,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
+import { startFileIntakeRuntime } from "./files/intake-runtime";
 import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
@@ -87,6 +88,7 @@ const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 let telegram: ReturnType<typeof createTelegramStore> | undefined;
 let conversation: Awaited<ReturnType<typeof startConversationRuntime>> | undefined;
 let fileDelivery: ReturnType<typeof startFileDeliveryRuntime> | undefined;
+let fileIntake: ReturnType<typeof startFileIntakeRuntime> | undefined;
 let fileCommands: ReturnType<typeof createFileCommands> | undefined;
 
 if (telegramToken || telegramSecret) {
@@ -96,6 +98,15 @@ if (telegramToken || telegramSecret) {
   const telegramClient = createTelegramClient(telegramToken);
   const bot = await telegramClient.identity();
   if (storage) {
+    fileIntake = startFileIntakeRuntime({
+      database,
+      botId: bot.id,
+      token: telegramToken,
+      artifacts: createArtifactService(database, storage),
+      notice: (code) => {
+        console.error(code);
+      },
+    });
     fileCommands = createFileCommands(database, bot.id);
     fileDelivery = startFileDeliveryRuntime({
       database,
@@ -221,6 +232,7 @@ function shutdown() {
     .then(async () => {
       await conversation?.stop();
       await fileDelivery?.stop();
+      await fileIntake?.stop();
       storage?.close();
       await Promise.all([auth.close(), database.close(), telegram?.close()]);
     })

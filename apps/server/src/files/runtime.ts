@@ -9,8 +9,34 @@ export function startFileDeliveryRuntime(options: {
   read: ReturnType<typeof createArtifactReader>;
   notice: (code: string) => void;
 }) {
-  const shutdown = new AbortController();
   const send = createTelegramDocumentSender(options.token);
+  return startOwnerFileLoop({
+    ...options,
+    async run(ownerId, signal) {
+      const outcome = await deliverTelegramFile(
+        options.database,
+        ownerId,
+        options.botId,
+        options.read,
+        send,
+        signal,
+      );
+      if (["uncertain", "unavailable", "rejected", "lease-lost"].includes(outcome))
+        options.notice(`telegram-file-${outcome}`);
+    },
+    failed: () => {
+      options.notice("telegram-file-delivery-failed");
+    },
+  });
+}
+
+export function startOwnerFileLoop(options: {
+  database: ReturnType<typeof createDatabase>;
+  botId: number;
+  run: (ownerId: string, signal: AbortSignal) => Promise<unknown>;
+  failed: () => void;
+}) {
+  const shutdown = new AbortController();
   const deliveries = new Map<string, Promise<void>>();
   let cursor: string | undefined;
   let active: Promise<void> | undefined;
@@ -20,21 +46,10 @@ export function startFileDeliveryRuntime(options: {
     for (const ownerId of owners) {
       if (shutdown.signal.aborted) return;
       if (deliveries.has(ownerId) || deliveries.size >= 2) continue;
-      const delivery = deliverTelegramFile(
-        options.database,
-        ownerId,
-        options.botId,
-        options.read,
-        send,
-        shutdown.signal,
-      )
-        .then((outcome) => {
-          if (["uncertain", "unavailable", "rejected", "lease-lost"].includes(outcome))
-            options.notice(`telegram-file-${outcome}`);
-        })
-        .catch(() => {
-          options.notice("telegram-file-delivery-failed");
-        })
+      const delivery = options
+        .run(ownerId, shutdown.signal)
+        .then(() => undefined)
+        .catch(options.failed)
         .finally(() => {
           deliveries.delete(ownerId);
         });
@@ -44,9 +59,7 @@ export function startFileDeliveryRuntime(options: {
   const tick = () => {
     if (active || shutdown.signal.aborted) return;
     active = pump()
-      .catch(() => {
-        options.notice("telegram-file-pump-failed");
-      })
+      .catch(options.failed)
       .finally(() => {
         active = undefined;
       });

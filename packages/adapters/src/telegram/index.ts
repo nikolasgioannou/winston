@@ -5,6 +5,7 @@ export { createTelegramSender, type TelegramSendOutcome } from "./send";
 export { splitTelegramText } from "./text";
 export { deliverTelegramNext } from "./deliver";
 export { deliverTelegramFile } from "./deliver-file";
+export { intakeTelegramFile } from "./intake";
 export {
   createTelegramDownloader,
   TelegramDownloadError,

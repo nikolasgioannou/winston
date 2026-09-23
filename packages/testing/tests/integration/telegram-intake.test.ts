@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase, type OwnerTransaction } from "@winston/adapters/database";
-import { createTelegramStore } from "@winston/adapters/telegram";
+import {
+  createTelegramStore,
+  intakeTelegramFile,
+  TelegramDownloadError,
+} from "@winston/adapters/telegram";
 import { withTestPostgres } from "../../src/postgres";
 
 test("attachment intake is durable, leased, edit-safe and owner scoped", async () => {
@@ -143,6 +147,86 @@ test("attachment intake is durable, leased, edit-safe and owner scoped", async (
         (await scope(({ telegramIntake }) => telegramIntake.find(next.id)))?.state,
         "failed",
       );
+
+      await receive(5, "file-four", "Recover this upload");
+      const uploads: string[] = [];
+      let interrupt = true;
+      const service = {
+        async resumeUpload(_owner: string, id: string) {
+          uploads.push(id);
+          if (interrupt) {
+            interrupt = false;
+            throw new Error("Interrupted after object storage accepted the bytes");
+          }
+          return scope(async ({ artifacts }) => {
+            const artifact = await artifacts.find(id);
+            assert.ok(artifact);
+            return artifacts.ready(id, artifact.revision);
+          });
+        },
+      };
+      const download = (id: string, _signal: AbortSignal, expected?: number) => {
+        assert.equal(id, "file-four");
+        assert.equal(expected, 3);
+        return Promise.resolve({
+          bytes: Buffer.from("abc"),
+          size: 3,
+          sha256: createHash("sha256").update("abc").digest("hex"),
+        });
+      };
+      const run = () =>
+        intakeTelegramFile(
+          database,
+          ownerId,
+          botId,
+          download,
+          service,
+          new AbortController().signal,
+        );
+      assert.equal(await run(), "retry");
+      await sql`UPDATE winston.telegram_intake SET available_at = clock_timestamp() WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await run(), "stored");
+      assert.equal(uploads.length, 2);
+      assert.equal(uploads[0], uploads[1]);
+      assert.equal(await run(), "idle");
+      const storedMessage = (await scope(({ conversations }) => conversations.snapshot(10)))
+        .messages[0]?.envelope;
+      assert.ok(storedMessage);
+      // A private object is not yet a path the model can use.
+      assert.equal(storedMessage.metadata.attachments[0]?.state, "pending");
+
+      await receive(6, "file-five", "Too large");
+      assert.equal(
+        await intakeTelegramFile(
+          database,
+          ownerId,
+          botId,
+          () => Promise.reject(new TelegramDownloadError("too_large")),
+          service,
+          new AbortController().signal,
+        ),
+        "too-large",
+      );
+      await receive(7, "file-six", "Replace during download");
+      assert.equal(
+        await intakeTelegramFile(
+          database,
+          ownerId,
+          botId,
+          async () => {
+            await receive(8, "file-seven", "New attachment");
+            return {
+              bytes: Buffer.from("abc"),
+              size: 3,
+              sha256: createHash("sha256").update("abc").digest("hex"),
+            };
+          },
+          service,
+          new AbortController().signal,
+        ),
+        "canceled",
+      );
+      assert.equal(uploads.length, 2);
     } finally {
       await Promise.all([database.close(), telegram.close()]);
     }
