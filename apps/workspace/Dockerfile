@@ -2,8 +2,8 @@ FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52
 WORKDIR /app
 COPY . .
 RUN test ! -e .env.local && test ! -e .git && test ! -e node_modules
-RUN bun install --filter @winston/workspace --frozen-lockfile --ignore-scripts
-RUN bun run --filter @winston/workspace build
+RUN bun install --filter @winston/workspace --filter @winston/cli --frozen-lockfile --ignore-scripts
+RUN bun run --filter @winston/workspace --filter @winston/cli build
 
 FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS runtime
 USER root
@@ -13,11 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends util-linux proc
     && test "$(id -g bun)" = 1000
 WORKDIR /app
 COPY --from=build /app/apps/workspace/dist/ ./
+COPY --from=build /app/apps/cli/dist/main.js ./cli.js
+COPY apps/workspace/winston.sh /usr/local/bin/winston
 COPY apps/workspace/entrypoint.sh /usr/local/bin/workspace-entrypoint
-RUN chown -R root:root /app /usr/local/bin/workspace-entrypoint \
+RUN chown -R root:root /app /usr/local/bin/workspace-entrypoint /usr/local/bin/winston \
     && chmod 0755 /app \
     && chmod 0444 /app/*.js \
-    && chmod 0555 /usr/local/bin/workspace-entrypoint \
+    && chmod 0555 /usr/local/bin/workspace-entrypoint /usr/local/bin/winston \
     && find / -xdev -type f -perm /6000 -exec chmod a-s {} +
 ENV NODE_ENV=production
 EXPOSE 8080

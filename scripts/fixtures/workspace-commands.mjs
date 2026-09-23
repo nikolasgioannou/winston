@@ -32,6 +32,24 @@ const input = (argv, overrides = {}) => ({
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 try {
+  const helpId = randomUUID();
+  const help = await runner.start(helpId, input(["winston", "devices", "--help", "--json"])).result;
+  assert.equal(help.exitCode, 0);
+  const discovery = JSON.parse(readFileSync(join(logsRoot, helpId, "stdout"), "utf8"));
+  assert.equal(discovery.version, 1);
+  assert.equal(discovery.status, "ok");
+  assert.ok(discovery.data.commands.some((command) => command.usage.includes("devices inspect")));
+  const missingAuthority = await runner.start(
+    randomUUID(),
+    input(["winston", "devices", "list", "--json"]),
+  ).result;
+  assert.equal(missingAuthority.exitCode, 3);
+  assert.equal(JSON.parse(missingAuthority.stdout.preview).status, "denied");
+  const immutableCli = await runner.start(
+    randomUUID(),
+    input(["/bin/sh", "-c", "test ! -w /app/cli.js && test ! -w /usr/local/bin/winston"]),
+  ).result;
+  assert.equal(immutableCli.exitCode, 0);
   process.env.WINSTON_SYNTHETIC_SECRET = "must-not-inherit";
   const identity = await runner.start(
     randomUUID(),

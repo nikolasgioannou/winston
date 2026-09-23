@@ -7,10 +7,13 @@ apps/**
 !apps/*/
 apps/*/**
 !apps/*/package.json
+!apps/cli/src/
+!apps/cli/src/**
 !apps/server/src/
 !apps/server/src/**
 !apps/workspace/Dockerfile
 !apps/workspace/entrypoint.sh
+!apps/workspace/winston.sh
 !apps/workspace/src/
 !apps/workspace/src/**
 !apps/web/src/
