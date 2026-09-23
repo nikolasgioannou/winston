@@ -9,6 +9,7 @@
     "./authorization": "./src/authorization.ts",
     "./bursts": "./src/bursts.ts",
     "./capabilities": "./src/capabilities.ts",
+    "./cli": "./src/cli.ts",
     "./commands": "./src/commands.ts",
     "./connections": "./src/connections.ts",
     "./connection-targets": "./src/connection-targets.ts",
