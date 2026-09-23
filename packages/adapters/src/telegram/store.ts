@@ -7,6 +7,7 @@ import { timestampSnapshot } from "@winston/contracts/timezone";
 import { eventRepository } from "../database/events";
 import type { DatabaseTransaction } from "../database/owners";
 import * as schema from "../database/schema";
+import { receiveTelegramApproval } from "./approval";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -104,6 +105,12 @@ export function createTelegramStore(connectionString: string, botId: number) {
     async receive(input: unknown) {
       const receivedAt = new Date();
       const update = telegramUpdateSchema.parse(input);
+      if (update.callback_query) {
+        const query = update.callback_query;
+        return database.transaction((transaction) =>
+          receiveTelegramApproval(transaction, botId, query),
+        );
+      }
       const message = update.message ?? update.edited_message;
       const sender = message?.from;
       if (

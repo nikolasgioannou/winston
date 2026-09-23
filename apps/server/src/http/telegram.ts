@@ -49,13 +49,24 @@ export function createTelegramOwnerRouter(store: TelegramStore, username: string
   return router;
 }
 
-export function createTelegramCallbackRouter(store: TelegramStore) {
+export function createTelegramCallbackRouter(
+  store: TelegramStore,
+  answer: (id: string, text: string) => Promise<void>,
+) {
   const router = new Hono<HttpEnvironment>();
   router.post("/telegram", async (context) => {
     const identity = context.get("identity");
     if (identity.kind !== "callback" || identity.provider !== "telegram")
       throw new RequestError("forbidden");
-    await store.receive(await parseJson(context, telegramUpdateSchema));
+    const result = await store.receive(await parseJson(context, telegramUpdateSchema));
+    if (typeof result === "object") {
+      try {
+        await answer(result.callbackId, result.text);
+      } catch {
+        // The durable decision is already committed; an expired toast cannot undo it.
+        console.error("Telegram callback acknowledgment failed.");
+      }
+    }
 
     return context.json({ ok: true });
   });

@@ -8,6 +8,7 @@ import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "../src/
 test("Telegram callbacks reject forged secrets and owner pairing mutations require an authenticated origin", async () => {
   let received = 0;
   let challenges = 0;
+  const acknowledgments: string[] = [];
   const store: TelegramStore = {
     close: () => Promise.resolve(),
     challenge: () => {
@@ -30,7 +31,10 @@ test("Telegram callbacks reject forged secrets and owner pairing mutations requi
     ownerOrigin: "https://web.example",
     groups: {
       callback: {
-        router: createTelegramCallbackRouter(store),
+        router: createTelegramCallbackRouter(store, (id, text) => {
+          acknowledgments.push(`${id}: ${text}`);
+          return Promise.reject(new Error("Expired callback"));
+        }),
         authenticate: (request) =>
           Promise.resolve(
             verifyTelegramWebhook(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), secret)
@@ -90,4 +94,16 @@ test("Telegram callbacks reject forged secrets and owner pairing mutations requi
     200,
   );
   assert.equal(challenges, 1);
+  store.receive = () => Promise.resolve({ callbackId: "synthetic", text: "Approved." });
+  assert.equal(
+    (
+      await app.request("/callbacks/telegram", {
+        method: "POST",
+        headers: { "X-Telegram-Bot-Api-Secret-Token": secret, "Content-Type": "application/json" },
+        body: JSON.stringify({ update_id: 2 }),
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(acknowledgments, ["synthetic: Approved."]);
 });

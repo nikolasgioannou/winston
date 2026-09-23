@@ -28,8 +28,15 @@ try {
     for (const update of updates) {
       controller.signal.throwIfAborted();
       const result = await store.receive(update);
+      if (typeof result === "object") {
+        try {
+          await client.answerCallback(result.callbackId, result.text);
+        } catch {
+          console.error("Telegram callback acknowledgment failed.");
+        }
+      }
       offset = update.update_id + 1;
-      console.log(JSON.stringify({ result }));
+      console.log(JSON.stringify({ result: typeof result === "object" ? "callback" : result }));
     }
   }
 } catch {

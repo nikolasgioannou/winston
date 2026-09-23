@@ -69,8 +69,17 @@ const messageSchema = z.looseObject({
     .optional(),
 });
 
+export const telegramCallbackQuerySchema = z.object({
+  id: z.string().min(1).max(256),
+  from: z.object({ id: integer, is_bot: z.boolean() }),
+  message: messageSchema.optional(),
+  data: z.string().max(256).optional(),
+});
+export type TelegramCallbackQuery = z.infer<typeof telegramCallbackQuerySchema>;
+
 export const telegramUpdateSchema = z.looseObject({
   update_id: integer,
+  callback_query: telegramCallbackQuerySchema.optional(),
   message: messageSchema.optional(),
   edited_message: messageSchema.optional(),
 });

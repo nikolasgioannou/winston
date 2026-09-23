@@ -79,9 +79,13 @@ if (telegramToken || telegramSecret) {
   if (!telegramToken || !telegramSecret || !/^[A-Za-z0-9_-]{32,256}$/.test(telegramSecret)) {
     throw new Error("Telegram configuration is incomplete.");
   }
-  const bot = await createTelegramClient(telegramToken).identity();
+  const telegramClient = createTelegramClient(telegramToken);
+  const bot = await telegramClient.identity();
   telegram = createTelegramStore(config.connectionString, bot.id);
-  callbacks.route("/", createTelegramCallbackRouter(telegram));
+  callbacks.route(
+    "/",
+    createTelegramCallbackRouter(telegram, (id, text) => telegramClient.answerCallback(id, text)),
+  );
   owner.route("/telegram", createTelegramOwnerRouter(telegram, bot.username));
   if (process.env.OPENROUTER_API_KEY) {
     const directConnectionString =

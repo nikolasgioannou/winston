@@ -45,6 +45,13 @@ export function createTelegramClient(token: string) {
   }
 
   return {
+    async answerCallback(id: string, text: string) {
+      await call(
+        "answerCallbackQuery",
+        { callback_query_id: id, text: text.slice(0, 200) },
+        AbortSignal.timeout(3000),
+      );
+    },
     async identity() {
       return telegramBotSchema.parse(await call("getMe", {}, AbortSignal.timeout(10_000)));
     },
@@ -54,7 +61,7 @@ export function createTelegramClient(token: string) {
         {
           offset,
           timeout: 25,
-          allowed_updates: ["message", "edited_message"],
+          allowed_updates: ["message", "edited_message", "callback_query"],
         },
         AbortSignal.any([signal, AbortSignal.timeout(35_000)]),
       );

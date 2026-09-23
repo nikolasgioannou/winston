@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
+import { createTelegramStore } from "@winston/adapters/telegram";
 import { withTestPostgres } from "../../src/postgres";
 
 test("Telegram approval requires the exact delivered card and current authority", async () => {
@@ -11,6 +12,7 @@ test("Telegram approval requires the exact delivered card and current authority"
     const ownerId = randomUUID();
     const botId = 12345;
     const userId = 123;
+    const store = createTelegramStore(connectionString, botId);
     try {
       await database.transaction(ownerId, ({ owners }) => owners.ensure());
       await sql`INSERT INTO winston.telegram_bindings (owner_id, bot_id, user_id, chat_id) VALUES (${ownerId}::uuid, ${botId}, ${userId}, ${userId})`;
@@ -98,6 +100,36 @@ test("Telegram approval requires the exact delivered card and current authority"
           ?.revision,
         1,
       );
+      const query = {
+        id: "synthetic-callback",
+        from: { id: userId, is_bot: false },
+        data: card.approve,
+        message: {
+          message_id: 90,
+          date: 1,
+          chat: { id: userId, type: "private" },
+          from: { id: botId, is_bot: true, first_name: "Winston" },
+        },
+      };
+      assert.deepEqual(await store.receive({ update_id: 500, callback_query: query }), {
+        callbackId: query.id,
+        text: "Already approved.",
+      });
+      for (const forged of [
+        { ...query, from: { id: 456, is_bot: false } },
+        { ...query, from: { id: userId, is_bot: true } },
+        { ...query, message: { ...query.message, from: { ...query.message.from, id: 456 } } },
+        { ...query, message: { ...query.message, chat: { id: userId, type: "group" } } },
+        { ...query, message: { ...query.message, date: 0 } },
+      ])
+        assert.deepEqual(await store.receive({ update_id: 501, callback_query: forged }), {
+          callbackId: query.id,
+          text: "This approval is no longer available.",
+        });
+      const updates = await sql<
+        { count: number }[]
+      >`SELECT count(*)::int AS count FROM winston.telegram_updates WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(updates[0]?.count, 0);
 
       for (const change of [
         "expired",
@@ -127,6 +159,24 @@ test("Telegram approval requires the exact delivered card and current authority"
           );
         if (change === "unpaired")
           await sql`DELETE FROM winston.telegram_bindings WHERE owner_id = ${ownerId}::uuid`;
+        if (change === "reject") {
+          assert.deepEqual(
+            await store.receive({
+              update_id: 502,
+              callback_query: {
+                ...query,
+                data: next.reject,
+                message: { ...query.message, message_id: 100 },
+              },
+            }),
+            { callbackId: query.id, text: "Rejected." },
+          );
+          assert.equal(
+            (await database.transaction(ownerId, ({ actions }) => actions.find(next.action.id)))
+              ?.state,
+            "denied",
+          );
+        }
         const result = await decide({
           ...callback,
           messageId: 100,
@@ -138,7 +188,7 @@ test("Telegram approval requires the exact delivered card and current authority"
         } else
           assert.deepEqual(result, {
             state: change === "reject" ? "denied" : "invalidated",
-            duplicate: false,
+            duplicate: change === "reject",
           });
         if (change === "denied")
           await database.transaction(ownerId, ({ authorization: policies }) =>
@@ -146,6 +196,7 @@ test("Telegram approval requires the exact delivered card and current authority"
           );
       }
     } finally {
+      await store.close();
       await database.close();
     }
   });
