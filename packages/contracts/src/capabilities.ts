@@ -17,6 +17,7 @@ export const serviceScopeSchema = z.strictObject({
   generation: z.number().int().nonnegative(),
   operation: serviceOperationSchema,
   resourceId: z.uuid(),
+  resourceRevision: z.number().int().nonnegative().optional(),
   credential: z.strictObject({ id: z.uuid(), revision: z.number().int().nonnegative() }).nullable(),
 });
 export const serviceRequestSchema = z.strictObject({

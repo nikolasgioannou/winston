@@ -18,6 +18,7 @@ import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
 import { createAuthorizationOwnerRouter } from "./http/authorization";
 import { createTargetPreferencesRouter } from "./http/connection-targets";
+import { createWorkspaceTaskGroup } from "./http/workspaces";
 import {
   authenticateDevicePairing,
   createDeviceGroup,
@@ -100,6 +101,7 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
+    task: createWorkspaceTaskGroup(database),
     device: createDeviceGroup(database),
     callback: {
       router: callbacks,
