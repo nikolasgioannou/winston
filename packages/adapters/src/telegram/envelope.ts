@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { userMessageSchema, type UserMessage } from "@winston/contracts/messages";
 import type { TelegramUpdate } from "@winston/contracts/telegram";
+import { telegramMedia } from "./media";
 
 // Called only with a durable, owner-authorized provider update and its original receipt snapshot.
 export function telegramEnvelope(input: {
@@ -9,31 +10,29 @@ export function telegramEnvelope(input: {
   conversationId: string;
   sentAt: UserMessage["sentAt"];
   current?: UserMessage;
+  previousUpdate?: TelegramUpdate;
 }): UserMessage {
   const message = input.update.message ?? input.update.edited_message;
   if (!message) throw new Error("Telegram update has no message.");
 
-  const media = message.document ?? message.voice ?? message.audio ?? message.video;
-  const photo = message.photo?.at(-1);
-  const attachmentId = input.current?.metadata.attachments[0]?.id ?? randomUUID();
-  const attachments: UserMessage["metadata"]["attachments"] =
-    media || photo
-      ? [
-          {
-            id: attachmentId,
-            state: "pending",
-            filename:
-              media && "file_name" in media && typeof media.file_name === "string"
-                ? media.file_name
-                : message.voice
-                  ? "voice.ogg"
-                  : photo
-                    ? "photo.jpg"
-                    : "attachment",
-            mediaType: media?.mime_type ?? (photo ? "image/jpeg" : "application/octet-stream"),
-          },
-        ]
-      : [];
+  const media = telegramMedia(input.update);
+  const previousMedia = input.previousUpdate ? telegramMedia(input.previousUpdate) : null;
+  const sameMedia =
+    media !== null &&
+    media.identity === previousMedia?.identity &&
+    media.voice === previousMedia.voice;
+  const previousAttachment = sameMedia ? input.current?.metadata.attachments[0] : undefined;
+  const attachmentId = previousAttachment?.id ?? randomUUID();
+  const attachments: UserMessage["metadata"]["attachments"] = media
+    ? [
+        previousAttachment ?? {
+          id: attachmentId,
+          state: "pending",
+          filename: media.filename,
+          mediaType: media.mediaType,
+        },
+      ]
+    : [];
 
   return userMessageSchema.parse({
     version: 1,
@@ -64,8 +63,15 @@ export function telegramEnvelope(input: {
     },
     metadata: {
       attachments,
-      ...(message.voice ? { transcript: { state: "pending", attachmentId } } : {}),
-      references: [],
+      ...(message.voice
+        ? {
+            transcript:
+              sameMedia && input.current?.metadata.transcript
+                ? input.current.metadata.transcript
+                : { state: "pending", attachmentId },
+          }
+        : {}),
+      references: input.current?.metadata.references ?? [],
     },
   });
 }

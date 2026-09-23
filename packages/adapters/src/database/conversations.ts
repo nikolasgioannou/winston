@@ -142,12 +142,16 @@ export function conversationRepository(transaction: DatabaseTransaction, ownerId
           const current = existing.rows[0];
           if (current?.sourceUpdateId === latest.updateId) return;
 
+          const previousUpdate = current
+            ? candidates.find((candidate) => candidate.updateId === current.sourceUpdateId)?.update
+            : undefined;
           const envelope = telegramEnvelope({
             update: latest.update,
             ownerId,
             conversationId: conversation.id,
             sentAt: first.snapshot,
             ...(current ? { current: userMessageSchema.parse(current.envelope) } : {}),
+            ...(previousUpdate ? { previousUpdate } : {}),
           });
           await transaction.execute(sql`
           INSERT INTO winston.conversation_messages

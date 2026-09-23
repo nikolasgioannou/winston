@@ -81,6 +81,19 @@ test("inbox keeps provider order, pending media and immutable receipt metadata a
         revision: pendingVoice.revision + 1,
         metadata: {
           ...pendingVoice.metadata,
+          attachments: [
+            {
+              id: attachmentId,
+              state: "staged" as const,
+              filename: "voice.ogg",
+              mediaType: "audio/ogg",
+              artifactId: randomUUID(),
+              workspaceId: randomUUID(),
+              path: "/data/home/inbox/voice.ogg",
+              sha256: "a".repeat(64),
+              verifiedAt: new Date().toISOString(),
+            },
+          ],
           transcript: {
             state: "ready" as const,
             attachmentId,
@@ -213,6 +226,42 @@ test("inbox keeps provider order, pending media and immutable receipt metadata a
         ),
         /unavailable/,
       );
+      await telegram.receive({
+        update_id: 80,
+        edited_message: {
+          ...voice.message,
+          text: undefined,
+          caption: "Clarified caption",
+          edit_date: 1_790_000_080,
+          voice: { file_id: "voice-20", mime_type: "audio/ogg" },
+        },
+      });
+      await consumeAll();
+      const captionEdit = (await snapshot()).messages.find(
+        ({ envelope }) => envelope.messageId === pendingVoice.messageId,
+      )?.envelope;
+      assert.ok(captionEdit);
+      assert.deepEqual(captionEdit.metadata.attachments, resolved.metadata.attachments);
+      assert.deepEqual(captionEdit.metadata.transcript, resolved.metadata.transcript);
+      assert.deepEqual(captionEdit.sentAt, pendingVoice.sentAt);
+      assert.equal(captionEdit.input.text, "Clarified caption");
+      await telegram.receive({
+        update_id: 81,
+        edited_message: {
+          ...voice.message,
+          text: undefined,
+          edit_date: 1_790_000_081,
+          voice: { file_id: "replacement", mime_type: "audio/ogg" },
+        },
+      });
+      await consumeAll();
+      const replaced = (await snapshot()).messages.find(
+        ({ envelope }) => envelope.messageId === pendingVoice.messageId,
+      )?.envelope;
+      assert.ok(replaced);
+      assert.equal(replaced.metadata.attachments[0]?.state, "pending");
+      assert.notEqual(replaced.metadata.attachments[0].id, attachmentId);
+      assert.equal(replaced.metadata.transcript?.state, "pending");
     } finally {
       await Promise.all([database.close(), telegram.close()]);
     }
