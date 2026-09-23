@@ -7,6 +7,7 @@ import {
 import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
+import { handoffRepository } from "./handoffs";
 
 export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -40,7 +41,7 @@ export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: 
             return;
           if (event.type !== "task.changed") throw new Error("Unsupported task update event.");
           const update = taskChangedSchema.parse(event.payload);
-          if (update.state !== "succeeded" && update.state !== "failed") return;
+          if (!["succeeded", "failed", "waiting"].includes(update.state)) return;
           const rows = await transaction.execute<{ document: unknown }>(sql`
             SELECT document FROM winston.tasks WHERE owner_id = ${ownerId}::uuid AND id = ${update.taskId}::uuid
           `);
@@ -52,13 +53,23 @@ export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: 
             !task.sourceMessageIds.length
           )
             return;
+          const handoff =
+            task.state === "waiting" && task.blocker?.kind === "connection"
+              ? await handoffRepository(transaction, ownerId).find(task.blocker.referenceId)
+              : null;
+          if (
+            task.state === "waiting" &&
+            (!handoff || !["pending", "expired"].includes(handoff.state))
+          )
+            return;
           const document = taskUpdateSchema.parse({
             id: event.id,
             taskId: task.id,
             revision: task.revision,
             state: task.state,
+            ...(handoff ? { handoffId: handoff.id } : {}),
             objectivePreview: task.objective.slice(0, 500),
-            resultPreview: (task.result ?? "").slice(0, 8000),
+            resultPreview: (handoff?.detail ?? task.result ?? "").slice(0, 8000),
             resultTruncated: (task.result?.length ?? 0) > 8000,
           });
           await transaction.execute(sql`

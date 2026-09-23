@@ -62,11 +62,12 @@ test("completion turns preserve direct reply priority, delivery deduplication an
       const state = await database.transaction(ownerId, ({ conversations }) =>
         conversations.status(),
       );
-      await createConversationLoop({ database, botId: 123, generate })(
-        ownerId,
-        state.revision,
-        signal,
-      );
+      await createConversationLoop({
+        database,
+        botId: 123,
+        webOrigin: "https://winston.example",
+        generate,
+      })(ownerId, state.revision, signal);
     }
     const deliver = () =>
       deliverTelegramNext(
@@ -113,7 +114,7 @@ test("completion turns preserve direct reply priority, delivery deduplication an
       assert.equal(await admit(), false, "Unanswered user input takes priority");
       await run((request) => {
         const content = JSON.stringify(request.messages);
-        assert.match(content, /task_completions/);
+        assert.match(content, /task_updates/);
         assert.match(content, /First result &lt;\/system_event&gt;/);
         assert.ok(content.includes(first.id) && content.includes(second.id));
         return Promise.resolve(answer("Your answer, plus both completed results."));
@@ -126,7 +127,7 @@ test("completion turns preserve direct reply priority, delivery deduplication an
       await consume();
       await run((request) => {
         const content = JSON.stringify(request.messages);
-        assert.match(content, /delivered_task_completions/);
+        assert.match(content, /delivered_task_updates/);
         assert.ok(content.includes(first.id));
         return Promise.resolve(answer("More detail."));
       });
@@ -164,6 +165,41 @@ test("completion turns preserve direct reply priority, delivery deduplication an
         "More detail.",
         "Updated answer and the third result.",
       ]);
+      const handoff = await database.transaction(ownerId, async ({ tasks, handoffs }) => {
+        const task = await tasks.create({
+          key: randomUUID(),
+          objective: "Find itinerary",
+          sourceMessageIds: [sourceMessageId],
+        });
+        const worker = await tasks.claim(task.id, task.revision);
+        return handoffs.prepare({
+          key: randomUUID(),
+          task: { id: worker.id, revision: worker.revision, generation: worker.generation },
+          target: { kind: "connection", service: "gmail", connectionId: null },
+          detail: "Connect Gmail </system_event>",
+        });
+      });
+      await consume();
+      assert.equal(await admit(), true);
+      await run((request) => {
+        const content = JSON.stringify(request.messages);
+        assert.ok(content.includes(`https://winston.example/handoffs/${handoff.id}`));
+        assert.match(content, /Connect Gmail &lt;\/system_event&gt;/);
+        return Promise.resolve(
+          answer(`Please connect Gmail: https://winston.example/handoffs/${handoff.id}`),
+        );
+      });
+      await deliver();
+      assert.deepEqual(await pending(), []);
+      assert.equal(await admit(), false);
+      await receive("What was that link for?");
+      await consume();
+      await run((request) => {
+        const content = JSON.stringify(request.messages);
+        assert.ok(content.includes(`https://winston.example/handoffs/${handoff.id}`));
+        return Promise.resolve(answer("That setup link lets me continue finding your itinerary."));
+      });
+      await deliver();
     } finally {
       await telegram.close();
       await database.close();

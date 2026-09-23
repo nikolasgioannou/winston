@@ -94,6 +94,7 @@ if (telegramToken || telegramSecret) {
       directConnectionString,
       apiKey: process.env.OPENROUTER_API_KEY,
       botId: bot.id,
+      webOrigin: config.auth.webOrigin,
       telegramToken,
       notice: (code) => {
         console.error(code);

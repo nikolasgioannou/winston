@@ -10,6 +10,7 @@ import { turnRoundSchema } from "@winston/contracts/turns";
 import { serializeMemoryContext } from "@winston/contracts/memory";
 import { serializeMessageBurst } from "@winston/contracts/bursts";
 import { conversationTools, executeConversationTool, toolContext } from "./tools";
+import type { TaskUpdate } from "@winston/contracts/task-updates";
 
 type Database = ReturnType<typeof createDatabase>;
 class Superseded extends Error {}
@@ -21,8 +22,20 @@ function xml(text: string) {
 export function createConversationLoop(options: {
   database: Database;
   botId: number;
+  webOrigin?: string;
   generate: (request: ModelRequest) => Promise<ModelResult>;
 }) {
+  function present(updates: TaskUpdate[]) {
+    return updates.map((update) => {
+      if (!update.handoffId) return update;
+      if (!options.webOrigin)
+        throw new Error("Handoff presentation requires the configured web origin.");
+      return {
+        ...update,
+        handoffUrl: new URL(`/handoffs/${update.handoffId}`, options.webOrigin).href,
+      };
+    });
+  }
   return async (ownerId: string, revision: number, signal: AbortSignal) => {
     const { database } = options;
     const controller = new AbortController();
@@ -78,7 +91,7 @@ export function createConversationLoop(options: {
                 ? [
                     {
                       role: "user" as const,
-                      content: `<system_event kind="delivered_task_completions">${xml(JSON.stringify(turn.updates))}</system_event>`,
+                      content: `<system_event kind="delivered_task_updates">${xml(JSON.stringify(present(turn.updates)))}</system_event>`,
                     },
                   ]
                 : []),
@@ -130,7 +143,7 @@ export function createConversationLoop(options: {
         ? serializeMessageBurst({ revision, messageIds: burstIds })
         : "";
       const completions = snapshot.taskUpdates.length
-        ? `<system_event kind="task_completions">${xml(JSON.stringify(snapshot.taskUpdates))}</system_event>`
+        ? `<system_event kind="task_updates">${xml(JSON.stringify(present(snapshot.taskUpdates)))}</system_event>`
         : "";
       const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n<system_event kind="task_resources">${xml(JSON.stringify(snapshot.taskResources))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}\n${completions}`;
       const user = last.messages[0];

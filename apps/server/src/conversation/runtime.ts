@@ -10,6 +10,7 @@ export async function startConversationRuntime(options: {
   directConnectionString: string;
   apiKey: string;
   botId: number;
+  webOrigin: string;
   telegramToken: string;
   notice: (code: string) => void;
 }) {
@@ -23,6 +24,7 @@ export async function startConversationRuntime(options: {
   const conversation = createConversationLoop({
     database,
     botId,
+    webOrigin: options.webOrigin,
     generate: (request) => model.generate(request),
   });
   const send = createTelegramSender(options.telegramToken);
