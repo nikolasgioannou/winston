@@ -149,6 +149,46 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    // Server-side read adapters only. The dispatch token never leaves the API process.
+    async authorizeConnectionRead(input: {
+      id: string;
+      token: string;
+      task: ActionTask;
+      authorization: ActionRequest["authorization"];
+      arguments: ActionRequest["arguments"];
+    }) {
+      const worker = actionTaskSchema.parse(input.task);
+      const expected = actionRequestSchema.parse({
+        key: "read-proof",
+        task: worker,
+        authorization: input.authorization,
+        arguments: input.arguments,
+      });
+      if (
+        expected.authorization.target.kind !== "connection" ||
+        !["gmail.read", "calendar.read"].includes(expected.authorization.operation)
+      )
+        return false;
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested || stored.tokenHash !== hash(input.token))
+        return false;
+      const action = actionRecordSchema.parse(stored.document);
+      if (
+        action.state !== "dispatching" ||
+        canonical(action.request.authorization) !== canonical(expected.authorization) ||
+        canonical(action.request.arguments) !== canonical(expected.arguments) ||
+        canonical(action.dispatchTask) !== canonical(worker)
+      )
+        return false;
+      const current = await task(worker.id);
+      if (!running(current, worker) || !sameIntent(current, action)) return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
     async unresolvedPriorEffect(input: ActionTask) {
       const worker = actionTaskSchema.parse(input);
       await lock();
