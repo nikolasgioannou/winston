@@ -23,6 +23,7 @@ import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./h
 import { createAuthorizationOwnerRouter } from "./http/authorization";
 import { createTargetPreferencesRouter } from "./http/connection-targets";
 import { createWorkspaceTaskGroup } from "./http/workspaces";
+import { createCliTaskGroup } from "./http/cli";
 import {
   authenticateDevicePairing,
   createDeviceGroup,
@@ -99,6 +100,12 @@ if (telegramToken || telegramSecret) {
   }
 }
 
+const workspaceTasks = createWorkspaceTaskGroup(database);
+const cliTasks = createCliTaskGroup(database);
+const taskRouter = new Hono<HttpEnvironment>();
+taskRouter.route("/", workspaceTasks.router);
+taskRouter.route("/", cliTasks.router);
+
 const host = startServer(readConfig(process.env), {
   ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),
   readiness: async () => {
@@ -109,7 +116,11 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
-    task: createWorkspaceTaskGroup(database),
+    task: {
+      router: taskRouter,
+      authenticate: async (request) =>
+        (await workspaceTasks.authenticate(request)) ?? cliTasks.authenticate(request),
+    },
     device: createDeviceGroup(database),
     callback: {
       router: callbacks,

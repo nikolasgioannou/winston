@@ -14,6 +14,20 @@ export function capabilityHash(token: string) {
 
 export function capabilityRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function live(scope: ServiceScope) {
+    if (scope.operation === "gateway:read") {
+      if (
+        scope.kind !== "workspace" ||
+        scope.subjectId !== scope.resourceId ||
+        scope.resourceRevision === undefined ||
+        scope.credential !== null
+      )
+        return false;
+      const workspace = await transaction.execute(sql`
+        SELECT id FROM winston.workspaces WHERE owner_id = ${ownerId}::uuid
+          AND id = ${scope.resourceId}::uuid AND revision = ${scope.resourceRevision} AND state = 'active'
+      `);
+      if (!workspace.rowCount) return false;
+    }
     if (scope.operation === "workspace:observe" || scope.operation === "workspace:cancel") {
       if (
         scope.kind !== "worker" ||

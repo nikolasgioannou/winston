@@ -26,6 +26,14 @@ export const cliResultSchema = z.discriminatedUnion("status", [
 ]);
 
 export type CliRequest = z.infer<typeof cliRequestSchema>;
+export const cliAuthoritySchema = z.strictObject({
+  version: z.literal(1),
+  environment: z.enum(["production", "local"]),
+  workspaceId: z.uuid(),
+  token: z.string().regex(/^wst_[A-Za-z0-9_-]{43}$/),
+  expiresAt: z.iso.datetime(),
+});
+export type CliAuthority = z.infer<typeof cliAuthoritySchema>;
 export type CliResult = z.infer<typeof cliResultSchema>;
 
 export const cliExitCodes = {
