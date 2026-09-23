@@ -72,7 +72,7 @@ export async function deployWorkspaces({
     if (!isDeepStrictEqual(current?.config, previous.config))
       throw new Error("Workspace configuration changed during deployment; no update attempted.");
     log(`Updating workspace ${id}; previous image ${previous.image_ref?.digest ?? "unknown"}.`);
-    run([
+    const update = [
       "machine",
       "update",
       id,
@@ -83,7 +83,26 @@ export async function deployWorkspaces({
       "--yes",
       "--wait-timeout",
       "300",
-    ]);
+    ];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        run(update);
+        break;
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await pause(5000 * (attempt + 1));
+        const observed = list().find((machine) => machine.id === id);
+        if (
+          observed?.state !== "started" ||
+          !isDeepStrictEqual(observed.config, previous.config) ||
+          !isDeepStrictEqual(observed.image_ref, previous.image_ref)
+        )
+          throw new Error(
+            "Workspace changed after an unsuccessful update; inspect before retrying.",
+          );
+        log(`Workspace ${id} remains unchanged; retrying the image update.`);
+      }
+    }
     const after = list().find((machine) => machine.id === id);
     validate(after);
     if (!isDeepStrictEqual(retained(after.config), retained(previous.config)))

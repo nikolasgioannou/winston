@@ -88,7 +88,45 @@ test("failed updates, volume changes, wrong images and failed health stop the ro
     const f = fixture();
     f.fault(fault);
     await assert.rejects(deployWorkspaces(f.options));
-    assert.equal(f.calls.filter((args) => args[1] === "update").length, 1);
+    assert.equal(f.calls.filter((args) => args[1] === "update").length, fault === "update" ? 3 : 1);
+  }
+});
+
+test("an unchanged running workspace can recover from a transient update failure", async () => {
+  const f = fixture();
+  let failures = 0;
+  const delays = [];
+  const run = (args) => {
+    if (args[1] === "update" && failures++ === 0) throw new Error("Transient failure");
+    return f.options.run(args);
+  };
+  await deployWorkspaces({
+    ...f.options,
+    run,
+    pause: async (ms) => {
+      delays.push(ms);
+    },
+  });
+  assert.deepEqual(delays, [5000]);
+  assert.equal(f.calls.filter((args) => args[1] === "update").length, 2);
+});
+
+test("an ambiguous or concurrent update never causes a second machine mutation", async () => {
+  for (const change of ["state", "config", "image"]) {
+    const f = fixture();
+    let updates = 0;
+    const run = (args) => {
+      if (args[1] === "update") {
+        updates += 1;
+        if (change === "state") f.machines[0].state = "starting";
+        if (change === "config") f.machines[0].config.mounts[0].volume = "changed";
+        if (change === "image") f.machines[0].image_ref.digest = `sha256:${"c".repeat(64)}`;
+        throw new Error("Unknown result");
+      }
+      return f.options.run(args);
+    };
+    await assert.rejects(deployWorkspaces({ ...f.options, run }), /changed after/);
+    assert.equal(updates, 1);
   }
 });
 
