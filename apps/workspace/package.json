@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "bun build ./src/main.ts --target=bun --outdir=dist",
+    "test:unit": "bun test tests",
     "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@winston/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

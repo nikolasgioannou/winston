@@ -29,7 +29,7 @@
     "test:models": "bun packages/testing/tests/models/live.ts",
     "test:models:adapter": "bun packages/testing/tests/models/adapter-live.ts",
     "test:tooling": "node --test scripts/*.test.mjs",
-    "test:unit": "bun run --filter @winston/testing --filter @winston/server test:unit",
+    "test:unit": "bun run --filter @winston/testing --filter @winston/server --filter @winston/workspace test:unit",
     "typecheck": "bun run --filter '*' typecheck"
   },
   "devDependencies": {

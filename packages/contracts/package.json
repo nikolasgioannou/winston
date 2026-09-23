@@ -20,7 +20,8 @@
     "./tasks": "./src/tasks.ts",
     "./telegram": "./src/telegram.ts",
     "./timezone": "./src/timezone.ts",
-    "./turns": "./src/turns.ts"
+    "./turns": "./src/turns.ts",
+    "./workspace": "./src/workspace.ts"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"
