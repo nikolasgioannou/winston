@@ -1,4 +1,5 @@
 export { createDatabase, type OwnerTransaction } from "./database";
+export { ScheduleWriteError } from "./schedules";
 export { startTaskSignals } from "./task-signals";
 export { migrateDatabase } from "./migrations";
 export type { Owner, OwnerRepository } from "./owners";

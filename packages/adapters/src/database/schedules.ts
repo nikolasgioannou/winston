@@ -10,6 +10,18 @@ import { nextScheduleOccurrence, recoverScheduleOccurrence } from "../schedules"
 import type { DatabaseTransaction } from "./owners";
 import { taskRepository } from "./tasks";
 
+export class ScheduleWriteError extends Error {
+  constructor(readonly kind: "not_found" | "conflict" | "invalid_request") {
+    super(
+      kind === "not_found"
+        ? "Schedule is unavailable."
+        : kind === "conflict"
+          ? "Schedule revision is stale or its creation key conflicts."
+          : "Schedule has no occurrences.",
+    );
+  }
+}
+
 export function scheduleRepository(transaction: DatabaseTransaction, ownerId: string) {
   const tasks = taskRepository(transaction, ownerId);
   async function lock() {
@@ -43,14 +55,14 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     if (sources.rowCount !== request.sourceMessageIds.length)
       throw new Error("Schedule source messages are unavailable to this owner.");
     const nextRunAt = nextScheduleOccurrence(request.timing, request.timing.startAt, true);
-    if (!nextRunAt) throw new Error("Schedule has no occurrences.");
+    if (!nextRunAt) throw new ScheduleWriteError("invalid_request");
     return { request, nextRunAt };
   }
   async function current(id: string, revision: number) {
     await lock();
     const schedule = await find(id);
-    if (!schedule || schedule.revision !== revision)
-      throw new Error("Schedule is unavailable or its revision is stale.");
+    if (!schedule) throw new ScheduleWriteError("not_found");
+    if (schedule.revision !== revision) throw new ScheduleWriteError("conflict");
     return schedule;
   }
   async function cancelOutstanding(id: string) {
@@ -91,8 +103,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
       `);
       const row = previous.rows[0];
       if (row) {
-        if (row.hash !== hash)
-          throw new Error("Schedule creation key conflicts with its original request.");
+        if (row.hash !== hash) throw new ScheduleWriteError("conflict");
         return scheduleSchema.parse(row.document);
       }
       const schedule = scheduleSchema.parse({

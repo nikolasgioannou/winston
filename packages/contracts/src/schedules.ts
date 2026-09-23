@@ -82,3 +82,15 @@ export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
 });
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;
 export type Schedule = z.infer<typeof scheduleSchema>;
+
+export const ownerScheduleCreateSchema = scheduleRequestSchema
+  .omit({ sourceMessageIds: true })
+  .extend({
+    key: z.string().min(1).max(196),
+  });
+export const ownerScheduleUpdateSchema = ownerScheduleCreateSchema.omit({ key: true }).extend({
+  revision: scheduleSchema.shape.revision,
+});
+export const ownerScheduleCancelSchema = z.strictObject({
+  revision: scheduleSchema.shape.revision,
+});
