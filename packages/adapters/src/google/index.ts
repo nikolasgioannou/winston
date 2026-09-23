@@ -16,6 +16,7 @@ export { createGoogleOAuth, type GoogleOAuth } from "./oauth";
 export { GoogleAccessError } from "./errors";
 export { createConnectionTargets, labelSearchResults } from "./targets";
 export { createGmailReader, GmailReadError } from "./gmail";
+export { createCalendarReader, CalendarReadError } from "./calendar-events";
 
 export function createGoogleConnections(options: {
   database: ReturnType<typeof createDatabase>;
