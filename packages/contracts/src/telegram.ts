@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const telegramApprovalCallbackSchema = z.strictObject({
+  botId: integer,
+  userId: integer,
+  chatId: integer,
+  messageId: integer,
+  token: z.string().regex(/^ap_[A-Za-z0-9_-]{43}$/),
+});
+export type TelegramApprovalCallback = z.infer<typeof telegramApprovalCallbackSchema>;
 export const telegramKeyboardSchema = z.strictObject({
   inline_keyboard: z
     .array(
