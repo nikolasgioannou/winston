@@ -22,7 +22,7 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
         await workspaces.register(workspaceId, "Fixture");
         await workspaces.setState(workspaceId, 0, "active");
       });
-      const start = () =>
+      const start = (size = 3) =>
         scope(async ({ tasks, artifacts, telegramFiles }) => {
           const queued = await tasks.create({
             key: randomUUID(),
@@ -33,7 +33,7 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
           const prepared = await artifacts.prepare(randomUUID(), {
             name: "fixture.txt",
             mediaType: "text/plain",
-            size: 3,
+            size,
             sha256: createHash("sha256").update("abc").digest("hex"),
             source: {
               kind: "workspace",
@@ -180,6 +180,30 @@ test("file delivery receipts bind task intent and never retry ambiguous dispatch
           telegramFiles.settle(reclaimed, { state: "sent", messageId: 12 }),
         ),
         true,
+      );
+
+      for (const size of [0, 50_000_001]) {
+        const linked = await start(size);
+        const linkClaim = await scope(({ telegramFiles }) => telegramFiles.claim(botId));
+        assert.ok(linkClaim);
+        assert.equal(linkClaim.id, linked.delivery.id);
+        assert.equal(linkClaim.method, "link");
+        assert.equal(await scope(({ telegramFiles }) => telegramFiles.dispatch(linkClaim)), true);
+        await scope(({ telegramFiles }) => telegramFiles.settle(linkClaim, { state: "uncertain" }));
+        assert.equal(await scope(({ telegramFiles }) => telegramFiles.claim(botId)), undefined);
+      }
+      const expiredLink = await start(0);
+      const expiresDuringPreparation = await scope(({ telegramFiles }) =>
+        telegramFiles.claim(botId),
+      );
+      assert.ok(expiresDuringPreparation);
+      await sql`UPDATE winston.telegram_files SET created_at = clock_timestamp() - interval '25 hours' WHERE id = ${expiredLink.delivery.id}::uuid`;
+      assert.deepEqual(await downloads.inspect(ownerId, expiredLink.delivery.id), {
+        kind: "expired",
+      });
+      assert.equal(
+        await scope(({ telegramFiles }) => telegramFiles.dispatch(expiresDuringPreparation)),
+        false,
       );
 
       const steered = await start();

@@ -27,7 +27,14 @@ test("file workers verify before dispatch and preserve uncertain send receipts",
     },
     object: { id, ownerId, purpose: "artifact", size: 3, sha256: hash },
   };
-  const delivery = { id: randomUUID(), token: randomUUID(), artifactId: id, chatId: "123" };
+  const delivery = {
+    id: randomUUID(),
+    token: randomUUID(),
+    artifactId: id,
+    chatId: "123",
+    name: "fixture.txt",
+    method: "document" as "document" | "link",
+  };
   const events: string[] = [];
   const outcomes: TelegramSendOutcome[] = [];
   let allowed = true;
@@ -93,4 +100,27 @@ test("file workers verify before dispatch and preserve uncertain send receipts",
   sendFails = true;
   assert.equal(await deliverTelegramFile(database, ownerId, 1, read, send, signal), "uncertain");
   assert.equal(outcomes.at(-1)?.state, "uncertain");
+  delivery.method = "link";
+  events.length = 0;
+  const fallback = {
+    webOrigin: "https://winston.example",
+    send(chat: string, text: string) {
+      assert.equal(chat, delivery.chatId);
+      assert.equal(text, `fixture.txt\nDownload: https://winston.example/files/${delivery.id}`);
+      events.push("link");
+      return Promise.resolve({ state: "uncertain" as const });
+    },
+  };
+  assert.equal(
+    await deliverTelegramFile(database, ownerId, 1, read, send, signal, fallback),
+    "uncertain",
+  );
+  assert.deepEqual(events, ["claim", "dispatch", "link", "settle"]);
+  events.length = 0;
+  allowed = false;
+  assert.equal(
+    await deliverTelegramFile(database, ownerId, 1, read, send, signal, fallback),
+    "canceled",
+  );
+  assert.deepEqual(events, ["claim", "dispatch"]);
 });

@@ -139,6 +139,7 @@ if (telegramToken || telegramSecret) {
     });
     fileCommands = createFileCommands(database, bot.id);
     fileDelivery = startFileDeliveryRuntime({
+      webOrigin: config.auth.webOrigin,
       database,
       botId: bot.id,
       token: telegramToken,

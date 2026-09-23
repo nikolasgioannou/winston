@@ -27,6 +27,8 @@ export type TelegramFileDelivery = {
   token: string;
   artifactId: string;
   chatId: string;
+  name: string;
+  method: "document" | "link";
 };
 
 export function telegramFileRepository(transaction: DatabaseTransaction, ownerId: string) {
@@ -45,7 +47,7 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
     `);
     return rows.rows[0];
   }
-  async function eligible(row: FileRow) {
+  async function eligible(row: FileRow, dispatching = false) {
     const rows = await transaction.execute(sql`
       SELECT 1 FROM winston.tasks t JOIN winston.telegram_bindings b ON b.owner_id = t.owner_id
       JOIN winston.artifacts a ON a.owner_id = t.owner_id AND a.id = ${row.artifactId}::uuid
@@ -53,6 +55,11 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
         AND t.intent_revision = ${row.intentRevision} AND t.document->>'state' NOT IN ('canceled', 'failed')
         AND b.bot_id = ${row.botId}::bigint AND b.chat_id = ${row.chatId}::bigint
         AND a.document->>'state' = 'ready'
+        AND (
+          NOT ${dispatching} OR (a.document->'metadata'->>'size')::bigint BETWEEN 1 AND ${maximumTelegramDocumentBytes}
+          OR EXISTS (SELECT 1 FROM winston.telegram_files f WHERE f.owner_id = ${ownerId}::uuid
+            AND f.id = ${row.id}::uuid AND f.created_at > clock_timestamp() - interval '24 hours')
+        )
     `);
     if (!rows.rowCount) return false;
     const snapshot = authorizationSnapshotSchema.parse(row.authorization);
@@ -129,8 +136,6 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
           `workspace:${input.workspaceId}/task:${task.id}/intent:${String(current.intentRevision)}`
       )
         throw new Error("Artifact is unavailable to this task.");
-      if (artifact.object.size === 0 || artifact.object.size > maximumTelegramDocumentBytes)
-        throw new Error("Artifact requires web download delivery.");
       const policy = await authorizationRepository(transaction, ownerId).evaluate({
         operation: "workspace.file.read",
         target: { kind: "workspace", id: input.workspaceId, resource: null },
@@ -167,23 +172,38 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
       `);
       const row = rows.rows[0];
       if (!row) return undefined;
-      if (!(await eligible(row))) {
+      if (!(await eligible(row, true))) {
         await cancel(row.id);
         return undefined;
       }
       const token = randomUUID();
+      const artifact = await artifactRepository(transaction, ownerId).find(row.artifactId);
+      if (artifact?.state !== "ready") {
+        await cancel(row.id);
+        return undefined;
+      }
       await transaction.execute(sql`
         UPDATE winston.telegram_files SET state = 'preparing', lease_token = ${token}::uuid, leased_until = clock_timestamp() + interval '90 seconds'
         WHERE owner_id = ${ownerId}::uuid AND id = ${row.id}::uuid
       `);
-      return { id: row.id, token, artifactId: row.artifactId, chatId: row.chatId };
+      return {
+        id: row.id,
+        token,
+        artifactId: row.artifactId,
+        chatId: row.chatId,
+        name: artifact.metadata.name,
+        method:
+          artifact.object.size === 0 || artifact.object.size > maximumTelegramDocumentBytes
+            ? "link"
+            : "document",
+      };
     },
     async dispatch(delivery: TelegramFileDelivery) {
       await lock();
       const row = await find(delivery.id);
       if (!row || row.state !== "preparing" || row.token !== delivery.token || row.expired)
         return false;
-      if (!(await eligible(row))) {
+      if (!(await eligible(row, true))) {
         await cancel(row.id);
         return false;
       }
