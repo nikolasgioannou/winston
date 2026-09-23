@@ -3,6 +3,9 @@ import { workspaceIdentitySchema } from "@winston/contracts/workspace";
 import { createWorkspaceAuthority } from "./authority";
 import { createWorkspaceHandler } from "./http";
 import { openWorkspaceJournal } from "./journal";
+import { createCommandRunner } from "./processes";
+import { createCommandService } from "./commands";
+import { createCommandHandler } from "./command-http";
 
 if (
   process.platform !== "linux" ||
@@ -39,13 +42,27 @@ if (initialize) {
   process.exit(0);
 }
 journal.recoverInterrupted();
+const runner = createCommandRunner({
+  home: journal.home,
+  logsRoot: "/data/control/commands",
+  supervisorPath: "/app/supervisor.js",
+});
+const commands = createCommandService({ journal, runner, authority });
+const commandHandler = createCommandHandler(identity, commands);
+const inspectionHandler = createWorkspaceHandler({
+  identity,
+  journal,
+  authorize: authority.inspect,
+});
 
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: 8080,
   maxRequestBodySize: 16_384,
   idleTimeout: 10,
-  fetch: createWorkspaceHandler({ identity, journal, authorize: authority.inspect }),
+  async fetch(request) {
+    return (await commandHandler(request)) ?? inspectionHandler(request);
+  },
   error() {
     return Response.json({ error: "workspace_unavailable" }, { status: 503 });
   },
@@ -56,6 +73,7 @@ async function stop() {
   if (stopping) return;
   stopping = true;
   await server.stop(true);
+  await commands.close();
   journal.close();
 }
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

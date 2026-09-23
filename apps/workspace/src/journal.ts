@@ -141,6 +141,19 @@ export function openWorkspaceJournal(options: {
         );
       return updated.changes === 1;
     },
+    uncertain(input: WorkspaceOperation, completionToken: string) {
+      const request = validated(input);
+      return (
+        database
+          .query(
+            `
+        UPDATE operations SET state = 'unknown', completion_token = NULL
+        WHERE id = ? AND request = ? AND state = 'running' AND completion_token = ?
+      `,
+          )
+          .run(request.operationId, JSON.stringify(request), completionToken).changes === 1
+      );
+    },
     // Call only after exclusive runtime ownership is established and old execution has stopped.
     // An uncertain external effect is never retried by recovering its journal entry.
     recoverInterrupted() {

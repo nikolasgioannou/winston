@@ -24,7 +24,7 @@ const environment = [
   "-e",
   `WORKSPACE_ID=${workspaceId}`,
   "-e",
-  "WORKSPACE_AUTHORITY_ORIGIN=https://example.invalid",
+  "WORKSPACE_AUTHORITY_ORIGIN=http://127.0.0.1:9090",
 ];
 
 function docker(...arguments_) {
@@ -117,12 +117,24 @@ try {
     "--read-only",
     "--tmpfs",
     "/tmp",
+    "--network",
+    "none",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--security-opt",
+    "no-new-privileges",
+    "--security-opt",
+    "apparmor=unconfined",
     "--mount",
     `type=volume,source=${volume},target=/data`,
     ...environment,
     image,
   );
   await ready();
+
+  const interruptedCommand = JSON.parse(
+    evaluate(readFileSync("scripts/fixtures/workspace-command-http.mjs", "utf8")),
+  );
 
   assert.throws(
     () => docker("exec", name, "/usr/local/bin/workspace-entrypoint"),
@@ -155,6 +167,12 @@ try {
   docker("kill", name);
   docker("start", name);
   await ready();
+  assert.equal(
+    evaluate(
+      `const {Database}=await import("bun:sqlite");const db=new Database("/data/control/operations.sqlite");console.log(db.query("SELECT state FROM operations WHERE id = ?").get(${JSON.stringify(interruptedCommand.operationId)}).state);db.close();`,
+    ),
+    "unknown",
+  );
   assert.equal(
     evaluate('console.log(await Bun.file("/data/home/persistent.txt").text());', "1000:1000"),
     "retained",
