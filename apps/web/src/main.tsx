@@ -33,13 +33,22 @@ if (import.meta.env.DEV && window.location.pathname === "/__dev/design/frame") {
   );
 } else {
   const { SignIn } = await import("./auth/sign-in");
+  const { readDownloadLocator } = await import("./files/locator");
+  const downloadId = readDownloadLocator();
   const { readHandoffLocator } = await import("./handoffs/locator");
-  const handoffId = readHandoffLocator();
+  const handoffId = downloadId ? null : readHandoffLocator();
   const { HandoffPage } = await import("./handoffs/handoff");
+  const { DownloadPage } = await import("./files/download");
 
   root.render(
     <StrictMode>
-      <SignIn>{handoffId ? <HandoffPage id={handoffId} /> : undefined}</SignIn>
+      <SignIn>
+        {downloadId ? (
+          <DownloadPage id={downloadId} />
+        ) : handoffId ? (
+          <HandoffPage id={handoffId} />
+        ) : undefined}
+      </SignIn>
     </StrictMode>,
   );
 }

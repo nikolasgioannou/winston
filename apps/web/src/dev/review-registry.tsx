@@ -5,6 +5,7 @@ import { SignInView, type SignInState } from "../auth/sign-in-view";
 import { PairingView, type PairingState } from "../telegram/pairing-view";
 import { ConnectionsPreview, previewConnections } from "./connections-preview";
 import { HandoffPreview, previewHandoff } from "./handoff-preview";
+import { DownloadPreview, previewDownload } from "./download-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -66,6 +67,37 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "download",
+    label: "File download",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <DownloadPreview initial={previewDownload} />,
+      },
+      ...(["loading", "error", "expired", "unavailable"] as const).map((kind) => ({
+        id: kind,
+        label: kind,
+        fullWidth: true,
+        render: () => <DownloadPreview initial={{ kind }} />,
+      })),
+      {
+        id: "downloading",
+        label: "Preparing download",
+        fullWidth: true,
+        render: () => <DownloadPreview busy initial={previewDownload} />,
+      },
+      {
+        id: "failed",
+        label: "Download failed",
+        fullWidth: true,
+        render: () => <DownloadPreview failed initial={previewDownload} />,
+      },
+    ],
+  },
   {
     id: "handoff",
     label: "Task setup",

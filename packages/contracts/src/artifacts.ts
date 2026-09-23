@@ -44,3 +44,25 @@ export const filePublicationSchema = artifactMetadataSchema.omit({ source: true 
   size: z.number().int().min(0).max(maximumPublicationSize),
 });
 export type FilePublication = z.infer<typeof filePublicationSchema>;
+
+export const deliveryDownloadSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("unavailable") }),
+  z.strictObject({ kind: z.literal("expired") }),
+  z.strictObject({
+    kind: z.literal("ready"),
+    id: z.uuid(),
+    name: artifactMetadataSchema.shape.name,
+    size: artifactMetadataSchema.shape.size,
+    expiresAt: z.iso.datetime(),
+  }),
+]);
+export type DeliveryDownload = z.infer<typeof deliveryDownloadSchema>;
+
+export const signedDownloadSchema = z.strictObject({
+  url: z.url().refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  }),
+  name: artifactMetadataSchema.shape.name,
+  expiresIn: z.number().int().min(1).max(60),
+});
