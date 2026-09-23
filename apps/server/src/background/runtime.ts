@@ -2,6 +2,7 @@ import { startTaskSignals, type createDatabase } from "@winston/adapters/databas
 import type { createJobRuntime } from "@winston/adapters/jobs";
 import type { ModelRequest, ModelResult } from "@winston/adapters/models";
 import { createBackgroundStep } from "./step";
+import { startCancellationRuntime } from "./cancellation";
 
 export async function startBackgroundRuntime(options: {
   database: ReturnType<typeof createDatabase>;
@@ -30,6 +31,7 @@ export async function startBackgroundRuntime(options: {
     throw error;
   }
   let cursor: string | undefined;
+  const cancellations = startCancellationRuntime(options);
   let active: Promise<void> | undefined;
   async function pump() {
     const owners = await database.telegramOwners(options.botId, cursor);
@@ -86,6 +88,7 @@ export async function startBackgroundRuntime(options: {
       clearInterval(timer);
       shutdown.abort();
       await signals.stop();
+      await cancellations.stop();
       await active;
     },
   };

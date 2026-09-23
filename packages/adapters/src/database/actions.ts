@@ -139,6 +139,47 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    async taskEffects(inputId: string) {
+      const id = actionTaskSchema.shape.id.parse(inputId);
+      const counts = await transaction.execute<{ unresolved: number }>(sql`
+        SELECT count(*)::int AS unresolved FROM winston.actions
+        WHERE owner_id = ${ownerId}::uuid AND task_id = ${id}::uuid
+          AND document->>'state' IN ('dispatching', 'unknown')
+      `);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.actions WHERE owner_id = ${ownerId}::uuid AND task_id = ${id}::uuid
+          AND document->'dispatchTask' <> 'null'::jsonb ORDER BY id LIMIT 20
+      `);
+      return {
+        unresolved: counts.rows[0]?.unresolved ?? 0,
+        actions: rows.rows.map((row) => {
+          const action = actionRecordSchema.parse(row.document);
+          return {
+            id: action.id,
+            state: action.state,
+            outcome: action.outcome
+              ? { ...action.outcome, detail: action.outcome.detail.slice(0, 2000) }
+              : null,
+            detailTruncated: (action.outcome?.detail.length ?? 0) > 2000,
+          };
+        }),
+      };
+    },
+    async stoppedWorkspaceCommands(afterId = "00000000-0000-0000-0000-000000000000") {
+      const cursor = actionRecordSchema.shape.id.parse(afterId);
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT a.document FROM winston.actions a
+        JOIN winston.tasks t ON t.owner_id = a.owner_id AND t.id = a.task_id
+        WHERE a.owner_id = ${ownerId}::uuid AND a.id > ${cursor}::uuid
+          AND a.document->>'state' IN ('dispatching', 'unknown')
+          AND a.document->'request'->'authorization'->'target'->>'kind' = 'workspace'
+          AND a.document->'request'->'authorization'->>'operation' = 'workspace.command'
+          AND (a.cancellation_requested OR t.document->>'state' IN ('canceled', 'failed', 'succeeded')
+            OR (a.document->>'intentRevision')::integer <> t.intent_revision)
+        ORDER BY a.id LIMIT 4
+      `);
+      return rows.rows.map((row) => actionRecordSchema.parse(row.document));
+    },
     // Trusted workspace adapter only: the caller must verify the complete returned operation.
     // This records evidence and never grants permission to dispatch or repeat an effect.
     async reconcileWorkspace(input: WorkspaceOperation, value: ActionOutcome) {

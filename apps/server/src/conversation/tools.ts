@@ -22,7 +22,8 @@ export const conversationTools = {
     inputSchema: steer,
   },
   cancel_task: {
-    description: "Cancel an active task at its current revision.",
+    description:
+      "Cancel future work at the current revision. Dispatched effects may still be running; report unresolved outcomes honestly and never claim they were undone.",
     inputSchema: cancel,
   },
 } satisfies ModelTools;
@@ -62,6 +63,7 @@ export async function executeConversationTool(
     if (!task) return { error: "Task unavailable." };
     return {
       ...task,
+      effects: await scope.actions.taskEffects(task.id),
       resources: await scope.taskResources.list({ id: task.id, revision: task.revision }),
     };
   }
@@ -85,7 +87,8 @@ export async function executeConversationTool(
       !["queued", "running", "waiting", "canceled"].includes(task.state)
     )
       return { error: "Task unavailable, finished, or changed. Read its current status first." };
-    return scope.tasks.cancel(input.id, input.revision);
+    const canceled = await scope.tasks.cancel(input.id, input.revision);
+    return { ...canceled, effects: await scope.actions.taskEffects(canceled.id) };
   }
   return { error: "Unknown tool." };
 }

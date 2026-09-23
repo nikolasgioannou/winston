@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { ActionRecord, ActionTask } from "@winston/contracts/actions";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { commandInputSchema, commandResultSchema } from "@winston/contracts/commands";
@@ -7,6 +7,7 @@ import type { WorkspaceRecord } from "@winston/contracts/workspace";
 import type { WorkspaceCommand } from "@winston/contracts/workspace-commands";
 import type { createDatabase } from "../database";
 import { createWorkspaceClient } from "./client";
+import { workspaceOperation as operation } from "./operation";
 
 type Status =
   | { kind: "finished"; action: ActionRecord }
@@ -18,22 +19,6 @@ export type WorkspaceSession = {
   actionId: string;
   poll(signal: AbortSignal): Promise<Status>;
 };
-
-function operation(ownerId: string, action: ActionRecord): WorkspaceCommand["operation"] {
-  if (!action.dispatchTask) throw new Error("Action has no committed dispatch.");
-  return {
-    version: 1,
-    identity: { ownerId, workspaceId: action.request.authorization.target.id },
-    operationId: action.operationId,
-    taskId: action.dispatchTask.id,
-    revision: action.dispatchTask.revision,
-    generation: action.dispatchTask.generation,
-    kind: "command:execute",
-    inputHash: createHash("sha256")
-      .update(canonicalJson(commandInputSchema.parse(action.request.arguments)))
-      .digest("hex"),
-  };
-}
 
 function terminal(action: ActionRecord): Status | undefined {
   if (action.state === "pending")
