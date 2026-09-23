@@ -64,6 +64,7 @@ test("background runtime advances durable steps independently and stops queue ad
       await sql`UPDATE pgboss.job SET state = 'failed', completed_on = clock_timestamp() WHERE id = ${jobId}::uuid AND name = 'winston-background'`;
       runtime = await startBackgroundRuntime({
         database,
+        directConnectionString: connectionString,
         jobs,
         botId: 123,
         notice: () => {},

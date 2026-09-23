@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { createDatabase } from "@winston/adapters/database";
+import type { createDatabase, startTaskSignals } from "@winston/adapters/database";
 import {
   buildModelWindow,
   modelRoles,
@@ -19,6 +19,7 @@ export function createBackgroundStep(options: {
   database: ReturnType<typeof createDatabase>;
   generate: (request: ModelRequest) => Promise<ModelResult>;
   sessions?: ReturnType<typeof createWorkspaceSessions>;
+  signals?: Awaited<ReturnType<typeof startTaskSignals>>;
 }) {
   const { database } = options;
   const sessions = options.sessions ?? createWorkspaceSessions({ database });
@@ -38,6 +39,7 @@ export function createBackgroundStep(options: {
     if (!task) return;
     const worker = { id: task.id, revision: task.revision, generation: task.generation };
     const controller = new AbortController();
+    const unwatch = options.signals?.watch(reference.ownerId, worker, controller);
     const combined = AbortSignal.any([signal, controller.signal]);
     let heartbeat: Promise<void> | undefined;
     const timer = setInterval(() => {
@@ -235,6 +237,7 @@ export function createBackgroundStep(options: {
         await tasks.yield(worker);
       });
     } finally {
+      unwatch?.();
       clearInterval(timer);
       await heartbeat;
     }

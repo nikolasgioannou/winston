@@ -1,10 +1,11 @@
-import type { createDatabase } from "@winston/adapters/database";
+import { startTaskSignals, type createDatabase } from "@winston/adapters/database";
 import type { createJobRuntime } from "@winston/adapters/jobs";
 import type { ModelRequest, ModelResult } from "@winston/adapters/models";
 import { createBackgroundStep } from "./step";
 
 export async function startBackgroundRuntime(options: {
   database: ReturnType<typeof createDatabase>;
+  directConnectionString: string;
   jobs: Pick<ReturnType<typeof createJobRuntime>, "work" | "enqueue" | "inspect">;
   botId: number;
   generate: (request: ModelRequest) => Promise<ModelResult>;
@@ -13,10 +14,21 @@ export async function startBackgroundRuntime(options: {
   const { database, jobs } = options;
   const shutdown = new AbortController();
   const stopping = () => shutdown.signal.aborted;
-  const step = createBackgroundStep({ database, generate: options.generate });
-  await jobs.work("background", (reference, signal) =>
-    step(reference, AbortSignal.any([signal, shutdown.signal])),
-  );
+  const signals = await startTaskSignals({
+    directConnectionString: options.directConnectionString,
+    onDisconnect: () => {
+      options.notice("task-signals-disconnected");
+    },
+  });
+  const step = createBackgroundStep({ database, generate: options.generate, signals });
+  try {
+    await jobs.work("background", (reference, signal) =>
+      step(reference, AbortSignal.any([signal, shutdown.signal])),
+    );
+  } catch (error) {
+    await signals.stop();
+    throw error;
+  }
   let cursor: string | undefined;
   let active: Promise<void> | undefined;
   async function pump() {
@@ -73,6 +85,7 @@ export async function startBackgroundRuntime(options: {
     async stop() {
       clearInterval(timer);
       shutdown.abort();
+      await signals.stop();
       await active;
     },
   };

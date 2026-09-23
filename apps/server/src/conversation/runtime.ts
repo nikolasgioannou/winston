@@ -39,6 +39,7 @@ export async function startConversationRuntime(options: {
     });
     background = await startBackgroundRuntime({
       database,
+      directConnectionString: options.directConnectionString,
       jobs,
       botId,
       generate: (request) => model.generate(request),

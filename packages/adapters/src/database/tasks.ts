@@ -42,6 +42,13 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       payload: { taskId: task.id, revision: task.revision, state: task.state },
       destinations: ["task-runtime", "conversation-updates"],
     });
+    await transaction.execute(
+      sql`SELECT pg_notify('winston_task_revision', ${JSON.stringify({
+        ownerId,
+        id: task.id,
+        revision: task.revision,
+      })})`,
+    );
   }
 
   async function save(task: Task) {
