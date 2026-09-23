@@ -28,6 +28,7 @@ export function parseCommand(args: string[]): ParsedCommand {
       until: { type: "string" },
       timezone: { type: "string" },
       path: { type: "string" },
+      type: { type: "string" },
     },
   });
   const flags = tokens.filter((token) => token.kind === "option").map((token) => token.name);
@@ -43,6 +44,21 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (command.command === "files.publish") {
+    if (flags.some((flag) => !["json", "path", "key", "type"].includes(flag)))
+      throw new Error("Unexpected command options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        path: values.path,
+        key: values.key,
+        mediaType: values.type,
+      }),
+    };
+  }
   if (command.command === "files.inspect") {
     if (flags.some((flag) => flag !== "json" && flag !== "path"))
       throw new Error("Unexpected command options.");

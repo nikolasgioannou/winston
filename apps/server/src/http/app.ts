@@ -60,14 +60,17 @@ export function createApi(options: ApiOptions = {}) {
     });
   });
 
-  app.use(
-    "*",
-    bodyLimit({
-      maxSize: 1_048_576,
-      onError: (context: Context<HttpEnvironment>) =>
-        errorResponse("body_too_large", context.get("requestId")),
-    }),
-  );
+  const jsonLimit = bodyLimit({
+    maxSize: 1_048_576,
+    onError: (context: Context<HttpEnvironment>) =>
+      errorResponse("body_too_large", context.get("requestId")),
+  });
+  app.use("*", (context: Context<HttpEnvironment, string>, next) => {
+    // The authenticated publication handler bounds its binary stream before private storage.
+    if (context.req.method === "POST" && context.req.path === "/api/tasks/files/publish")
+      return next();
+    return jsonLimit(context, next);
+  });
 
   app.get("/health/live", (context) => context.json({ status: "alive" }));
   app.on(

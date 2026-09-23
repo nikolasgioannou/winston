@@ -9,9 +9,9 @@ import {
 } from "@winston/contracts/cli";
 
 // Credential destinations are application-owned, never supplied through arguments or the authority channel.
-const endpoints = {
-  production: "https://winston-628.fly.dev/api/tasks/cli",
-  local: "http://127.0.0.1:3001/api/tasks/cli",
+export const gatewayBaseURLs = {
+  production: "https://winston-628.fly.dev/api/tasks",
+  local: "http://127.0.0.1:3001/api/tasks",
 } as const;
 
 export async function callGateway(
@@ -29,20 +29,27 @@ export async function callGateway(
   const remaining = Date.parse(authority.expiresAt) - Date.now();
   if (remaining <= 0 || remaining > 300_000)
     return { version: 1, status: "denied", message: "Task authority is expired or invalid." };
-  const response = await send(`${endpoints[authority.environment]}${control ? "/control" : ""}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "X-Winston-Workspace": authority.workspaceId,
+  const response = await send(
+    `${gatewayBaseURLs[authority.environment]}/cli${control ? "/control" : ""}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "X-Winston-Workspace": authority.workspaceId,
+      },
+      body: JSON.stringify(request),
+      redirect: "error",
+      credentials: "omit",
+      signal: AbortSignal.timeout(
+        Math.min(cliReadRequestSchema.safeParse(request).success ? 45_000 : 15_000, remaining),
+      ),
     },
-    body: JSON.stringify(request),
-    redirect: "error",
-    credentials: "omit",
-    signal: AbortSignal.timeout(
-      Math.min(cliReadRequestSchema.safeParse(request).success ? 45_000 : 15_000, remaining),
-    ),
-  });
+  );
+  return readGatewayResponse(response);
+}
+
+export async function readGatewayResponse(response: Response): Promise<CliResult> {
   if (response.status === 401 || response.status === 403) {
     await response.body?.cancel();
     return { version: 1, status: "denied", message: "Task authority is unavailable or expired." };

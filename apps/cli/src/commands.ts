@@ -2,6 +2,14 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "files.publish",
+    description:
+      "Publish a completed staged file to private storage. Reuse the same key and unchanged file to recover its artifact reference.",
+    id: false,
+    flags: ["path", "key", "type"],
+    usage: "--path <absolute-file-path> --key <request-key> [--type <media-type>]",
+  },
+  {
     command: "files.inspect",
     description:
       "Check a completed file in /data/home/artifacts and compute its size and checksum.",

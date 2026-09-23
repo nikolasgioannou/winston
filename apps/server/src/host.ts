@@ -1,6 +1,7 @@
 import type { ServerConfig } from "./config";
 import { createApi, type ApiOptions } from "./http/app";
 import { errorResponse } from "./http/errors";
+import { maximumPublicationSize } from "@winston/contracts/artifacts";
 
 export function startServer(config: ServerConfig, options: ApiOptions = {}) {
   const { app, lifecycle } = createApi(options);
@@ -8,7 +9,8 @@ export function startServer(config: ServerConfig, options: ApiOptions = {}) {
     hostname: config.hostname,
     port: config.port,
     fetch: app.fetch,
-    maxRequestBodySize: 1_048_576,
+    maxRequestBodySize: maximumPublicationSize,
+    idleTimeout: 60,
     error: () => errorResponse("internal_error", crypto.randomUUID()),
   });
 

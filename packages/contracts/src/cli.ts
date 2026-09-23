@@ -6,6 +6,13 @@ export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 export const cliRequestSchema = z.discriminatedUnion("command", [
   z.strictObject({
     version: z.literal(1),
+    command: z.literal("files.publish"),
+    path: z.string().min(1).max(4096),
+    key: z.string().min(1).max(100),
+    mediaType: z.string().min(1).max(255).default("application/octet-stream"),
+  }),
+  z.strictObject({
+    version: z.literal(1),
     command: z.literal("files.inspect"),
     path: z.string().min(1).max(4096),
   }),

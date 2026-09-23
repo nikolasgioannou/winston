@@ -10,15 +10,17 @@ import { serviceRequestSchema } from "@winston/contracts/capabilities";
 import type { createDatabase, OwnerTransaction } from "@winston/adapters/database";
 import type { HttpEnvironment, Identity } from "./app";
 import { parseJson, RequestError } from "./errors";
+import { publishFileResponse, type FilePublisher } from "./file-publication";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
-  if (path !== "/api/tasks/cli" && path !== "/api/tasks/cli/control") return null;
+  if (!["/api/tasks/cli", "/api/tasks/cli/control", "/api/tasks/files/publish"].includes(path))
+    return null;
   const result = serviceRequestSchema.safeParse({
     token: request.headers.get("Authorization")?.match(/^Bearer (\S+)$/)?.[1],
     kind: "workspace",
     subjectId: request.headers.get("X-Winston-Workspace"),
-    operation: path.endsWith("/control") ? "gateway:control" : "gateway:read",
+    operation: path === "/api/tasks/cli" ? "gateway:read" : "gateway:control",
     resourceId: request.headers.get("X-Winston-Workspace"),
   });
   return result.success ? result.data : null;
@@ -38,8 +40,15 @@ export function createCliTaskGroup(
     request: CliReadRequest,
     signal: AbortSignal,
   ) => Promise<CliResult>,
+  publish?: FilePublisher,
 ) {
   const router = new Hono<HttpEnvironment>();
+  router.post("/files/publish", async (context) => {
+    const identity = context.get("identity");
+    const authority = credential(context.req.raw);
+    if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
+    return publishFileResponse(context, authority, publish);
+  });
   router.post("/cli/control", async (context) => {
     const identity = context.get("identity");
     const authority = credential(context.req.raw);

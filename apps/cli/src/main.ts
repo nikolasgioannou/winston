@@ -2,6 +2,7 @@ import { runCli } from "./run";
 import { readAuthority } from "./authority";
 import { callGateway } from "./gateway";
 import { snapshotPublishFile } from "./files";
+import { publishFile } from "./file-gateway";
 
 const result = await runCli(process.argv.slice(2), async (request) => {
   if (request.command === "files.inspect") {
@@ -25,6 +26,21 @@ const result = await runCli(process.argv.slice(2), async (request) => {
       status: "denied",
       message: "Run this command with authority supplied by the task runtime.",
     };
+  }
+  if (request.command === "files.publish") {
+    const file = await snapshotPublishFile(request.path);
+    return publishFile(
+      authority,
+      {
+        version: 1,
+        key: request.key,
+        name: file.metadata.name,
+        mediaType: request.mediaType,
+        size: file.metadata.size,
+        sha256: file.metadata.sha256,
+      },
+      file.bytes,
+    );
   }
   return callGateway(authority, request);
 });

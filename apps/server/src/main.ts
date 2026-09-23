@@ -6,7 +6,7 @@ import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
 import { createObjectStorage } from "@winston/adapters/storage";
-import { createArtifactService } from "@winston/adapters/artifacts";
+import { createArtifactService, createWorkspaceFilePublisher } from "@winston/adapters/artifacts";
 import { readStorageConfig } from "./storage-config";
 import { createArtifactOwnerRouter } from "./http/artifacts";
 import {
@@ -117,7 +117,16 @@ const workspaceTasks = createWorkspaceTaskGroup(
   database,
   process.env.NODE_ENV === "production" ? "production" : "local",
 );
-const cliTasks = createCliTaskGroup(database, connectedReads);
+const cliTasks = createCliTaskGroup(
+  database,
+  connectedReads,
+  storage
+    ? createWorkspaceFilePublisher({
+        database,
+        artifacts: createArtifactService(database, storage),
+      })
+    : undefined,
+);
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);
