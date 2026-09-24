@@ -6,6 +6,48 @@ import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 
 test.skipIf(process.platform !== "darwin")(
+  "native command handler preserves text and journal outcomes across cancellation and uncertainty",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "winston-command-handler-"));
+    const child = Bun.spawn(
+      [
+        "xcrun",
+        "swift",
+        "run",
+        "--package-path",
+        "apps/desktop-macos",
+        "CommandHandlerFixture",
+        directory,
+      ],
+      {
+        cwd: fileURLToPath(new URL("../../../", import.meta.url)),
+        env: { ...process.env, WINSTON_PARENT_ONLY: "must-not-leak" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const timeout = setTimeout(() => {
+      child.kill();
+    }, 45_000);
+    try {
+      const [code, output, error] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      assert.equal(code, 0, error);
+      assert.match(output, /Native command handler and journal checks passed/);
+    } finally {
+      clearTimeout(timeout);
+      child.kill();
+      await child.exited;
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
+
+test.skipIf(process.platform !== "darwin")(
   "native commands preserve arguments and environment, bound output and stop only owned processes",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "winston-command-"));
