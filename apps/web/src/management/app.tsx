@@ -18,6 +18,7 @@ import { ManagementShell } from "./shell";
 import { AccountView } from "./account-view";
 import { queryClient } from "./query-client";
 import { Schedules } from "../schedules/schedules";
+import { Responsibilities } from "../responsibilities/responsibilities";
 const ScheduleEditor = lazy(async () => ({
   default: (await import("../schedules/editor")).ScheduleEditor,
 }));
@@ -37,7 +38,14 @@ function Layout() {
       onNavigate={(href) => {
         clearPendingDestination();
         navigate({
-          to: href === "/schedules" ? "/schedules" : href === "/connections" ? "/connections" : "/",
+          to:
+            href === "/responsibilities"
+              ? "/responsibilities"
+              : href === "/schedules"
+                ? "/schedules"
+                : href === "/connections"
+                  ? "/connections"
+                  : "/",
         }).catch(() => {
           window.location.assign(href);
         });
@@ -83,6 +91,11 @@ const schedulesRoute = createRoute({
   path: "/schedules",
   component: Schedules,
 });
+const responsibilitiesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/responsibilities",
+  component: Responsibilities,
+});
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/schedules/$id",
@@ -122,6 +135,7 @@ const router = createRouter({
     accountRoute,
     connectionsRoute,
     schedulesRoute,
+    responsibilitiesRoute,
     editorRoute,
     downloadRoute,
     handoffRoute,

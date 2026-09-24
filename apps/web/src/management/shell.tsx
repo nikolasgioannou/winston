@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, Link, Settings, Sidebar } from "@winston/ui";
+import { Activity, CalendarDays, Link, Settings, Sidebar } from "@winston/ui";
 
 export function ManagementShell({
   activeHref,
@@ -19,6 +19,7 @@ export function ManagementShell({
         { label: "Account", href: "/", icon: Settings },
         { label: "Connections", href: "/connections", icon: Link },
         { label: "Schedules", href: "/schedules", icon: CalendarDays },
+        { label: "Responsibilities", href: "/responsibilities", icon: Activity },
       ]}
       activeHref={activeHref}
       onNavigate={onNavigate}

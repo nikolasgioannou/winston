@@ -39,3 +39,4 @@ export const deviceRenameSchema = deviceRevisionSchema.extend({ name: deviceName
 
 export type DeviceRegistration = z.infer<typeof deviceRegistrationSchema>;
 export type RegisteredDevice = z.infer<typeof registeredDeviceSchema>;
+export const registeredDeviceListSchema = z.array(registeredDeviceSchema).max(1000);
