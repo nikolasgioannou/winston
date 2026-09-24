@@ -281,6 +281,13 @@
       "when": 1790000000039,
       "tag": "0039_responsibility_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790000000040,
+      "tag": "0040_task_activity",
+      "breakpoints": true
     }
   ]
 }

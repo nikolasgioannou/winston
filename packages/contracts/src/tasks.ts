@@ -41,3 +41,28 @@ export const taskOutcomeSchema = z.discriminatedUnion("state", [
 export type Task = z.infer<typeof taskSchema>;
 export type TaskRequest = z.infer<typeof taskRequestSchema>;
 export type TaskOutcome = z.infer<typeof taskOutcomeSchema>;
+
+export const taskActivityCursorSchema = z.strictObject({
+  createdAt: z.iso.datetime({ precision: 6 }),
+  id: z.uuid(),
+});
+export type TaskActivityCursor = z.infer<typeof taskActivityCursorSchema>;
+export const taskActivitySchema = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        revision: taskSchema.shape.revision,
+        createdAt: z.iso.datetime(),
+        updatedAt: z.iso.datetime(),
+        objective: z.string().max(2000),
+        objectiveTruncated: z.boolean(),
+        state: taskSchema.shape.state,
+        waiting: taskBlockerSchema.omit({ referenceId: true }).nullable(),
+        result: z.string().max(4000).nullable(),
+        resultTruncated: z.boolean(),
+      }),
+    )
+    .max(20),
+  next: taskActivityCursorSchema.nullable(),
+});
