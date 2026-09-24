@@ -9,6 +9,7 @@ import { workspaceListSchema } from "@winston/contracts/workspace";
 import { ownerJson } from "../management/api";
 import { ComputersView } from "./computers-view";
 import type { DeviceChange } from "./device-card";
+import { DevicePairing } from "./pairing";
 
 export function Computers() {
   const client = useQueryClient();
@@ -58,7 +59,15 @@ export function Computers() {
   });
   return (
     <ComputersView
-      key={version}
+      pairing={
+        <DevicePairing
+          onRefresh={() => {
+            client.invalidateQueries({ queryKey: ["owner-devices"] }).catch(() => {});
+            client.invalidateQueries({ queryKey: ["owner-device-presence"] }).catch(() => {});
+          }}
+        />
+      }
+      version={version}
       presence={
         presence.isError
           ? { kind: "error" }

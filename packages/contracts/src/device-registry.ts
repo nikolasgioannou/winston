@@ -39,6 +39,11 @@ export const registeredDeviceSchema = deviceRegistrationSchema.extend({
 });
 
 export const devicePairingStartSchema = z.strictObject({ name: deviceNameSchema });
+export const devicePairingChallengeSchema = z.strictObject({
+  id: z.uuid(),
+  secret: devicePairingTokenSchema,
+  expiresAt: z.iso.datetime(),
+});
 export const deviceRevisionSchema = z.strictObject({ revision: z.number().int().nonnegative() });
 export const deviceRenameSchema = deviceRevisionSchema.extend({ name: deviceNameSchema });
 

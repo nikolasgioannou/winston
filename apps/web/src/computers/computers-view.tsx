@@ -1,4 +1,5 @@
 import { Badge, Button } from "@winston/ui";
+import type { ReactNode } from "react";
 import type { RegisteredDevice } from "@winston/contracts/device-registry";
 import type { workspaceListSchema } from "@winston/contracts/workspace";
 import { DeviceCard, type DeviceChange } from "./device-card";
@@ -19,6 +20,8 @@ export function ComputersView({
   saving = false,
   failed = false,
   more = false,
+  pairing,
+  version = 0,
   onRefresh,
   onMore,
   onChange,
@@ -29,6 +32,8 @@ export function ComputersView({
   saving?: boolean;
   failed?: boolean;
   more?: boolean;
+  pairing?: ReactNode;
+  version?: number;
   onRefresh: () => void;
   onMore: () => void;
   onChange: (change: DeviceChange) => void;
@@ -93,6 +98,7 @@ export function ComputersView({
           </section>
           <section className="space-y-4 border-t border-line pt-5" aria-label="Your computers">
             <h2 className="text-sm font-medium">Your computers</h2>
+            {pairing}
             {presence.kind === "error" && state.devices.some((device) => !device.revoked) ? (
               <p role="alert" className="text-sm text-muted">
                 Unable to refresh availability.
@@ -104,7 +110,7 @@ export function ComputersView({
             <div className="divide-y divide-line">
               {state.devices.map((device) => (
                 <DeviceCard
-                  key={device.id}
+                  key={`${device.id}:${String(version)}`}
                   device={device}
                   presence={presence}
                   disabled={busy || failed}

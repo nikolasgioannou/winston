@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { RegisteredDevice } from "@winston/contracts/device-registry";
 import { ComputersView, type ComputersState } from "../computers/computers-view";
 import { ManagementShell } from "../management/shell";
+import { DevicePairingPreview } from "./device-pairing-preview";
 
 const device: RegisteredDevice = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -43,7 +44,14 @@ export function ComputersPreview({
     | "sleeping"
     | "paused"
     | "presence-error"
-    | "presence-loading";
+    | "presence-loading"
+    | "pairing-form"
+    | "pairing-creating"
+    | "pairing-code"
+    | "pairing-expired"
+    | "pairing-error"
+    | "pairing-closing"
+    | "pairing-cancel-error";
 }) {
   const [state, setState] = useState<ComputersState>(
     initial === "loading" || initial === "error"
@@ -57,7 +65,8 @@ export function ComputersPreview({
   return (
     <ManagementShell preview activeHref="/computers" onNavigate={() => {}}>
       <ComputersView
-        key={version}
+        version={version}
+        pairing={<DevicePairingPreview initial={initial} />}
         state={state}
         presence={
           initial === "presence-error"

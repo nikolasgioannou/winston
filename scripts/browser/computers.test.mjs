@@ -207,3 +207,116 @@ test("computer review uses real controls and fits mobile", async ({ page }, test
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("button", { name: "Rename", exact: true })).toBeEnabled();
 });
+
+test("pairing codes survive list refresh and cancel only the observed challenge", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const secret = `wdp_${"p".repeat(43)}`;
+  let creates = 0;
+  let cancels = 0;
+  await page.route("**/api/owner/devices", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/owner/devices/pairing", (route) => {
+    creates++;
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({ name: "Travel Mac" });
+    return route.fulfill({
+      json: { id, secret, expiresAt: new Date(Date.now() + 300_000).toISOString() },
+    });
+  });
+  await page.route(`**/api/owner/devices/pairing/${id}`, (route) => {
+    cancels++;
+    expect(route.request().method()).toBe("DELETE");
+    return cancels === 1 ? route.abort("failed") : route.fulfill({ status: 204 });
+  });
+  await page.goto("/computers");
+  await page.getByRole("button", { name: "Connect a computer", exact: true }).click();
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByText("Enter a computer name.", { exact: true })).toBeVisible();
+  expect(creates).toBe(0);
+  await page.getByLabel("New computer name").fill(" Travel Mac ");
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByLabel("Pairing code", { exact: true })).toHaveValue(secret);
+  await page.getByRole("button", { name: "Copy code", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByLabel("Pairing code", { exact: true })).toHaveValue(secret);
+  expect(page.url()).not.toContain(secret);
+  expect(
+    await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage })),
+  ).not.toContain(secret);
+  await page.getByRole("button", { name: "Close and cancel unused code" }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not confirm cancellation");
+  await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+  expect(cancels).toBe(1);
+  await page.getByRole("button", { name: "Retry cancellation" }).click();
+  await expect(page.getByRole("button", { name: "Connect a computer", exact: true })).toBeVisible();
+  expect(creates).toBe(1);
+  expect(cancels).toBe(2);
+});
+
+test("pairing expires in memory and uncertain or malformed responses never retry automatically", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2030-01-01T12:00:00.000Z") });
+  let creates = 0;
+  await page.route("**/api/owner/devices", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/owner/devices/pairing", (route) => {
+    creates++;
+    if (creates === 2) return route.abort("failed");
+    return route.fulfill({
+      json: {
+        id,
+        secret: creates === 3 ? "malformed-secret" : `wdp_${"p".repeat(43)}`,
+        expiresAt: "2030-01-01T12:05:00.000Z",
+      },
+    });
+  });
+  await page.goto("/computers");
+  await page.getByRole("button", { name: "Connect a computer", exact: true }).click();
+  await page.getByLabel("New computer name").fill("Travel Mac");
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByLabel("Pairing code", { exact: true })).toBeVisible();
+  await page.clock.fastForward(300_001);
+  await expect(page.getByText("Code expired. Create a new one.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not confirm the code");
+  await page.clock.fastForward(60_000);
+  expect(creates).toBe(2);
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not confirm the code");
+  await expect(page.getByLabel("Pairing code", { exact: true })).toHaveCount(0);
+  expect(creates).toBe(3);
+});
+
+test("pairing review states use the real form and fit a mobile viewport", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/__dev/design/frame?page=computers&state=pairing-form");
+  await page.getByLabel("New computer name").fill("Travel Mac");
+  await page.getByRole("button", { name: "Create pairing code", exact: true }).click();
+  await expect(page.getByLabel("Pairing code", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("computer-pairing-mobile.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Close and cancel unused code" }).click();
+  await expect(page.getByRole("button", { name: "Connect a computer", exact: true })).toBeVisible();
+  for (const state of [
+    "pairing-creating",
+    "pairing-closing",
+    "pairing-expired",
+    "pairing-error",
+    "pairing-cancel-error",
+  ]) {
+    await page.goto(`/__dev/design/frame?page=computers&state=${state}`);
+    await expect(
+      page.getByRole("region", { name: "Connect a computer", exact: true }),
+    ).toBeVisible();
+  }
+});

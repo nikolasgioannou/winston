@@ -257,6 +257,13 @@ export const reviewPages: readonly ReviewPage[] = [
           "paused",
           "presence-error",
           "presence-loading",
+          "pairing-form",
+          "pairing-creating",
+          "pairing-code",
+          "pairing-expired",
+          "pairing-error",
+          "pairing-closing",
+          "pairing-cancel-error",
         ] as const
       ).map((state) => ({
         id: state,
