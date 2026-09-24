@@ -8,6 +8,7 @@ import {
   decodeDeviceMessage,
   deviceFrameLimit,
   encodeDeviceMessage,
+  type DeviceMessage,
 } from "@winston/contracts/devices";
 import { errorResponse } from "../http/errors";
 
@@ -23,6 +24,7 @@ export type DeviceSocketData = {
   session: DeviceSessionIdentity;
   expiresAt: string;
   busy: boolean;
+  pending: DeviceMessage[];
   closed: boolean;
   timeout?: ReturnType<typeof setTimeout>;
 };
@@ -49,6 +51,7 @@ export function createDeviceSocketTransport(database: Database) {
   function close(socket: ServerWebSocket<DeviceSocketData>, code: number) {
     if (socket.data.closed) return;
     socket.data.closed = true;
+    socket.data.pending.length = 0;
     clearTimeout(socket.data.timeout);
     sockets.delete(socket);
     socket.close(code);
@@ -84,11 +87,10 @@ export function createDeviceSocketTransport(database: Database) {
     },
     async message(socket, raw) {
       if (isClosed(socket)) return;
-      if (socket.data.busy || typeof raw !== "string") {
+      if (typeof raw !== "string") {
         close(socket, 1008);
         return;
       }
-      socket.data.busy = true;
       try {
         const message = decodeDeviceMessage(raw);
         const session = socket.data.session;
@@ -96,27 +98,49 @@ export function createDeviceSocketTransport(database: Database) {
           message.deviceId !== session.deviceId ||
           message.sessionId !== session.sessionId ||
           message.generation !== session.generation ||
-          message.payload.kind !== "heartbeat"
+          !["heartbeat", "capabilities"].includes(message.payload.kind)
         ) {
           close(socket, 1008);
           return;
         }
-        const status = message.payload.status;
-        const accepted = await database.transaction(socket.data.ownerId, ({ deviceSessions }) =>
-          deviceSessions.heartbeat(session, status),
-        );
-        if (!accepted) {
-          close(socket, 1008);
+        if (socket.data.pending.length >= 32) {
+          close(socket, 1013);
           return;
         }
-        if (isClosed(socket)) return;
-        arm(socket);
-        const response = encodeDeviceMessage({
-          ...message,
-          messageId: crypto.randomUUID(),
-          correlationId: message.messageId,
-        });
-        if (socket.send(response) <= 0) close(socket, 1013);
+        socket.data.pending.push(message);
+      } catch {
+        close(socket, 1008);
+        return;
+      }
+      if (socket.data.busy) return;
+      socket.data.busy = true;
+      try {
+        while (!isClosed(socket)) {
+          const message = socket.data.pending.shift();
+          if (!message) break;
+          const payload = message.payload;
+          const accepted = await database.transaction(socket.data.ownerId, ({ deviceSessions }) => {
+            if (payload.kind === "heartbeat")
+              return deviceSessions.heartbeat(socket.data.session, payload.status);
+            if (payload.kind === "capabilities")
+              return deviceSessions.advertise(socket.data.session, payload.capabilities);
+            return Promise.resolve(false);
+          });
+          if (!accepted) {
+            close(socket, 1008);
+            return;
+          }
+          if (isClosed(socket)) return;
+          if (payload.kind === "heartbeat") {
+            arm(socket);
+            const response = encodeDeviceMessage({
+              ...message,
+              messageId: crypto.randomUUID(),
+              correlationId: message.messageId,
+            });
+            if (socket.send(response) <= 0) close(socket, 1013);
+          }
+        }
       } catch {
         close(socket, 1008);
       } finally {
@@ -157,6 +181,7 @@ export function createDeviceSocketTransport(database: Database) {
         },
         expiresAt: session.expiresAt,
         busy: false,
+        pending: [],
         closed: false,
       };
       if (isStopped() || !server.upgrade(request, { data })) {

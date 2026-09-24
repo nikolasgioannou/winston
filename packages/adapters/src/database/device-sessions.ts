@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { deviceStatusSchema } from "@winston/contracts/devices";
+import { deviceCapabilitySchema, deviceStatusSchema } from "@winston/contracts/devices";
 import {
   deviceCredentialSchema,
   deviceSessionIdentitySchema,
   deviceSessionSchema,
   devicePresenceSchema,
+  deviceRegistrationSchema,
   type DeviceSessionIdentity,
 } from "@winston/contracts/device-registry";
 import type { DatabaseTransaction } from "./owners";
@@ -55,7 +56,8 @@ export function deviceSessionRepository(transaction: DatabaseTransaction, ownerI
         ON CONFLICT (owner_id, device_id) DO UPDATE SET
           session_id = EXCLUDED.session_id, generation = winston.device_sessions.generation + 1,
           credential_hash = EXCLUDED.credential_hash, lease_until = EXCLUDED.lease_until,
-          reported_status = NULL, last_seen_at = NULL, disconnected_at = NULL, presence_revision = 0
+          reported_status = NULL, last_seen_at = NULL, disconnected_at = NULL, presence_revision = 0,
+          capabilities = '[]'::jsonb, capability_revision = 0
         RETURNING device_id AS "deviceId", session_id AS "sessionId", generation::float8 AS generation,
           to_char(lease_until AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "expiresAt"
       `);
@@ -69,6 +71,67 @@ export function deviceSessionRepository(transaction: DatabaseTransaction, ownerI
         destinations: ["device-runtime"],
       });
       return session;
+    },
+    async advertise(input: DeviceSessionIdentity, inputCapabilities: string[]) {
+      const session = deviceSessionIdentitySchema.parse(input);
+      const capabilities = deviceRegistrationSchema.shape.capabilities
+        .parse(inputCapabilities)
+        .sort();
+      await lock();
+      const rows = await transaction.execute<{
+        capabilities: unknown;
+        registered: unknown;
+        revision: number;
+      }>(sql`
+        SELECT s.capabilities, d.capabilities AS registered, s.capability_revision AS revision
+        FROM winston.device_sessions s
+        JOIN winston.devices d ON d.owner_id = s.owner_id AND d.id = s.device_id
+        WHERE s.owner_id = ${ownerId}::uuid AND s.device_id = ${session.deviceId}::uuid
+          AND s.session_id = ${session.sessionId}::uuid AND s.generation = ${session.generation}
+          AND s.disconnected_at IS NULL AND s.lease_until > clock_timestamp()
+          AND d.revoked_at IS NULL AND d.token_hash = s.credential_hash
+      `);
+      const current = rows.rows[0];
+      if (!current) return false;
+      const same = (value: unknown) =>
+        JSON.stringify(deviceRegistrationSchema.shape.capabilities.parse(value).sort()) ===
+        JSON.stringify(capabilities);
+      const registeredChanged = !same(current.registered);
+      if (same(current.capabilities) && !registeredChanged) return true;
+      const revision = current.revision + 1;
+      await transaction.execute(sql`
+        UPDATE winston.device_sessions SET capabilities = ${JSON.stringify(capabilities)}::jsonb,
+          capability_revision = ${revision}
+        WHERE owner_id = ${ownerId}::uuid AND device_id = ${session.deviceId}::uuid
+      `);
+      if (registeredChanged)
+        await transaction.execute(sql`
+        UPDATE winston.devices SET capabilities = ${JSON.stringify(capabilities)}::jsonb, revision = revision + 1
+        WHERE owner_id = ${ownerId}::uuid AND id = ${session.deviceId}::uuid
+      `);
+      await events.publish({
+        key: `${session.sessionId}:capabilities:${String(revision)}`,
+        type: "device.capabilities-changed",
+        payload: { ...session, capabilities },
+        destinations: ["device-runtime"],
+      });
+      return true;
+    },
+    // This reports current technical support, never authorization to perform an action.
+    async supports(input: DeviceSessionIdentity, inputCapability: string) {
+      const session = deviceSessionIdentitySchema.parse(input);
+      const capability = deviceCapabilitySchema.parse(inputCapability);
+      await lock();
+      const rows = await transaction.execute(sql`
+        SELECT 1 FROM winston.device_sessions s
+        JOIN winston.devices d ON d.owner_id = s.owner_id AND d.id = s.device_id
+        WHERE s.owner_id = ${ownerId}::uuid AND s.device_id = ${session.deviceId}::uuid
+          AND s.session_id = ${session.sessionId}::uuid AND s.generation = ${session.generation}
+          AND s.disconnected_at IS NULL AND s.lease_until > clock_timestamp()
+          AND s.reported_status = 'ready' AND s.capabilities @> ${JSON.stringify([capability])}::jsonb
+          AND d.revoked_at IS NULL AND d.token_hash = s.credential_hash
+      `);
+      return rows.rows.length === 1;
     },
     async heartbeat(input: DeviceSessionIdentity, inputStatus: string) {
       const session = deviceSessionIdentitySchema.parse(input);

@@ -5,6 +5,116 @@ import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import type { DeviceSessionIdentity } from "@winston/contracts/device-registry";
 import { withTestPostgres } from "../../src/postgres";
 
+test("session capabilities require a fresh live advertisement and explicit readiness", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    const ownerId = randomUUID();
+    const other = randomUUID();
+    try {
+      for (const id of [ownerId, other])
+        await database.transaction(id, ({ owners }) => owners.ensure());
+      const paired = await database.transaction(ownerId, async ({ devices }) => {
+        const challenge = await devices.start("Capabilities fixture");
+        const result = await devices.pair(challenge.secret, {
+          platform: "macos",
+          appVersion: "0.1.0",
+          protocolVersion: 1,
+          capabilities: ["command"],
+        });
+        assert.ok(result);
+        return result;
+      });
+      const open = async () => {
+        const result = await database.transaction(ownerId, ({ deviceSessions }) =>
+          deviceSessions.open(paired.device.id, paired.credential),
+        );
+        assert.ok(result);
+        return {
+          deviceId: result.deviceId,
+          sessionId: result.sessionId,
+          generation: result.generation,
+        };
+      };
+      const supports = (session: DeviceSessionIdentity, capability = "command", owner = ownerId) =>
+        database.transaction(owner, ({ deviceSessions }) =>
+          deviceSessions.supports(session, capability),
+        );
+      const advertise = (session: DeviceSessionIdentity, capabilities: string[], owner = ownerId) =>
+        database.transaction(owner, ({ deviceSessions }) =>
+          deviceSessions.advertise(session, capabilities),
+        );
+      const heartbeat = (session: DeviceSessionIdentity, status: string) =>
+        database.transaction(ownerId, ({ deviceSessions }) =>
+          deviceSessions.heartbeat(session, status),
+        );
+      const first = await open();
+      assert.equal(await heartbeat(first, "ready"), true);
+      assert.equal(await supports(first), false);
+      assert.equal(await advertise(first, ["file.read", "command"]), true);
+      assert.equal(await supports(first), true);
+      assert.equal(await supports(first, "input"), false);
+      const updated = await database.transaction(ownerId, ({ devices }) =>
+        devices.find(paired.device.id),
+      );
+      assert.equal(updated?.revision, paired.device.revision + 1);
+      assert.deepEqual(updated.capabilities, ["command", "file.read"]);
+      assert.equal(await advertise(first, ["command", "file.read"]), true);
+      assert.deepEqual(
+        await database.transaction(ownerId, ({ devices }) => devices.find(paired.device.id)),
+        updated,
+      );
+      assert.equal(await advertise(first, [], other), false);
+      assert.equal(await supports(first, "command", other), false);
+      await assert.rejects(() => advertise(first, ["command", "command"]));
+      await assert.rejects(() => advertise(first, ["invalid"]));
+      assert.equal(await advertise(first, []), true);
+      assert.equal(await supports(first), false);
+      assert.equal(await advertise(first, ["command"]), true);
+
+      const second = await open();
+      assert.equal(await advertise(first, ["input"]), false);
+      assert.equal(await supports(first), false);
+      assert.equal(await heartbeat(second, "ready"), true);
+      assert.equal(await supports(second), false);
+      assert.equal(await advertise(second, ["command"]), true);
+      for (const status of ["paused", "locked", "sleeping"]) {
+        assert.equal(await heartbeat(second, status), true);
+        assert.equal(await supports(second), false);
+      }
+      assert.equal(await heartbeat(second, "ready"), true);
+      assert.equal(await supports(second), true);
+      const before = await sql<
+        { lease: string }[]
+      >`SELECT lease_until::text AS lease FROM winston.device_sessions WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await advertise(second, ["command", "file.read"]), true);
+      const after = await sql<
+        { lease: string }[]
+      >`SELECT lease_until::text AS lease FROM winston.device_sessions WHERE owner_id = ${ownerId}::uuid`;
+      assert.deepEqual(after, before);
+      await sql`UPDATE winston.device_sessions SET lease_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await supports(second), false);
+      assert.equal(await advertise(second, ["command"]), false);
+
+      const third = await open();
+      assert.equal(await advertise(third, ["command"]), true);
+      assert.equal(await heartbeat(third, "ready"), true);
+      assert.equal(await supports(third), true);
+      const current = await database.transaction(ownerId, ({ devices }) =>
+        devices.find(paired.device.id),
+      );
+      assert.ok(current);
+      await database.transaction(ownerId, ({ devices }) =>
+        devices.revoke(current.id, current.revision),
+      );
+      assert.equal(await supports(third), false);
+      assert.equal(await advertise(third, ["command"]), false);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
 test("proxy sessions fence reconnects and report only fresh explicit availability", async () => {
   await withTestPostgres(async (sql, connectionString) => {
     await migrateDatabase(connectionString);

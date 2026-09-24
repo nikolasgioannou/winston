@@ -47,6 +47,8 @@ test.skipIf(process.platform !== "darwin")(
     const id = "11111111-1111-4111-8111-111111111111";
     let heartbeats = 0;
     const deviceSessions: OwnerTransaction["deviceSessions"] = {
+      advertise: () => Promise.resolve(true),
+      supports: () => Promise.resolve(false),
       open: () =>
         Promise.resolve({
           deviceId: id,
