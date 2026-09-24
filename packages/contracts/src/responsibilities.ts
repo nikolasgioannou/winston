@@ -27,3 +27,17 @@ export const responsibilitySchema = responsibilityPurposeSchema
   });
 export type Responsibility = z.infer<typeof responsibilitySchema>;
 export type ResponsibilityProposal = z.infer<typeof responsibilityProposalSchema>;
+
+export const ownerResponsibilityProposalSchema = responsibilityProposalSchema
+  .omit({ sourceMessageIds: true })
+  .extend({ key: z.string().min(1).max(196) });
+export const ownerResponsibilityRevisionSchema = z.strictObject({
+  revision: responsibilitySchema.shape.revision,
+});
+export const ownerResponsibilityEditSchema = ownerResponsibilityProposalSchema
+  .omit({ key: true })
+  .extend(ownerResponsibilityRevisionSchema.shape);
+export const responsibilityListSchema = z.strictObject({
+  items: z.array(responsibilitySchema).max(100),
+  next: z.uuid().nullable(),
+});

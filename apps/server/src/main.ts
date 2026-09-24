@@ -2,6 +2,7 @@ import { createOwnerAuth } from "@winston/adapters/auth";
 import { createDatabase } from "@winston/adapters/database";
 import { createOwnerRouter } from "./http/owner";
 import { createScheduleOwnerRouter } from "./http/schedules";
+import { createResponsibilityOwnerRouter } from "./http/responsibilities";
 import { createHandoffOwnerRouter } from "./http/handoffs";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
@@ -67,6 +68,7 @@ try {
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
 owner.route("/schedules", createScheduleOwnerRouter(database));
+owner.route("/responsibilities", createResponsibilityOwnerRouter(database));
 const callbacks = new Hono<HttpEnvironment>();
 const storageConfig = readStorageConfig(process.env);
 const storage = storageConfig ? createObjectStorage(storageConfig) : undefined;
