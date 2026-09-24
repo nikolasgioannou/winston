@@ -6,6 +6,8 @@ import {
   ownerScheduleCreateSchema,
   ownerScheduleUpdateSchema,
   ownerScheduleCancelSchema,
+  scheduleRunCursorSchema,
+  type ScheduleRunCursor,
 } from "@winston/contracts/schedules";
 import type { HttpEnvironment } from "./app";
 import { parseJson, RequestError } from "./errors";
@@ -50,6 +52,21 @@ export function createScheduleOwnerRouter(database: {
     const result = await transact(owner.ownerId, (scope) => scope.schedules.find(id));
     if (!result) throw new RequestError("not_found");
     return context.json(result);
+  });
+  router.get("/:id/runs", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const id = identifier(context.req.param("id"));
+    const revision = context.req.query("beforeRevision");
+    const dueAt = context.req.query("beforeDueAt");
+    let before: ScheduleRunCursor | undefined;
+    if (revision !== undefined || dueAt !== undefined) {
+      if (!revision || !/^(0|[1-9]\d*)$/.test(revision)) throw new RequestError("invalid_request");
+      const parsed = scheduleRunCursorSchema.safeParse({ revision: Number(revision), dueAt });
+      if (!parsed.success) throw new RequestError("invalid_request");
+      before = parsed.data;
+    }
+    return context.json(await transact(owner.ownerId, (scope) => scope.schedules.runs(id, before)));
   });
   router.post("/", async (context) => {
     const owner = context.get("identity");

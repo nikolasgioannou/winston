@@ -5,11 +5,13 @@ import {
   scheduleRequestSchema,
   type Schedule,
   type ScheduleRequest,
+  type ScheduleRunCursor,
 } from "@winston/contracts/schedules";
 import { nextScheduleOccurrence, recoverScheduleOccurrence } from "../schedules";
 import type { DatabaseTransaction } from "./owners";
 import { taskRepository } from "./tasks";
 import { responsibilityBindingAllowed } from "./responsibility-bindings";
+import { scheduleRuns } from "./schedule-runs";
 
 export class ScheduleWriteError extends Error {
   constructor(readonly kind: "not_found" | "conflict" | "invalid_request") {
@@ -80,6 +82,10 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
   }
   return {
     find,
+    async runs(id: string, before?: ScheduleRunCursor) {
+      if (!(await find(id))) throw new ScheduleWriteError("not_found");
+      return scheduleRuns(transaction, ownerId, id, before);
+    },
     async findByKey(key: string) {
       const result = await transaction.execute<{ document: unknown }>(sql`
         SELECT document FROM winston.schedules WHERE owner_id = ${ownerId}::uuid AND request_key = ${key}

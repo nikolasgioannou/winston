@@ -39,6 +39,12 @@ test("schedule management checks sessions, origins, revisions and owner provenan
               calls++;
               return work({
                 schedules: {
+                  runs: (id, before) => {
+                    if (id !== current.id) throw new ScheduleWriteError("not_found");
+                    if (before)
+                      assert.deepEqual(before, { revision: 2, dueAt: current.timing.startAt });
+                    return Promise.resolve({ items: [], next: null });
+                  },
                   find: (id) => Promise.resolve(id === current.id ? current : undefined),
                   findByKey: () => Promise.resolve(undefined),
                   list: () => Promise.resolve([current]),
@@ -92,6 +98,7 @@ test("schedule management checks sessions, origins, revisions and owner provenan
       body: JSON.stringify(body),
     });
   assert.equal((await app.request(path)).status, 401);
+  assert.equal((await app.request(`${path}/${current.id}/runs`)).status, 401);
   assert.equal((await mutate("", "POST", input, "https://other.example")).status, 403);
   assert.equal(calls, 0);
   const list = await app.request(path, { headers });
@@ -99,6 +106,27 @@ test("schedule management checks sessions, origins, revisions and owner provenan
   assert.deepEqual(await list.json(), { items: [current], next: null });
   assert.equal((await app.request(`${path}?after=invalid`, { headers })).status, 400);
   assert.equal((await app.request(`${path}/${randomUUID()}`, { headers })).status, 404);
+  const runs = await app.request(`${path}/${current.id}/runs`, { headers });
+  assert.equal(runs.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(await runs.json(), { items: [], next: null });
+  assert.equal((await app.request(`${path}/${randomUUID()}/runs`, { headers })).status, 404);
+  const cursor = new URLSearchParams({ beforeRevision: "2", beforeDueAt: current.timing.startAt });
+  assert.equal(
+    (await app.request(`${path}/${current.id}/runs?${cursor.toString()}`, { headers })).status,
+    200,
+  );
+  for (const query of [
+    "beforeRevision=2",
+    "beforeDueAt=2027-01-01T00:00:00Z",
+    "beforeRevision=-1&beforeDueAt=2027-01-01T00:00:00Z",
+    "beforeRevision=2147483648&beforeDueAt=2027-01-01T00:00:00Z",
+    "beforeRevision=2&beforeDueAt=bad",
+  ]) {
+    assert.equal(
+      (await app.request(`${path}/${current.id}/runs?${query}`, { headers })).status,
+      400,
+    );
+  }
   assert.equal((await mutate("", "POST", input)).status, 200);
   assert.equal(
     (await mutate("", "POST", { ...input, sourceMessageIds: [randomUUID()] })).status,

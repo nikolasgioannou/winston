@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validTimezone } from "./timezone";
+import { taskBlockerSchema, taskSchema } from "./tasks";
 
 const common = {
   startAt: z.iso.datetime(),
@@ -92,6 +93,30 @@ export const scheduleListSchema = z.strictObject({
   items: z.array(scheduleSchema).max(100),
   next: z.uuid().nullable(),
 });
+
+export const scheduleRunCursorSchema = z.strictObject({
+  revision: z.number().int().nonnegative().max(2_147_483_647),
+  dueAt: z.iso.datetime(),
+});
+export type ScheduleRunCursor = z.infer<typeof scheduleRunCursorSchema>;
+
+export const scheduleRunsSchema = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        scheduleRevision: scheduleRunCursorSchema.shape.revision,
+        dueAt: z.iso.datetime(),
+        taskId: z.uuid(),
+        state: taskSchema.shape.state,
+        waiting: taskBlockerSchema.omit({ referenceId: true }).nullable(),
+        result: z.string().max(4000).nullable(),
+        truncated: z.boolean(),
+      }),
+    )
+    .max(20),
+  next: scheduleRunCursorSchema.nullable(),
+});
+export type ScheduleRuns = z.infer<typeof scheduleRunsSchema>;
 
 export const ownerScheduleCreateSchema = scheduleRequestSchema
   .omit({ sourceMessageIds: true })
