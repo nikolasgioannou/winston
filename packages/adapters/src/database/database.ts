@@ -33,6 +33,7 @@ import { connectionTargetRepository, type ConnectionTargetRepository } from "./c
 import { authorizationRepository, type AuthorizationRepository } from "./authorization";
 import { deviceRepository, deviceTokenHash, type DeviceRepository } from "./devices";
 import { deviceSessionRepository } from "./device-sessions";
+import { deviceExecutionRepository } from "./device-executions";
 import { workspaceRepository, type WorkspaceRepository } from "./workspaces";
 import { actionRepository, type ActionRepository } from "./actions";
 import { artifactRepository, type ArtifactRepository } from "./artifacts";
@@ -76,6 +77,7 @@ export type OwnerTransaction = {
   readonly capabilities: CapabilityRepository;
   readonly devices: DeviceRepository;
   readonly deviceSessions: ReturnType<typeof deviceSessionRepository>;
+  readonly deviceExecutions: ReturnType<typeof deviceExecutionRepository>;
   readonly authorization: AuthorizationRepository;
   readonly connectionTargets: ConnectionTargetRepository;
   readonly workspaces: WorkspaceRepository;
@@ -205,6 +207,7 @@ export function createDatabase(options: {
           capabilities: capabilityRepository(transaction, ownerId),
           devices: deviceRepository(transaction, ownerId),
           deviceSessions: deviceSessionRepository(transaction, ownerId),
+          deviceExecutions: deviceExecutionRepository(transaction, ownerId),
           authorization: authorizationRepository(transaction, ownerId),
           connectionTargets: connectionTargetRepository(transaction, ownerId),
           workspaces: workspaceRepository(transaction, ownerId),

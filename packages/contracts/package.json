@@ -16,6 +16,7 @@
     "./connection-targets": "./src/connection-targets.ts",
     "./credentials": "./src/credentials.ts",
     "./devices": "./src/devices.ts",
+    "./device-executions": "./src/device-executions.ts",
     "./device-registry": "./src/device-registry.ts",
     "./events": "./src/events.ts",
     "./gmail": "./src/gmail.ts",
