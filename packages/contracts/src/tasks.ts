@@ -67,3 +67,14 @@ export const taskActivitySchema = z.strictObject({
   next: taskActivityCursorSchema.nullable(),
 });
 export type TaskActivity = z.infer<typeof taskActivitySchema>;
+
+export const taskDetailSchema = taskActivitySchema.shape.items.element
+  .omit({ objectiveTruncated: true, resultTruncated: true })
+  .extend({ objective: taskSchema.shape.objective, result: taskSchema.shape.result });
+export type TaskDetail = z.infer<typeof taskDetailSchema>;
+export const taskHistoryCursorSchema = z.number().int().min(0).max(2147483647);
+export const taskHistorySchema = z.strictObject({
+  items: taskActivitySchema.shape.items,
+  next: taskHistoryCursorSchema.nullable(),
+});
+export type TaskHistory = z.infer<typeof taskHistorySchema>;

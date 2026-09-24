@@ -17,6 +17,7 @@ import { taskResourceRepository } from "./task-resources";
 import { responsibilitySchema } from "@winston/contracts/responsibilities";
 import { responsibilityTaskAllowed, taskResponsibilitySetup } from "./responsibility-bindings";
 import { taskActivity } from "./task-activity";
+import { taskDetail, taskHistory } from "./task-detail";
 
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
@@ -86,6 +87,8 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
 
   return {
     activity: (before?: TaskActivityCursor) => taskActivity(transaction, ownerId, before),
+    detail: (id: string) => taskDetail(transaction, ownerId, id),
+    activityHistory: (id: string, before?: number) => taskHistory(transaction, ownerId, id, before),
     async wakeDue(limit = 100) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 100)
         throw new Error("Invalid retry page.");
