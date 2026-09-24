@@ -78,7 +78,9 @@ export function ActivityView({
                 </time>
               </div>
               <h2 className="text-sm font-medium whitespace-pre-wrap wrap-anywhere">
-                {item.objective}
+                <a href={`/activity/${item.id}`} className="hover:underline underline-offset-4">
+                  {item.objective}
+                </a>
               </h2>
               {item.objectiveTruncated ? (
                 <p className="text-xs text-muted">Request excerpt</p>

@@ -73,6 +73,10 @@ test("canceled schedules retain paged history, waiting details and responsibilit
   await page.getByRole("button", { name: "History", exact: true }).click();
   await expect(page).toHaveURL(`/schedules/${id}/runs`);
   await expect(page.getByText("Waiting for Studio Mac", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View request", exact: true })).toHaveAttribute(
+    "href",
+    `/activity/${run.taskId}`,
+  );
   await expect(page.getByRole("link", { name: "View responsibility" })).toHaveAttribute(
     "href",
     `/responsibilities/${responsibility}`,

@@ -14,6 +14,7 @@ const paths = [
 function allowedPath(path: string) {
   if (paths.includes(path)) return true;
   const id =
+    /^\/activity\/([^/]+)$/.exec(path)?.[1] ??
     /^\/schedules\/([^/]+)(?:\/runs)?$/.exec(path)?.[1] ??
     /^\/responsibilities\/([^/]+)$/.exec(path)?.[1];
   return scheduleSchema.shape.id.safeParse(id).success;

@@ -28,6 +28,9 @@ const Computers = lazy(async () => ({
 const ActivityPage = lazy(async () => ({
   default: (await import("../activity/activity")).ActivityPage,
 }));
+const TaskDetailPage = lazy(async () => ({
+  default: (await import("../activity/detail")).TaskDetailPage,
+}));
 const Permissions = lazy(async () => ({
   default: (await import("../permissions/permissions")).Permissions,
 }));
@@ -50,11 +53,13 @@ function Layout() {
   return (
     <ManagementShell
       activeHref={
-        pathname.startsWith("/responsibilities/")
-          ? "/responsibilities"
-          : pathname.startsWith("/schedules/")
-            ? "/schedules"
-            : pathname
+        pathname.startsWith("/activity/")
+          ? "/activity"
+          : pathname.startsWith("/responsibilities/")
+            ? "/responsibilities"
+            : pathname.startsWith("/schedules/")
+              ? "/schedules"
+              : pathname
       }
       onNavigate={(href) => {
         clearPendingDestination();
@@ -126,6 +131,19 @@ const activityRoute = createRoute({
     </Suspense>
   ),
 });
+const taskDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity/$id",
+  component: TaskDetailRoute,
+});
+function TaskDetailRoute() {
+  const { id } = taskDetailRoute.useParams();
+  return (
+    <Suspense fallback={<p role="status">Loading request…</p>}>
+      <TaskDetailPage key={id} id={id} />
+    </Suspense>
+  );
+}
 const permissionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/permissions",
@@ -234,6 +252,7 @@ const router = createRouter({
     connectionsRoute,
     computersRoute,
     activityRoute,
+    taskDetailRoute,
     permissionsRoute,
     schedulesRoute,
     responsibilitiesRoute,

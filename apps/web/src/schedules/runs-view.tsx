@@ -116,6 +116,12 @@ export function ScheduleRunsView({
                 <p className="text-sm whitespace-pre-wrap wrap-anywhere">{run.result}</p>
               ) : null}
               {run.truncated ? <p className="text-xs text-muted">Result excerpt</p> : null}
+              <a
+                href={`/activity/${run.taskId}`}
+                className="text-sm text-muted underline underline-offset-4 hover:text-ink"
+              >
+                View request
+              </a>
             </article>
           ))}
         </div>
