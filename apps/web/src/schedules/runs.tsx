@@ -3,6 +3,7 @@ import { Button } from "@winston/ui";
 import {
   scheduleSchema,
   scheduleRunsSchema,
+  scheduleSourcesSchema,
   type ScheduleRunCursor,
 } from "@winston/contracts/schedules";
 import { ownerJson } from "../management/api";
@@ -25,8 +26,14 @@ export function ScheduleRuns({ id, onBack }: { id: string; onBack: () => void })
     initialPageParam: null as ScheduleRunCursor | null,
     getNextPageParam: (page) => page.next,
   });
+  const sources = useQuery({
+    queryKey: ["schedule-sources", id, schedule.data?.revision],
+    enabled: !!schedule.data && !schedule.isError,
+    queryFn: ({ signal }) =>
+      ownerJson(`/api/owner/schedules/${id}/sources`, scheduleSourcesSchema, { signal }),
+  });
   function refresh() {
-    Promise.all([schedule.refetch(), runs.refetch()]).catch(() => {});
+    Promise.all([schedule.refetch(), runs.refetch(), sources.refetch()]).catch(() => {});
   }
   if (schedule.isError)
     return (
@@ -61,7 +68,14 @@ export function ScheduleRuns({ id, onBack }: { id: string; onBack: () => void })
             ? { kind: "ready", items: runs.data.pages.flatMap((page) => page.items) }
             : { kind: "loading" }
       }
-      busy={schedule.isFetching || runs.isFetching}
+      busy={schedule.isFetching || runs.isFetching || sources.isFetching}
+      sources={
+        sources.isError || (sources.data && sources.data.revision !== schedule.data.revision)
+          ? { kind: "error" }
+          : sources.data
+            ? { kind: "ready", value: sources.data }
+            : { kind: "loading" }
+      }
       more={runs.hasNextPage}
       onBack={onBack}
       onRefresh={refresh}

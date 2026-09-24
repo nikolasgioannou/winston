@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   scheduleSchema,
   scheduleRequestSchema,
+  scheduleSourcesSchema,
   type Schedule,
   type ScheduleRequest,
   type ScheduleRunCursor,
@@ -12,6 +13,8 @@ import type { DatabaseTransaction } from "./owners";
 import { taskRepository } from "./tasks";
 import { responsibilityBindingAllowed } from "./responsibility-bindings";
 import { scheduleRuns } from "./schedule-runs";
+import { messageSources } from "./message-sources";
+import { userMessageSchema } from "@winston/contracts/messages";
 
 export class ScheduleWriteError extends Error {
   constructor(readonly kind: "not_found" | "conflict" | "invalid_request") {
@@ -51,15 +54,25 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
   async function validate(input: ScheduleRequest) {
     const request = scheduleRequestSchema.parse(input);
     request.sourceMessageIds = [...new Set(request.sourceMessageIds)].sort();
-    const sources = await transaction.execute(sql`
-      SELECT id FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid
+    const sources = await transaction.execute<{ id: string; envelope: unknown }>(sql`
+      SELECT id, envelope FROM winston.conversation_messages WHERE owner_id = ${ownerId}::uuid
         AND id IN (SELECT jsonb_array_elements_text(${JSON.stringify(request.sourceMessageIds)}::jsonb)::uuid)
     `);
     if (sources.rowCount !== request.sourceMessageIds.length)
       throw new Error("Schedule source messages are unavailable to this owner.");
     const nextRunAt = nextScheduleOccurrence(request.timing, request.timing.startAt, true);
     if (!nextRunAt) throw new ScheduleWriteError("invalid_request");
-    return { request, nextRunAt };
+    const revisions = new Map(
+      sources.rows.map((row) => [row.id, userMessageSchema.parse(row.envelope).revision]),
+    );
+    return {
+      request,
+      nextRunAt,
+      sources: request.sourceMessageIds.map((messageId) => ({
+        messageId,
+        revision: revisions.get(messageId) ?? null,
+      })),
+    };
   }
   async function current(id: string, revision: number) {
     await lock();
@@ -82,6 +95,20 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
   }
   return {
     find,
+    async sources(id: string) {
+      const schedule = await find(id);
+      if (!schedule) throw new ScheduleWriteError("not_found");
+      const references = schedule.sourceMessageIds.map((messageId) => ({
+        messageId,
+        revision:
+          schedule.sources?.find((source) => source.messageId === messageId)?.revision ?? null,
+      }));
+      return scheduleSourcesSchema.parse({
+        id,
+        revision: schedule.revision,
+        items: await messageSources(transaction, ownerId, references),
+      });
+    },
     async runs(id: string, before?: ScheduleRunCursor) {
       if (!(await find(id))) throw new ScheduleWriteError("not_found");
       return scheduleRuns(transaction, ownerId, id, before);
@@ -102,7 +129,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     },
     async create(input: ScheduleRequest) {
       await lock();
-      const { request, nextRunAt } = await validate(input);
+      const { request, nextRunAt, sources } = await validate(input);
       if (
         request.responsibility &&
         !(await responsibilityBindingAllowed(transaction, ownerId, request.responsibility))
@@ -126,6 +153,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
         nextRunAt,
         objective: request.objective,
         sourceMessageIds: request.sourceMessageIds,
+        sources,
         timing: request.timing,
         ...(request.responsibility ? { responsibility: request.responsibility } : {}),
       });
@@ -139,7 +167,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
       const schedule = await current(id, revision);
       if (input.responsibility) throw new ScheduleWriteError("conflict");
       if (schedule.state === "canceled") throw new ScheduleWriteError("conflict");
-      const { request, nextRunAt } = await validate({ ...input, key: "update" });
+      const { request, nextRunAt, sources } = await validate({ ...input, key: "update" });
       const timingUnchanged =
         new Date(request.timing.startAt).getTime() ===
           new Date(schedule.timing.startAt).getTime() &&
@@ -152,6 +180,16 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
         ...schedule,
         objective: request.objective,
         sourceMessageIds: request.sourceMessageIds,
+        sources: sources.map((source) =>
+          schedule.sourceMessageIds.includes(source.messageId)
+            ? {
+                ...source,
+                revision:
+                  schedule.sources?.find((previous) => previous.messageId === source.messageId)
+                    ?.revision ?? null,
+              }
+            : source,
+        ),
         timing: request.timing,
         revision: revision + 1,
         state: schedule.state === "paused" ? "paused" : timingUnchanged ? schedule.state : "active",

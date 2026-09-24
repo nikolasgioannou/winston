@@ -5,6 +5,12 @@ export { autonomousEventSchema, metadataSchema, userMessageSchema } from "./sche
 export type { AutonomousEvent, MessageMetadata, UserMessage } from "./schema";
 export { serializeAutonomousEvent, serializeUserMessage } from "./serialize";
 export { isXmlText } from "./xml";
+export {
+  messageSourceReferenceSchema,
+  versionedMessageSourceSchema,
+  messageSourceSchema,
+} from "./sources";
+export type { MessageSource } from "./sources";
 
 type MessageReceipt = Omit<UserMessage, "version" | "kind" | "revision" | "sentAt">;
 

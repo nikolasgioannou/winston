@@ -3,6 +3,7 @@ import type { ScheduleRuns } from "@winston/contracts/schedules";
 import { ScheduleRunsView, type RunsState } from "../schedules/runs-view";
 import { ManagementShell } from "../management/shell";
 import { previewSchedules, SchedulesPreview } from "./schedules-preview";
+import type { SourceInstructionsState } from "../management/source-instructions";
 
 export const previewRuns: ScheduleRuns["items"] = [
   {
@@ -37,12 +38,55 @@ export const previewRuns: ScheduleRuns["items"] = [
 export function ScheduleRunsPreview({
   initial,
 }: {
-  initial: "ready" | "empty" | "loading" | "error";
+  initial:
+    | "ready"
+    | "empty"
+    | "loading"
+    | "error"
+    | "sources-changed"
+    | "sources-error"
+    | "sources-uncaptured";
 }) {
   const [state, setState] = useState<RunsState>(
-    initial === "ready" || initial === "empty"
+    initial !== "loading" && initial !== "error"
       ? { kind: "ready", items: initial === "empty" ? [] : previewRuns }
       : { kind: initial },
+  );
+  const [sources, setSources] = useState<SourceInstructionsState>(
+    initial === "sources-error"
+      ? { kind: "error" }
+      : initial === "loading"
+        ? { kind: "loading" }
+        : {
+            kind: "ready",
+            value: {
+              items:
+                initial === "empty"
+                  ? []
+                  : [
+                      {
+                        messageId: "66666666-6666-4666-8666-666666666666",
+                        ...(initial === "sources-uncaptured"
+                          ? { revision: null, status: "uncaptured" as const }
+                          : initial === "sources-changed"
+                            ? { revision: 0, status: "changed" as const }
+                            : {
+                                revision: 0,
+                                status: "current" as const,
+                                kind: "text" as const,
+                                text: "Remind me to water the plants every Tuesday morning.",
+                                transcript: null,
+                                truncated: false,
+                                sentAt: {
+                                  instant: "2029-12-01T15:00:00.000Z",
+                                  timezone: "America/New_York",
+                                  offset: "-05:00",
+                                },
+                              }),
+                      },
+                    ],
+            },
+          },
   );
   const [back, setBack] = useState(false);
   const schedule = previewSchedules[0];
@@ -59,12 +103,14 @@ export function ScheduleRunsPreview({
       <ScheduleRunsView
         schedule={schedule}
         state={state}
+        sources={sources}
         onBack={() => {
           setBack(true);
         }}
         onMore={() => {}}
         onRefresh={() => {
           setState({ kind: "ready", items: previewRuns });
+          setSources({ kind: "ready", value: { items: [] } });
         }}
       />
     </ManagementShell>

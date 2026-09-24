@@ -39,6 +39,10 @@ test("schedule management checks sessions, origins, revisions and owner provenan
               calls++;
               return work({
                 schedules: {
+                  sources: (id) => {
+                    if (id !== current.id) throw new ScheduleWriteError("not_found");
+                    return Promise.resolve({ id, revision: current.revision, items: [] });
+                  },
                   runs: (id, before) => {
                     if (id !== current.id) throw new ScheduleWriteError("not_found");
                     if (before)
@@ -99,6 +103,7 @@ test("schedule management checks sessions, origins, revisions and owner provenan
     });
   assert.equal((await app.request(path)).status, 401);
   assert.equal((await app.request(`${path}/${current.id}/runs`)).status, 401);
+  assert.equal((await app.request(`${path}/${current.id}/sources`)).status, 401);
   assert.equal((await mutate("", "POST", input, "https://other.example")).status, 403);
   assert.equal(calls, 0);
   const list = await app.request(path, { headers });
@@ -107,6 +112,10 @@ test("schedule management checks sessions, origins, revisions and owner provenan
   assert.equal((await app.request(`${path}?after=invalid`, { headers })).status, 400);
   assert.equal((await app.request(`${path}/${randomUUID()}`, { headers })).status, 404);
   const runs = await app.request(`${path}/${current.id}/runs`, { headers });
+  const sources = await app.request(`${path}/${current.id}/sources`, { headers });
+  assert.equal(sources.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(await sources.json(), { id: current.id, revision: 2, items: [] });
+  assert.equal((await app.request(`${path}/${randomUUID()}/sources`, { headers })).status, 404);
   assert.equal(runs.headers.get("Cache-Control"), "no-store");
   assert.deepEqual(await runs.json(), { items: [], next: null });
   assert.equal((await app.request(`${path}/${randomUUID()}/runs`, { headers })).status, 404);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { validTimezone } from "./timezone";
 import { taskBlockerSchema, taskSchema } from "./tasks";
+import { messageSourceReferenceSchema, messageSourceSchema } from "./messages";
 
 const common = {
   startAt: z.iso.datetime(),
@@ -86,9 +87,20 @@ export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
   revision: z.number().int().nonnegative(),
   state: z.enum(["active", "paused", "completed", "canceled"]),
   nextRunAt: z.iso.datetime().nullable(),
+  sources: z
+    .array(
+      messageSourceReferenceSchema.extend({ revision: z.number().int().nonnegative().nullable() }),
+    )
+    .max(100)
+    .optional(),
 });
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;
 export type Schedule = z.infer<typeof scheduleSchema>;
+export const scheduleSourcesSchema = z.strictObject({
+  id: z.uuid(),
+  revision: scheduleSchema.shape.revision,
+  items: z.array(messageSourceSchema).max(100),
+});
 export const scheduleListSchema = z.strictObject({
   items: z.array(scheduleSchema).max(100),
   next: z.uuid().nullable(),

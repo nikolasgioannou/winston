@@ -31,6 +31,9 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ json: { items: [schedule], next: null } }),
   );
   await page.route(`**/api/owner/schedules/${id}`, (route) => route.fulfill({ json: schedule }));
+  await page.route(`**/api/owner/schedules/${id}/sources`, (route) =>
+    route.fulfill({ json: { id, revision: schedule.revision, items: [] } }),
+  );
 });
 
 test("canceled schedules retain paged history, waiting details and responsibility links", async ({
@@ -140,9 +143,73 @@ test("history review states use the real page and fit mobile", async ({ page }, 
   await page.goto("/__dev/design/frame?page=schedule-runs&state=empty");
   await expect(page.getByText("No runs yet.", { exact: true })).toBeVisible();
   await page.goto("/__dev/design/frame?page=schedule-runs&state=loading");
-  await expect(page.getByRole("status")).toContainText("Loading runs");
+  await expect(page.getByText("Loading runs…", { exact: true })).toBeVisible();
   await page.goto("/__dev/design/frame?page=schedule-runs&state=error");
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("Reminder delivered.", { exact: true })).toBeVisible();
+});
+
+test("source versions never show changed or uncaptured wording and retry is read-only", async ({
+  page,
+}) => {
+  let status = "current";
+  await page.route(`**/api/owner/schedules/${id}/runs`, (route) =>
+    route.fulfill({ json: { items: [], next: null } }),
+  );
+  await page.route(`**/api/owner/schedules/${id}/sources`, (route) =>
+    route.fulfill({
+      status: status === "error" ? 503 : 200,
+      json: {
+        id,
+        revision: schedule.revision,
+        items: [
+          {
+            messageId: responsibility,
+            revision: status === "uncaptured" ? null : 0,
+            status,
+            ...(status === "current"
+              ? {
+                  kind: "voice",
+                  text: "<b>Caption</b>",
+                  transcript: "Remind me tomorrow",
+                  truncated: false,
+                  sentAt: {
+                    instant: "2030-01-01T00:00:00.000Z",
+                    timezone: "UTC",
+                    offset: "+00:00",
+                  },
+                }
+              : {}),
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(`/schedules/${id}/runs`);
+  await expect(page.getByText("<b>Caption</b>", { exact: true })).toBeVisible();
+  await expect(page.getByText("Voice transcript", { exact: true })).toBeVisible();
+  await expect(page.getByText("Remind me tomorrow", { exact: true })).toBeVisible();
+  status = "changed";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(
+    page.getByText(
+      "This message changed after it was recorded. Its original wording is unavailable.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Remind me tomorrow", { exact: true })).toHaveCount(0);
+  status = "uncaptured";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(
+    page.getByText("The original version of this message was not recorded.", { exact: true }),
+  ).toBeVisible();
+  status = "error";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Unable to load source instructions");
+  status = "unavailable";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(
+    page.getByText("This source message is unavailable.", { exact: true }),
+  ).toBeVisible();
 });

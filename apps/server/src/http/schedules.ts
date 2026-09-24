@@ -68,6 +68,12 @@ export function createScheduleOwnerRouter(database: {
     }
     return context.json(await transact(owner.ownerId, (scope) => scope.schedules.runs(id, before)));
   });
+  router.get("/:id/sources", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const id = identifier(context.req.param("id"));
+    return context.json(await transact(owner.ownerId, (scope) => scope.schedules.sources(id)));
+  });
   router.post("/", async (context) => {
     const owner = context.get("identity");
     if (owner.kind !== "owner") throw new RequestError("unauthorized");

@@ -164,7 +164,16 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <ScheduleRunsPreview initial="ready" />,
       },
-      ...(["empty", "loading", "error"] as const).map((state) => ({
+      ...(
+        [
+          "empty",
+          "loading",
+          "error",
+          "sources-changed",
+          "sources-error",
+          "sources-uncaptured",
+        ] as const
+      ).map((state) => ({
         id: state,
         label: state,
         fullWidth: true,

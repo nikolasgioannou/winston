@@ -1,5 +1,9 @@
 import { Badge, Button } from "@winston/ui";
 import type { Schedule, ScheduleRuns } from "@winston/contracts/schedules";
+import {
+  SourceInstructions,
+  type SourceInstructionsState,
+} from "../management/source-instructions";
 
 export type RunsState =
   { kind: "loading" | "error" } | { kind: "ready"; items: ScheduleRuns["items"] };
@@ -20,6 +24,7 @@ export function ScheduleRunsView({
   onRefresh,
   onMore,
   onBack,
+  sources,
 }: {
   schedule: Schedule;
   state: RunsState;
@@ -28,6 +33,7 @@ export function ScheduleRunsView({
   onRefresh: () => void;
   onMore: () => void;
   onBack: () => void;
+  sources?: SourceInstructionsState;
 }) {
   const format = (value: string) =>
     new Intl.DateTimeFormat(undefined, {
@@ -119,6 +125,7 @@ export function ScheduleRunsView({
           Older runs
         </Button>
       ) : null}
+      {sources ? <SourceInstructions state={sources} /> : null}
       <div>
         <Button variant="quiet" onClick={onBack}>
           Back to schedules
