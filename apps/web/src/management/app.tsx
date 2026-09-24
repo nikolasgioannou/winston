@@ -25,6 +25,9 @@ const ScheduleEditor = lazy(async () => ({
 const Computers = lazy(async () => ({
   default: (await import("../computers/computers")).Computers,
 }));
+const ActivityPage = lazy(async () => ({
+  default: (await import("../activity/activity")).ActivityPage,
+}));
 const Permissions = lazy(async () => ({
   default: (await import("../permissions/permissions")).Permissions,
 }));
@@ -57,17 +60,19 @@ function Layout() {
         clearPendingDestination();
         navigate({
           to:
-            href === "/permissions"
-              ? "/permissions"
-              : href === "/computers"
-                ? "/computers"
-                : href === "/responsibilities"
-                  ? "/responsibilities"
-                  : href === "/schedules"
-                    ? "/schedules"
-                    : href === "/connections"
-                      ? "/connections"
-                      : "/",
+            href === "/activity"
+              ? "/activity"
+              : href === "/permissions"
+                ? "/permissions"
+                : href === "/computers"
+                  ? "/computers"
+                  : href === "/responsibilities"
+                    ? "/responsibilities"
+                    : href === "/schedules"
+                      ? "/schedules"
+                      : href === "/connections"
+                        ? "/connections"
+                        : "/",
         }).catch(() => {
           window.location.assign(href);
         });
@@ -109,6 +114,15 @@ const computersRoute = createRoute({
   component: () => (
     <Suspense fallback={<p role="status">Loading computers…</p>}>
       <Computers />
+    </Suspense>
+  ),
+});
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity",
+  component: () => (
+    <Suspense fallback={<p role="status">Loading activity…</p>}>
+      <ActivityPage />
     </Suspense>
   ),
 });
@@ -219,6 +233,7 @@ const router = createRouter({
     accountRoute,
     connectionsRoute,
     computersRoute,
+    activityRoute,
     permissionsRoute,
     schedulesRoute,
     responsibilitiesRoute,

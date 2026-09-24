@@ -17,6 +17,7 @@ export function ManagementShell({
       persistWidth={!preview}
       items={[
         { label: "Account", href: "/", icon: Settings },
+        { label: "Activity", href: "/activity", icon: Activity },
         { label: "Connections", href: "/connections", icon: Link },
         { label: "Computers", href: "/computers", icon: Monitor },
         { label: "Permissions", href: "/permissions", icon: Settings },

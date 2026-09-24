@@ -14,6 +14,7 @@ import { ScheduleEditorPreview } from "./schedule-editor-preview";
 import { ScheduleRunsPreview } from "./schedule-runs-preview";
 import { ComputersPreview } from "./computers-preview";
 import { PermissionsPreview } from "./permissions-preview";
+import { ActivityPreview } from "./activity-preview";
 import { ResponsibilitiesPreview } from "./responsibilities-preview";
 import { ResponsibilityDetailPreview } from "./responsibility-detail-preview";
 
@@ -81,6 +82,25 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "activity",
+    label: "Activity",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <ActivityPreview initial="ready" />,
+      },
+      ...(["empty", "loading", "error"] as const).map((state) => ({
+        id: state,
+        label: state,
+        fullWidth: true,
+        render: () => <ActivityPreview initial={state} />,
+      })),
+    ],
+  },
   {
     id: "responsibility-detail",
     label: "Responsibility details",

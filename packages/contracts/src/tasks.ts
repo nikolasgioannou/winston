@@ -66,3 +66,4 @@ export const taskActivitySchema = z.strictObject({
     .max(20),
   next: taskActivityCursorSchema.nullable(),
 });
+export type TaskActivity = z.infer<typeof taskActivitySchema>;
