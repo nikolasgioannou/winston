@@ -12,5 +12,6 @@ let package = Package(
       dependencies: [.product(name: "WinstonDeviceProtocol", package: "device-protocol")]),
     .executableTarget(name: "TransportFixture", dependencies: ["WinstonDeviceTransport"]),
     .executableTarget(name: "PairingFixture", dependencies: ["WinstonDeviceTransport"]),
+    .executableTarget(name: "IdentityFixture", dependencies: ["WinstonDeviceTransport"]),
   ]
 )
