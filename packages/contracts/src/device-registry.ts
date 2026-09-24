@@ -50,6 +50,10 @@ export type DeviceSessionIdentity = z.infer<typeof deviceSessionIdentitySchema>;
 export const deviceSessionSchema = deviceSessionIdentitySchema.extend({
   expiresAt: z.iso.datetime(),
 });
+export const deviceSessionWelcomeSchema = deviceSessionSchema.extend({
+  kind: z.literal("session"),
+  version: z.literal(deviceProtocolVersion),
+});
 export const devicePresenceSchema = z.strictObject({
   deviceId: z.uuid(),
   status: z.enum(["unreachable", ...deviceStatusSchema.options]),

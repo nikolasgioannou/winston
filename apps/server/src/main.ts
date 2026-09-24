@@ -9,6 +9,7 @@ import { createHandoffOwnerRouter } from "./http/handoffs";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
+import { createDeviceSocketTransport } from "./devices/socket";
 import { createObjectStorage } from "@winston/adapters/storage";
 import {
   createArtifactService,
@@ -203,6 +204,7 @@ taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);
 
 const host = startServer(readConfig(process.env), {
+  deviceTransport: createDeviceSocketTransport(database),
   ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),
   readiness: async () => {
     await database.assertCompatible();

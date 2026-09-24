@@ -2,13 +2,24 @@ import type { ServerConfig } from "./config";
 import { createApi, type ApiOptions } from "./http/app";
 import { errorResponse } from "./http/errors";
 import { maximumPublicationSize } from "@winston/contracts/artifacts";
+import type { createDeviceSocketTransport, DeviceSocketData } from "./devices/socket";
 
-export function startServer(config: ServerConfig, options: ApiOptions = {}) {
+export function startServer(
+  config: ServerConfig,
+  options: ApiOptions & { deviceTransport?: ReturnType<typeof createDeviceSocketTransport> } = {},
+) {
   const { app, lifecycle } = createApi(options);
-  const server = Bun.serve({
+  const server = Bun.serve<DeviceSocketData>({
     hostname: config.hostname,
     port: config.port,
-    fetch: app.fetch,
+    fetch(request, server) {
+      if (options.deviceTransport && new URL(request.url).pathname === "/api/devices/socket") {
+        if (lifecycle.draining) return errorResponse("unavailable", crypto.randomUUID());
+        return options.deviceTransport.upgrade(request, server);
+      }
+      return app.fetch(request);
+    },
+    websocket: options.deviceTransport?.websocket ?? { message() {} },
     maxRequestBodySize: maximumPublicationSize,
     idleTimeout: 60,
     error: () => errorResponse("internal_error", crypto.randomUUID()),
@@ -27,6 +38,7 @@ export function startServer(config: ServerConfig, options: ApiOptions = {}) {
     }, config.shutdownTimeoutMs);
 
     try {
+      await options.deviceTransport?.stop();
       await server.stop();
     } finally {
       clearTimeout(timeout);
