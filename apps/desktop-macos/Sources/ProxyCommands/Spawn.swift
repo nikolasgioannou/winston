@@ -52,11 +52,9 @@ func spawn(_ command: Command) throws -> SpawnedCommand {
   try check(posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0))
   try check(posix_spawn_file_actions_adddup2(&actions, stdout[1], STDOUT_FILENO))
   try check(posix_spawn_file_actions_adddup2(&actions, stderr[1], STDERR_FILENO))
-  if #available(macOS 26, *) {
-    try check(posix_spawn_file_actions_addchdir(&actions, command.directory))
-  } else {
-    try check(posix_spawn_file_actions_addchdir_np(&actions, command.directory))
-  }
+  // The non-suffixed spelling also requires a macOS 26 SDK at compile time.
+  // Keep the spelling available in our minimum supported SDK, including native CI.
+  try check(posix_spawn_file_actions_addchdir_np(&actions, command.directory))
 
   var attributes: posix_spawnattr_t?
   try check(posix_spawnattr_init(&attributes))
