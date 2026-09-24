@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const deviceProtocolVersion = 1;
 export const deviceFrameLimit = 262_144;
+export const deviceStatusSchema = z.enum(["ready", "locked", "sleeping", "paused"]);
 
 const counter = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const identifier = z
@@ -78,7 +79,7 @@ export const devicePayloadSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     kind: z.literal("heartbeat"),
-    status: z.enum(["ready", "locked", "sleeping", "paused"]),
+    status: deviceStatusSchema,
   }),
   z.strictObject({
     kind: z.literal("execute"),

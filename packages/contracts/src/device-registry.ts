@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { deviceCapabilitySchema, deviceProtocolVersion } from "./devices";
+import { deviceCapabilitySchema, deviceProtocolVersion, deviceStatusSchema } from "./devices";
 
 export const devicePairingTokenSchema = z.string().regex(/^wdp_[A-Za-z0-9_-]{43}$/);
 export const deviceCredentialSchema = z.string().regex(/^wdi_[A-Za-z0-9_-]{43}$/);
@@ -40,3 +40,18 @@ export const deviceRenameSchema = deviceRevisionSchema.extend({ name: deviceName
 export type DeviceRegistration = z.infer<typeof deviceRegistrationSchema>;
 export type RegisteredDevice = z.infer<typeof registeredDeviceSchema>;
 export const registeredDeviceListSchema = z.array(registeredDeviceSchema).max(1000);
+
+export const deviceSessionIdentitySchema = z.strictObject({
+  deviceId: z.uuid(),
+  sessionId: z.uuid(),
+  generation: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+});
+export type DeviceSessionIdentity = z.infer<typeof deviceSessionIdentitySchema>;
+export const deviceSessionSchema = deviceSessionIdentitySchema.extend({
+  expiresAt: z.iso.datetime(),
+});
+export const devicePresenceSchema = z.strictObject({
+  deviceId: z.uuid(),
+  status: z.enum(["unreachable", ...deviceStatusSchema.options]),
+  lastSeenAt: z.iso.datetime().nullable(),
+});
