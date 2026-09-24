@@ -5,9 +5,15 @@ let package = Package(
   name: "WinstonDesktop",
   platforms: [.macOS(.v14)],
   products: [.executable(name: "WinstonProxy", targets: ["WinstonProxy"])],
-  dependencies: [.package(path: "../../packages/device-transport")],
+  dependencies: [
+    .package(path: "../../packages/device-transport"),
+    .package(path: "../../packages/device-protocol"),
+  ],
   targets: [
     .target(name: "ProxyState"),
+    .target(
+      name: "ProxyJournal",
+      dependencies: [.product(name: "WinstonDeviceProtocol", package: "device-protocol")]),
     .target(
       name: "ProxySession",
       dependencies: [.product(name: "WinstonDeviceTransport", package: "device-transport")]),
@@ -18,5 +24,6 @@ let package = Package(
       ]),
     .executableTarget(name: "ShellFixture", dependencies: ["ProxyState"]),
     .executableTarget(name: "SessionFixture", dependencies: ["ProxySession"]),
+    .executableTarget(name: "JournalFixture", dependencies: ["ProxyJournal"]),
   ]
 )
