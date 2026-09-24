@@ -123,13 +123,13 @@ export function parseCommand(args: string[]): ParsedCommand {
       ...(values.id === undefined ? {} : { id: values.id }),
       ...(values.limit === undefined ? {} : { limit: Number(values.limit) }),
       ...(values.cursor === undefined ? {} : { cursor: JSON.parse(values.cursor) as unknown }),
-      ...(command.command === "calendar.events"
+      ...(command.command === "calendar.events" || command.command === "calendar.availability"
         ? {
             window: {
               timeMin: values.from,
               timeMax: values.until,
               timezone: values.timezone,
-              query: values.query ?? "",
+              ...(command.command === "calendar.events" ? { query: values.query ?? "" } : {}),
             },
           }
         : command.command === "gmail.search"

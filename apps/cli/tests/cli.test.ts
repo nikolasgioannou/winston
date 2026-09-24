@@ -136,6 +136,25 @@ test("connected reads require explicit targets and reject unrelated or malformed
   assert.equal(calendar.kind, "request");
   assert.equal(calendar.request.command, "calendar.events");
   assert.equal(calendar.request.calendarId, "team@example.com");
+  const availabilityArgs = [
+    "calendar",
+    "availability",
+    "--account",
+    id,
+    "--calendar",
+    "team@example.com",
+    "--from",
+    "2026-11-01T00:00:00-04:00",
+    "--until",
+    "2026-11-02T00:00:00-05:00",
+    "--timezone",
+    "America/New_York",
+  ];
+  const availability = parseCommand(availabilityArgs);
+  assert.equal(availability.kind, "request");
+  assert.equal(availability.request.command, "calendar.availability");
+  assert.equal("query" in availability.request.window, false);
+  assert.throws(() => parseCommand([...availabilityArgs, "--query", "ignored"]));
   for (const args of [
     ["gmail", "search"],
     ["gmail", "search", "--account", id, "--limit", "NaN"],

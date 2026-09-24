@@ -9,6 +9,7 @@ import { gmailReadTargetSchema } from "@winston/contracts/gmail";
 import { calendarReadTargetSchema } from "@winston/contracts/calendar";
 import { createGmailReader } from "./gmail";
 import { createCalendarReader } from "./calendar-events";
+import { createCalendarAvailabilityReader } from "./calendar-availability";
 import { createConnectionTargets } from "./targets";
 import { GoogleReadError, type GoogleReadOptions } from "./read-request";
 import { prepareReadApproval, completeRead, type ReadDispatch } from "./read-approval";
@@ -90,6 +91,16 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
           dispatch = approval;
         }
         switch (request.command) {
+          case "calendar.availability":
+            data = await createCalendarAvailabilityReader(bound)(
+              authority.ownerId,
+              {
+                target: calendarReadTargetSchema.parse(selected.target),
+                window: request.window,
+              },
+              signal,
+            );
+            break;
           case "gmail.search":
             data = await createGmailReader(bound).search(
               authority.ownerId,
@@ -170,7 +181,9 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
         message:
           error instanceof GoogleReadError && error.kind === "approval_required"
             ? "This read requires approval and was not performed. Retry with a stable --key to request approval."
-            : "The requested read could not be completed.",
+            : error instanceof GoogleReadError && error.kind === "reconnect_required"
+              ? "Reconnect this Calendar account to grant availability access. Existing event access is unchanged."
+              : "The requested read could not be completed.",
       };
     }
   };

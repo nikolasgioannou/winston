@@ -36,7 +36,11 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
             accessToken: "provider-secret",
             refreshToken: "synthetic-refresh",
             expiresAt: "2030-01-01T00:00:00.000Z",
-            scopes: [...googleScopes.gmail, ...googleScopes.calendar],
+            scopes: [
+              ...googleScopes.gmail,
+              ...googleScopes.calendar,
+              "https://www.googleapis.com/auth/calendar.events.freebusy",
+            ],
           },
         };
       },
@@ -49,6 +53,12 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
         requests += 1;
         assert.equal(new Headers(init.headers).get("Authorization"), "Bearer provider-secret");
         await duringFetch?.();
+        if (url.pathname.endsWith("/freeBusy"))
+          return Response.json({
+            timeMin: "2026-11-01T00:00:00Z",
+            timeMax: "2026-11-02T00:00:00Z",
+            calendars: { team: { busy: [] } },
+          });
         return Response.json(
           url.hostname === "gmail.googleapis.com"
             ? { messages: [{ id: "m1", threadId: "t1" }] }
@@ -184,6 +194,22 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
         ).status,
         "ok",
       );
+      const availability = await execute(
+        credential(),
+        {
+          version: 1,
+          command: "calendar.availability",
+          accountId: calendarAccountId,
+          calendarId: "team",
+          window: {
+            timeMin: "2026-11-01T00:00:00Z",
+            timeMax: "2026-11-02T00:00:00Z",
+            timezone: "UTC",
+          },
+        },
+        signal,
+      );
+      assert.equal(availability.status, "ok");
       const before = requestCount();
       duringAccess = () =>
         database.transaction(ownerId, ({ capabilities }) => capabilities.revoke(capability.id));

@@ -74,7 +74,14 @@ export function createGoogleOAuth(config: {
           access_type: "offline",
           prompt: "consent select_account",
           include_granted_scopes: false,
-          scope: ["openid", "email", ...googleScopes[service]],
+          scope: [
+            "openid",
+            "email",
+            ...googleScopes[service],
+            ...(service === "calendar"
+              ? ["https://www.googleapis.com/auth/calendar.events.freebusy"]
+              : []),
+          ],
           state,
           code_challenge_method: CodeChallengeMethod.S256,
           code_challenge: createHash("sha256").update(derive("pkce", state)).digest("base64url"),

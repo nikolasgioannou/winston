@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
-import { createCalendarReader, createConnectionTargets } from "@winston/adapters/google";
+import {
+  createCalendarReader,
+  createConnectionTargets,
+  createCalendarAvailabilityReader,
+} from "@winston/adapters/google";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import {
   calendarEventQuerySchema,
@@ -27,7 +31,7 @@ test("Calendar windows retain date boundaries, recurrence and account-scoped pag
       accessToken: "synthetic",
       refreshToken: "synthetic",
       expiresAt: "2030-01-01T00:00:00.000Z",
-      scopes: [...googleScopes.calendar],
+      scopes: [...googleScopes.calendar] as string[],
     };
     const google = {
       list: (id: string) => database.transaction(id, ({ connections }) => connections.list()),
@@ -157,6 +161,71 @@ test("Calendar windows retain date boundaries, recurrence and account-scoped pag
         "event1",
       );
       const before = requests;
+      let availabilityRequests = 0;
+      let availabilityData: unknown = {};
+      const availability = createCalendarAvailabilityReader({
+        database,
+        google,
+        fetch: (url, init) => {
+          availabilityRequests += 1;
+          assert.equal(url.href, "https://www.googleapis.com/calendar/v3/freeBusy");
+          assert.equal(init.method, "POST");
+          assert.equal(typeof init.body, "string");
+          assert.deepEqual(JSON.parse(init.body as string), {
+            timeMin: window.timeMin,
+            timeMax: window.timeMax,
+            timeZone: window.timezone,
+            calendarExpansionMax: 1,
+            groupExpansionMax: 1,
+            items: [{ id: calendarId }],
+          });
+          return Promise.resolve(Response.json(availabilityData));
+        },
+      });
+      await assert.rejects(
+        availability(ownerId, { target: first, window }, signal),
+        /reconnect_required/,
+      );
+      assert.equal(availabilityRequests, 0);
+      grant.scopes.push("https://www.googleapis.com/auth/calendar.events.freebusy");
+      const busy = [{ start: timed.start.dateTime, end: timed.end.dateTime }];
+      const validAvailability = {
+        timeMin: window.timeMin,
+        timeMax: window.timeMax,
+        calendars: { [calendarId]: { busy } },
+      };
+      availabilityData = validAvailability;
+      const available = await availability(ownerId, { target: first, window }, signal);
+      assert.deepEqual(available.busy, busy);
+      assert.equal(available.source.connectionId, first.connectionId);
+      for (const malformedAvailability of [
+        { ...validAvailability, calendars: {} },
+        {
+          ...validAvailability,
+          calendars: { [calendarId]: { busy: [], errors: [{ reason: "newError" }] } },
+        },
+        { ...validAvailability, timeMax: window.timeMin },
+        { ...validAvailability, groups: { secret: { calendars: ["excluded"] } } },
+        {
+          ...validAvailability,
+          calendars: { [calendarId]: { busy: [{ start: window.timeMax, end: window.timeMin }] } },
+        },
+      ]) {
+        availabilityData = malformedAvailability;
+        await assert.rejects(
+          availability(ownerId, { target: first, window }, signal),
+          /unavailable/,
+        );
+      }
+      availabilityData = { ...validAvailability, calendars: { [calendarId]: { busy: [] } } };
+      assert.deepEqual((await availability(ownerId, { target: first, window }, signal)).busy, []);
+      const previousAvailabilityRequests = availabilityRequests;
+      await assert.rejects(availability(stranger, { target: first, window }, signal), /stale/);
+      await assert.rejects(
+        availability(ownerId, { target: { ...first, calendarId: "excluded" }, window }, signal),
+        /stale/,
+      );
+      assert.equal(availabilityRequests, previousAvailabilityRequests);
       await assert.rejects(
         reader.events(ownerId, { target: second, window, cursor: page.cursor }, signal),
         /stale/,

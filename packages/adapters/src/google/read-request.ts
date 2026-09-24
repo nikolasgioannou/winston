@@ -6,7 +6,7 @@ import { createConnectionTargets } from "./targets";
 import { sameResolvedTarget } from "./target-resolution";
 
 export type GoogleReadFailure =
-  "denied" | "approval_required" | "stale" | "unavailable" | "too_large";
+  "denied" | "approval_required" | "stale" | "unavailable" | "too_large" | "reconnect_required";
 export class GoogleReadError extends Error {
   constructor(
     readonly kind: GoogleReadFailure,
@@ -72,6 +72,7 @@ export function createGoogleReadRequest(
     path: string,
     query: URLSearchParams,
     signal: AbortSignal,
+    freeBusy?: { timeMin: string; timeMax: string; timeZone: string },
   ) => {
     try {
       if (options.authorize && !(await options.authorize())) throw fail("stale");
@@ -107,6 +108,21 @@ export function createGoogleReadRequest(
         throw fail("approval_required");
       if (initial.decision === "deny" || !initial.snapshot) throw fail("denied");
       const access = await google.access(ownerId, target.connectionId, deadline);
+      if (freeBusy) {
+        if (config.service !== "calendar" || path !== "freeBusy") throw fail("unavailable");
+        const scopes = [
+          "calendar",
+          "calendar.readonly",
+          "calendar.events.freebusy",
+          "calendar.freebusy",
+        ];
+        if (
+          !scopes.some((scope) =>
+            access.grant.scopes.includes(`https://www.googleapis.com/auth/${scope}`),
+          )
+        )
+          throw fail("reconnect_required");
+      }
       const allowed = () =>
         database.transaction(ownerId, async (scope) => {
           const policy = await scope.authorization.evaluate(action, initial.snapshot ?? undefined);
@@ -131,8 +147,21 @@ export function createGoogleReadRequest(
       if (!url.href.startsWith(base)) throw fail("unavailable");
       url.search = query.toString();
       const response = await (options.fetch ?? fetch)(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${access.grant.accessToken}` },
+        method: freeBusy ? "POST" : "GET",
+        headers: {
+          Authorization: `Bearer ${access.grant.accessToken}`,
+          ...(freeBusy ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(freeBusy
+          ? {
+              body: JSON.stringify({
+                ...freeBusy,
+                calendarExpansionMax: 1,
+                groupExpansionMax: 1,
+                items: [{ id: target.calendarId }],
+              }),
+            }
+          : {}),
         redirect: "error",
         cache: "no-store",
         signal: deadline,

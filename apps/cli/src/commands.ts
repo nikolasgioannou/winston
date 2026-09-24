@@ -112,6 +112,14 @@ export const commands = [
       "--account <uuid> --calendar <calendar-id> --from <timestamp> --until <timestamp> --timezone <IANA-zone> [--query <search>] [--limit <1-100>] [--cursor <json>] [--key <request-key>]",
   },
   {
+    command: "calendar.availability",
+    description: "Read busy intervals for one permitted calendar; unavailable is not free.",
+    id: false,
+    flags: ["account", "calendar", "from", "until", "timezone", "key"],
+    usage:
+      "--account <uuid> --calendar <calendar-id> --from <timestamp> --until <timestamp> --timezone <IANA-zone> [--key <request-key>]",
+  },
+  {
     command: "calendar.event",
     description: "Read one event from an explicitly selected calendar.",
     id: true,

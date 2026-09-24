@@ -98,3 +98,31 @@ export const calendarEventPageSchema = z.object({
 });
 export type CalendarEventQuery = z.input<typeof calendarEventQuerySchema>;
 export type CalendarEventRequest = z.input<typeof calendarEventRequestSchema>;
+
+export const calendarAvailabilityQuerySchema = z.strictObject({
+  target: calendarReadTargetSchema,
+  window: z.strictObject({ timeMin: instant, timeMax: instant, timezone }).refine((value) => {
+    const duration = Date.parse(value.timeMax) - Date.parse(value.timeMin);
+    return duration > 0 && duration <= 366 * 86_400_000;
+  }, "Calendar windows must span no more than 366 days."),
+});
+export type CalendarAvailabilityQuery = z.input<typeof calendarAvailabilityQuerySchema>;
+
+export const calendarAvailabilityResponseSchema = z.object({
+  timeMin: instant,
+  timeMax: instant,
+  groups: z.record(z.string(), z.unknown()).optional(),
+  calendars: z.record(
+    z.string(),
+    z.object({
+      errors: z.array(z.unknown()).optional(),
+      busy: z
+        .array(
+          z
+            .object({ start: instant, end: instant })
+            .refine((item) => Date.parse(item.start) < Date.parse(item.end)),
+        )
+        .max(10000),
+    }),
+  ),
+});
