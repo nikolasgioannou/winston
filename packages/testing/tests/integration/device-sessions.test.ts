@@ -50,6 +50,8 @@ test("proxy sessions fence reconnects and report only fresh explicit availabilit
         deviceSessions.open(first.device.id, first.credential),
       );
       assert.ok(opened);
+      assert.deepEqual(await database.deviceSessionOwners(), [ownerId]);
+      assert.deepEqual(await database.deviceSessionOwners(ownerId), []);
       const old = identity(opened);
       assert.equal(opened.generation, 1);
       assert.ok(Date.parse(opened.expiresAt) > Date.now());
@@ -140,10 +142,12 @@ test("proxy sessions fence reconnects and report only fresh explicit availabilit
         "unreachable",
       );
       assert.equal(presence.find((item) => item.deviceId === second.device.id)?.status, "paused");
-      assert.equal(
-        await database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
-        1,
+      const expired = await Promise.all(
+        [0, 1].map(() =>
+          database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
+        ),
       );
+      assert.deepEqual(expired.sort(), [0, 1]);
       assert.equal(
         await database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
         0,
@@ -169,6 +173,7 @@ test("proxy sessions fence reconnects and report only fresh explicit availabilit
         await database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
         1,
       );
+      assert.deepEqual(await database.deviceSessionOwners(), []);
       assert.deepEqual(
         await database.transaction(other, ({ deviceSessions }) => deviceSessions.presence()),
         [],

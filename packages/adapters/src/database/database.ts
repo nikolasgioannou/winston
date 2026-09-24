@@ -152,6 +152,13 @@ export function createDatabase(options: {
       );
     },
     // Trusted runtime enumeration only; never expose this cross-owner operation through owner HTTP routes.
+    async deviceSessionOwners(afterId = "00000000-0000-0000-0000-000000000000") {
+      const result = await pool.query<{ ownerId: string }>(
+        'SELECT DISTINCT owner_id AS "ownerId" FROM winston.device_sessions WHERE disconnected_at IS NULL AND owner_id > $1::uuid ORDER BY owner_id LIMIT 100',
+        [afterId],
+      );
+      return result.rows.map((row) => row.ownerId);
+    },
     async telegramOwners(botId: number, afterId = "00000000-0000-0000-0000-000000000000") {
       const result = await pool.query<{ ownerId: string }>(
         'SELECT owner_id AS "ownerId" FROM winston.telegram_bindings WHERE bot_id = $1 AND owner_id > $2::uuid ORDER BY owner_id LIMIT 100',

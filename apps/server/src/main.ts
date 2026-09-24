@@ -33,6 +33,7 @@ import {
 } from "@winston/adapters/telegram";
 import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/telegram";
 import { startConversationRuntime } from "./conversation/runtime";
+import { startDeviceSessionRuntime } from "./devices/session-runtime";
 import { Hono } from "hono";
 import type { HttpEnvironment, Identity } from "./http/app";
 import {
@@ -270,10 +271,20 @@ const host = startServer(readConfig(process.env), {
   },
 });
 
+const deviceSessionRuntime = startDeviceSessionRuntime({
+  owners: (afterId) => database.deviceSessionOwners(afterId),
+  expire: (ownerId) =>
+    database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
+  notice: (code) => {
+    console.error(code);
+  },
+});
+
 function shutdown() {
   host
     .stop()
     .then(async () => {
+      await deviceSessionRuntime.stop();
       await conversation?.stop();
       await fileDelivery?.stop();
       await fileIntake?.stop();
