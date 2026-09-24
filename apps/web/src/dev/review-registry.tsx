@@ -94,7 +94,17 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <TaskDetailPreview initial="ready" />,
       },
-      ...(["completed", "loading", "error", "history-error"] as const).map((state) => ({
+      ...(
+        [
+          "completed",
+          "loading",
+          "error",
+          "history-error",
+          "unknown",
+          "cancel-failed",
+          "actions-error",
+        ] as const
+      ).map((state) => ({
         id: state,
         label: state,
         fullWidth: true,

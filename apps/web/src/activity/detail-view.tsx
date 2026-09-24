@@ -1,4 +1,5 @@
 import type { TaskDetail } from "@winston/contracts/tasks";
+import type { ReactNode } from "react";
 import { Badge, Button } from "@winston/ui";
 import type { ActivityState } from "./activity-view";
 
@@ -24,6 +25,8 @@ export function TaskDetailView({
   more = false,
   onRefresh,
   onMore,
+  actions,
+  cancellation,
 }: {
   state: TaskDetailState;
   history: ActivityState;
@@ -31,6 +34,8 @@ export function TaskDetailView({
   more?: boolean;
   onRefresh: () => void;
   onMore: () => void;
+  actions?: ReactNode;
+  cancellation?: ReactNode;
 }) {
   return (
     <>
@@ -88,6 +93,8 @@ export function TaskDetailView({
               <p className="text-sm whitespace-pre-wrap wrap-anywhere">{state.value.result}</p>
             ) : null}
           </section>
+          {cancellation}
+          {actions}
           <section aria-label="Request history" className="space-y-4 border-t border-line pt-6">
             <h2 className="text-sm font-medium">History</h2>
             {history.kind === "loading" ? (

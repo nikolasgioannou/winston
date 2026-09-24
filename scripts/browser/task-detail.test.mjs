@@ -14,6 +14,9 @@ const detail = {
 };
 const entry = { ...detail, objectiveTruncated: false, resultTruncated: false };
 test.beforeEach(async ({ page }) => {
+  await page.route(`**/api/owner/activity/${id}/actions*`, (route) =>
+    route.fulfill({ json: { unresolved: 0, items: [], next: null } }),
+  );
   await page.route("**/api/owner/session", (route) => route.fulfill({ json: {} }));
   await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 401, json: {} }));
 });
