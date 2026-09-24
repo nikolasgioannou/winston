@@ -30,9 +30,11 @@ async function runFixture(port: number | undefined, mode?: string) {
     assert.equal(code, 0, stderr);
     assert.match(
       stdout,
-      mode
-        ? /Native transport rejected connection/
-        : /Native transport handshake and heartbeat passed/,
+      mode === "reconnect" || mode === "pairing"
+        ? /Native connection lifecycle passed/
+        : mode
+          ? /Native transport rejected connection/
+          : /Native transport handshake and heartbeat passed/,
     );
   } finally {
     child.kill();
@@ -82,6 +84,73 @@ test.skipIf(process.platform !== "darwin")(
       assert.equal(heartbeats, 1);
     } finally {
       await host.stop();
+    }
+  },
+  60_000,
+);
+
+test.skipIf(process.platform !== "darwin")(
+  "native loop reconnects with a new session and stops after credential rejection",
+  async () => {
+    let rejected = false;
+    let requests = 0;
+    let connections = 0;
+    let heartbeats = 0;
+    const id = "11111111-1111-4111-8111-111111111111";
+    const server = Bun.serve<{ sessionId: string; generation: number }>({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request, host) {
+        requests += 1;
+        if (rejected) return new Response(null, { status: 401 });
+        connections += 1;
+        if (
+          host.upgrade(request, {
+            data: { sessionId: crypto.randomUUID(), generation: connections },
+          })
+        )
+          return;
+        return new Response(null, { status: 400 });
+      },
+      websocket: {
+        open(socket) {
+          socket.send(
+            JSON.stringify({
+              kind: "session",
+              version: 1,
+              deviceId: id,
+              ...socket.data,
+              expiresAt: new Date(Date.now() + 45_000).toISOString(),
+            }),
+          );
+        },
+        message(socket, raw) {
+          const message = decodeDeviceMessage(String(raw));
+          assert.equal(message.sessionId, socket.data.sessionId);
+          assert.equal(message.generation, socket.data.generation);
+          heartbeats += 1;
+          if (socket.data.generation === 1) socket.close(1001);
+          else
+            socket.send(
+              JSON.stringify({
+                ...message,
+                messageId: crypto.randomUUID(),
+                correlationId: message.messageId,
+              }),
+            );
+        },
+      },
+    });
+    try {
+      await runFixture(server.port, "reconnect");
+      assert.equal(connections, 2);
+      assert.equal(heartbeats, 2);
+      rejected = true;
+      const before = requests;
+      await runFixture(server.port, "pairing");
+      assert.equal(requests - before, 1);
+    } finally {
+      await server.stop(true);
     }
   },
   60_000,

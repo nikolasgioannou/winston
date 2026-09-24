@@ -22,6 +22,27 @@ struct TransportFixture {
       allowInsecureLoopback: true)
     if CommandLine.arguments.count > 2 {
       let mode = CommandLine.arguments[2]
+      if mode == "reconnect" || mode == "pairing" {
+        let loop = DeviceConnectionLoop(transport: transport)
+        let operation = Task { try await loop.run { .paused } }
+        for _ in 0..<100 {
+          let state = await loop.state
+          if state == .connected || state == .pairingRequired { break }
+          try await Task.sleep(for: .milliseconds(50))
+        }
+        let state = await loop.state
+        guard state == (mode == "reconnect" ? .connected : .pairingRequired) else {
+          operation.cancel()
+          fatalError("Incorrect connection lifecycle")
+        }
+        operation.cancel()
+        try await operation.value
+        if mode == "reconnect" {
+          guard await loop.state == .stopped else { fatalError("Connection did not stop") }
+        }
+        print("Native connection lifecycle passed")
+        return
+      }
       let operation = Task {
         _ = try await transport.connect()
         try await transport.heartbeat(status: "paused")
