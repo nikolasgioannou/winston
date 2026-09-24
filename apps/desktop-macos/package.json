@@ -1,0 +1,8 @@
+{
+  "name": "@winston/desktop-macos",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../scripts/build-desktop.mjs"
+  }
+}
