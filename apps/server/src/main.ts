@@ -274,7 +274,10 @@ const host = startServer(readConfig(process.env), {
 const deviceSessionRuntime = startDeviceSessionRuntime({
   owners: (afterId) => database.deviceSessionOwners(afterId),
   expire: (ownerId) =>
-    database.transaction(ownerId, ({ deviceSessions }) => deviceSessions.expire()),
+    database.transaction(ownerId, async ({ deviceSessions, deviceExecutions }) => {
+      await deviceSessions.expire();
+      await deviceExecutions.expire();
+    }),
   notice: (code) => {
     console.error(code);
   },

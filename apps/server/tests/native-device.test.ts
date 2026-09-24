@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 import type { OwnerTransaction } from "@winston/adapters/database";
-import { createDeviceSocketTransport } from "../src/devices/socket";
+import { createDeviceSocketTransport, type DeviceSocketScope } from "../src/devices/socket";
 import { startServer } from "../src/host";
 import { decodeDeviceMessage } from "@winston/contracts/devices";
 
@@ -72,10 +72,15 @@ test.skipIf(process.platform !== "darwin")(
         Promise.resolve(
           credential === `wdi_${"a".repeat(43)}` ? { ownerId: id, deviceId: id } : null,
         ),
-      transaction: <Result>(
-        _id: string,
-        work: (scope: Pick<OwnerTransaction, "deviceSessions">) => Promise<Result>,
-      ) => work({ deviceSessions }),
+      transaction: <Result>(_id: string, work: (scope: DeviceSocketScope) => Promise<Result>) =>
+        work({
+          deviceSessions,
+          deviceExecutions: {
+            receipt: () => Promise.resolve(null),
+            reconcile: () => Promise.resolve(null),
+            expire: () => Promise.resolve(0),
+          },
+        }),
     });
     const host = startServer(
       { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 1000 },

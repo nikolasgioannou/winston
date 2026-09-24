@@ -12,10 +12,14 @@ import {
 } from "@winston/contracts/devices";
 import { errorResponse } from "../http/errors";
 
+export type DeviceSocketScope = Pick<OwnerTransaction, "deviceSessions"> & {
+  deviceExecutions: Pick<OwnerTransaction["deviceExecutions"], "receipt" | "reconcile" | "expire">;
+};
+
 type Database = Pick<ReturnType<typeof createDatabase>, "authenticateDevice"> & {
   transaction<Result>(
     ownerId: string,
-    work: (scope: Pick<OwnerTransaction, "deviceSessions">) => Promise<Result>,
+    work: (scope: DeviceSocketScope) => Promise<Result>,
   ): Promise<Result>;
 };
 
@@ -38,7 +42,10 @@ export function createDeviceSocketTransport(database: Database) {
 
   function cleanup(data: DeviceSocketData) {
     const pending = database
-      .transaction(data.ownerId, ({ deviceSessions }) => deviceSessions.close(data.session))
+      .transaction(data.ownerId, async ({ deviceSessions, deviceExecutions }) => {
+        await deviceSessions.close(data.session);
+        await deviceExecutions.expire();
+      })
       .then(() => {})
       // A failed cleanup cannot revive the bounded database lease.
       .catch(() => {})
@@ -98,7 +105,7 @@ export function createDeviceSocketTransport(database: Database) {
           message.deviceId !== session.deviceId ||
           message.sessionId !== session.sessionId ||
           message.generation !== session.generation ||
-          !["heartbeat", "capabilities"].includes(message.payload.kind)
+          !["heartbeat", "capabilities", "status", "reconciled"].includes(message.payload.kind)
         ) {
           close(socket, 1008);
           return;
@@ -119,13 +126,20 @@ export function createDeviceSocketTransport(database: Database) {
           const message = socket.data.pending.shift();
           if (!message) break;
           const payload = message.payload;
-          const accepted = await database.transaction(socket.data.ownerId, ({ deviceSessions }) => {
-            if (payload.kind === "heartbeat")
-              return deviceSessions.heartbeat(socket.data.session, payload.status);
-            if (payload.kind === "capabilities")
-              return deviceSessions.advertise(socket.data.session, payload.capabilities);
-            return Promise.resolve(false);
-          });
+          const accepted = await database.transaction(
+            socket.data.ownerId,
+            async ({ deviceSessions, deviceExecutions }) => {
+              if (payload.kind === "heartbeat")
+                return deviceSessions.heartbeat(socket.data.session, payload.status);
+              if (payload.kind === "capabilities")
+                return deviceSessions.advertise(socket.data.session, payload.capabilities);
+              if (payload.kind === "status")
+                return (await deviceExecutions.receipt(message)) !== null;
+              if (payload.kind === "reconciled")
+                return (await deviceExecutions.reconcile(message)) !== null;
+              return false;
+            },
+          );
           if (!accepted) {
             close(socket, 1008);
             return;

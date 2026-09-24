@@ -10,8 +10,168 @@ import {
   encodeDeviceMessage,
   type DeviceMessage,
 } from "@winston/contracts/devices";
-import { createDeviceSocketTransport } from "../src/devices/socket";
+import { createDeviceSocketTransport, type DeviceSocketScope } from "../src/devices/socket";
 import { startServer } from "../src/host";
+import type { DeviceExecution } from "@winston/contracts/device-executions";
+
+const rejectedEvidence: DeviceSocketScope["deviceExecutions"] = {
+  receipt: () => Promise.resolve(null),
+  reconcile: () => Promise.resolve(null),
+  expire: () => Promise.resolve(0),
+};
+
+test("execution evidence is serialized, owner scoped and rejected before it can cross sessions", async () => {
+  for (const mode of ["accepted", "rejected", "spoofed"] as const) {
+    const ownerId = crypto.randomUUID();
+    const session = {
+      deviceId: crypto.randomUUID(),
+      sessionId: crypto.randomUUID(),
+      generation: 1,
+    };
+    const task = { id: crypto.randomUUID(), revision: 1, generation: 1 };
+    const message: DeviceMessage = {
+      version: 1,
+      ...session,
+      messageId: crypto.randomUUID(),
+      correlationId: crypto.randomUUID(),
+      payload: {
+        kind: "execute",
+        executionId: crypto.randomUUID(),
+        taskId: task.id,
+        taskRevision: task.revision,
+        deadline: Date.now() + 60_000,
+        operation: { kind: "command", executable: "/bin/true", arguments: [], directory: "/tmp" },
+      },
+    };
+    assert.equal(message.payload.kind, "execute");
+    const record: DeviceExecution = {
+      actionId: crypto.randomUUID(),
+      task,
+      message,
+      state: "running",
+      receipt: null,
+      reconciliation: null,
+    };
+    const status: DeviceMessage = {
+      ...message,
+      correlationId: message.messageId,
+      messageId: crypto.randomUUID(),
+      payload: {
+        kind: "status",
+        executionId: message.payload.executionId,
+        taskId: task.id,
+        taskRevision: task.revision,
+        sequence: 1,
+        state: "running",
+        exitCode: null,
+      },
+    };
+    const entered = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const calls: string[] = [];
+    const scope: DeviceSocketScope = {
+      deviceSessions: {
+        open: () =>
+          Promise.resolve({ ...session, expiresAt: new Date(Date.now() + 45_000).toISOString() }),
+        advertise: () => Promise.resolve(true),
+        supports: () => Promise.resolve(false),
+        heartbeat: () => {
+          calls.push("heartbeat");
+          return Promise.resolve(true);
+        },
+        close: () => {
+          calls.push("close");
+          return Promise.resolve(true);
+        },
+        expire: () => Promise.resolve(0),
+        presence: () => Promise.resolve([]),
+      },
+      deviceExecutions: {
+        receipt: async (received) => {
+          assert.deepEqual(received, status);
+          calls.push("status");
+          entered.resolve(undefined);
+          await release.promise;
+          return mode === "accepted" ? record : null;
+        },
+        reconcile: (received) => {
+          assert.equal(received.payload.kind, "reconciled");
+          calls.push("reconciled");
+          return Promise.resolve(record);
+        },
+        expire: () => {
+          calls.push("expire");
+          return Promise.resolve(1);
+        },
+      },
+    };
+    const transport = createDeviceSocketTransport({
+      authenticateDevice: () => Promise.resolve({ ownerId, deviceId: session.deviceId }),
+      transaction: <Result>(id: string, work: (scope: DeviceSocketScope) => Promise<Result>) => {
+        assert.equal(id, ownerId);
+        return work(scope);
+      },
+    });
+    const host = startServer(
+      { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 1000 },
+      { deviceTransport: transport },
+    );
+    const socket = new WebSocket(`ws://127.0.0.1:${String(host.server.port)}/api/devices/socket`, {
+      headers: { Authorization: `Bearer wdi_${"a".repeat(43)}` },
+    });
+    try {
+      await received(socket);
+      const closed = disconnected(socket);
+      socket.send(
+        encodeDeviceMessage(
+          mode === "spoofed" ? { ...status, sessionId: crypto.randomUUID() } : status,
+        ),
+      );
+      if (mode !== "spoofed") {
+        await entered.promise;
+        socket.send(
+          encodeDeviceMessage({
+            ...status,
+            messageId: crypto.randomUUID(),
+            payload: {
+              kind: "reconciled",
+              executionId: message.payload.executionId,
+              taskId: task.id,
+              taskRevision: task.revision,
+              state: "uncertain",
+              exitCode: null,
+            },
+          }),
+        );
+        const acknowledgment = mode === "accepted" ? received(socket) : undefined;
+        socket.send(
+          encodeDeviceMessage({ ...status, payload: { kind: "heartbeat", status: "ready" } }),
+        );
+        assert.deepEqual(calls, ["status"]);
+        release.resolve(undefined);
+        if (acknowledgment) {
+          assert.equal(decodeDeviceMessage(await acknowledgment).payload.kind, "heartbeat");
+          assert.deepEqual(calls, ["status", "reconciled", "heartbeat"]);
+          socket.close();
+        }
+      }
+      await closed;
+      await transport.stop();
+      assert.deepEqual(
+        calls,
+        mode === "accepted"
+          ? ["status", "reconciled", "heartbeat", "close", "expire"]
+          : mode === "rejected"
+            ? ["status", "close", "expire"]
+            : ["close", "expire"],
+      );
+    } finally {
+      release.resolve(undefined);
+      socket.close();
+      await host.stop();
+    }
+  }
+}, 10_000);
 
 function received(socket: WebSocket) {
   return new Promise<string>((resolve, reject) => {
@@ -69,10 +229,8 @@ test("proxy sockets serialize advertisements and heartbeats and discard overflow
     };
     const transport = createDeviceSocketTransport({
       authenticateDevice: () => Promise.resolve({ ownerId, deviceId: session.deviceId }),
-      transaction: <Result>(
-        _owner: string,
-        work: (scope: Pick<OwnerTransaction, "deviceSessions">) => Promise<Result>,
-      ) => work({ deviceSessions: sessions }),
+      transaction: <Result>(_owner: string, work: (scope: DeviceSocketScope) => Promise<Result>) =>
+        work({ deviceSessions: sessions, deviceExecutions: rejectedEvidence }),
     });
     const host = startServer(
       { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 1000 },
@@ -169,12 +327,9 @@ test("proxy sockets authenticate, acknowledge fenced heartbeats and close invali
   const transport = createDeviceSocketTransport({
     authenticateDevice: (token) =>
       Promise.resolve(token === credential ? { ownerId, deviceId } : null),
-    transaction: <Result>(
-      id: string,
-      work: (scope: Pick<OwnerTransaction, "deviceSessions">) => Promise<Result>,
-    ) => {
+    transaction: <Result>(id: string, work: (scope: DeviceSocketScope) => Promise<Result>) => {
       assert.equal(id, ownerId);
-      return work({ deviceSessions: sessions });
+      return work({ deviceSessions: sessions, deviceExecutions: rejectedEvidence });
     },
   });
   const host = startServer(

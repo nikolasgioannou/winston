@@ -264,6 +264,12 @@ test("expired or disconnected executions retain resources until trustworthy comp
       assert.equal((await f.reserve(later)).status, "busy");
       const unrelated = await f.prepare(await f.pair());
       assert.equal((await f.reserve(unrelated)).status, "reserved");
+      // Closing all sessions must not hide unfinished executions from recovery.
+      await sql`UPDATE winston.device_sessions SET disconnected_at = clock_timestamp() WHERE owner_id = ${f.ownerId}::uuid`;
+      assert.deepEqual(await database.deviceSessionOwners(), [f.ownerId]);
+      assert.deepEqual(await database.deviceSessionOwners(f.ownerId), []);
+      assert.equal(await expire(), 1);
+      assert.deepEqual(await database.deviceSessionOwners(), []);
     } finally {
       await database.close();
     }
