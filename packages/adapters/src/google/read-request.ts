@@ -101,9 +101,11 @@ export function createGoogleReadRequest(
         },
         operation,
       };
-      const initial = await database.transaction(ownerId, (scope) =>
-        scope.authorization.evaluate(action),
-      );
+      const initial = await database.transaction(ownerId, async (scope) => {
+        if (target.task && !(await scope.responsibilityAccess(target.task.id, action)))
+          throw fail("denied");
+        return scope.authorization.evaluate(action);
+      });
       if (initial.decision === "ask" && !(await options.approved?.(action)))
         throw fail("approval_required");
       if (initial.decision === "deny" || !initial.snapshot) throw fail("denied");
@@ -133,6 +135,7 @@ export function createGoogleReadRequest(
             ...(target.task ? { task: target.task } : {}),
           });
           return (
+            (!target.task || (await scope.responsibilityAccess(target.task.id, action))) &&
             policy.decision !== "deny" &&
             credential?.revision === access.revision &&
             preferences.revision === target.preferencesRevision &&

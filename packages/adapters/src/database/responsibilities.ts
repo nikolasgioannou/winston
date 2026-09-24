@@ -10,6 +10,8 @@ import {
 import { userMessageSchema } from "@winston/contracts/messages";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationResource } from "./authorization-resources";
+import { scheduleRepository } from "./schedules";
+import { scheduleSchema } from "@winston/contracts/schedules";
 
 export class ResponsibilityWriteError extends Error {
   constructor(readonly kind: "not_found" | "conflict" | "invalid_scope") {
@@ -69,6 +71,20 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
     `);
     return value;
   }
+  async function suspendSchedules(id: string, pause: boolean) {
+    const result = await transaction.execute<{ document: unknown }>(sql`
+      SELECT document FROM winston.schedules WHERE owner_id = ${ownerId}::uuid
+        AND document->'responsibility'->>'id' = ${id} AND document->>'state' <> 'canceled'
+    `);
+    const schedules = scheduleRepository(transaction, ownerId);
+    for (const row of result.rows) {
+      const schedule = scheduleSchema.parse(row.document);
+      if (pause && schedule.state === "paused") continue;
+      if (pause && schedule.state === "active")
+        await schedules.pause(schedule.id, schedule.revision);
+      else await schedules.cancel(schedule.id, schedule.revision);
+    }
+  }
   async function current(id: string, revision: number) {
     responsibilitySchema.shape.revision.parse(revision);
     await lock();
@@ -122,6 +138,7 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
     async revise(id: string, revision: number, input: Omit<ResponsibilityProposal, "key">) {
       const value = await current(id, revision);
       const { parsed, sources } = await validate({ ...input, key: "revision" });
+      await suspendSchedules(id, false);
       return record({
         ...value,
         purpose: parsed.purpose,
@@ -161,6 +178,7 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
         (state === "paused" && value.state !== "active")
       )
         throw new ResponsibilityWriteError("conflict");
+      if (state !== "active") await suspendSchedules(id, state === "paused");
       return record({ ...value, revision: revision + 1, state, updatedAt: await clock() });
     },
   };

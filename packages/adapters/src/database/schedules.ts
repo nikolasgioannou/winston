@@ -9,6 +9,7 @@ import {
 import { nextScheduleOccurrence, recoverScheduleOccurrence } from "../schedules";
 import type { DatabaseTransaction } from "./owners";
 import { taskRepository } from "./tasks";
+import { responsibilityBindingAllowed } from "./responsibility-bindings";
 
 export class ScheduleWriteError extends Error {
   constructor(readonly kind: "not_found" | "conflict" | "invalid_request") {
@@ -96,6 +97,11 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     async create(input: ScheduleRequest) {
       await lock();
       const { request, nextRunAt } = await validate(input);
+      if (
+        request.responsibility &&
+        !(await responsibilityBindingAllowed(transaction, ownerId, request.responsibility))
+      )
+        throw new ScheduleWriteError("conflict");
       const hash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
       const previous = await transaction.execute<{ document: unknown; hash: string }>(sql`
         SELECT document, request_hash AS hash FROM winston.schedules
@@ -115,6 +121,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
         objective: request.objective,
         sourceMessageIds: request.sourceMessageIds,
         timing: request.timing,
+        ...(request.responsibility ? { responsibility: request.responsibility } : {}),
       });
       await transaction.execute(sql`
         INSERT INTO winston.schedules (owner_id, id, request_key, request_hash, document, next_run_at)
@@ -124,6 +131,7 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     },
     async update(id: string, revision: number, input: Omit<ScheduleRequest, "key">) {
       const schedule = await current(id, revision);
+      if (input.responsibility) throw new ScheduleWriteError("conflict");
       if (schedule.state === "canceled") throw new ScheduleWriteError("conflict");
       const { request, nextRunAt } = await validate({ ...input, key: "update" });
       const timingUnchanged =
@@ -153,6 +161,11 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
     },
     async resume(id: string, revision: number) {
       const schedule = await current(id, revision);
+      if (
+        schedule.responsibility &&
+        !(await responsibilityBindingAllowed(transaction, ownerId, schedule.responsibility))
+      )
+        throw new ScheduleWriteError("conflict");
       if (schedule.state !== "paused") throw new ScheduleWriteError("conflict");
       const clock = await transaction.execute<{ now: string }>(
         sql`SELECT clock_timestamp() AS now`,
@@ -192,6 +205,19 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
       const row = result.rows[0];
       if (!row) return undefined;
       const schedule = scheduleSchema.parse(row.document);
+      if (
+        schedule.responsibility &&
+        !(await responsibilityBindingAllowed(transaction, ownerId, schedule.responsibility))
+      ) {
+        await cancelOutstanding(schedule.id);
+        await save({
+          ...schedule,
+          revision: schedule.revision + 1,
+          state: "canceled",
+          nextRunAt: null,
+        });
+        return undefined;
+      }
       if (!schedule.nextRunAt) return undefined;
       const occurrence = recoverScheduleOccurrence(schedule.timing, schedule.nextRunAt, row.now);
       if (!occurrence) return undefined;

@@ -8,6 +8,7 @@ import { maximumTelegramDocumentBytes } from "../telegram/document";
 import type { DatabaseTransaction } from "./owners";
 import { artifactRepository } from "./artifacts";
 import { authorizationRepository } from "./authorization";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
 
 type FileRow = {
   id: string;
@@ -63,6 +64,13 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
     `);
     if (!rows.rowCount) return false;
     const snapshot = authorizationSnapshotSchema.parse(row.authorization);
+    if (
+      !(await responsibilityTaskAllowed(transaction, ownerId, row.taskId, {
+        operation: snapshot.operation,
+        target: snapshot.target,
+      }))
+    )
+      return false;
     return (
       (
         await authorizationRepository(transaction, ownerId).evaluate(
@@ -140,6 +148,13 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
         operation: "workspace.file.read",
         target: { kind: "workspace", id: input.workspaceId, resource: null },
       });
+      if (
+        !(await responsibilityTaskAllowed(transaction, ownerId, task.id, {
+          operation: "workspace.file.read",
+          target: { kind: "workspace", id: input.workspaceId, resource: null },
+        }))
+      )
+        throw new Error("File access is not allowed.");
       if (policy.decision !== "allow" || !policy.snapshot)
         throw new Error("File access is not allowed.");
       const bindings = await transaction.execute<{ chatId: string }>(sql`

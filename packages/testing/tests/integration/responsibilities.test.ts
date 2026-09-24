@@ -166,6 +166,46 @@ test("responsibilities require current owner agreement and preserve terminal rev
         { count: number }[]
       >`SELECT count(*)::integer AS count FROM winston.schedules WHERE owner_id = ${ownerId}::uuid`;
       assert.equal(counts[0]?.count, 0);
+      await run(({ responsibilities }) =>
+        responsibilities.revise(sourced.id, 0, {
+          purpose: input.purpose,
+          scope: input.scope,
+          sourceMessageIds: [messageId],
+        }),
+      );
+      await run(({ responsibilities }) => responsibilities.agree(sourced.id, 1));
+      const schedule = await run(({ schedules }) =>
+        schedules.create({
+          key: "source-revision",
+          objective: "Check the agreed trip",
+          sourceMessageIds: [messageId],
+          timing: { kind: "once", startAt: "2026-01-01T00:00:00.000Z", timezone: "UTC" },
+          responsibility: { id: sourced.id, agreementRevision: 1 },
+        }),
+      );
+      const occurrence = await run(({ schedules }) => schedules.claimDue());
+      assert.ok(occurrence);
+      const worker = await run(({ tasks }) => tasks.claim(occurrence.task.id, 0));
+      const pending = await run(({ schedules }) =>
+        schedules.create({
+          key: "source-revision-pending",
+          objective: schedule.objective,
+          sourceMessageIds: [messageId],
+          timing: schedule.timing,
+          responsibility: schedule.responsibility,
+        }),
+      );
+      await sql`UPDATE winston.conversation_messages SET envelope = jsonb_set(envelope, '{revision}', '2') WHERE owner_id = ${ownerId}::uuid AND id = ${messageId}::uuid`;
+      const outcome = await run(({ tasks }) =>
+        tasks.finishStep(worker.id, worker.revision, worker.generation, {
+          state: "succeeded",
+          result: "Outdated result",
+        }),
+      );
+      assert.equal(outcome.state, "canceled");
+      assert.equal(outcome.result, null);
+      assert.equal(await run(({ schedules }) => schedules.claimDue()), undefined);
+      assert.equal((await run(({ schedules }) => schedules.find(pending.id)))?.state, "canceled");
     } finally {
       await telegram.close();
       await database.close();

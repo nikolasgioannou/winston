@@ -13,6 +13,7 @@ import {
   type ActionTask,
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
 import { eventRepository } from "./events";
@@ -72,6 +73,15 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       action.request.authorization,
       action.snapshot ?? undefined,
     );
+    if (
+      !(await responsibilityTaskAllowed(
+        transaction,
+        ownerId,
+        action.request.task.id,
+        action.request.authorization,
+      ))
+    )
+      return { ...evaluation, decision: "deny" as const, reason: "stale" as const };
     if (
       action.request.bindingKey &&
       !(await taskResourceRepository(transaction, ownerId).matches(
@@ -374,6 +384,17 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const decision = await authorizationRepository(transaction, ownerId).evaluate(
         request.authorization,
       );
+      if (
+        !(await responsibilityTaskAllowed(
+          transaction,
+          ownerId,
+          request.task.id,
+          request.authorization,
+        ))
+      ) {
+        decision.decision = "deny";
+        decision.reason = "stale";
+      }
       const clock = await transaction.execute<{ expiresAt: string }>(
         sql`SELECT clock_timestamp() + interval '15 minutes' AS "expiresAt"`,
       );

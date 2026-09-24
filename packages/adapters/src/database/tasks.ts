@@ -13,6 +13,8 @@ import { eventRepository } from "./events";
 import { actionTaskSchema, type ActionTask } from "@winston/contracts/actions";
 import { serializeUserMessage, userMessageSchema } from "@winston/contracts/messages";
 import { taskResourceRepository } from "./task-resources";
+import { responsibilitySchema } from "@winston/contracts/responsibilities";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
 
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
@@ -138,11 +140,14 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
         dueAt: string;
         observedAt: string;
         timezone: string;
+        responsibility: unknown;
       }>(sql`
         SELECT o.schedule_id AS "scheduleId", o.due_at AS "dueAt", clock_timestamp() AS "observedAt",
-          s.document->'timing'->>'timezone' AS timezone
+          s.document->'timing'->>'timezone' AS timezone, r.document AS responsibility
         FROM winston.schedule_occurrences o JOIN winston.schedules s
           ON s.owner_id = o.owner_id AND s.id = o.schedule_id
+        LEFT JOIN winston.responsibilities r ON r.owner_id = s.owner_id
+          AND r.id = (s.document->'responsibility'->>'id')::uuid
         WHERE o.owner_id = ${ownerId}::uuid AND o.task_id = ${task.id}::uuid
       `);
       const occurrence = occurrences.rows[0];
@@ -151,6 +156,9 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
         scheduled: occurrence
           ? {
               ...occurrence,
+              responsibility: occurrence.responsibility
+                ? responsibilitySchema.parse(occurrence.responsibility)
+                : null,
               dueAt: new Date(occurrence.dueAt).toISOString(),
               observedAt: new Date(occurrence.observedAt).toISOString(),
             }
@@ -272,6 +280,14 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       const { task, leaseValid } = await current(id, revision);
       if (task.state !== "running" || !leaseValid || task.generation !== generation)
         throw new Error("Worker lease is stale or expired.");
+      if (!(await responsibilityTaskAllowed(transaction, ownerId, id)))
+        return save({
+          ...task,
+          state: "canceled",
+          revision: task.revision + 1,
+          generation: task.generation + 1,
+          blocker: null,
+        });
 
       if (
         outcome.state === "waiting" &&

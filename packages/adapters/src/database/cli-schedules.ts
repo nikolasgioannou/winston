@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   cliScheduleRequestSchema,
+  cliResultSchema,
   isScheduleMutation,
   type CliResult,
   type CliScheduleRequest,
@@ -11,6 +12,16 @@ import { ownerRepository } from "./owners";
 import { capabilityRepository } from "./capabilities";
 import { taskRepository } from "./tasks";
 import { scheduleRepository } from "./schedules";
+import { taskResponsibilityBinding } from "./responsibility-bindings";
+import type { JsonValue } from "@winston/contracts/json";
+
+function success(data: JsonValue): CliResult {
+  return cliResultSchema.parse({
+    version: 1,
+    status: "ok",
+    data: JSON.parse(JSON.stringify(data)) as unknown,
+  });
+}
 
 export async function executeScheduleCommand(
   transaction: DatabaseTransaction,
@@ -26,30 +37,36 @@ export async function executeScheduleCommand(
   const operation = isScheduleMutation(request.command) ? "gateway:control" : "gateway:read";
   if (!authority || authority.operation !== operation)
     return { version: 1, status: "denied", message: "Task authority is unavailable or expired." };
+  if (
+    isScheduleMutation(request.command) &&
+    (await taskResponsibilityBinding(transaction, ownerId, authority.taskId))
+  )
+    return {
+      version: 1,
+      status: "denied",
+      message:
+        "Responsibility checks cannot create or change schedules. Ask the owner through the conversation.",
+    };
   const schedules = scheduleRepository(transaction, ownerId);
   if (request.command === "schedules.list") {
     const records = await schedules.list(request.after);
-    return {
-      version: 1,
-      status: "ok",
-      data: {
-        schedules: records,
-        next: records.length === 100 ? (records.at(-1)?.id ?? null) : null,
-      },
-    };
+    return success({
+      schedules: records,
+      next: records.length === 100 ? (records.at(-1)?.id ?? null) : null,
+    });
   }
   if (request.command === "schedules.inspect") {
     const schedule = await schedules.find(request.id);
     return schedule
-      ? { version: 1, status: "ok", data: schedule }
+      ? success(schedule)
       : { version: 1, status: "unavailable", message: "Schedule unavailable." };
   }
   if (request.command === "schedules.cancel")
-    return { version: 1, status: "ok", data: await schedules.cancel(request.id, request.revision) };
+    return success(await schedules.cancel(request.id, request.revision));
   if (request.command === "schedules.pause")
-    return { version: 1, status: "ok", data: await schedules.pause(request.id, request.revision) };
+    return success(await schedules.pause(request.id, request.revision));
   if (request.command === "schedules.resume")
-    return { version: 1, status: "ok", data: await schedules.resume(request.id, request.revision) };
+    return success(await schedules.resume(request.id, request.revision));
   const context = await taskRepository(transaction, ownerId).context({
     id: authority.taskId,
     revision: authority.revision,
@@ -75,5 +92,5 @@ export async function executeScheduleCommand(
     request.command === "schedules.create"
       ? await schedules.create({ ...change, key: `cli:${authority.taskId}:${request.key}` })
       : await schedules.update(request.id, request.revision, change);
-  return { version: 1, status: "ok", data: schedule };
+  return success(schedule);
 }

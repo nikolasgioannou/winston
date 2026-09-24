@@ -7,6 +7,7 @@ import {
   type ServiceScope,
 } from "@winston/contracts/capabilities";
 import type { DatabaseTransaction } from "./owners";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
 
 export function capabilityHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -57,6 +58,7 @@ export function capabilityRepository(transaction: DatabaseTransaction, ownerId: 
         AND (document->>'generation')::integer = ${scope.generation} AND leased_until > clock_timestamp()
     `);
     if (!task.rowCount) return false;
+    if (!(await responsibilityTaskAllowed(transaction, ownerId, scope.taskId))) return false;
     if (scope.credential) {
       const credential = await transaction.execute(sql`
         SELECT id FROM winston.credentials WHERE owner_id = ${ownerId}::uuid AND id = ${scope.credential.id}::uuid

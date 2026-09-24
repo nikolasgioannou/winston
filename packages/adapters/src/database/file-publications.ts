@@ -6,6 +6,7 @@ import type { AuthorizationSnapshot } from "@winston/contracts/authorization";
 import type { DatabaseTransaction } from "./owners";
 import { capabilityRepository } from "./capabilities";
 import { authorizationRepository } from "./authorization";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
 
 export function filePublicationRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
@@ -20,6 +21,13 @@ export function filePublicationRepository(transaction: DatabaseTransaction, owne
       );
       const authority = await capabilityRepository(transaction, ownerId).authenticate(credential);
       if (authority?.operation !== "gateway:control") return { status: "denied" as const };
+      if (
+        !(await responsibilityTaskAllowed(transaction, ownerId, authority.taskId, {
+          operation: "workspace.file.read",
+          target: { kind: "workspace", id: authority.resourceId, resource: null },
+        }))
+      )
+        return { status: "denied" as const };
       const policy = await authorizationRepository(transaction, ownerId).evaluate(
         {
           operation: "workspace.file.read",

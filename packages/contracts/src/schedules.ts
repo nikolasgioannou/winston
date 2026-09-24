@@ -67,11 +67,17 @@ export const scheduleTimingSchema = z.discriminatedUnion("kind", [
 
 export type ScheduleTiming = z.infer<typeof scheduleTimingSchema>;
 
+export const scheduleResponsibilitySchema = z.strictObject({
+  id: z.uuid(),
+  agreementRevision: z.number().int().nonnegative(),
+});
+
 export const scheduleRequestSchema = z.strictObject({
   key: z.string().min(1).max(200),
   objective: z.string().min(1).max(20_000),
   sourceMessageIds: z.array(z.uuid()).max(100),
   timing: scheduleTimingSchema,
+  responsibility: scheduleResponsibilitySchema.optional(),
 });
 export const scheduleSchema = scheduleRequestSchema.omit({ key: true }).extend({
   id: z.uuid(),
@@ -92,9 +98,11 @@ export const ownerScheduleCreateSchema = scheduleRequestSchema
   .extend({
     key: z.string().min(1).max(196),
   });
-export const ownerScheduleUpdateSchema = ownerScheduleCreateSchema.omit({ key: true }).extend({
-  revision: scheduleSchema.shape.revision,
-});
+export const ownerScheduleUpdateSchema = ownerScheduleCreateSchema
+  .omit({ key: true, responsibility: true })
+  .extend({
+    revision: scheduleSchema.shape.revision,
+  });
 export const ownerScheduleCancelSchema = z.strictObject({
   revision: scheduleSchema.shape.revision,
 });

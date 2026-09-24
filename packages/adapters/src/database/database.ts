@@ -1,6 +1,8 @@
 import { Pool } from "pg";
 import { scheduleRepository } from "./schedules";
 import { responsibilityRepository } from "./responsibilities";
+import { responsibilityTaskAllowed } from "./responsibility-bindings";
+import type { AuthorizationRequest } from "@winston/contracts/authorization";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { checkSchema } from "./migrations";
@@ -42,6 +44,10 @@ import {
 } from "@winston/contracts/device-registry";
 
 export type OwnerTransaction = {
+  readonly responsibilityAccess: (
+    taskId: string,
+    request: AuthorizationRequest,
+  ) => Promise<boolean>;
   readonly responsibilities: ReturnType<typeof responsibilityRepository>;
   readonly schedules: ReturnType<typeof scheduleRepository>;
   readonly voice: ReturnType<typeof voiceRepository>;
@@ -163,6 +169,8 @@ export function createDatabase(options: {
         return work({
           schedules: scheduleRepository(transaction, ownerId),
           responsibilities: responsibilityRepository(transaction, ownerId),
+          responsibilityAccess: (taskId, request) =>
+            responsibilityTaskAllowed(transaction, ownerId, taskId, request),
           voice: voiceRepository(transaction, ownerId),
           inboxTransfers: inboxTransferRepository(transaction, ownerId),
           telegramIntake: telegramIntakeRepository(transaction, ownerId),
