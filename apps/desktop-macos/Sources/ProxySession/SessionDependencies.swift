@@ -1,0 +1,65 @@
+import Foundation
+import WinstonDeviceTransport
+
+@MainActor
+package struct SessionDependencies {
+  var allowed: Bool
+  var load: () async throws -> StoredDeviceIdentity?
+  var save: (StoredDeviceIdentity) async throws -> Void
+  var remove: () async throws -> Void
+  var pair: (URL, String) async throws -> StoredDeviceIdentity
+  var run:
+    (
+      StoredDeviceIdentity,
+      @escaping @Sendable (DeviceConnectionState) async -> Void,
+      @escaping @Sendable () async -> DeviceAvailability
+    ) async throws -> Void
+
+  package init(
+    allowed: Bool,
+    load: @escaping () async throws -> StoredDeviceIdentity?,
+    save: @escaping (StoredDeviceIdentity) async throws -> Void,
+    remove: @escaping () async throws -> Void,
+    pair: @escaping (URL, String) async throws -> StoredDeviceIdentity,
+    run:
+      @escaping (
+        StoredDeviceIdentity,
+        @escaping @Sendable (DeviceConnectionState) async -> Void,
+        @escaping @Sendable () async -> DeviceAvailability
+      ) async throws -> Void
+  ) {
+    self.allowed = allowed
+    self.load = load
+    self.save = save
+    self.remove = remove
+    self.pair = pair
+    self.run = run
+  }
+
+  static func live() -> Self {
+    let store = KeychainIdentityStore()
+    return Self(
+      allowed: Bundle.main.bundleIdentifier == "app.runwinston.proxy",
+      load: { try await store.load() },
+      save: { try await store.save($0) },
+      remove: { try await store.remove() },
+      pair: { origin, token in
+        // Execution capabilities are advertised only after their handlers are installed.
+        let device = try await DevicePairing.pair(
+          origin: origin, token: token,
+          appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+            ?? "0.1.0",
+          capabilities: [])
+        return try StoredDeviceIdentity(
+          origin: origin, deviceId: device.id, name: device.name, credential: device.credential)
+      },
+      run: { identity, onState, status in
+        var endpoint = URLComponents(url: identity.origin, resolvingAgainstBaseURL: false)!
+        endpoint.scheme = "wss"
+        endpoint.path = "/api/devices/socket"
+        let transport = try DeviceTransport(
+          endpoint: endpoint.url!, deviceId: identity.deviceId, credential: identity.credential)
+        try await DeviceConnectionLoop(transport: transport).run(onState: onState, status: status)
+      })
+  }
+}

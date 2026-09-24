@@ -23,3 +23,25 @@ test.skipIf(process.platform !== "darwin")(
   },
   60_000,
 );
+
+test.skipIf(process.platform !== "darwin")(
+  "native session fences obsolete loops and handles pairing and Keychain failures",
+  async () => {
+    const child = Bun.spawn(
+      ["xcrun", "swift", "run", "--package-path", "apps/desktop-macos", "SessionFixture"],
+      { cwd: fileURLToPath(new URL("../../../", import.meta.url)), stdout: "pipe", stderr: "pipe" },
+    );
+    try {
+      const [code, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      assert.equal(code, 0, stderr);
+      assert.match(stdout, /Native session integration checks passed/);
+    } finally {
+      child.kill();
+    }
+  },
+  60_000,
+);

@@ -8,5 +8,9 @@ struct WinstonProxyApp: App {
     MenuBarExtra("Winston", systemImage: "desktopcomputer") {
       ProxyMenu(controller: controller)
     }
+    Window("Winston connection", id: "connection") {
+      ConnectionView(session: controller.session)
+    }
+    .windowResizability(.contentSize)
   }
 }

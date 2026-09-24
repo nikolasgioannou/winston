@@ -1,12 +1,14 @@
 import AppKit
 @preconcurrency import ApplicationServices
 import Observation
+import ProxySession
 import ProxyState
 import ServiceManagement
 
 @MainActor
 @Observable
 final class ProxyController {
+  let session = DeviceSessionController()
   private(set) var state = ProxyState()
   private(set) var accessibilityAllowed = false
   private(set) var screenCaptureAllowed = false
@@ -21,16 +23,21 @@ final class ProxyController {
     observers.append(
       center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) {
         [weak self] _ in
-        MainActor.assumeIsolated { self?.state.sleep() }
+        MainActor.assumeIsolated {
+          self?.state.sleep()
+          self?.session.setSleeping(true)
+        }
       })
     observers.append(
       center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) {
         [weak self] _ in
         MainActor.assumeIsolated {
           self?.state.wake()
+          self?.session.setSleeping(false)
           self?.refresh()
         }
       })
+    Task { await session.restore() }
   }
 
   func refresh() {
@@ -41,6 +48,7 @@ final class ProxyController {
 
   func togglePause() {
     state.setPaused(!state.isPaused)
+    session.setPaused(state.isPaused)
   }
 
   func requestAccessibility() {
@@ -82,6 +90,7 @@ final class ProxyController {
 
   func quit() {
     state.setPaused(true)
+    session.setEnabled(false)
     NSApplication.shared.terminate(nil)
   }
 }

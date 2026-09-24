@@ -1,6 +1,14 @@
 import Foundation
 import WinstonDeviceTransport
 
+private actor LifecycleEvents {
+  private(set) var values: [DeviceConnectionState] = []
+
+  func append(_ state: DeviceConnectionState) {
+    values.append(state)
+  }
+}
+
 @main
 struct TransportFixture {
   static func main() async throws {
@@ -24,7 +32,10 @@ struct TransportFixture {
       let mode = CommandLine.arguments[2]
       if mode == "reconnect" || mode == "pairing" {
         let loop = DeviceConnectionLoop(transport: transport)
-        let operation = Task { try await loop.run { .paused } }
+        let events = LifecycleEvents()
+        let operation = Task {
+          try await loop.run(onState: { await events.append($0) }, status: { .paused })
+        }
         for _ in 0..<100 {
           let state = await loop.state
           if state == .connected || state == .pairingRequired { break }
@@ -39,6 +50,13 @@ struct TransportFixture {
         try await operation.value
         if mode == "reconnect" {
           guard await loop.state == .stopped else { fatalError("Connection did not stop") }
+        }
+        let expected: [DeviceConnectionState] =
+          mode == "reconnect"
+          ? [.connecting, .disconnected, .connecting, .connected, .stopped]
+          : [.connecting, .pairingRequired]
+        guard await events.values == expected else {
+          fatalError("Incorrect lifecycle notifications")
         }
         print("Native connection lifecycle passed")
         return
