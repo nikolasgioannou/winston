@@ -13,6 +13,8 @@ import {
   type ActionTask,
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
+import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
+import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
@@ -159,6 +161,59 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    // A proof check only: the dispatcher must reserve durably before sending once.
+    async authorizeDevice(input: {
+      id: string;
+      token: string;
+      task: ActionTask;
+      message: DeviceMessage;
+    }) {
+      const worker = actionTaskSchema.parse(input.task);
+      const message = deviceMessageSchema.parse(input.message);
+      const operation = message.payload;
+      if (operation.kind !== "execute") return false;
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested || stored.tokenHash !== hash(input.token))
+        return false;
+      const action = actionRecordSchema.parse(stored.document);
+      const { target } = action.request.authorization;
+      if (
+        action.state !== "dispatching" ||
+        target.kind !== "device" ||
+        target.id !== message.deviceId ||
+        target.resource !== null ||
+        action.operationId !== operation.executionId ||
+        action.request.authorization.operation !== `device.${operation.operation.kind}` ||
+        canonical(action.request.arguments) !== canonical(operation.operation) ||
+        canonical(action.dispatchTask) !== canonical(worker) ||
+        operation.taskId !== worker.id ||
+        operation.taskRevision !== worker.revision
+      )
+        return false;
+      const current = await task(worker.id);
+      if (!running(current, worker) || !sameIntent(current, action)) return false;
+      const evaluation = await policy(action);
+      if (
+        evaluation.decision !== "allow" &&
+        !(evaluation.decision === "ask" && action.decisionSource === "owner")
+      )
+        return false;
+      const supported = await deviceSessionRepository(transaction, ownerId).supports(
+        {
+          deviceId: message.deviceId,
+          sessionId: message.sessionId,
+          generation: message.generation,
+        },
+        operation.operation.kind,
+      );
+      if (!supported) return false;
+      // Use database time after lock acquisition, matching task and device leases.
+      const deadline = await transaction.execute(sql`
+        SELECT 1 WHERE ${operation.deadline}::numeric > extract(epoch FROM clock_timestamp()) * 1000
+      `);
+      return deadline.rows.length === 1;
+    },
     // Server-side read adapters only. The dispatch token never leaves the API process.
     async authorizeConnectionRead(input: {
       id: string;
