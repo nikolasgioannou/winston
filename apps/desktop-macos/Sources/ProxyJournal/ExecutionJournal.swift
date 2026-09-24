@@ -16,6 +16,19 @@ public actor ExecutionJournal {
 
   public func close() { database.close() }
 
+  public func hasUncertainExecution(deviceId: String) throws -> Bool {
+    guard UUID(uuidString: deviceId) != nil else { throw JournalError.invalidRequest }
+    do {
+      return try database.query(
+        "SELECT 1 FROM executions WHERE device_id = ? AND state = 'uncertain' LIMIT 1",
+        values: [deviceId.lowercased()], read: { _ in true }
+      ).first ?? false
+    } catch {
+      database.close()
+      throw error
+    }
+  }
+
   public func admit(_ message: DeviceMessage) throws -> JournalAdmission {
     guard case .execute(let binding, _, _) = message.payload else {
       throw JournalError.invalidRequest
@@ -101,6 +114,17 @@ public actor ExecutionJournal {
     return JournalRecord(
       key: key, fingerprint: current.fingerprint, state: state,
       cancellationRequested: current.cancellationRequested, exitCode: exitCode)
+  }
+
+  public func markUncertain(_ key: JournalKey) throws -> JournalRecord {
+    guard let current = try record(key) else { throw JournalError.invalidTransition }
+    guard !current.state.isTerminal && current.state != .uncertain else { return current }
+    try write(
+      "UPDATE executions SET state = 'uncertain' WHERE device_id = ? AND execution_id = ?",
+      values: [key.deviceId, key.executionId])
+    return JournalRecord(
+      key: key, fingerprint: current.fingerprint, state: .uncertain,
+      cancellationRequested: current.cancellationRequested, exitCode: nil)
   }
 
   private func write(_ sql: String, values: [String?]) throws {

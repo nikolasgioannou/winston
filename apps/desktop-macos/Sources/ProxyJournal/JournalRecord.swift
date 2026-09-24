@@ -21,7 +21,7 @@ public enum JournalState: String, Sendable {
   }
 }
 
-public struct JournalKey: Sendable, Equatable {
+public struct JournalKey: Sendable, Hashable {
   public let deviceId: String
   public let executionId: String
 

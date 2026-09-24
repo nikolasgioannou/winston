@@ -6,6 +6,39 @@ import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 
 test.skipIf(process.platform !== "darwin")(
+  "native execution keeps stop responsive and fences pending admission, sessions and resources",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "winston-execution-"));
+    const child = Bun.spawn(
+      [
+        "xcrun",
+        "swift",
+        "run",
+        "--package-path",
+        "apps/desktop-macos",
+        "ExecutionFixture",
+        directory,
+      ],
+      { cwd: fileURLToPath(new URL("../../../", import.meta.url)), stdout: "pipe", stderr: "pipe" },
+    );
+    try {
+      const [code, output, error] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      assert.equal(code, 0, error);
+      assert.match(output, /Native execution admission and stop checks passed/);
+    } finally {
+      child.kill();
+      await child.exited;
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
+
+test.skipIf(process.platform !== "darwin")(
   "native execution journal survives abrupt death and rejects replay, conflicts and unsafe storage",
   async () => {
     const cwd = fileURLToPath(new URL("../../../", import.meta.url));
