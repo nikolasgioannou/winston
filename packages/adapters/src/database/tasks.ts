@@ -18,6 +18,16 @@ import { responsibilitySchema } from "@winston/contracts/responsibilities";
 import { responsibilityTaskAllowed, taskResponsibilitySetup } from "./responsibility-bindings";
 import { taskActivity } from "./task-activity";
 import { taskDetail, taskHistory } from "./task-detail";
+import { taskActionEvidence } from "./task-action-evidence";
+
+export class TaskWriteError extends Error {
+  constructor(
+    readonly kind: "not_found" | "conflict",
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
@@ -73,22 +83,27 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
     // Use the same owner → task ordering as action dispatch and policy changes.
     await lockOwner();
     const stored = await row(id, true);
-    if (!stored) throw new Error("Task is unavailable to this owner.");
+    if (!stored) throw new TaskWriteError("not_found", "Task is unavailable to this owner.");
     const task = taskSchema.parse(stored.document);
-    if (task.revision !== revision) throw new Error("Task revision is stale.");
+    if (task.revision !== revision) throw new TaskWriteError("conflict", "Task revision is stale.");
 
     return { task, leaseValid: stored.leaseValid };
   }
 
   function active(task: Task) {
     if (["succeeded", "failed", "canceled"].includes(task.state))
-      throw new Error("Terminal tasks cannot be changed. Create new work explicitly.");
+      throw new TaskWriteError(
+        "conflict",
+        "Terminal tasks cannot be changed. Create new work explicitly.",
+      );
   }
 
   return {
     activity: (before?: TaskActivityCursor) => taskActivity(transaction, ownerId, before),
     detail: (id: string) => taskDetail(transaction, ownerId, id),
     activityHistory: (id: string, before?: number) => taskHistory(transaction, ownerId, id, before),
+    actionEvidence: (id: string, after?: string) =>
+      taskActionEvidence(transaction, ownerId, id, after),
     async wakeDue(limit = 100) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 100)
         throw new Error("Invalid retry page.");

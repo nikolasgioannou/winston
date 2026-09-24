@@ -1,19 +1,23 @@
 import { Hono } from "hono";
-import type { OwnerTransaction } from "@winston/adapters/database";
+import { TaskWriteError, type OwnerTransaction } from "@winston/adapters/database";
 import {
   taskActivityCursorSchema,
   taskSchema,
   taskHistoryCursorSchema,
+  ownerTaskCancelSchema,
   type TaskActivityCursor,
 } from "@winston/contracts/tasks";
 import type { HttpEnvironment } from "./app";
-import { RequestError } from "./errors";
+import { parseJson, RequestError } from "./errors";
 
 export function createActivityOwnerRouter(database: {
   transaction<T>(
     ownerId: string,
     work: (scope: {
-      tasks: Pick<OwnerTransaction["tasks"], "activity" | "detail" | "activityHistory">;
+      tasks: Pick<
+        OwnerTransaction["tasks"],
+        "activity" | "detail" | "activityHistory" | "actionEvidence" | "cancel"
+      >;
     }) => Promise<T>,
   ): Promise<T>;
 }) {
@@ -63,6 +67,40 @@ export function createActivityOwnerRouter(database: {
         return tasks.activityHistory(parsed.data, before);
       }),
     );
+  });
+  router.get("/:id/actions", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const parsed = taskSchema.shape.id.safeParse(context.req.param("id"));
+    if (!parsed.success) throw new RequestError("not_found");
+    const after = context.req.query("after");
+    if (after !== undefined && !taskSchema.shape.id.safeParse(after).success)
+      throw new RequestError("invalid_request");
+    return context.json(
+      await database.transaction(owner.ownerId, async ({ tasks }) => {
+        if (!(await tasks.detail(parsed.data))) throw new RequestError("not_found");
+        return tasks.actionEvidence(parsed.data, after);
+      }),
+    );
+  });
+  router.post("/:id/cancel", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const parsed = taskSchema.shape.id.safeParse(context.req.param("id"));
+    if (!parsed.success) throw new RequestError("not_found");
+    const input = await parseJson(context, ownerTaskCancelSchema);
+    try {
+      const result = await database.transaction(owner.ownerId, async ({ tasks }) => {
+        await tasks.cancel(parsed.data, input.revision);
+        const detail = await tasks.detail(parsed.data);
+        if (!detail) throw new RequestError("not_found");
+        return detail;
+      });
+      return context.json(result);
+    } catch (error) {
+      if (error instanceof TaskWriteError) throw new RequestError(error.kind);
+      throw error;
+    }
   });
   return router;
 }

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { actionStateSchema } from "./actions";
+import { authorizationRequestSchema } from "./authorization";
 
 export const taskBlockerSchema = z.strictObject({
   kind: z.enum([
@@ -78,3 +80,22 @@ export const taskHistorySchema = z.strictObject({
   next: taskHistoryCursorSchema.nullable(),
 });
 export type TaskHistory = z.infer<typeof taskHistorySchema>;
+
+export const taskActionEvidenceSchema = z.strictObject({
+  unresolved: z.number().int().nonnegative(),
+  items: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        intentRevision: z.number().int().nonnegative(),
+        authorization: authorizationRequestSchema,
+        state: actionStateSchema,
+        decisionSource: z.enum(["policy", "owner"]).nullable(),
+        expiresAt: z.iso.datetime(),
+      }),
+    )
+    .max(20),
+  next: z.uuid().nullable(),
+});
+export type TaskActionEvidence = z.infer<typeof taskActionEvidenceSchema>;
+export const ownerTaskCancelSchema = z.strictObject({ revision: taskSchema.shape.revision });

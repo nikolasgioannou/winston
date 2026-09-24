@@ -4,6 +4,7 @@ import { test } from "bun:test";
 import { Hono } from "hono";
 import { createApi, type HttpEnvironment } from "../src/http/app";
 import { createActivityOwnerRouter } from "../src/http/activity";
+import { TaskWriteError } from "@winston/adapters/database";
 
 test("activity requires an owner session and validates complete precise cursors", async () => {
   const ownerId = randomUUID();
@@ -24,6 +25,8 @@ test("activity requires an owner session and validates complete precise cursors"
               assert.equal(owner, ownerId);
               return work({
                 tasks: {
+                  actionEvidence: () => Promise.resolve({ unresolved: 0, items: [], next: null }),
+                  cancel: () => Promise.reject(new TaskWriteError("not_found", "Missing")),
                   detail: () => Promise.resolve(null),
                   activityHistory: () => Promise.resolve({ items: [], next: null }),
                   activity: (before) => {
@@ -74,6 +77,7 @@ test("task details and history require owner access and reject malformed cursors
     updatedAt: "2030-01-01T00:00:00.000000Z",
   };
   const cursors: (number | undefined)[] = [];
+  let canceled = 0;
   const { app } = createApi({
     ownerOrigin: "https://web.example",
     groups: {
@@ -90,6 +94,25 @@ test("task details and history require owner access and reject malformed cursors
               return work({
                 tasks: {
                   activity: () => Promise.resolve({ items: [], next: null }),
+                  actionEvidence: (requested) => {
+                    assert.equal(requested, id);
+                    return Promise.resolve({ unresolved: 2, items: [], next: null });
+                  },
+                  cancel: (requested, revision) => {
+                    if (requested !== id)
+                      return Promise.reject(new TaskWriteError("not_found", "Missing"));
+                    if (revision !== 0)
+                      return Promise.reject(new TaskWriteError("conflict", "Changed"));
+                    canceled++;
+                    return Promise.resolve({
+                      ...detail,
+                      ownerId,
+                      generation: 1,
+                      sourceMessageIds: [],
+                      blocker: null,
+                      state: "canceled" as const,
+                    });
+                  },
                   detail: (requested) => Promise.resolve(requested === id ? detail : null),
                   activityHistory: (requested, before) => {
                     assert.equal(requested, id);
@@ -127,4 +150,47 @@ test("task details and history require owner access and reject malformed cursors
   assert.equal((await app.request(`${path}/history`, { headers })).status, 200);
   assert.equal((await app.request(`${path}/history?beforeRevision=0`, { headers })).status, 200);
   assert.deepEqual(cursors, [undefined, 0]);
+  assert.equal((await app.request(`${path}/actions`)).status, 401);
+  assert.equal((await app.request(`${path}/actions?after=bad`, { headers })).status, 400);
+  assert.equal(
+    (await app.request(`/api/owner/activity/${randomUUID()}/actions`, { headers })).status,
+    404,
+  );
+  assert.deepEqual(await (await app.request(`${path}/actions`, { headers })).json(), {
+    unresolved: 2,
+    items: [],
+    next: null,
+  });
+  const write = (revision: number, extra: Record<string, string> = {}) => ({
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json", ...extra },
+    body: JSON.stringify({ revision }),
+  });
+  assert.equal(
+    (await app.request(`${path}/cancel`, write(0, { Origin: "https://wrong.example" }))).status,
+    403,
+  );
+  assert.equal(canceled, 0);
+  assert.equal(
+    (await app.request(`${path}/cancel`, write(1, { Origin: "https://web.example" }))).status,
+    409,
+  );
+  assert.equal(
+    (
+      await app.request(
+        `/api/owner/activity/${randomUUID()}/cancel`,
+        write(0, { Origin: "https://web.example" }),
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await app.request(`${path}/cancel`, write(-1, { Origin: "https://web.example" }))).status,
+    400,
+  );
+  assert.equal(
+    (await app.request(`${path}/cancel`, write(0, { Origin: "https://web.example" }))).status,
+    200,
+  );
+  assert.equal(canceled, 1);
 });
