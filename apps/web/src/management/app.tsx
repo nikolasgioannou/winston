@@ -22,6 +22,9 @@ import { Responsibilities } from "../responsibilities/responsibilities";
 const ScheduleEditor = lazy(async () => ({
   default: (await import("../schedules/editor")).ScheduleEditor,
 }));
+const Computers = lazy(async () => ({
+  default: (await import("../computers/computers")).Computers,
+}));
 const ScheduleRuns = lazy(async () => ({
   default: (await import("../schedules/runs")).ScheduleRuns,
 }));
@@ -51,13 +54,15 @@ function Layout() {
         clearPendingDestination();
         navigate({
           to:
-            href === "/responsibilities"
-              ? "/responsibilities"
-              : href === "/schedules"
-                ? "/schedules"
-                : href === "/connections"
-                  ? "/connections"
-                  : "/",
+            href === "/computers"
+              ? "/computers"
+              : href === "/responsibilities"
+                ? "/responsibilities"
+                : href === "/schedules"
+                  ? "/schedules"
+                  : href === "/connections"
+                    ? "/connections"
+                    : "/",
         }).catch(() => {
           window.location.assign(href);
         });
@@ -91,6 +96,15 @@ const connectionsRoute = createRoute({
       <h1 className="text-xl font-medium">Connections</h1>
       <Connections />
     </>
+  ),
+});
+const computersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/computers",
+  component: () => (
+    <Suspense fallback={<p role="status">Loading computers…</p>}>
+      <Computers />
+    </Suspense>
   ),
 });
 const downloadRoute = createRoute({
@@ -190,6 +204,7 @@ const router = createRouter({
   routeTree: rootRoute.addChildren([
     accountRoute,
     connectionsRoute,
+    computersRoute,
     schedulesRoute,
     responsibilitiesRoute,
     responsibilityDetailRoute,

@@ -12,6 +12,7 @@ import { AccountView } from "../management/account-view";
 import { SchedulesPreview, previewSchedules } from "./schedules-preview";
 import { ScheduleEditorPreview } from "./schedule-editor-preview";
 import { ScheduleRunsPreview } from "./schedule-runs-preview";
+import { ComputersPreview } from "./computers-preview";
 import { ResponsibilitiesPreview } from "./responsibilities-preview";
 import { ResponsibilityDetailPreview } from "./responsibility-detail-preview";
 
@@ -178,6 +179,25 @@ export const reviewPages: readonly ReviewPage[] = [
         label: state,
         fullWidth: true,
         render: () => <ScheduleRunsPreview initial={state} />,
+      })),
+    ],
+  },
+  {
+    id: "computers",
+    label: "Computers",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <ComputersPreview initial="ready" />,
+      },
+      ...(["empty", "loading", "error", "saving", "uncertain"] as const).map((state) => ({
+        id: state,
+        label: state,
+        fullWidth: true,
+        render: () => <ComputersPreview initial={state} />,
       })),
     ],
   },

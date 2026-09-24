@@ -7,7 +7,7 @@ export class OwnerApiError extends Error {
 export async function ownerJson<T>(
   path: `/api/owner/${string}`,
   schema: { parse(value: unknown): T },
-  options: { signal?: AbortSignal; method?: "POST" | "PUT"; body?: unknown } = {},
+  options: { signal?: AbortSignal; method?: "POST" | "PUT" | "PATCH"; body?: unknown } = {},
 ) {
   const timeout = AbortSignal.timeout(10_000);
   const response = await fetch(path, {
