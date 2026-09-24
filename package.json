@@ -31,7 +31,7 @@
     "test:integration": "node scripts/test-integration.mjs",
     "test:models": "bun packages/testing/tests/models/live.ts",
     "test:models:adapter": "bun packages/testing/tests/models/adapter-live.ts",
-    "test:native": "bun run test:device-protocol && bun test apps/server/tests/native-device.test.ts apps/server/tests/native-duplex.test.ts apps/server/tests/native-pairing.test.ts apps/server/tests/native-identity.test.ts apps/server/tests/native-shell.test.ts && bun run build:desktop",
+    "test:native": "bun run test:device-protocol && bun test apps/server/tests/native-device.test.ts apps/server/tests/native-duplex.test.ts apps/server/tests/native-pairing.test.ts apps/server/tests/native-identity.test.ts apps/server/tests/native-shell.test.ts apps/server/tests/native-command-session.test.ts && bun run build:desktop",
     "test:tooling": "node --test scripts/*.test.mjs",
     "test:unit": "bun run --filter @winston/testing --filter @winston/server --filter @winston/workspace --filter @winston/cli test:unit",
     "typecheck": "bun run --filter '*' typecheck"
