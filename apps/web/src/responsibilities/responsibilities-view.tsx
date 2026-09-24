@@ -8,6 +8,9 @@ export type ResponsibilitiesState =
 export type ResponsibilityAction = "agree" | "pause" | "resume" | "end";
 
 export function ResponsibilitiesView({
+  title = "Responsibilities",
+  onInspect,
+  onEdit,
   state,
   names = {},
   namesReady = true,
@@ -19,6 +22,9 @@ export function ResponsibilitiesView({
   onMore,
   onChange,
 }: {
+  title?: string;
+  onInspect?: (id: string) => void;
+  onEdit?: () => void;
   state: ResponsibilitiesState;
   names?: ScopeNames;
   namesReady?: boolean;
@@ -38,7 +44,7 @@ export function ResponsibilitiesView({
   return (
     <>
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-medium">Responsibilities</h1>
+        <h1 className="text-xl font-medium">{title}</h1>
         <Button
           variant="quiet"
           disabled={busy}
@@ -138,6 +144,26 @@ export function ResponsibilitiesView({
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2 empty:hidden">
+                    {onInspect ? (
+                      <Button
+                        variant="quiet"
+                        onClick={() => {
+                          onInspect(item.id);
+                        }}
+                      >
+                        Details
+                      </Button>
+                    ) : null}
+                    {onEdit && item.state !== "ended" ? (
+                      <Button
+                        variant="quiet"
+                        aria-label="Edit responsibility"
+                        disabled={blocked || !namesReady}
+                        onClick={onEdit}
+                      >
+                        Edit
+                      </Button>
+                    ) : null}
                     {item.state === "proposed" ? (
                       <Button
                         disabled={blocked || !namesReady}

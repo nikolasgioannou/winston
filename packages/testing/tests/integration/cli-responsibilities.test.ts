@@ -142,9 +142,10 @@ test("responsibility CLI waits for owner agreement, resumes only its intent and 
         botId: 123,
         webOrigin: "https://winston.example",
         generate: (request) => {
-          assert.match(
-            JSON.stringify(request.messages),
-            /https:\/\/winston.example\/responsibilities/,
+          assert.ok(
+            JSON.stringify(request.messages).includes(
+              `https://winston.example/responsibilities/${id}`,
+            ),
           );
           presented = true;
           return Promise.resolve({

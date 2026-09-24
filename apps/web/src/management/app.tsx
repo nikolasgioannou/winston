@@ -22,6 +22,9 @@ import { Responsibilities } from "../responsibilities/responsibilities";
 const ScheduleEditor = lazy(async () => ({
   default: (await import("../schedules/editor")).ScheduleEditor,
 }));
+const ResponsibilityDetail = lazy(async () => ({
+  default: (await import("../responsibilities/detail")).ResponsibilityDetail,
+}));
 import { clearPendingDestination, restoreManagementPage } from "./locator";
 
 const rootRoute = createRootRouteWithContext<{ signOut: () => void }>()({
@@ -34,7 +37,13 @@ function Layout() {
   const navigate = useNavigate();
   return (
     <ManagementShell
-      activeHref={pathname.startsWith("/schedules/") ? "/schedules" : pathname}
+      activeHref={
+        pathname.startsWith("/responsibilities/")
+          ? "/responsibilities"
+          : pathname.startsWith("/schedules/")
+            ? "/schedules"
+            : pathname
+      }
       onNavigate={(href) => {
         clearPendingDestination();
         navigate({
@@ -96,6 +105,28 @@ const responsibilitiesRoute = createRoute({
   path: "/responsibilities",
   component: Responsibilities,
 });
+const responsibilityDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/responsibilities/$id",
+  component: ResponsibilityDetailRoute,
+});
+function ResponsibilityDetailRoute() {
+  const { id } = responsibilityDetailRoute.useParams();
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<p role="status">Loading responsibility…</p>}>
+      <ResponsibilityDetail
+        key={id}
+        id={id}
+        onBack={() => {
+          navigate({ to: "/responsibilities" }).catch(() => {
+            window.location.assign("/responsibilities");
+          });
+        }}
+      />
+    </Suspense>
+  );
+}
 const editorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/schedules/$id",
@@ -136,6 +167,7 @@ const router = createRouter({
     connectionsRoute,
     schedulesRoute,
     responsibilitiesRoute,
+    responsibilityDetailRoute,
     editorRoute,
     downloadRoute,
     handoffRoute,

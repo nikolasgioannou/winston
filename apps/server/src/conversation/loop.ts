@@ -36,7 +36,12 @@ export function createConversationLoop(options: {
           ? { handoffUrl: new URL(`/handoffs/${update.handoffId}`, options.webOrigin).href }
           : {}),
         ...(update.responsibilityId
-          ? { responsibilityUrl: new URL("/responsibilities", options.webOrigin).href }
+          ? {
+              responsibilityUrl: new URL(
+                `/responsibilities/${update.responsibilityId}`,
+                options.webOrigin,
+              ).href,
+            }
           : {}),
       };
     });
