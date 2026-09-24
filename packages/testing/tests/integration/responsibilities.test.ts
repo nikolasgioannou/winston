@@ -147,7 +147,7 @@ test("responsibilities require current owner agreement and preserve terminal rev
       await receive(2, "We could monitor this trip.");
       const events = await sql<
         { id: string }[]
-      >`SELECT id FROM winston.events WHERE owner_id = ${ownerId}::uuid`;
+      >`SELECT id FROM winston.events WHERE owner_id = ${ownerId}::uuid AND type = 'telegram.message-received'`;
       for (const event of events)
         await run(({ conversations }) => conversations.consumeTelegram(event.id));
       const snapshot = await run(({ conversations }) => conversations.snapshot(10));

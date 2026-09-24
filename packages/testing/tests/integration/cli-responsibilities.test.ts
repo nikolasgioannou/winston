@@ -252,6 +252,48 @@ test("responsibility CLI waits for owner agreement, resumes only its intent and 
       );
       assert.equal((await propose(current)).status, "denied");
 
+      const pendingEdit = await create();
+      const pendingReceipt = await propose(await issue(pendingEdit));
+      assert.equal(pendingReceipt.status, "waiting");
+      const pendingId = pendingReceipt.referenceId;
+      assert.ok(pendingId);
+      await database.transaction(ownerId, ({ responsibilities }) =>
+        responsibilities.revise(pendingId, 0, {
+          purpose: "Watch only release notes",
+          scope: input.scope,
+          sourceMessageIds: [messageId],
+        }),
+      );
+      await database.transaction(ownerId, ({ responsibilities }) =>
+        responsibilities.agree(pendingId, 1),
+      );
+      assert.equal(
+        (await database.transaction(ownerId, ({ tasks }) => tasks.find(pendingEdit.id)))?.state,
+        "queued",
+      );
+      const requested = await sql<
+        { taskId: string }[]
+      >`SELECT task_id AS "taskId" FROM winston.responsibility_requests WHERE owner_id = ${ownerId}::uuid AND responsibility_id = ${pendingId}::uuid`;
+      assert.equal(requested[0]?.taskId, pendingEdit.id);
+
+      const canceledProposal = await create();
+      const canceledReceipt = await propose(await issue(canceledProposal));
+      assert.equal(canceledReceipt.status, "waiting");
+      const canceledId = canceledReceipt.referenceId;
+      assert.ok(canceledId);
+      const canceled = await database.transaction(ownerId, async ({ tasks }) => {
+        const waiting = await tasks.find(canceledProposal.id);
+        assert.ok(waiting);
+        return tasks.cancel(waiting.id, waiting.revision);
+      });
+      await database.transaction(ownerId, ({ responsibilities }) =>
+        responsibilities.agree(canceledId, 0),
+      );
+      assert.deepEqual(
+        await database.transaction(ownerId, ({ tasks }) => tasks.find(canceledProposal.id)),
+        canceled,
+      );
+
       // Steering changes intent: agreement to the old proposal cannot resume the newer work.
       const steered = await create();
       const second = await propose(await issue(steered));

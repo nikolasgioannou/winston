@@ -12,8 +12,7 @@ import type { DatabaseTransaction } from "./owners";
 import { authorizationResource } from "./authorization-resources";
 import { scheduleRepository } from "./schedules";
 import { scheduleSchema } from "@winston/contracts/schedules";
-import { taskSchema } from "@winston/contracts/tasks";
-import { taskRepository } from "./tasks";
+import { cancelResponsibilitySetup, resumeResponsibilitySetup } from "./responsibility-setup";
 import { responsibilityHistory, responsibilitySources } from "./responsibility-reads";
 
 export class ResponsibilityWriteError extends Error {
@@ -97,27 +96,6 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
       throw new ResponsibilityWriteError("conflict");
     return value;
   }
-  async function updateSetup(id: string, resume: boolean) {
-    const result = await transaction.execute<{ document: unknown }>(sql`
-      SELECT t.document FROM winston.responsibility_requests q
-      JOIN winston.tasks t ON t.owner_id = q.owner_id AND t.id = q.task_id AND t.intent_revision = q.intent_revision
-      WHERE q.owner_id = ${ownerId}::uuid AND q.responsibility_id = ${id}::uuid
-    `);
-    const tasks = taskRepository(transaction, ownerId);
-    for (const row of result.rows) {
-      const task = taskSchema.parse(row.document);
-      if (resume) {
-        if (
-          task.state === "waiting" &&
-          task.blocker?.kind === "responsibility" &&
-          task.blocker.referenceId === id
-        )
-          await tasks.resume(task.id, task.revision, id);
-      } else if (["queued", "running", "waiting"].includes(task.state)) {
-        await tasks.cancel(task.id, task.revision);
-      }
-    }
-  }
   return {
     find,
     async sources(id: string) {
@@ -174,7 +152,7 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
       await suspendSchedules(id, false);
       // A running setup must not continue with its previous scope after an edit.
       // Pending proposals can still resume after agreement to the revised scope.
-      if (value.state !== "proposed") await updateSetup(id, false);
+      if (value.state !== "proposed") await cancelResponsibilitySetup(transaction, ownerId, id);
       return record({
         ...value,
         purpose: parsed.purpose,
@@ -206,7 +184,7 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
         updatedAt: now,
         agreement: { proposalRevision: revision, at: now },
       });
-      await updateSetup(id, true);
+      await resumeResponsibilitySetup(transaction, ownerId, agreed);
       return agreed;
     },
     async transition(id: string, revision: number, state: "active" | "paused" | "ended") {
@@ -218,7 +196,7 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
         throw new ResponsibilityWriteError("conflict");
       if (state !== "active") {
         await suspendSchedules(id, state === "paused");
-        await updateSetup(id, false);
+        await cancelResponsibilitySetup(transaction, ownerId, id);
       }
       return record({ ...value, revision: revision + 1, state, updatedAt: await clock() });
     },
