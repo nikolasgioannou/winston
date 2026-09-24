@@ -65,6 +65,15 @@ export function workspaceRepository(transaction: DatabaseTransaction, ownerId: s
 
   return {
     find,
+    async list(after?: string) {
+      if (after !== undefined) registeredWorkspaceSchema.shape.id.parse(after);
+      const result = await transaction.execute<RegisteredWorkspace>(sql`
+        SELECT id, name, state, revision FROM winston.workspaces WHERE owner_id = ${ownerId}::uuid
+          AND (${after ?? null}::uuid IS NULL OR id > ${after ?? null}::uuid) ORDER BY id LIMIT 101
+      `);
+      const items = result.rows.slice(0, 100).map((row) => registeredWorkspaceSchema.parse(row));
+      return { items, next: result.rows.length > 100 ? (items.at(-1)?.id ?? null) : null };
+    },
     // Trusted provisioning only. Registration creates no execution authority.
     async register(inputId: string, inputName: string) {
       await lock();

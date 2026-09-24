@@ -11,6 +11,7 @@ import { ResponsibilityDetailView } from "./detail-view";
 import { useScopeNames } from "./use-scope-names";
 import type { ResponsibilityEdit } from "./editor-view";
 import type { ResponsibilityAction } from "./responsibilities-view";
+import { scopeOptions } from "./scope-options";
 
 export function ResponsibilityDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const client = useQueryClient();
@@ -41,10 +42,13 @@ export function ResponsibilityDetail({ id, onBack }: { id: string; onBack: () =>
     initialPageParam: null as number | null,
     getNextPageParam: (page) => page.next,
   });
-  const scope = useScopeNames([
-    ...(query.data ? [query.data] : []),
-    ...(history.data?.pages.flatMap((page) => page.items) ?? []),
-  ]);
+  const scope = useScopeNames(
+    [
+      ...(query.data ? [query.data] : []),
+      ...(history.data?.pages.flatMap((page) => page.items) ?? []),
+    ],
+    editing,
+  );
   const change = useMutation({
     mutationFn: (
       request:
@@ -96,7 +100,24 @@ export function ResponsibilityDetail({ id, onBack }: { id: string; onBack: () =>
       }
       names={scope.names}
       namesReady={scope.ready}
-      busy={query.isFetching || change.isPending || history.isFetchingNextPage}
+      busy={
+        query.isFetching || change.isPending || history.isFetchingNextPage || scope.fetchingMore
+      }
+      catalog={
+        scope.error
+          ? { kind: "error" }
+          : scope.ready
+            ? {
+                kind: "ready",
+                items: scopeOptions(scope.connections, scope.devices, scope.workspaces),
+              }
+            : { kind: "loading" }
+      }
+      moreComputers={scope.more}
+      onMoreComputers={scope.loadMore}
+      onReloadChoices={() => {
+        scope.refresh().catch(() => {});
+      }}
       failed={change.isError}
       editing={editing}
       more={history.hasNextPage}

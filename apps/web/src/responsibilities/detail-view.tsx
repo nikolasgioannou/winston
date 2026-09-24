@@ -4,6 +4,7 @@ import { ResponsibilitiesView, type ResponsibilityAction } from "./responsibilit
 import { ResponsibilityEvidence, type EvidenceState, type Sources, type History } from "./evidence";
 import { ResponsibilityEditorView, type ResponsibilityEdit } from "./editor-view";
 import type { ScopeNames } from "./scope";
+import type { ScopeCatalog } from "./scope-options";
 
 export function ResponsibilityDetailView({
   state,
@@ -21,6 +22,10 @@ export function ResponsibilityDetailView({
   onChange,
   onEdit,
   onSave,
+  catalog,
+  moreComputers,
+  onMoreComputers,
+  onReloadChoices,
 }: {
   state: EvidenceState<Responsibility>;
   sources: EvidenceState<Sources>;
@@ -37,6 +42,10 @@ export function ResponsibilityDetailView({
   onChange: (item: Responsibility, action: ResponsibilityAction) => void;
   onEdit: (value: boolean) => void;
   onSave: (input: ResponsibilityEdit) => void;
+  catalog: ScopeCatalog;
+  moreComputers: boolean;
+  onMoreComputers: () => void;
+  onReloadChoices: () => void;
 }) {
   if (editing && state.kind === "ready" && state.value.state !== "ended")
     return (
@@ -50,6 +59,10 @@ export function ResponsibilityDetailView({
           onEdit(false);
         }}
         onReload={onRefresh}
+        catalog={catalog}
+        moreComputers={moreComputers}
+        onMoreComputers={onMoreComputers}
+        onReloadChoices={onReloadChoices}
       />
     );
   return (

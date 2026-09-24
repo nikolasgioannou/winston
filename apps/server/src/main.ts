@@ -1,6 +1,7 @@
 import { createOwnerAuth } from "@winston/adapters/auth";
 import { createDatabase } from "@winston/adapters/database";
 import { createOwnerRouter } from "./http/owner";
+import { createWorkspaceOwnerRouter } from "./http/workspace-catalog";
 import { createScheduleOwnerRouter } from "./http/schedules";
 import { createResponsibilityOwnerRouter } from "./http/responsibilities";
 import { createHandoffOwnerRouter } from "./http/handoffs";
@@ -67,6 +68,7 @@ try {
 
 const auth = createOwnerAuth(config.auth, config.connectionString);
 const owner = createOwnerRouter(database);
+owner.route("/workspaces", createWorkspaceOwnerRouter(database));
 owner.route("/schedules", createScheduleOwnerRouter(database));
 owner.route("/responsibilities", createResponsibilityOwnerRouter(database));
 const callbacks = new Hono<HttpEnvironment>();

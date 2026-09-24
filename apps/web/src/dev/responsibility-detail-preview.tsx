@@ -14,11 +14,15 @@ export type DetailPreviewState =
   | "source-changed"
   | "evidence-error"
   | "saving"
-  | "uncertain";
+  | "uncertain"
+  | "choices-loading"
+  | "choices-error";
 export function ResponsibilityDetailPreview({ initial }: { initial: DetailPreviewState }) {
   const [state, setState] = useState(initial);
   const [back, setBack] = useState(false);
-  const [editing, setEditing] = useState(["editing", "saving", "uncertain"].includes(initial));
+  const [editing, setEditing] = useState(
+    ["editing", "saving", "uncertain", "choices-loading", "choices-error"].includes(initial),
+  );
   const [item, setItem] = useState<Responsibility>({
     ...previewResponsibility,
     state: initial === "ended" ? "ended" : "proposed",
@@ -82,6 +86,42 @@ export function ResponsibilityDetailPreview({ initial }: { initial: DetailPrevie
         failed={state === "uncertain"}
         editing={editing}
         more={false}
+        catalog={
+          state === "choices-error"
+            ? { kind: "error" }
+            : state === "choices-loading"
+              ? { kind: "loading" }
+              : {
+                  kind: "ready",
+                  items: [
+                    {
+                      label: "Gmail · alex@example.com",
+                      target: {
+                        kind: "connection",
+                        id: "33333333-3333-4333-8333-333333333333",
+                        resource: null,
+                      },
+                      operations: ["gmail.read", "gmail.draft"],
+                      unavailable: false,
+                    },
+                    {
+                      label: "Winston’s computer",
+                      target: {
+                        kind: "workspace",
+                        id: "55555555-5555-4555-8555-555555555555",
+                        resource: null,
+                      },
+                      operations: ["workspace.command", "workspace.file.read"],
+                      unavailable: false,
+                    },
+                  ],
+                }
+        }
+        moreComputers={false}
+        onMoreComputers={() => {}}
+        onReloadChoices={() => {
+          setState("editing");
+        }}
         onBack={() => {
           setBack(true);
         }}

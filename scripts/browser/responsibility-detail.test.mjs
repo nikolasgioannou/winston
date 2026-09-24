@@ -18,6 +18,10 @@ const fixture = {
   ],
 };
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/owner/devices", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/owner/workspaces*", (route) =>
+    route.fulfill({ json: { items: [], next: null } }),
+  );
   await page.route("**/api/owner/session", (route) => route.fulfill({ json: {} }));
   await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 401, json: {} }));
   await page.route("**/api/owner/connections", (route) =>

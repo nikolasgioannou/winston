@@ -5,6 +5,8 @@ import {
   type Responsibility,
 } from "@winston/contracts/responsibilities";
 import { ResponsibilityScope, type ScopeNames } from "./scope";
+import { ScopePicker } from "./scope-picker";
+import type { ScopeCatalog } from "./scope-options";
 
 export type ResponsibilityEdit = ReturnType<typeof ownerResponsibilityEditSchema.parse>;
 export function ResponsibilityEditorView({
@@ -15,6 +17,10 @@ export function ResponsibilityEditorView({
   onSave,
   onCancel,
   onReload,
+  catalog,
+  moreComputers,
+  onMoreComputers,
+  onReloadChoices,
 }: {
   item: Responsibility;
   names: ScopeNames;
@@ -23,6 +29,10 @@ export function ResponsibilityEditorView({
   onSave: (input: ResponsibilityEdit) => void;
   onCancel: () => void;
   onReload: () => void;
+  catalog: ScopeCatalog;
+  moreComputers: boolean;
+  onMoreComputers: () => void;
+  onReloadChoices: () => void;
 }) {
   const [original] = useState(item);
   const [purpose, setPurpose] = useState(item.purpose);
@@ -85,7 +95,7 @@ export function ResponsibilityEditorView({
           {!scope.length ? (
             <p className="text-sm text-muted">No connected accounts or computers.</p>
           ) : null}
-          {scope.length < original.scope.length ? (
+          {JSON.stringify(scope) !== JSON.stringify(original.scope) ? (
             <Button
               variant="quiet"
               disabled={busy || failed}
@@ -96,6 +106,17 @@ export function ResponsibilityEditorView({
               Restore scope
             </Button>
           ) : null}
+          <ScopePicker
+            catalog={catalog}
+            scope={scope}
+            disabled={busy || failed}
+            more={moreComputers}
+            onMore={onMoreComputers}
+            onRetry={onReloadChoices}
+            onAdd={(entry) => {
+              setScope((current) => [...current, entry]);
+            }}
+          />
         </div>
         <p className="text-sm text-muted">
           Saving requires a new agreement and cancels existing schedules.

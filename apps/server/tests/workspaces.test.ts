@@ -24,6 +24,7 @@ test("workspace authorization has no owner issuance path and requires worker aut
   let current = true;
   const unused = () => Promise.reject(new Error("This method must not be exposed."));
   const workspaces: OwnerTransaction["workspaces"] = {
+    list: () => Promise.resolve({ items: [], next: null }),
     find: unused,
     register: unused,
     setState: unused,
@@ -135,6 +136,7 @@ test("command and recovery routes enforce distinct scopes and carry exact dispat
   };
   const unused = () => Promise.reject(new Error("Unexpected repository call"));
   const workspaces: OwnerTransaction["workspaces"] = {
+    list: () => Promise.resolve({ items: [], next: null }),
     find: unused,
     register: unused,
     setState: unused,

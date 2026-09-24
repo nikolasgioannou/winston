@@ -1,7 +1,7 @@
 import type { Responsibility } from "@winston/contracts/responsibilities";
 import type { AuthorizationRequest } from "@winston/contracts/authorization";
 
-const operations: Record<AuthorizationRequest["operation"], string> = {
+export const scopeOperationLabels: Record<AuthorizationRequest["operation"], string> = {
   "gmail.read": "Read email",
   "gmail.draft": "Create email drafts",
   "gmail.send": "Send email",
@@ -38,14 +38,14 @@ export function ResponsibilityScope({
           className="space-y-0.5 wrap-anywhere"
         >
           <p>
-            {operations[operation]} ·{" "}
+            {scopeOperationLabels[operation]} ·{" "}
             {names[`${target.kind}:${target.id}`] ??
               (target.kind === "workspace"
                 ? "Winston’s computer"
                 : "Unavailable account or computer")}
           </p>
           {target.resource ? <p className="text-xs text-muted">{target.resource}</p> : null}
-          {target.kind === "workspace" || !names[`${target.kind}:${target.id}`] ? (
+          {!names[`${target.kind}:${target.id}`] ? (
             <p className="text-xs text-muted">{target.id}</p>
           ) : null}
         </li>

@@ -32,18 +32,22 @@ export function Select({
         className={`${selectorClasses} ${controlSizeClasses[size]}`}
         data-size={size}
       >
-        <BaseSelect.Value placeholder="Choose an option" />
+        <BaseSelect.Value className="min-w-0 truncate" placeholder="Choose an option" />
         <BaseSelect.Icon>
           <ChevronDown size={16} aria-hidden="true" />
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner sideOffset={6} alignItemWithTrigger={false} className="z-50">
-          <BaseSelect.Popup className={`${popupClasses} min-w-(--anchor-width) p-1`}>
+          <BaseSelect.Popup
+            className={`${popupClasses} max-w-[calc(100vw-2rem)] min-w-(--anchor-width) p-1`}
+          >
             <BaseSelect.List>
               {options.map((option) => (
                 <BaseSelect.Item key={option.value} value={option.value} className={optionClasses}>
-                  <BaseSelect.ItemText className="flex-1">{option.label}</BaseSelect.ItemText>
+                  <BaseSelect.ItemText className="min-w-0 flex-1 whitespace-normal wrap-anywhere">
+                    {option.label}
+                  </BaseSelect.ItemText>
                   <BaseSelect.ItemIndicator>
                     <Check size={15} aria-hidden="true" />
                   </BaseSelect.ItemIndicator>

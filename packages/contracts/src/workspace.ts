@@ -12,6 +12,10 @@ export const registeredWorkspaceSchema = z.strictObject({
   state: workspaceStateSchema,
   revision: z.number().int().nonnegative(),
 });
+export const workspaceListSchema = z.strictObject({
+  items: z.array(registeredWorkspaceSchema).max(100),
+  next: z.uuid().nullable(),
+});
 
 export const workspaceWorkerSchema = z.strictObject({
   workerId: z.uuid(),

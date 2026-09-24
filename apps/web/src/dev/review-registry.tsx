@@ -99,6 +99,8 @@ export const reviewPages: readonly ReviewPage[] = [
           "evidence-error",
           "saving",
           "uncertain",
+          "choices-loading",
+          "choices-error",
         ] as const
       ).map((state) => ({
         id: state,
