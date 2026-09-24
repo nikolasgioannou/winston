@@ -78,30 +78,47 @@ jobs:
     concurrency:
       group: production-deploy
       cancel-in-progress: false
+    outputs:
+      current: ${{ steps.release.outputs.current }}
     steps:
       - name: Check out the verified commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Install pinned runtimes
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: "2026.9.5"
+          cache: false
+
+      - name: Skip superseded releases
+        id: release
+        run: node scripts/check-deploy-head.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Install pinned Fly CLI
+        if: steps.release.outputs.current == 'true'
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: "0.4.102"
 
       - name: Deploy verified source and run release migrations
+        if: steps.release.outputs.current == 'true'
         run: flyctl deploy --remote-only --depot=true --ha=false --image-label "$IMAGE_LABEL"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           IMAGE_LABEL: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Verify production readiness
+        if: steps.release.outputs.current == 'true'
         run: curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors --max-time 20 https://winston-628.fly.dev/health/ready
 
   deploy-workspaces:
     name: Deploy cloud workspaces
     needs: [deploy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'nikolasgioannou/winston'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'nikolasgioannou/winston' && needs.deploy.outputs.current == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -124,17 +141,26 @@ jobs:
           version: "2026.9.5"
           cache: false
 
+      - name: Skip superseded releases
+        id: release
+        run: node scripts/check-deploy-head.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Install pinned Fly CLI
+        if: steps.release.outputs.current == 'true'
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: "0.4.102"
 
       - name: Build and publish the verified workspace image
+        if: steps.release.outputs.current == 'true'
         run: flyctl deploy --config apps/workspace/fly.toml --dockerfile apps/workspace/Dockerfile --build-only --push --remote-only --depot=true --image-label "$IMAGE_LABEL"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_WORKSPACE_API_TOKEN }}
 
       - name: Update selected workspaces and verify persistent runtime health
+        if: steps.release.outputs.current == 'true'
         run: node scripts/deploy-workspaces.mjs
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_WORKSPACE_API_TOKEN }}
