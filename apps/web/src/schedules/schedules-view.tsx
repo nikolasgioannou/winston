@@ -17,6 +17,7 @@ export function SchedulesView({
   onPause,
   onResume,
   onEdit,
+  onHistory,
 }: {
   state: SchedulesState;
   busy?: boolean;
@@ -29,6 +30,7 @@ export function SchedulesView({
   onPause: (schedule: Schedule) => void;
   onResume: (schedule: Schedule) => void;
   onEdit: (schedule: Schedule) => void;
+  onHistory?: (schedule: Schedule) => void;
 }) {
   const [confirmation, setConfirmation] = useState<Schedule | null>(null);
   return (
@@ -110,6 +112,16 @@ export function SchedulesView({
                 </div>
               </dl>
               <div className="flex flex-wrap items-start gap-2 empty:hidden">
+                {onHistory ? (
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      onHistory(schedule);
+                    }}
+                  >
+                    History
+                  </Button>
+                ) : null}
                 {confirmation?.id !== schedule.id && schedule.state !== "canceled" ? (
                   <Button
                     variant="quiet"

@@ -91,6 +91,11 @@ export function Schedules() {
           window.location.assign(`/schedules/${schedule.id}`);
         });
       }}
+      onHistory={(schedule) => {
+        navigate({ to: "/schedules/$id/runs", params: { id: schedule.id } }).catch(() => {
+          window.location.assign(`/schedules/${schedule.id}/runs`);
+        });
+      }}
     />
   );
 }

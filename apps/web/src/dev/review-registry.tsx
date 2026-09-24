@@ -11,6 +11,7 @@ import { ManagementShell } from "../management/shell";
 import { AccountView } from "../management/account-view";
 import { SchedulesPreview, previewSchedules } from "./schedules-preview";
 import { ScheduleEditorPreview } from "./schedule-editor-preview";
+import { ScheduleRunsPreview } from "./schedule-runs-preview";
 import { ResponsibilitiesPreview } from "./responsibilities-preview";
 import { ResponsibilityDetailPreview } from "./responsibility-detail-preview";
 
@@ -150,6 +151,25 @@ export const reviewPages: readonly ReviewPage[] = [
           render: () => <ScheduleEditorPreview initial={state} />,
         }),
       ),
+    ],
+  },
+  {
+    id: "schedule-runs",
+    label: "Schedule history",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <ScheduleRunsPreview initial="ready" />,
+      },
+      ...(["empty", "loading", "error"] as const).map((state) => ({
+        id: state,
+        label: state,
+        fullWidth: true,
+        render: () => <ScheduleRunsPreview initial={state} />,
+      })),
     ],
   },
   {

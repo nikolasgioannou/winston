@@ -7,6 +7,7 @@ import {
 } from "../schedules/schedules-view";
 import { ManagementShell } from "../management/shell";
 import { ScheduleEditorView } from "../schedules/editor-view";
+import { ScheduleRunsView } from "../schedules/runs-view";
 
 export const previewSchedules: Schedule[] = [
   {
@@ -42,6 +43,7 @@ export function SchedulesPreview({
   const [state, setState] = useState(initial);
   const [failure, setFailure] = useState(failed);
   const [editing, setEditing] = useState<Schedule | null>(null);
+  const [history, setHistory] = useState<Schedule | null>(null);
   const content = (
     <SchedulesView
       state={state}
@@ -54,6 +56,7 @@ export function SchedulesPreview({
       }}
       onMore={() => {}}
       onEdit={setEditing}
+      onHistory={setHistory}
       onPause={(schedule) => {
         if (state.kind === "ready")
           setState({
@@ -99,7 +102,17 @@ export function SchedulesPreview({
       }}
     />
   );
-  const page = editing ? (
+  const page = history ? (
+    <ScheduleRunsView
+      schedule={history}
+      state={{ kind: "ready", items: [] }}
+      onBack={() => {
+        setHistory(null);
+      }}
+      onRefresh={() => {}}
+      onMore={() => {}}
+    />
+  ) : editing ? (
     <ScheduleEditorView
       schedule={editing}
       onBack={() => {

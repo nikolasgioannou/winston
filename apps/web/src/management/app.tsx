@@ -22,6 +22,9 @@ import { Responsibilities } from "../responsibilities/responsibilities";
 const ScheduleEditor = lazy(async () => ({
   default: (await import("../schedules/editor")).ScheduleEditor,
 }));
+const ScheduleRuns = lazy(async () => ({
+  default: (await import("../schedules/runs")).ScheduleRuns,
+}));
 const ResponsibilityDetail = lazy(async () => ({
   default: (await import("../responsibilities/detail")).ResponsibilityDetail,
 }));
@@ -148,6 +151,28 @@ function EditorRoute() {
     </Suspense>
   );
 }
+const runsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/schedules/$id/runs",
+  component: RunsRoute,
+});
+function RunsRoute() {
+  const { id } = runsRoute.useParams();
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<p role="status">Loading schedule…</p>}>
+      <ScheduleRuns
+        key={id}
+        id={id}
+        onBack={() => {
+          navigate({ to: "/schedules" }).catch(() => {
+            window.location.assign("/schedules");
+          });
+        }}
+      />
+    </Suspense>
+  );
+}
 function DownloadRoute() {
   return <DownloadPage id={downloadRoute.useParams().id} />;
 }
@@ -169,6 +194,7 @@ const router = createRouter({
     responsibilitiesRoute,
     responsibilityDetailRoute,
     editorRoute,
+    runsRoute,
     downloadRoute,
     handoffRoute,
   ]),

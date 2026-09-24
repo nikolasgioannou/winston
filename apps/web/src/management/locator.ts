@@ -6,7 +6,9 @@ const storageKey = "winston.pending-page";
 const paths = ["/connections", "/schedules", "/responsibilities"];
 function allowedPath(path: string) {
   if (paths.includes(path)) return true;
-  const id = /^\/(?:schedules|responsibilities)\/([^/]+)$/.exec(path)?.[1];
+  const id =
+    /^\/schedules\/([^/]+)(?:\/runs)?$/.exec(path)?.[1] ??
+    /^\/responsibilities\/([^/]+)$/.exec(path)?.[1];
   return scheduleSchema.shape.id.safeParse(id).success;
 }
 
