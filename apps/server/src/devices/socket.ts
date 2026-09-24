@@ -13,7 +13,10 @@ import {
 import { errorResponse } from "../http/errors";
 
 export type DeviceSocketScope = Pick<OwnerTransaction, "deviceSessions"> & {
-  deviceExecutions: Pick<OwnerTransaction["deviceExecutions"], "receipt" | "reconcile" | "expire">;
+  deviceExecutions: Pick<
+    OwnerTransaction["deviceExecutions"],
+    "receipt" | "reconcile" | "expire" | "appendOutput"
+  >;
 };
 
 type Database = Pick<ReturnType<typeof createDatabase>, "authenticateDevice"> & {
@@ -105,7 +108,9 @@ export function createDeviceSocketTransport(database: Database) {
           message.deviceId !== session.deviceId ||
           message.sessionId !== session.sessionId ||
           message.generation !== session.generation ||
-          !["heartbeat", "capabilities", "status", "reconciled"].includes(message.payload.kind)
+          !["heartbeat", "capabilities", "status", "reconciled", "output"].includes(
+            message.payload.kind,
+          )
         ) {
           close(socket, 1008);
           return;
@@ -135,6 +140,7 @@ export function createDeviceSocketTransport(database: Database) {
                 return deviceSessions.advertise(socket.data.session, payload.capabilities);
               if (payload.kind === "status")
                 return (await deviceExecutions.receipt(message)) !== null;
+              if (payload.kind === "output") return deviceExecutions.appendOutput(message);
               if (payload.kind === "reconciled")
                 return (await deviceExecutions.reconcile(message)) !== null;
               return false;

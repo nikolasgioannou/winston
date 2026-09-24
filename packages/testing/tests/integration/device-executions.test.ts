@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { deviceCapabilitySchema, type DeviceMessage } from "@winston/contracts/devices";
+import {
+  deviceOutputByteLimit,
+  deviceOutputChunkLimit,
+} from "@winston/contracts/device-executions";
 import { withTestPostgres } from "../../src/postgres";
 
 type Operation = Extract<DeviceMessage["payload"], { kind: "execute" }>["operation"];
@@ -109,6 +113,144 @@ function receipt(
     },
   };
 }
+
+test("command output enforces original authority, shared ordering, quotas and bounded reads", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      const f = await fixture(database);
+      const proof = await f.prepare();
+      assert.equal(proof.message.payload.kind, "execute");
+      const executionId = proof.message.payload.executionId;
+      await f.reserve(proof);
+      await f.receive(receipt(proof.message, "running", 0));
+      const chunk = (
+        sequence: number,
+        text = "hello",
+        stream: "stdout" | "stderr" = "stdout",
+      ): DeviceMessage => ({
+        ...proof.message,
+        messageId: randomUUID(),
+        correlationId: proof.message.messageId,
+        payload: {
+          kind: "output",
+          executionId,
+          taskId: proof.task.id,
+          taskRevision: proof.task.revision,
+          sequence,
+          stream,
+          text,
+        },
+      });
+      const append = (message: DeviceMessage, owner = f.ownerId) =>
+        database.transaction(owner, ({ deviceExecutions }) =>
+          deviceExecutions.appendOutput(message),
+        );
+      const read = (after = -1, owner = f.ownerId) =>
+        database.transaction(owner, ({ deviceExecutions }) =>
+          deviceExecutions.listOutput(executionId, after),
+        );
+      const first = chunk(2);
+      const other = randomUUID();
+      await database.transaction(other, ({ owners }) => owners.ensure());
+      assert.equal(await append(first, other), false);
+      for (const changed of [
+        { ...first, deviceId: randomUUID() },
+        { ...first, sessionId: randomUUID() },
+        { ...first, generation: first.generation + 1 },
+        { ...first, correlationId: randomUUID() },
+      ])
+        assert.equal(await append(changed), false);
+      assert.equal(first.payload.kind, "output");
+      assert.equal(
+        await append({ ...first, payload: { ...first.payload, taskId: randomUUID() } }),
+        false,
+      );
+      assert.equal(await append(chunk(0)), false);
+      assert.equal(await append(first), true);
+      assert.equal(await append(chunk(2)), true);
+      assert.equal(await append(chunk(2, "changed")), false);
+      assert.equal(await append(chunk(1)), false);
+      assert.equal(await f.receive(receipt(proof.message, "succeeded", 2)), null);
+      assert.equal(await append(chunk(3, "diagnostic", "stderr")), true);
+      assert.equal((await read(-1, other)).messages.length, 0);
+      assert.deepEqual(
+        (await read()).messages.map((message) => message.payload),
+        [first.payload, chunk(3, "diagnostic", "stderr").payload],
+      );
+      const observer = createDatabase({ connectionString, onConnectionError: () => {} });
+      try {
+        assert.deepEqual(
+          await observer.transaction(f.ownerId, ({ deviceExecutions }) =>
+            deviceExecutions.listOutput(executionId),
+          ),
+          await read(),
+        );
+      } finally {
+        await observer.close();
+      }
+      await f.receive(receipt(proof.message, "succeeded", 4));
+      assert.equal(await append(chunk(5)), false);
+      assert.equal(await append(first), true);
+      await database.transaction(f.ownerId, ({ deviceSessions }) =>
+        deviceSessions.open(f.device.device.id, f.device.credential),
+      );
+      assert.equal(await append(first), false);
+
+      const bytesFixture = await fixture(database);
+      const bytesProof = await bytesFixture.prepare();
+      assert.equal(bytesProof.message.payload.kind, "execute");
+      const bytesId = bytesProof.message.payload.executionId;
+      await bytesFixture.reserve(bytesProof);
+      const text = "😀".repeat(16_384);
+      const byteChunk = (sequence: number, value = text): DeviceMessage => ({
+        ...bytesProof.message,
+        messageId: randomUUID(),
+        correlationId: bytesProof.message.messageId,
+        payload: {
+          kind: "output",
+          executionId: bytesId,
+          taskId: bytesProof.task.id,
+          taskRevision: bytesProof.task.revision,
+          sequence,
+          stream: "stdout",
+          text: value,
+        },
+      });
+      const byteAppend = (message: DeviceMessage) =>
+        database.transaction(bytesFixture.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.appendOutput(message),
+        );
+      const chunks = deviceOutputByteLimit / new TextEncoder().encode(text).byteLength;
+      for (let index = 0; index < chunks; index += 1)
+        assert.equal(await byteAppend(byteChunk(index)), true);
+      assert.equal(await byteAppend(byteChunk(chunks, "x")), false);
+      assert.equal(await byteAppend(byteChunk(0)), true);
+      let after = -1;
+      for (let index = 0; index < chunks; index += 1) {
+        const page = await database.transaction(bytesFixture.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.listOutput(bytesId, after),
+        );
+        assert.equal(page.messages.length, 1);
+        assert.equal(page.afterSequence, index);
+        assert.equal(page.hasMore, index < chunks - 1);
+        after = page.afterSequence;
+      }
+      // Exercise the chunk boundary without thousands of redundant round trips.
+      await sql`UPDATE winston.device_executions SET output_count = ${deviceOutputChunkLimit - 1} WHERE owner_id = ${bytesFixture.ownerId}::uuid`;
+      assert.equal(await byteAppend(byteChunk(chunks, "")), true);
+      assert.equal(await byteAppend(byteChunk(chunks + 1, "")), false);
+      assert.equal(await byteAppend(byteChunk(chunks, "")), true);
+      assert.equal(
+        (await bytesFixture.receive(receipt(bytesProof.message, "failed", chunks + 2)))?.state,
+        "failed",
+      );
+    } finally {
+      await database.close();
+    }
+  });
+});
 
 test("device reservations serialize desktop work, bound file work and never grant duplicate sends", async () => {
   await withTestPostgres(async (_sql, connectionString) => {

@@ -76,6 +76,7 @@ test.skipIf(process.platform !== "darwin")(
         work({
           deviceSessions,
           deviceExecutions: {
+            appendOutput: () => Promise.resolve(false),
             receipt: () => Promise.resolve(null),
             reconcile: () => Promise.resolve(null),
             expire: () => Promise.resolve(0),

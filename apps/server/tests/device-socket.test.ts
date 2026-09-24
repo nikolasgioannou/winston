@@ -15,6 +15,7 @@ import { startServer } from "../src/host";
 import type { DeviceExecution } from "@winston/contracts/device-executions";
 
 const rejectedEvidence: DeviceSocketScope["deviceExecutions"] = {
+  appendOutput: () => Promise.resolve(false),
   receipt: () => Promise.resolve(null),
   reconcile: () => Promise.resolve(null),
   expire: () => Promise.resolve(0),
@@ -87,6 +88,11 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
         presence: () => Promise.resolve([]),
       },
       deviceExecutions: {
+        appendOutput: (received) => {
+          assert.equal(received.payload.kind, "output");
+          calls.push("output");
+          return Promise.resolve(true);
+        },
         receipt: async (received) => {
           assert.deepEqual(received, status);
           calls.push("status");
@@ -134,6 +140,21 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
             ...status,
             messageId: crypto.randomUUID(),
             payload: {
+              kind: "output",
+              executionId: message.payload.executionId,
+              taskId: task.id,
+              taskRevision: task.revision,
+              sequence: 2,
+              stream: "stdout",
+              text: "fixture",
+            },
+          }),
+        );
+        socket.send(
+          encodeDeviceMessage({
+            ...status,
+            messageId: crypto.randomUUID(),
+            payload: {
               kind: "reconciled",
               executionId: message.payload.executionId,
               taskId: task.id,
@@ -151,7 +172,7 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
         release.resolve(undefined);
         if (acknowledgment) {
           assert.equal(decodeDeviceMessage(await acknowledgment).payload.kind, "heartbeat");
-          assert.deepEqual(calls, ["status", "reconciled", "heartbeat"]);
+          assert.deepEqual(calls, ["status", "output", "reconciled", "heartbeat"]);
           socket.close();
         }
       }
@@ -160,7 +181,7 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
       assert.deepEqual(
         calls,
         mode === "accepted"
-          ? ["status", "reconciled", "heartbeat", "close", "expire"]
+          ? ["status", "output", "reconciled", "heartbeat", "close", "expire"]
           : mode === "rejected"
             ? ["status", "close", "expire"]
             : ["close", "expire"],

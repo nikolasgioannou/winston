@@ -11,6 +11,7 @@ import { canonicalJson } from "@winston/contracts/json";
 import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
 import { eventRepository } from "./events";
+import { deviceOutputRepository } from "./device-output";
 
 type Proof = Parameters<ReturnType<typeof actionRepository>["authorizeDevice"]>[0];
 type Reservation =
@@ -47,12 +48,16 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
     return rows.rows.length === 1;
   }
 
+  const output = deviceOutputRepository(transaction, ownerId, { find, live });
+
   async function save(execution: DeviceExecution, publish = true) {
     const next = deviceExecutionSchema.parse(execution);
     if (next.message.payload.kind !== "execute") throw new Error("Invalid execution record.");
     const id = next.message.payload.executionId;
+    const sequence = next.receipt?.payload.kind === "status" ? next.receipt.payload.sequence : -1;
     await transaction.execute(sql`
-      UPDATE winston.device_executions SET state = ${next.state}, document = ${JSON.stringify(next)}::jsonb
+      UPDATE winston.device_executions SET state = ${next.state}, document = ${JSON.stringify(next)}::jsonb,
+        last_sequence = GREATEST(last_sequence, ${sequence})
       WHERE owner_id = ${ownerId}::uuid AND execution_id = ${id}::uuid
     `);
     if (next.state === "unknown" || terminal(next.state)) {
@@ -73,6 +78,8 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
 
   return {
     find,
+    appendOutput: (message: DeviceMessage) => output.append(message),
+    listOutput: (id: string, after?: number) => output.list(id, after),
     async reserve(input: Proof): Promise<Reservation> {
       const message = deviceMessageSchema.parse(input.message);
       const payload = message.payload;
@@ -152,6 +159,7 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
         if (payload.sequence <= prior.sequence) return null;
       }
       if (terminal(current.state)) return null;
+      if (payload.sequence <= (await output.latestSequence(payload.executionId))) return null;
       if (current.state === "running" && payload.state === "accepted") return null;
       const state =
         current.state === "unknown" && !terminal(payload.state) ? "unknown" : payload.state;
