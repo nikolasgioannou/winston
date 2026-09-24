@@ -18,6 +18,10 @@ mise exec -- bun run dev
 
 The API exposes `/health/live` for process liveness and `/health/ready` for startup and dependency readiness. Startup requires a compatible migrated database and complete authentication configuration. Callback, owner, device, and task route groups have separate authenticators and reject access by default. Owner routes validate database sessions and the verified email allowlist on every request; mutations also require the configured web origin. Other authority implementations arrive separately. Request errors use stable codes and server-generated correlation IDs. Request logs contain only correlation ID, status, and duration, excluding request content and raw exceptions. SIGINT/SIGTERM stop new connections and drain active requests, forcing closure after the configured timeout.
 
+## Native development
+
+The Swift protocol and transport packages target macOS 14 and later and use the installed Swift 6 toolchain. `bun run test:native` runs shared protocol fixtures and real Foundation-to-Bun loopback tests on macOS. `bun run format:native` applies the toolchain's Swift formatter; `format:native:check` checks without rewriting files and runs in pre-commit and macOS CI. No separate global formatter installation is needed. The transport tests use synthetic credentials and do not pair this Mac or request privacy permissions.
+
 ## Production container
 
 Build the web app and API together with `docker build -t winston .`. The pinned Bun image installs frozen dependencies and runs as a non-root user on port 8080. The build context excludes local environment files, Git metadata, and installed dependencies. Supply runtime secrets through the deployment environment; never add them to the image.

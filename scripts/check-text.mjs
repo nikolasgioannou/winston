@@ -23,6 +23,7 @@ const textNames = new Set([
   ".gitattributes",
   ".gitignore",
   ".prettierignore",
+  ".swift-format",
   "bun.lock",
 ]);
 

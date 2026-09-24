@@ -24,8 +24,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check Swift protocol fixtures
-        run: swift run --package-path packages/device-protocol ProtocolFixtures packages/device-protocol/fixtures/messages.json
       - name: Install pinned runtimes
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
@@ -34,7 +32,7 @@ jobs:
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Check native proxy transport
-        run: bun test apps/server/tests/native-device.test.ts
+        run: bun run format:native:check && bun run test:native
 
   quality:
     name: Quality
