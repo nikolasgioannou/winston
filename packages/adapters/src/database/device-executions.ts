@@ -1,7 +1,12 @@
 import { sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { actionRecordSchema } from "@winston/contracts/actions";
 import { deviceExecutionSchema, type DeviceExecution } from "@winston/contracts/device-executions";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
+import {
+  deviceSessionIdentitySchema,
+  type DeviceSessionIdentity,
+} from "@winston/contracts/device-registry";
 import { canonicalJson } from "@winston/contracts/json";
 import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
@@ -30,7 +35,19 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
     return rows.rows[0] ? deviceExecutionSchema.parse(rows.rows[0].document) : null;
   }
 
-  async function save(execution: DeviceExecution) {
+  async function live(session: DeviceSessionIdentity) {
+    const rows = await transaction.execute(sql`
+      SELECT 1 FROM winston.device_sessions s
+      JOIN winston.devices d ON d.owner_id = s.owner_id AND d.id = s.device_id
+      WHERE s.owner_id = ${ownerId}::uuid AND s.device_id = ${session.deviceId}::uuid
+        AND s.session_id = ${session.sessionId}::uuid AND s.generation = ${session.generation}
+        AND s.disconnected_at IS NULL AND s.lease_until > clock_timestamp()
+        AND d.revoked_at IS NULL AND d.token_hash = s.credential_hash
+    `);
+    return rows.rows.length === 1;
+  }
+
+  async function save(execution: DeviceExecution, publish = true) {
     const next = deviceExecutionSchema.parse(execution);
     if (next.message.payload.kind !== "execute") throw new Error("Invalid execution record.");
     const id = next.message.payload.executionId;
@@ -38,13 +55,15 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       UPDATE winston.device_executions SET state = ${next.state}, document = ${JSON.stringify(next)}::jsonb
       WHERE owner_id = ${ownerId}::uuid AND execution_id = ${id}::uuid
     `);
-    const sequence = next.receipt?.payload.kind === "status" ? next.receipt.payload.sequence : -1;
-    await eventRepository(transaction, ownerId).publish({
-      key: `${id}:${next.state}:${String(sequence)}`,
-      type: "device.execution-changed",
-      payload: { executionId: id, deviceId: next.message.deviceId, state: next.state },
-      destinations: ["device-runtime"],
-    });
+    const evidence =
+      next.reconciliation?.response?.messageId ?? next.receipt?.messageId ?? "reserved";
+    if (publish)
+      await eventRepository(transaction, ownerId).publish({
+        key: `${id}:${next.state}:${evidence}`,
+        type: "device.execution-changed",
+        payload: { executionId: id, deviceId: next.message.deviceId, state: next.state },
+        destinations: ["device-runtime"],
+      });
     return next;
   }
 
@@ -122,15 +141,7 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
         return null;
       // Facts may arrive after task cancellation or local pause. They still need
       // the authenticated original live session; reconnect reconciliation is separate.
-      const live = await transaction.execute(sql`
-        SELECT 1 FROM winston.device_sessions s
-        JOIN winston.devices d ON d.owner_id = s.owner_id AND d.id = s.device_id
-        WHERE s.owner_id = ${ownerId}::uuid AND s.device_id = ${message.deviceId}::uuid
-          AND s.session_id = ${message.sessionId}::uuid AND s.generation = ${message.generation}
-          AND s.disconnected_at IS NULL AND s.lease_until > clock_timestamp()
-          AND d.revoked_at IS NULL AND d.token_hash = s.credential_hash
-      `);
-      if (!live.rows.length) return null;
+      if (!(await live(message))) return null;
       const prior = current.receipt?.payload;
       if (prior?.kind === "status") {
         if (canonicalJson(prior) === canonicalJson(payload)) return current;
@@ -141,6 +152,66 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       const state =
         current.state === "unknown" && !terminal(payload.state) ? "unknown" : payload.state;
       return save({ ...current, state, receipt: message });
+    },
+
+    async requestReconciliation(inputId: string, inputSession: DeviceSessionIdentity) {
+      const session = deviceSessionIdentitySchema.parse(inputSession);
+      await lock();
+      const current = await find(inputId);
+      if (!current || terminal(current.state) || current.message.payload.kind !== "execute")
+        return null;
+      if (current.message.deviceId !== session.deviceId || !(await live(session))) return null;
+      const original = current.message.payload;
+      const request = deviceMessageSchema.parse({
+        version: 1,
+        messageId: randomUUID(),
+        correlationId: current.message.messageId,
+        ...session,
+        payload: {
+          kind: "reconcile",
+          executionId: original.executionId,
+          taskId: original.taskId,
+          taskRevision: original.taskRevision,
+          operation: original.operation,
+        },
+      });
+      // Commit this query before sending. A newer query fences all older replies.
+      await save(
+        { ...current, state: "unknown", reconciliation: { request, response: null } },
+        current.state !== "unknown",
+      );
+      return request;
+    },
+
+    async reconcile(input: DeviceMessage) {
+      const message = deviceMessageSchema.parse(input);
+      const result = message.payload;
+      if (result.kind !== "reconciled") return null;
+      await lock();
+      const current = await find(result.executionId);
+      const query = current?.reconciliation?.request;
+      if (!current || !query || query.payload.kind !== "reconcile") return null;
+      if (
+        message.correlationId !== query.messageId ||
+        message.deviceId !== query.deviceId ||
+        message.sessionId !== query.sessionId ||
+        message.generation !== query.generation ||
+        result.taskId !== query.payload.taskId ||
+        result.taskRevision !== query.payload.taskRevision ||
+        !(await live(message))
+      )
+        return null;
+      const previous = current.reconciliation?.response;
+      if (previous)
+        return canonicalJson(previous.payload) === canonicalJson(result) ? current : null;
+      if (terminal(current.state)) return null;
+      // Missing storage is not proof that an effect never happened. Every nonterminal
+      // answer, including still-running work, retains the reservation as unknown.
+      const state =
+        result.state === "succeeded" || result.state === "failed" || result.state === "canceled"
+          ? result.state
+          : "unknown";
+      return save({ ...current, state, reconciliation: { request: query, response: message } });
     },
 
     async expire() {

@@ -16,6 +16,15 @@ export const deviceExecutionSchema = z.strictObject({
     "canceled",
   ]),
   receipt: deviceMessageSchema.nullable(),
+  reconciliation: z
+    .strictObject({
+      request: deviceMessageSchema.refine((message) => message.payload.kind === "reconcile"),
+      response: deviceMessageSchema
+        .refine((message) => message.payload.kind === "reconciled")
+        .nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 
 export type DeviceExecution = z.infer<typeof deviceExecutionSchema>;

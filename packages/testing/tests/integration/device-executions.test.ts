@@ -269,3 +269,148 @@ test("expired or disconnected executions retain resources until trustworthy comp
     }
   });
 });
+
+test("fresh reconciliation queries fence replies and only terminal journal evidence releases a device", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      const f = await fixture(database);
+      const proof = await f.prepare();
+      await f.reserve(proof);
+      assert.equal(proof.message.payload.kind, "execute");
+      const executionId = proof.message.payload.executionId;
+      // Older persisted documents acquire the new optional evidence field on read.
+      await sql`UPDATE winston.device_executions SET document = document - 'reconciliation' WHERE owner_id = ${f.ownerId}::uuid`;
+      const restored = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+        deviceExecutions.find(executionId),
+      );
+      assert.equal(restored?.reconciliation, null);
+
+      const replacement = await database.transaction(f.ownerId, async ({ deviceSessions }) => {
+        const opened = await deviceSessions.open(f.device.device.id, f.device.credential);
+        assert.ok(opened);
+        const session = {
+          deviceId: opened.deviceId,
+          sessionId: opened.sessionId,
+          generation: opened.generation,
+        };
+        await deviceSessions.advertise(session, [...deviceCapabilitySchema.options]);
+        await deviceSessions.heartbeat(session, "paused");
+        return session;
+      });
+      const query = (session = replacement, owner = f.ownerId) =>
+        database.transaction(owner, ({ deviceExecutions }) =>
+          deviceExecutions.requestReconciliation(executionId, session),
+        );
+      const receive = (message: DeviceMessage, owner = f.ownerId) =>
+        database.transaction(owner, ({ deviceExecutions }) => deviceExecutions.reconcile(message));
+      const answer = (
+        request: DeviceMessage,
+        state: Extract<DeviceMessage["payload"], { kind: "reconciled" }>["state"],
+      ): DeviceMessage => {
+        assert.equal(request.payload.kind, "reconcile");
+        return {
+          ...request,
+          messageId: randomUUID(),
+          correlationId: request.messageId,
+          payload: {
+            kind: "reconciled",
+            executionId: request.payload.executionId,
+            taskId: request.payload.taskId,
+            taskRevision: request.payload.taskRevision,
+            state,
+            exitCode: state === "succeeded" ? 0 : null,
+          },
+        };
+      };
+      assert.equal(await query(f.device.session), null);
+      const other = randomUUID();
+      await database.transaction(other, ({ owners }) => owners.ensure());
+      assert.equal(await query(replacement, other), null);
+      assert.equal(await query({ ...replacement, deviceId: randomUUID() }), null);
+      const first = await query();
+      assert.ok(first);
+      assert.equal(first.payload.kind, "reconcile");
+      assert.deepEqual(first.payload.operation, proof.message.payload.operation);
+      const second = await query();
+      assert.ok(second);
+      assert.notEqual(second.messageId, first.messageId);
+      assert.equal(await receive(answer(first, "succeeded")), null);
+      const response = answer(second, "succeeded");
+      for (const changed of [
+        { ...response, correlationId: randomUUID() },
+        { ...response, sessionId: randomUUID() },
+        { ...response, deviceId: randomUUID() },
+        { ...response, generation: response.generation + 1 },
+      ])
+        assert.equal(await receive(changed), null);
+      assert.equal(await receive(response, other), null);
+      assert.equal(response.payload.kind, "reconciled");
+      assert.equal(
+        await receive({ ...response, payload: { ...response.payload, taskId: randomUUID() } }),
+        null,
+      );
+      assert.equal(
+        await receive({
+          ...response,
+          payload: { ...response.payload, taskRevision: response.payload.taskRevision + 1 },
+        }),
+        null,
+      );
+
+      await database.transaction(f.ownerId, ({ deviceSessions }) =>
+        deviceSessions.heartbeat(replacement, "ready"),
+      );
+      const blocked = await f.prepare({ ...f.device, session: replacement });
+      for (const state of [
+        "missing",
+        "conflict",
+        "unavailable",
+        "running",
+        "cancel_requested",
+        "uncertain",
+      ] as const) {
+        const request = await query();
+        assert.ok(request);
+        const message = answer(request, state);
+        const evidence = await receive(message);
+        assert.equal(evidence?.state, "unknown", state);
+        assert.deepEqual(await receive(message), evidence);
+        assert.equal(await receive(answer(request, "succeeded")), null);
+        assert.equal((await f.reserve(blocked)).status, "busy", state);
+      }
+      const finalQuery = await query();
+      assert.ok(finalQuery);
+      await database.transaction(f.ownerId, ({ tasks }) =>
+        tasks.cancel(proof.task.id, proof.task.revision),
+      );
+      const observer = createDatabase({ connectionString, onConnectionError: () => {} });
+      try {
+        const persisted = await observer.transaction(f.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.find(executionId),
+        );
+        assert.deepEqual(persisted?.reconciliation?.request, finalQuery);
+      } finally {
+        await observer.close();
+      }
+      const complete = answer(finalQuery, "succeeded");
+      const final = await receive(complete);
+      assert.equal(final?.state, "succeeded");
+      assert.deepEqual(await receive(complete), final);
+      assert.equal(await receive(answer(finalQuery, "failed")), null);
+      assert.equal(await query(), null);
+      assert.equal((await f.reserve(blocked)).status, "reserved");
+      assert.equal(blocked.message.payload.kind, "execute");
+      const blockedId = blocked.message.payload.executionId;
+      const staleQuery = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+        deviceExecutions.requestReconciliation(blockedId, replacement),
+      );
+      assert.ok(staleQuery);
+      await sql`UPDATE winston.device_sessions SET lease_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${f.ownerId}::uuid`;
+      assert.equal(await receive(answer(staleQuery, "succeeded")), null);
+    } finally {
+      await database.close();
+    }
+  });
+});
