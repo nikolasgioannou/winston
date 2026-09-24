@@ -11,6 +11,7 @@ import { serializeMemoryContext } from "@winston/contracts/memory";
 import { serializeMessageBurst } from "@winston/contracts/bursts";
 import { conversationTools, executeConversationTool, toolContext } from "./tools";
 import type { TaskUpdate } from "@winston/contracts/task-updates";
+import { startTypingIndicator } from "./typing";
 
 type Database = ReturnType<typeof createDatabase>;
 class Superseded extends Error {}
@@ -24,7 +25,9 @@ export function createConversationLoop(options: {
   botId: number;
   webOrigin?: string;
   generate: (request: ModelRequest) => Promise<ModelResult>;
+  indicate?: (chatId: string, signal: AbortSignal) => Promise<boolean>;
 }) {
+  const indicators = new Map<string, () => void>();
   function present(updates: TaskUpdate[]) {
     return updates.map((update) => {
       if (!update.handoffId && !update.responsibilityId) return update;
@@ -47,6 +50,7 @@ export function createConversationLoop(options: {
     });
   }
   return async (ownerId: string, revision: number, signal: AbortSignal) => {
+    let stopTyping = () => {};
     const { database } = options;
     const controller = new AbortController();
     const combined = AbortSignal.any([signal, controller.signal, AbortSignal.timeout(60_000)]);
@@ -90,6 +94,22 @@ export function createConversationLoop(options: {
         const memories = query ? await scope.memory.search(query) : [];
         return { ...state, history, memories };
       });
+      const indicate = options.indicate;
+      if (indicate) {
+        indicators.get(ownerId)?.();
+        stopTyping = startTypingIndicator({
+          signal: combined,
+          send: async (typingSignal) => {
+            const chatId = await database.transaction(ownerId, async (scope) => {
+              await current(scope);
+              return scope.telegramOutbound.pairedChat(options.botId);
+            });
+            if (!chatId || typingSignal.aborted) return false;
+            return indicate(chatId, typingSignal);
+          },
+        });
+        indicators.set(ownerId, stopTyping);
+      }
       const exchanges = snapshot.messages.map((message) => ({
         id: message.envelope.messageId,
         messages: [
@@ -265,6 +285,8 @@ export function createConversationLoop(options: {
       if (error instanceof Superseded || monitor.superseded) return;
       throw error;
     } finally {
+      stopTyping();
+      if (indicators.get(ownerId) === stopTyping) indicators.delete(ownerId);
       clearInterval(timer);
       controller.abort();
     }

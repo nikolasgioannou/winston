@@ -1,7 +1,11 @@
 import { dispatchNext, type createDatabase } from "@winston/adapters/database";
 import { createJobRuntime } from "@winston/adapters/jobs";
 import { createOpenRouterAdapter } from "@winston/adapters/models";
-import { createTelegramSender, deliverTelegramNext } from "@winston/adapters/telegram";
+import {
+  createTelegramSender,
+  createTelegramTypingSender,
+  deliverTelegramNext,
+} from "@winston/adapters/telegram";
 import { createConversationLoop } from "./loop";
 import { startBackgroundRuntime } from "../background/runtime";
 
@@ -26,6 +30,7 @@ export async function startConversationRuntime(options: {
     botId,
     webOrigin: options.webOrigin,
     generate: (request) => model.generate(request),
+    indicate: createTelegramTypingSender(options.telegramToken),
   });
   const send = createTelegramSender(options.telegramToken);
   const deliveries = new Map<string, Promise<void>>();

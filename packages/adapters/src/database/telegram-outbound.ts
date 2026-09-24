@@ -40,6 +40,14 @@ export function telegramOutboundRepository(transaction: DatabaseTransaction, own
     COALESCE(leased_until <= clock_timestamp(), true) AS expired, available_at <= clock_timestamp() AS available`;
 
   return {
+    async pairedChat(botId: number) {
+      if (!Number.isSafeInteger(botId)) throw new Error("Invalid bot identity.");
+      const result = await transaction.execute<{ chatId: string }>(sql`
+        SELECT chat_id::text AS "chatId" FROM winston.telegram_bindings
+        WHERE owner_id = ${ownerId}::uuid AND bot_id = ${botId}
+      `);
+      return result.rows[0]?.chatId ?? null;
+    },
     async enqueue(key: string, botId: number, text: string, inputKeyboard?: TelegramKeyboard) {
       if (!key || key.length > 200 || !Number.isSafeInteger(botId))
         throw new Error("Invalid outbound identity.");

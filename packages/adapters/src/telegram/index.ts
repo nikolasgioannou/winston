@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { telegramBotSchema, telegramUpdateSchema } from "@winston/contracts/telegram";
 export { createTelegramStore, type TelegramStore } from "./store";
 export { createTelegramSender, type TelegramSendOutcome } from "./send";
+export { createTelegramTypingSender } from "./typing";
 export { splitTelegramText } from "./text";
 export { deliverTelegramNext } from "./deliver";
 export { deliverTelegramFile } from "./deliver-file";
