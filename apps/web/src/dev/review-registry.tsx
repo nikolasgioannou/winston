@@ -13,6 +13,7 @@ import { SchedulesPreview, previewSchedules } from "./schedules-preview";
 import { ScheduleEditorPreview } from "./schedule-editor-preview";
 import { ScheduleRunsPreview } from "./schedule-runs-preview";
 import { ComputersPreview } from "./computers-preview";
+import { PermissionsPreview } from "./permissions-preview";
 import { ResponsibilitiesPreview } from "./responsibilities-preview";
 import { ResponsibilityDetailPreview } from "./responsibility-detail-preview";
 
@@ -199,6 +200,27 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <ComputersPreview initial={state} />,
       })),
+    ],
+  },
+  {
+    id: "permissions",
+    label: "Permissions",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <PermissionsPreview initial="ready" />,
+      },
+      ...(["empty", "loading", "error", "saving", "uncertain", "unavailable"] as const).map(
+        (state) => ({
+          id: state,
+          label: state,
+          fullWidth: true,
+          render: () => <PermissionsPreview initial={state} />,
+        }),
+      ),
     ],
   },
   {

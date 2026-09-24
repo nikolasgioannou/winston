@@ -33,6 +33,14 @@ export const authorizationRuleSchema = authorizationRequestSchema.extend({
 export const authorizationUpdateSchema = authorizationRuleSchema.extend({
   revision: z.number().int().nonnegative(),
 });
+export const authorizationRulesSchema = z.strictObject({
+  revision: z.number().int().nonnegative(),
+  rules: z.array(authorizationRuleSchema),
+});
+export const authorizationReceiptSchema = z.strictObject({
+  revision: z.number().int().nonnegative(),
+});
+export type AuthorizationRules = z.infer<typeof authorizationRulesSchema>;
 export const authorizationSnapshotSchema = authorizationRequestSchema.extend({
   revision: z.number().int().nonnegative(),
   resourceRevision: z.number().int().nonnegative(),

@@ -19,6 +19,7 @@ export function ManagementShell({
         { label: "Account", href: "/", icon: Settings },
         { label: "Connections", href: "/connections", icon: Link },
         { label: "Computers", href: "/computers", icon: Monitor },
+        { label: "Permissions", href: "/permissions", icon: Settings },
         { label: "Schedules", href: "/schedules", icon: CalendarDays },
         { label: "Responsibilities", href: "/responsibilities", icon: Activity },
       ]}

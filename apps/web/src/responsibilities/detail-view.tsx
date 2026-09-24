@@ -4,7 +4,7 @@ import { ResponsibilitiesView, type ResponsibilityAction } from "./responsibilit
 import { ResponsibilityEvidence, type EvidenceState, type Sources, type History } from "./evidence";
 import { ResponsibilityEditorView, type ResponsibilityEdit } from "./editor-view";
 import type { ScopeNames } from "./scope";
-import type { ScopeCatalog } from "./scope-options";
+import type { ScopeCatalog } from "../management/resource-options";
 
 export function ResponsibilityDetailView({
   state,

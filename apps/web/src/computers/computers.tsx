@@ -43,7 +43,6 @@ export function Computers() {
       ),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ["owner-devices"] });
-      await client.invalidateQueries({ queryKey: ["responsibility-device-names"] });
       setVersion((current) => current + 1);
     },
   });

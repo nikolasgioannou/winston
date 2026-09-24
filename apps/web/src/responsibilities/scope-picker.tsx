@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button, Select } from "@winston/ui";
 import type { AuthorizationRequest } from "@winston/contracts/authorization";
-import type { ScopeCatalog } from "./scope-options";
-import { scopeOperationLabels } from "./scope";
+import type { ScopeCatalog } from "../management/resource-options";
+import { operationLabels } from "../management/operation-labels";
 
 export function ScopePicker({
   catalog,
@@ -66,7 +66,7 @@ export function ScopePicker({
           disabled={disabled || selected.unavailable}
           options={selected.operations.map((value) => ({
             value,
-            label: scopeOperationLabels[value],
+            label: operationLabels[value],
           }))}
           value={operation}
           onValueChange={setOperation}

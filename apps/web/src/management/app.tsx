@@ -25,6 +25,9 @@ const ScheduleEditor = lazy(async () => ({
 const Computers = lazy(async () => ({
   default: (await import("../computers/computers")).Computers,
 }));
+const Permissions = lazy(async () => ({
+  default: (await import("../permissions/permissions")).Permissions,
+}));
 const ScheduleRuns = lazy(async () => ({
   default: (await import("../schedules/runs")).ScheduleRuns,
 }));
@@ -54,15 +57,17 @@ function Layout() {
         clearPendingDestination();
         navigate({
           to:
-            href === "/computers"
-              ? "/computers"
-              : href === "/responsibilities"
-                ? "/responsibilities"
-                : href === "/schedules"
-                  ? "/schedules"
-                  : href === "/connections"
-                    ? "/connections"
-                    : "/",
+            href === "/permissions"
+              ? "/permissions"
+              : href === "/computers"
+                ? "/computers"
+                : href === "/responsibilities"
+                  ? "/responsibilities"
+                  : href === "/schedules"
+                    ? "/schedules"
+                    : href === "/connections"
+                      ? "/connections"
+                      : "/",
         }).catch(() => {
           window.location.assign(href);
         });
@@ -104,6 +109,15 @@ const computersRoute = createRoute({
   component: () => (
     <Suspense fallback={<p role="status">Loading computers…</p>}>
       <Computers />
+    </Suspense>
+  ),
+});
+const permissionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/permissions",
+  component: () => (
+    <Suspense fallback={<p role="status">Loading permissions…</p>}>
+      <Permissions />
     </Suspense>
   ),
 });
@@ -205,6 +219,7 @@ const router = createRouter({
     accountRoute,
     connectionsRoute,
     computersRoute,
+    permissionsRoute,
     schedulesRoute,
     responsibilitiesRoute,
     responsibilityDetailRoute,

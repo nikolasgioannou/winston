@@ -3,7 +3,7 @@ import { readHandoffLocator, rememberHandoff } from "../handoffs/locator";
 import { scheduleSchema } from "@winston/contracts/schedules";
 
 const storageKey = "winston.pending-page";
-const paths = ["/connections", "/computers", "/schedules", "/responsibilities"];
+const paths = ["/connections", "/computers", "/permissions", "/schedules", "/responsibilities"];
 function allowedPath(path: string) {
   if (paths.includes(path)) return true;
   const id =

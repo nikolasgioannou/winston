@@ -11,7 +11,7 @@ import { ResponsibilityDetailView } from "./detail-view";
 import { useScopeNames } from "./use-scope-names";
 import type { ResponsibilityEdit } from "./editor-view";
 import type { ResponsibilityAction } from "./responsibilities-view";
-import { scopeOptions } from "./scope-options";
+import { resourceOptions } from "../management/resource-options";
 
 export function ResponsibilityDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const client = useQueryClient();
@@ -109,7 +109,7 @@ export function ResponsibilityDetail({ id, onBack }: { id: string; onBack: () =>
           : scope.ready
             ? {
                 kind: "ready",
-                items: scopeOptions(scope.connections, scope.devices, scope.workspaces),
+                items: resourceOptions(scope.connections, scope.devices, scope.workspaces),
               }
             : { kind: "loading" }
       }

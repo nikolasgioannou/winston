@@ -6,7 +6,7 @@ import {
 } from "@winston/contracts/responsibilities";
 import { ResponsibilityScope, type ScopeNames } from "./scope";
 import { ScopePicker } from "./scope-picker";
-import type { ScopeCatalog } from "./scope-options";
+import type { ScopeCatalog } from "../management/resource-options";
 
 export type ResponsibilityEdit = ReturnType<typeof ownerResponsibilityEditSchema.parse>;
 export function ResponsibilityEditorView({

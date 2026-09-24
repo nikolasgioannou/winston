@@ -19,7 +19,7 @@ const deviceOperations = {
   application: "device.application",
 } as const;
 
-export function scopeOptions(
+export function resourceOptions(
   connections: Connection[],
   devices: RegisteredDevice[],
   workspaces: RegisteredWorkspace[],
