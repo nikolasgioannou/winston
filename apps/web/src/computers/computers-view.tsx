@@ -2,6 +2,7 @@ import { Badge, Button } from "@winston/ui";
 import type { RegisteredDevice } from "@winston/contracts/device-registry";
 import type { workspaceListSchema } from "@winston/contracts/workspace";
 import { DeviceCard, type DeviceChange } from "./device-card";
+import type { PresenceState } from "./presence";
 
 export type ComputersState =
   | { kind: "loading" | "error" }
@@ -13,6 +14,7 @@ export type ComputersState =
 
 export function ComputersView({
   state,
+  presence,
   busy = false,
   saving = false,
   failed = false,
@@ -22,6 +24,7 @@ export function ComputersView({
   onChange,
 }: {
   state: ComputersState;
+  presence: PresenceState;
   busy?: boolean;
   saving?: boolean;
   failed?: boolean;
@@ -90,6 +93,11 @@ export function ComputersView({
           </section>
           <section className="space-y-4 border-t border-line pt-5" aria-label="Your computers">
             <h2 className="text-sm font-medium">Your computers</h2>
+            {presence.kind === "error" && state.devices.some((device) => !device.revoked) ? (
+              <p role="alert" className="text-sm text-muted">
+                Unable to refresh availability.
+              </p>
+            ) : null}
             {!state.devices.length ? (
               <p className="text-sm text-muted">No registered computers.</p>
             ) : null}
@@ -98,6 +106,7 @@ export function ComputersView({
                 <DeviceCard
                   key={device.id}
                   device={device}
+                  presence={presence}
                   disabled={busy || failed}
                   onChange={onChange}
                 />

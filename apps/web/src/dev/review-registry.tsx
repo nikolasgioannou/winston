@@ -244,7 +244,21 @@ export const reviewPages: readonly ReviewPage[] = [
         fullWidth: true,
         render: () => <ComputersPreview initial="ready" />,
       },
-      ...(["empty", "loading", "error", "saving", "uncertain"] as const).map((state) => ({
+      ...(
+        [
+          "empty",
+          "loading",
+          "error",
+          "saving",
+          "uncertain",
+          "unreachable",
+          "locked",
+          "sleeping",
+          "paused",
+          "presence-error",
+          "presence-loading",
+        ] as const
+      ).map((state) => ({
         id: state,
         label: state,
         fullWidth: true,

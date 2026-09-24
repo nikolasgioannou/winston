@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   registeredDeviceListSchema,
   registeredDeviceSchema,
+  devicePresenceListSchema,
 } from "@winston/contracts/device-registry";
 import { workspaceListSchema } from "@winston/contracts/workspace";
 import { ownerJson } from "../management/api";
@@ -16,6 +17,14 @@ export function Computers() {
     queryKey: ["owner-devices"],
     queryFn: ({ signal }) =>
       ownerJson("/api/owner/devices", registeredDeviceListSchema, { signal }),
+  });
+  const presence = useQuery({
+    queryKey: ["owner-device-presence"],
+    queryFn: ({ signal }) =>
+      ownerJson("/api/owner/devices/presence", devicePresenceListSchema, { signal }),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    retry: false,
   });
   const workspaces = useInfiniteQuery({
     queryKey: ["owner-workspaces"],
@@ -43,12 +52,20 @@ export function Computers() {
       ),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ["owner-devices"] });
+      await client.invalidateQueries({ queryKey: ["owner-device-presence"] });
       setVersion((current) => current + 1);
     },
   });
   return (
     <ComputersView
       key={version}
+      presence={
+        presence.isError
+          ? { kind: "error" }
+          : presence.data
+            ? { kind: "ready", items: presence.data }
+            : { kind: "loading" }
+      }
       state={
         devices.isError || workspaces.isError
           ? { kind: "error" }
@@ -65,6 +82,7 @@ export function Computers() {
       failed={change.isError}
       more={workspaces.hasNextPage}
       onRefresh={() => {
+        presence.refetch().catch(() => {});
         Promise.all([devices.refetch(), workspaces.refetch()])
           .then((results) => {
             if (results.every((result) => result.isSuccess)) {

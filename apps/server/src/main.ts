@@ -10,6 +10,7 @@ import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
 import { startServer } from "./host";
 import { createDeviceSocketTransport } from "./devices/socket";
+import { createDevicePresenceRouter } from "./http/device-presence";
 import { createObjectStorage } from "@winston/adapters/storage";
 import {
   createArtifactService,
@@ -85,6 +86,7 @@ if (storage) {
   );
 }
 owner.route("/devices", createDeviceOwnerRouter(database));
+owner.route("/devices/presence", createDevicePresenceRouter(database));
 owner.route("/permissions", createAuthorizationOwnerRouter(database));
 owner.route("/connection-targets", createTargetPreferencesRouter(database));
 callbacks.route("/", createDevicePairingRouter(database));

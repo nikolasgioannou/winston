@@ -64,3 +64,5 @@ export const devicePresenceSchema = z.strictObject({
   status: z.enum(["unreachable", ...deviceStatusSchema.options]),
   lastSeenAt: z.iso.datetime().nullable(),
 });
+export type DevicePresence = z.infer<typeof devicePresenceSchema>;
+export const devicePresenceListSchema = z.array(devicePresenceSchema).max(1000);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge, Button, TextField } from "@winston/ui";
 import { deviceNameSchema, type RegisteredDevice } from "@winston/contracts/device-registry";
+import { Presence, type PresenceState } from "./presence";
 
 export type DeviceChange =
   | { device: RegisteredDevice; action: "default" | "revoke" }
@@ -8,10 +9,12 @@ export type DeviceChange =
 
 export function DeviceCard({
   device,
+  presence,
   disabled,
   onChange,
 }: {
   device: RegisteredDevice;
+  presence: PresenceState;
   disabled: boolean;
   onChange: (change: DeviceChange) => void;
 }) {
@@ -25,6 +28,7 @@ export function DeviceCard({
         <h3 className="text-sm font-medium wrap-anywhere">{device.name}</h3>
         <Badge>{device.revoked ? "Revoked" : device.isDefault ? "Default" : "Registered"}</Badge>
       </div>
+      {!device.revoked ? <Presence state={presence} deviceId={device.id} /> : null}
       <p className="text-xs text-muted">
         {device.platform === "macos"
           ? "macOS"

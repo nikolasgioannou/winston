@@ -31,7 +31,19 @@ const populated: ComputersState = {
 export function ComputersPreview({
   initial,
 }: {
-  initial: "ready" | "empty" | "loading" | "error" | "saving" | "uncertain";
+  initial:
+    | "ready"
+    | "empty"
+    | "loading"
+    | "error"
+    | "saving"
+    | "uncertain"
+    | "unreachable"
+    | "locked"
+    | "sleeping"
+    | "paused"
+    | "presence-error"
+    | "presence-loading";
 }) {
   const [state, setState] = useState<ComputersState>(
     initial === "loading" || initial === "error"
@@ -47,6 +59,28 @@ export function ComputersPreview({
       <ComputersView
         key={version}
         state={state}
+        presence={
+          initial === "presence-error"
+            ? { kind: "error" }
+            : initial === "presence-loading"
+              ? { kind: "loading" }
+              : {
+                  kind: "ready",
+                  items: [
+                    {
+                      deviceId: device.id,
+                      status:
+                        initial === "unreachable" ||
+                        initial === "locked" ||
+                        initial === "sleeping" ||
+                        initial === "paused"
+                          ? initial
+                          : "ready",
+                      lastSeenAt: "2030-01-01T12:00:00.000Z",
+                    },
+                  ],
+                }
+        }
         busy={initial === "saving"}
         saving={initial === "saving"}
         failed={failed}

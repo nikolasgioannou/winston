@@ -17,10 +17,48 @@ const device = {
 };
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/owner/devices/presence", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/owner/session", (route) => route.fulfill({ json: {} }));
   await page.route("**/api/owner/timezone", (route) => route.fulfill({ status: 401, json: {} }));
   await page.route("**/api/owner/workspaces*", (route) =>
     route.fulfill({ json: { items: [], next: null } }),
+  );
+});
+
+test("availability refresh is independent from device controls and never keeps a failed ready status", async ({
+  page,
+}, testInfo) => {
+  let status = "ready";
+  let failed = false;
+  await page.route("**/api/owner/devices", (route) => route.fulfill({ json: [device] }));
+  await page.route("**/api/owner/devices/presence", (route) =>
+    failed
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fulfill({ json: [{ deviceId: id, status, lastSeenAt: "2030-01-01T12:00:00.000Z" }] }),
+  );
+  await page.goto("/computers");
+  await expect(page.getByText("Ready", { exact: true })).toBeVisible();
+  failed = true;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("Unable to refresh availability.");
+  await expect(page.getByText("Ready", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Rename", exact: true })).toBeEnabled();
+  failed = false;
+  status = "locked";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByText("Locked", { exact: true })).toBeVisible();
+  status = "unreachable";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByText("Unreachable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Last seen", { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: testInfo.outputPath("computer-presence-mobile.png"),
+    fullPage: true,
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
   );
 });
 
