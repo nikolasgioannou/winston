@@ -67,3 +67,23 @@ require((try? DeviceMessage(data: oversized)) == nil, "oversized frame")
 require((try? DeviceMessage(data: Data("{".utf8))) == nil, "malformed JSON")
 require((try? DeviceMessage(data: Data([0xff]))) == nil, "invalid UTF-8")
 print("Swift protocol fixtures and execution binding checks passed")
+
+let sessionPath = URL(fileURLWithPath: path).deletingLastPathComponent()
+  .appendingPathComponent("sessions.json")
+let sessionFixtures =
+  try JSONSerialization.jsonObject(with: Data(contentsOf: sessionPath)) as! [String: Any]
+let sessionBase = sessionFixtures["base"] as! [String: Any]
+for fixture in sessionFixtures["cases"] as! [[String: Any]] {
+  let name = fixture["name"] as! String
+  let expected = fixture["valid"] as! Bool
+  let changes = fixture["changes"] as! [String: Any]
+  let object = sessionBase.merging(changes) { _, new in new }
+  let data = try JSONSerialization.data(withJSONObject: object)
+  require(((try? DeviceSession(data: data)) != nil) == expected, "session \(name)")
+}
+require(
+  (try? DeviceSession(data: Data(repeating: 32, count: DeviceMessage.frameLimit + 1))) == nil,
+  "oversized session")
+require((try? DeviceSession(data: Data("{".utf8))) == nil, "malformed session")
+require((try? DeviceSession(data: Data([0xff]))) == nil, "invalid session UTF-8")
+print("Swift session handshake fixtures passed")

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { deviceCapabilitySchema, deviceProtocolVersion, deviceStatusSchema } from "./devices";
+import {
+  deviceCapabilitySchema,
+  deviceProtocolVersion,
+  deviceStatusSchema,
+  deviceMessageSchema,
+} from "./devices";
 
 export const devicePairingTokenSchema = z.string().regex(/^wdp_[A-Za-z0-9_-]{43}$/);
 export const deviceCredentialSchema = z.string().regex(/^wdi_[A-Za-z0-9_-]{43}$/);
@@ -42,8 +47,8 @@ export type RegisteredDevice = z.infer<typeof registeredDeviceSchema>;
 export const registeredDeviceListSchema = z.array(registeredDeviceSchema).max(1000);
 
 export const deviceSessionIdentitySchema = z.strictObject({
-  deviceId: z.uuid(),
-  sessionId: z.uuid(),
+  deviceId: deviceMessageSchema.shape.deviceId,
+  sessionId: deviceMessageSchema.shape.sessionId,
   generation: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
 });
 export type DeviceSessionIdentity = z.infer<typeof deviceSessionIdentitySchema>;
