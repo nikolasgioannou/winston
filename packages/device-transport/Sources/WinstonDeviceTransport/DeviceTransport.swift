@@ -9,16 +9,6 @@ public enum DeviceTransportError: Error {
   case busy
 }
 
-private final class NoRedirects: NSObject, URLSessionTaskDelegate {
-  func urlSession(
-    _ session: URLSession, task: URLSessionTask,
-    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
-    completionHandler: @escaping @Sendable (URLRequest?) -> Void
-  ) {
-    completionHandler(nil)
-  }
-}
-
 public actor DeviceTransport {
   private let endpoint: URL
   private let deviceId: String
@@ -42,12 +32,7 @@ public actor DeviceTransport {
     self.endpoint = endpoint
     self.deviceId = deviceId
     self.credential = credential
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.httpCookieStorage = nil
-    configuration.httpShouldSetCookies = false
-    configuration.urlCredentialStorage = nil
-    configuration.urlCache = nil
-    client = URLSession(configuration: configuration, delegate: NoRedirects(), delegateQueue: nil)
+    client = isolatedSession()
   }
 
   deinit { client.invalidateAndCancel() }
