@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import {
   createRootRouteWithContext,
   createRoute,
@@ -17,6 +18,9 @@ import { ManagementShell } from "./shell";
 import { AccountView } from "./account-view";
 import { queryClient } from "./query-client";
 import { Schedules } from "../schedules/schedules";
+const ScheduleEditor = lazy(async () => ({
+  default: (await import("../schedules/editor")).ScheduleEditor,
+}));
 import { clearPendingDestination, restoreManagementPage } from "./locator";
 
 const rootRoute = createRootRouteWithContext<{ signOut: () => void }>()({
@@ -29,7 +33,7 @@ function Layout() {
   const navigate = useNavigate();
   return (
     <ManagementShell
-      activeHref={pathname}
+      activeHref={pathname.startsWith("/schedules/") ? "/schedules" : pathname}
       onNavigate={(href) => {
         clearPendingDestination();
         navigate({
@@ -79,6 +83,27 @@ const schedulesRoute = createRoute({
   path: "/schedules",
   component: Schedules,
 });
+const editorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/schedules/$id",
+  component: EditorRoute,
+});
+function EditorRoute() {
+  const { id } = editorRoute.useParams();
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<p role="status">Loading schedule…</p>}>
+      <ScheduleEditor
+        id={id}
+        onBack={() => {
+          navigate({ to: "/schedules" }).catch(() => {
+            window.location.assign("/schedules");
+          });
+        }}
+      />
+    </Suspense>
+  );
+}
 function DownloadRoute() {
   return <DownloadPage id={downloadRoute.useParams().id} />;
 }
@@ -97,6 +122,7 @@ const router = createRouter({
     accountRoute,
     connectionsRoute,
     schedulesRoute,
+    editorRoute,
     downloadRoute,
     handoffRoute,
   ]),

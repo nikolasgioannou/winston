@@ -10,6 +10,7 @@ import { ManagementPreview } from "./management-preview";
 import { ManagementShell } from "../management/shell";
 import { AccountView } from "../management/account-view";
 import { SchedulesPreview, previewSchedules } from "./schedules-preview";
+import { ScheduleEditorPreview } from "./schedule-editor-preview";
 
 function PairingPreview({ initial }: { initial: PairingState }) {
   const [state, setState] = useState(initial);
@@ -75,6 +76,27 @@ export type ReviewPage = {
 // Page registrations import real view components and supply local fixture adapters.
 // Production data hooks and actions must stay outside those view components.
 export const reviewPages: readonly ReviewPage[] = [
+  {
+    id: "schedule-editor",
+    label: "Edit schedule",
+    kind: "page",
+    states: [
+      {
+        id: "ready",
+        label: "Ready",
+        fullWidth: true,
+        render: () => <ScheduleEditorPreview initial="ready" />,
+      },
+      ...(["paused", "canceled", "saving", "conflict", "loading", "error"] as const).map(
+        (state) => ({
+          id: state,
+          label: state,
+          fullWidth: true,
+          render: () => <ScheduleEditorPreview initial={state} />,
+        }),
+      ),
+    ],
+  },
   {
     id: "schedules",
     label: "Schedules",

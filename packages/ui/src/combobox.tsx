@@ -11,6 +11,7 @@ export function Combobox({
   placeholder = "Search…",
   emptyMessage = "No matches found.",
   size = "md",
+  disabled = false,
 }: {
   label: string;
   items: string[];
@@ -19,9 +20,15 @@ export function Combobox({
   placeholder?: string;
   emptyMessage?: string;
   size?: ControlSize;
+  disabled?: boolean;
 }) {
   return (
-    <BaseCombobox.Root items={items} value={value} onValueChange={onValueChange}>
+    <BaseCombobox.Root
+      items={items}
+      value={value}
+      onValueChange={onValueChange}
+      disabled={disabled}
+    >
       <BaseCombobox.Label className="mb-2 block text-sm font-medium">{label}</BaseCombobox.Label>
       <BaseCombobox.Trigger
         className={`${selectorClasses} ${controlSizeClasses[size]} text-left`}

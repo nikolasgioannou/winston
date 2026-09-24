@@ -7,11 +7,13 @@ import {
 import { scheduleListSchema, scheduleSchema, type Schedule } from "@winston/contracts/schedules";
 import { ownerJson } from "../management/api";
 import { SchedulesView, type ScheduleAction } from "./schedules-view";
+import { useNavigate } from "@tanstack/react-router";
 
 const key = ["owner-schedules"] as const;
 type Page = ReturnType<typeof scheduleListSchema.parse>;
 
 export function Schedules() {
+  const navigate = useNavigate();
   const client = useQueryClient();
   const list = useInfiniteQuery({
     queryKey: key,
@@ -83,6 +85,11 @@ export function Schedules() {
       }}
       onResume={(schedule) => {
         change.mutate({ schedule, action: "resume" });
+      }}
+      onEdit={(schedule) => {
+        navigate({ to: "/schedules/$id", params: { id: schedule.id } }).catch(() => {
+          window.location.assign(`/schedules/${schedule.id}`);
+        });
       }}
     />
   );

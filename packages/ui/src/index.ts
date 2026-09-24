@@ -14,4 +14,5 @@ export { SidebarLink } from "./sidebar-link";
 export { Skeleton } from "./skeleton";
 export { Table } from "./table";
 export { TextField } from "./text-field";
+export { TextArea } from "./text-area";
 export { Activity, CalendarDays, Home, Link, Monitor, Palette, Plus, Settings } from "lucide-react";

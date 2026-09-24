@@ -73,11 +73,20 @@ test("schedule claims are durable, owner-scoped and coalesce missed runs without
         scope(({ schedules }) => schedules.cancel(created.id, 0)),
         /stale/,
       );
-      const changed = await scope(({ schedules }) =>
+      const instructionOnly = await scope(({ schedules }) =>
         schedules.update(created.id, 1, {
-          objective: "Updated reminder",
+          objective: "Changed instruction",
           sourceMessageIds: [],
           timing: request.timing,
+        }),
+      );
+      assert.equal(instructionOnly.nextRunAt, advanced.nextRunAt);
+      assert.equal(await scope(({ schedules }) => schedules.claimDue()), undefined);
+      const changed = await scope(({ schedules }) =>
+        schedules.update(created.id, 2, {
+          objective: "Updated reminder",
+          sourceMessageIds: [],
+          timing: { ...request.timing, startAt: "2026-01-02T14:00:00.000Z" },
         }),
       );
       assert.equal((await scope(({ tasks }) => tasks.find(occurrence.task.id)))?.state, "canceled");
@@ -118,6 +127,15 @@ test("schedule claims are durable, owner-scoped and coalesce missed runs without
       const final = await scope(({ schedules }) => schedules.claimDue());
       assert.equal(final?.scheduleId, once.id);
       assert.equal((await scope(({ schedules }) => schedules.find(once.id)))?.state, "completed");
+      const editedCompleted = await scope(({ schedules }) =>
+        schedules.update(once.id, 1, {
+          objective: "Reworded reminder",
+          sourceMessageIds: [],
+          timing: once.timing,
+        }),
+      );
+      assert.equal(editedCompleted.state, "completed");
+      assert.equal(editedCompleted.nextRunAt, null);
       assert.equal(await scope(({ schedules }) => schedules.claimDue()), undefined);
       const receipts = await sql<
         { count: number }[]

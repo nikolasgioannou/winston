@@ -126,6 +126,13 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
       const schedule = await current(id, revision);
       if (schedule.state === "canceled") throw new ScheduleWriteError("conflict");
       const { request, nextRunAt } = await validate({ ...input, key: "update" });
+      const timingUnchanged =
+        new Date(request.timing.startAt).getTime() ===
+          new Date(schedule.timing.startAt).getTime() &&
+        request.timing.timezone === schedule.timing.timezone &&
+        request.timing.kind === schedule.timing.kind &&
+        (request.timing.kind === "once" ||
+          (schedule.timing.kind === "recurring" && request.timing.rule === schedule.timing.rule));
       await cancelOutstanding(id);
       return save({
         ...schedule,
@@ -133,8 +140,9 @@ export function scheduleRepository(transaction: DatabaseTransaction, ownerId: st
         sourceMessageIds: request.sourceMessageIds,
         timing: request.timing,
         revision: revision + 1,
-        state: schedule.state === "paused" ? "paused" : "active",
-        nextRunAt: schedule.state === "paused" ? null : nextRunAt,
+        state: schedule.state === "paused" ? "paused" : timingUnchanged ? schedule.state : "active",
+        nextRunAt:
+          schedule.state === "paused" ? null : timingUnchanged ? schedule.nextRunAt : nextRunAt,
       });
     },
     async pause(id: string, revision: number) {

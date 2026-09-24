@@ -6,6 +6,7 @@ import {
   type ScheduleAction,
 } from "../schedules/schedules-view";
 import { ManagementShell } from "../management/shell";
+import { ScheduleEditorView } from "../schedules/editor-view";
 
 export const previewSchedules: Schedule[] = [
   {
@@ -40,6 +41,7 @@ export function SchedulesPreview({
 }) {
   const [state, setState] = useState(initial);
   const [failure, setFailure] = useState(failed);
+  const [editing, setEditing] = useState<Schedule | null>(null);
   const content = (
     <SchedulesView
       state={state}
@@ -51,6 +53,7 @@ export function SchedulesPreview({
         setFailure(false);
       }}
       onMore={() => {}}
+      onEdit={setEditing}
       onPause={(schedule) => {
         if (state.kind === "ready")
           setState({
@@ -96,11 +99,32 @@ export function SchedulesPreview({
       }}
     />
   );
-  return embedded ? (
+  const page = editing ? (
+    <ScheduleEditorView
+      schedule={editing}
+      onBack={() => {
+        setEditing(null);
+      }}
+      onReload={() => {}}
+      onSave={(input) => {
+        if (state.kind === "ready")
+          setState({
+            kind: "ready",
+            items: state.items.map((item) =>
+              item.id === editing.id ? { ...item, ...input, revision: item.revision + 1 } : item,
+            ),
+          });
+        setEditing(null);
+      }}
+    />
+  ) : (
     content
+  );
+  return embedded ? (
+    page
   ) : (
     <ManagementShell preview activeHref="/schedules" onNavigate={() => {}}>
-      {content}
+      {page}
     </ManagementShell>
   );
 }

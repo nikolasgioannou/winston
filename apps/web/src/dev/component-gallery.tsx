@@ -12,6 +12,7 @@ import {
   Skeleton,
   Table,
   TextField,
+  TextArea,
 } from "@winston/ui";
 
 const approvalOptions = [
@@ -96,6 +97,11 @@ export function ComponentGallery({
             <Card title="Fields & buttons">
               <div className="space-y-5">
                 <TextField label="Computer name" defaultValue="Studio Mac" />
+                <TextArea
+                  label="Instruction"
+                  rows={3}
+                  defaultValue="Remind me to water the plants."
+                />
                 <TextField
                   label="Name with a validation error"
                   defaultValue=""
