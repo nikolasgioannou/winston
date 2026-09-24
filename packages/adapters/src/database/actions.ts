@@ -14,6 +14,7 @@ import {
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
+import { deviceExecutionSchema } from "@winston/contracts/device-executions";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import type { DatabaseTransaction } from "./owners";
@@ -161,6 +162,55 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    // Trusted adapter only. Read persisted evidence rather than accepting a caller's
+    // claimed outcome. This never grants dispatch authority or repeats an effect.
+    async reconcileDevice(inputId: string) {
+      const id = actionRecordSchema.shape.operationId.parse(inputId);
+      await lock();
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.device_executions
+        WHERE owner_id = ${ownerId}::uuid AND execution_id = ${id}::uuid
+      `);
+      if (!rows.rows[0]) return null;
+      const execution = deviceExecutionSchema.parse(rows.rows[0].document);
+      const original = execution.message.payload;
+      if (original.kind !== "execute" || original.executionId !== id) return null;
+      const stored = await row(execution.actionId);
+      if (!stored) return null;
+      const action = actionRecordSchema.parse(stored.document);
+      const target = action.request.authorization.target;
+      if (
+        action.operationId !== id ||
+        target.kind !== "device" ||
+        target.id !== execution.message.deviceId ||
+        target.resource !== null ||
+        action.request.authorization.operation !== `device.${original.operation.kind}` ||
+        canonical(action.request.arguments) !== canonical(original.operation) ||
+        canonical(action.dispatchTask) !== canonical(execution.task) ||
+        original.taskId !== execution.task.id ||
+        original.taskRevision !== execution.task.revision
+      )
+        return null;
+      if (["dispatching", "accepted", "running"].includes(execution.state)) return action;
+      const state =
+        execution.state === "succeeded"
+          ? "succeeded"
+          : execution.state === "unknown"
+            ? "unknown"
+            : "failed";
+      const detail =
+        execution.state === "succeeded"
+          ? "Device operation completed."
+          : execution.state === "canceled"
+            ? "Device operation was canceled; earlier effects may remain."
+            : execution.state === "unknown"
+              ? "Device operation outcome is unknown; do not repeat it."
+              : "Device operation failed; earlier effects may remain.";
+      const outcome = actionOutcomeSchema.parse({ state, detail, providerReference: id });
+      if (action.outcome && canonical(action.outcome) === canonical(outcome)) return action;
+      if (!["dispatching", "unknown"].includes(action.state)) return null;
+      return save(action, { state: outcome.state, outcome });
+    },
     // A proof check only: the dispatcher must reserve durably before sending once.
     async authorizeDevice(input: {
       id: string;

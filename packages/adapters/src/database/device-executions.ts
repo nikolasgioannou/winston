@@ -55,6 +55,10 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       UPDATE winston.device_executions SET state = ${next.state}, document = ${JSON.stringify(next)}::jsonb
       WHERE owner_id = ${ownerId}::uuid AND execution_id = ${id}::uuid
     `);
+    if (next.state === "unknown" || terminal(next.state)) {
+      const action = await actionRepository(transaction, ownerId).reconcileDevice(id);
+      if (!action) throw new Error("Device evidence conflicts with its action.");
+    }
     const evidence =
       next.reconciliation?.response?.messageId ?? next.receipt?.messageId ?? "reserved";
     if (publish)

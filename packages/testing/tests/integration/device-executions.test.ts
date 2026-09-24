@@ -215,6 +215,17 @@ test("device receipts require the original binding and ordered evidence, includi
       const final = await f.receive(complete);
       assert.equal(final?.state, "succeeded");
       assert.deepEqual(await f.receive(complete), final);
+      const action = await database.transaction(f.ownerId, ({ actions }) => actions.find(proof.id));
+      assert.equal(action?.state, "succeeded");
+      assert.equal(proof.message.payload.kind, "execute");
+      const executionId = proof.message.payload.executionId;
+      assert.equal(action.outcome?.providerReference, executionId);
+      assert.deepEqual(
+        await database.transaction(f.ownerId, ({ actions }) =>
+          actions.reconcileDevice(executionId),
+        ),
+        action,
+      );
       assert.equal(await f.receive(receipt(proof.message, "failed", 5)), null);
       assert.equal(await f.receive(receipt(proof.message, "running", 6)), null);
     } finally {
@@ -237,6 +248,10 @@ test("expired or disconnected executions retain resources until trustworthy comp
         database.transaction(f.ownerId, ({ deviceExecutions }) => deviceExecutions.expire());
       assert.equal(await expire(), 1);
       assert.equal(await expire(), 0);
+      assert.equal(
+        (await database.transaction(f.ownerId, ({ actions }) => actions.find(proof.id)))?.state,
+        "unknown",
+      );
       assert.equal((await f.reserve(blocked)).status, "busy");
       assert.equal((await f.receive(receipt(proof.message, "running", 1)))?.state, "unknown");
       assert.equal((await f.reserve(blocked)).status, "busy");
@@ -403,6 +418,9 @@ test("fresh reconciliation queries fence replies and only terminal journal evide
       const complete = answer(finalQuery, "succeeded");
       const final = await receive(complete);
       assert.equal(final?.state, "succeeded");
+      const action = await database.transaction(f.ownerId, ({ actions }) => actions.find(proof.id));
+      assert.equal(action?.state, "succeeded");
+      assert.equal(action.outcome?.providerReference, executionId);
       assert.deepEqual(await receive(complete), final);
       assert.equal(await receive(answer(finalQuery, "failed")), null);
       assert.equal(await query(), null);
@@ -415,6 +433,80 @@ test("fresh reconciliation queries fence replies and only terminal journal evide
       assert.ok(staleQuery);
       await sql`UPDATE winston.device_sessions SET lease_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${f.ownerId}::uuid`;
       assert.equal(await receive(answer(staleQuery, "succeeded")), null);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
+test("device action outcomes preserve cancellation and reject mismatched persisted authority atomically", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      for (const state of ["failed", "canceled"] as const) {
+        const f = await fixture(database);
+        const proof = await f.prepare();
+        assert.equal(proof.message.payload.kind, "execute");
+        const executionId = proof.message.payload.executionId;
+        await f.reserve(proof);
+        await f.receive(receipt(proof.message, "running", 1));
+        const original = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.find(executionId),
+        );
+        assert.ok(original);
+        const other = randomUUID();
+        await database.transaction(other, ({ owners }) => owners.ensure());
+        assert.equal(
+          await database.transaction(other, ({ actions }) => actions.reconcileDevice(executionId)),
+          null,
+        );
+        // A mismatched reservation must not settle a different immutable action.
+        for (const changed of [
+          { ...original, actionId: randomUUID() },
+          { ...original, task: { ...original.task, generation: original.task.generation + 1 } },
+          { ...original, message: { ...original.message, deviceId: randomUUID() } },
+          {
+            ...original,
+            message: {
+              ...proof.message,
+              payload: {
+                ...proof.message.payload,
+                operation: { ...command, executable: "/bin/false" },
+              },
+            },
+          },
+        ]) {
+          await sql`UPDATE winston.device_executions SET document = ${JSON.stringify({ ...changed, state: "failed" })}::text::jsonb WHERE owner_id = ${f.ownerId}::uuid`;
+          assert.equal(
+            await database.transaction(f.ownerId, ({ actions }) =>
+              actions.reconcileDevice(executionId),
+            ),
+            null,
+          );
+        }
+        await sql`UPDATE winston.device_executions SET document = ${JSON.stringify(original)}::text::jsonb WHERE owner_id = ${f.ownerId}::uuid`;
+        // Conflicting action authority rolls the receipt update back in the same transaction.
+        await sql`UPDATE winston.actions SET document = jsonb_set(document, '{operationId}', to_jsonb(${randomUUID()}::text)) WHERE owner_id = ${f.ownerId}::uuid AND id = ${proof.id}::uuid`;
+        const terminal = receipt(proof.message, state, 2);
+        await assert.rejects(() => f.receive(terminal), /conflicts with its action/);
+        assert.deepEqual(
+          await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+            deviceExecutions.find(executionId),
+          ),
+          original,
+        );
+        await sql`UPDATE winston.actions SET document = jsonb_set(document, '{operationId}', to_jsonb(${executionId}::text)) WHERE owner_id = ${f.ownerId}::uuid AND id = ${proof.id}::uuid`;
+        await f.receive(terminal);
+        const action = await database.transaction(f.ownerId, ({ actions }) =>
+          actions.find(proof.id),
+        );
+        assert.equal(action?.state, "failed");
+        assert.equal(action.outcome?.providerReference, executionId);
+        assert.match(action.outcome.detail, state === "canceled" ? /canceled/ : /failed/);
+        assert.match(action.outcome.detail, /earlier effects may remain/);
+        assert.equal(await f.receive(receipt(proof.message, "succeeded", 3)), null);
+      }
     } finally {
       await database.close();
     }
