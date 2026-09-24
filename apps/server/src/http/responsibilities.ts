@@ -5,6 +5,7 @@ import {
   ownerResponsibilityProposalSchema,
   ownerResponsibilityEditSchema,
   ownerResponsibilityRevisionSchema,
+  responsibilitySchema,
 } from "@winston/contracts/responsibilities";
 import type { HttpEnvironment } from "./app";
 import { parseJson, RequestError } from "./errors";
@@ -38,6 +39,29 @@ export function createResponsibilityOwnerRouter(database: {
       responsibilities.list(after),
     );
     return context.json({ items, next: items.length === 100 ? items.at(-1)?.id : null });
+  });
+  router.get("/:id/sources", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const id = identifier(context.req.param("id"));
+    return context.json(
+      await transact(owner.ownerId, ({ responsibilities }) => responsibilities.sources(id)),
+    );
+  });
+  router.get("/:id/history", async (context) => {
+    const owner = context.get("identity");
+    if (owner.kind !== "owner") throw new RequestError("unauthorized");
+    const id = identifier(context.req.param("id"));
+    const cursor = context.req.query("before");
+    let before: number | undefined;
+    if (cursor !== undefined) {
+      const parsed = responsibilitySchema.shape.revision.safeParse(Number(cursor));
+      if (!/^\d+$/.test(cursor) || !parsed.success) throw new RequestError("invalid_request");
+      before = parsed.data;
+    }
+    return context.json(
+      await transact(owner.ownerId, ({ responsibilities }) => responsibilities.history(id, before)),
+    );
   });
   router.get("/:id", async (context) => {
     const owner = context.get("identity");

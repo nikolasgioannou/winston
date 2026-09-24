@@ -45,6 +45,14 @@ test("responsibility endpoints require owner sessions and current explicit agree
               return work({
                 responsibilities: {
                   find: (id) => Promise.resolve(id === current.id ? current : undefined),
+                  sources: (id) => {
+                    check(id, current.revision);
+                    return Promise.resolve({ id, revision: current.revision, items: [] });
+                  },
+                  history: (id, before) => {
+                    check(id, current.revision);
+                    return Promise.resolve({ items: before === 0 ? [] : [current], next: null });
+                  },
                   list: () => Promise.resolve([current]),
                   propose: (input) => {
                     assert.equal(input.key, "web:fixture");
@@ -91,6 +99,8 @@ test("responsibility endpoints require owner sessions and current explicit agree
       body: JSON.stringify(body),
     });
   assert.equal((await app.request(path)).status, 401);
+  assert.equal((await app.request(`${path}/${current.id}/sources`)).status, 401);
+  assert.equal((await app.request(`${path}/${current.id}/history`)).status, 401);
   assert.equal(
     (await mutate(`/${current.id}/agree`, { revision: 3 }, "POST", "https://evil.example")).status,
     403,
@@ -101,6 +111,19 @@ test("responsibility endpoints require owner sessions and current explicit agree
   assert.deepEqual(await list.json(), { items: [current], next: null });
   assert.equal((await app.request(`${path}?after=invalid`, { headers })).status, 400);
   assert.equal((await app.request(`${path}/${randomUUID()}`, { headers })).status, 404);
+  for (const suffix of ["sources", "history"]) {
+    assert.equal((await app.request(`${path}/${randomUUID()}/${suffix}`, { headers })).status, 404);
+    const response = await app.request(`${path}/${current.id}/${suffix}`, { headers });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+  }
+  for (const cursor of ["", "-1", "NaN", "1.5", "1e2", "9007199254740992"])
+    assert.equal(
+      (await app.request(`${path}/${current.id}/history?before=${cursor}`, { headers })).status,
+      400,
+    );
+  const history = await app.request(`${path}/${current.id}/history?before=0`, { headers });
+  assert.deepEqual(await history.json(), { items: [], next: null });
   const proposal = { key: "fixture", purpose: current.purpose, scope: [] };
   assert.equal((await mutate("", proposal)).status, 200);
   for (const injected of [

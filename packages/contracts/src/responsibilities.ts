@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { authorizationRequestSchema } from "./authorization";
+import { userMessageSchema } from "./messages";
 
 export const responsibilityPurposeSchema = z.strictObject({
   purpose: z.string().trim().min(1).max(4000),
@@ -40,4 +41,29 @@ export const ownerResponsibilityEditSchema = ownerResponsibilityProposalSchema
 export const responsibilityListSchema = z.strictObject({
   items: z.array(responsibilitySchema).max(100),
   next: z.uuid().nullable(),
+});
+
+const sourceReferenceSchema = z.strictObject({
+  messageId: z.uuid(),
+  revision: z.number().int().nonnegative(),
+});
+export const responsibilitySourceSchema = z.discriminatedUnion("status", [
+  sourceReferenceSchema.extend({
+    status: z.literal("current"),
+    kind: z.enum(["text", "caption", "attachment", "voice"]),
+    text: z.string().max(4000),
+    transcript: z.string().max(4000).nullable(),
+    truncated: z.boolean(),
+    sentAt: userMessageSchema.shape.sentAt,
+  }),
+  sourceReferenceSchema.extend({ status: z.enum(["changed", "unavailable"]) }),
+]);
+export const responsibilitySourcesSchema = z.strictObject({
+  id: z.uuid(),
+  revision: responsibilitySchema.shape.revision,
+  items: z.array(responsibilitySourceSchema).max(100),
+});
+export const responsibilityHistorySchema = z.strictObject({
+  items: z.array(responsibilitySchema).max(10),
+  next: responsibilitySchema.shape.revision.nullable(),
 });

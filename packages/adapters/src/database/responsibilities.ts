@@ -14,6 +14,7 @@ import { scheduleRepository } from "./schedules";
 import { scheduleSchema } from "@winston/contracts/schedules";
 import { taskSchema } from "@winston/contracts/tasks";
 import { taskRepository } from "./tasks";
+import { responsibilityHistory, responsibilitySources } from "./responsibility-reads";
 
 export class ResponsibilityWriteError extends Error {
   constructor(readonly kind: "not_found" | "conflict" | "invalid_scope") {
@@ -119,6 +120,15 @@ export function responsibilityRepository(transaction: DatabaseTransaction, owner
   }
   return {
     find,
+    async sources(id: string) {
+      const value = await find(id);
+      if (!value) throw new ResponsibilityWriteError("not_found");
+      return responsibilitySources(transaction, ownerId, value);
+    },
+    async history(id: string, before?: number) {
+      if (!(await find(id))) throw new ResponsibilityWriteError("not_found");
+      return responsibilityHistory(transaction, ownerId, id, before);
+    },
     async list(after?: string) {
       if (after) responsibilitySchema.shape.id.parse(after);
       const result = await transaction.execute<{ document: unknown }>(sql`

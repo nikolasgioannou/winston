@@ -157,7 +157,41 @@ test("responsibilities require current owner agreement and preserve terminal rev
         responsibilities.propose({ ...input, key: "sourced", sourceMessageIds: [messageId] }),
       );
       assert.deepEqual(sourced.sources, [{ messageId, revision: 0 }]);
+      const provenance = await run(({ responsibilities }) => responsibilities.sources(sourced.id));
+      assert.equal(provenance.revision, 0);
+      const original = provenance.items[0];
+      assert.ok(original);
+      assert.equal(original.status, "current");
+      assert.equal(original.text, "We could monitor this trip.");
+      assert.deepEqual(original.sentAt, snapshot.messages[0]?.envelope.sentAt);
+      assert.equal(original.truncated, false);
+      assert.equal(original.transcript, null);
+      for (const read of ["sources", "history"] as const) {
+        await assert.rejects(
+          database.transaction(stranger, async ({ responsibilities }) => {
+            await responsibilities[read](sourced.id);
+          }),
+          /not_found/,
+        );
+        await assert.rejects(
+          run(async ({ responsibilities }) => {
+            await responsibilities[read](randomUUID());
+          }),
+          /not_found/,
+        );
+      }
+      await sql`UPDATE winston.conversation_messages SET envelope = jsonb_set(envelope, '{input,text}', to_jsonb(${"x".repeat(4001)}::text)) WHERE owner_id = ${ownerId}::uuid AND id = ${messageId}::uuid`;
+      const excerpt = (await run(({ responsibilities }) => responsibilities.sources(sourced.id)))
+        .items[0];
+      assert.ok(excerpt);
+      assert.equal(excerpt.status, "current");
+      assert.equal(excerpt.text.length, 4000);
+      assert.equal(excerpt.truncated, true);
       await sql`UPDATE winston.conversation_messages SET envelope = jsonb_set(envelope, '{revision}', '1') WHERE owner_id = ${ownerId}::uuid AND id = ${messageId}::uuid`;
+      assert.deepEqual(
+        (await run(({ responsibilities }) => responsibilities.sources(sourced.id))).items,
+        [{ messageId, revision: 0, status: "changed" }],
+      );
       await assert.rejects(
         run(({ responsibilities }) => responsibilities.agree(sourced.id, 0)),
         /conflict/,
@@ -206,6 +240,53 @@ test("responsibilities require current owner agreement and preserve terminal rev
       assert.equal(outcome.result, null);
       assert.equal(await run(({ schedules }) => schedules.claimDue()), undefined);
       assert.equal((await run(({ schedules }) => schedules.find(pending.id)))?.state, "canceled");
+
+      let historical = await run(({ responsibilities }) =>
+        responsibilities.propose({ ...input, key: "history" }),
+      );
+      for (let revision = 0; revision < 20; revision++) {
+        historical = await run(({ responsibilities }) =>
+          responsibilities.revise(historical.id, revision, {
+            ...input,
+            purpose: `Purpose ${String(revision + 1)}`,
+          }),
+        );
+      }
+      const firstPage = await run(({ responsibilities }) =>
+        responsibilities.history(historical.id),
+      );
+      assert.deepEqual(
+        firstPage.items.map((item) => item.revision),
+        [20, 19, 18, 17, 16, 15, 14, 13, 12, 11],
+      );
+      assert.equal(firstPage.next, 11);
+      const secondPage = await run(({ responsibilities }) =>
+        responsibilities.history(historical.id, 11),
+      );
+      assert.deepEqual(
+        secondPage.items.map((item) => item.revision),
+        [10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+      );
+      assert.equal(secondPage.next, 1);
+      const lastPage = await run(({ responsibilities }) =>
+        responsibilities.history(historical.id, 1),
+      );
+      assert.equal(lastPage.items.length, 1);
+      assert.equal(lastPage.items[0]?.purpose, input.purpose);
+      assert.equal(lastPage.next, null);
+      assert.deepEqual(
+        await run(({ responsibilities }) => responsibilities.history(historical.id, 0)),
+        { items: [], next: null },
+      );
+      await assert.rejects(
+        run(({ responsibilities }) => responsibilities.history(historical.id, -1)),
+      );
+      const missingId = randomUUID();
+      await sql`UPDATE winston.responsibilities SET document = jsonb_set(document, '{sources}', jsonb_build_array(jsonb_build_object('messageId', ${missingId}::text, 'revision', 0))) WHERE owner_id = ${ownerId}::uuid AND id = ${historical.id}::uuid`;
+      assert.deepEqual(
+        (await run(({ responsibilities }) => responsibilities.sources(historical.id))).items,
+        [{ messageId: missingId, revision: 0, status: "unavailable" }],
+      );
     } finally {
       await telegram.close();
       await database.close();
