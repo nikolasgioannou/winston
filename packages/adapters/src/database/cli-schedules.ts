@@ -12,7 +12,7 @@ import { ownerRepository } from "./owners";
 import { capabilityRepository } from "./capabilities";
 import { taskRepository } from "./tasks";
 import { scheduleRepository } from "./schedules";
-import { taskResponsibilityBinding } from "./responsibility-bindings";
+import { taskResponsibilityBinding, taskResponsibilitySetup } from "./responsibility-bindings";
 import type { JsonValue } from "@winston/contracts/json";
 
 function success(data: JsonValue): CliResult {
@@ -46,6 +46,19 @@ export async function executeScheduleCommand(
       status: "denied",
       message:
         "Responsibility checks cannot create or change schedules. Ask the owner through the conversation.",
+    };
+  const setup = await taskResponsibilitySetup(transaction, ownerId, authority.taskId);
+  if (
+    setup &&
+    isScheduleMutation(request.command) &&
+    (request.command !== "schedules.create" ||
+      request.responsibility?.id !== setup.id ||
+      request.responsibility.agreementRevision !== setup.agreement?.proposalRevision)
+  )
+    return {
+      version: 1,
+      status: "denied",
+      message: "Responsibility setup can only create schedules bound to its current agreement.",
     };
   const schedules = scheduleRepository(transaction, ownerId);
   if (request.command === "schedules.list") {
@@ -90,7 +103,11 @@ export async function executeScheduleCommand(
   };
   const schedule =
     request.command === "schedules.create"
-      ? await schedules.create({ ...change, key: `cli:${authority.taskId}:${request.key}` })
+      ? await schedules.create({
+          ...change,
+          key: `cli:${authority.taskId}:${request.key}`,
+          ...(request.responsibility ? { responsibility: request.responsibility } : {}),
+        })
       : await schedules.update(request.id, request.revision, change);
   return success(schedule);
 }

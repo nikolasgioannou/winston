@@ -8,6 +8,7 @@ import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { eventRepository } from "./events";
 import { handoffRepository } from "./handoffs";
+import { taskResponsibilitySetup } from "./responsibility-bindings";
 
 export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -57,8 +58,17 @@ export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: 
             task.state === "waiting" && task.blocker?.kind === "connection"
               ? await handoffRepository(transaction, ownerId).find(task.blocker.referenceId)
               : null;
+          const setup =
+            task.state === "waiting" && task.blocker?.kind === "responsibility"
+              ? await taskResponsibilitySetup(transaction, ownerId, task.id)
+              : undefined;
+          const proposal =
+            setup?.state === "proposed" && setup.id === task.blocker?.referenceId
+              ? setup
+              : undefined;
           if (
             task.state === "waiting" &&
+            !proposal &&
             (!handoff || !["pending", "expired"].includes(handoff.state))
           )
             return;
@@ -68,8 +78,12 @@ export function taskUpdateRepository(transaction: DatabaseTransaction, ownerId: 
             revision: task.revision,
             state: task.state,
             ...(handoff ? { handoffId: handoff.id } : {}),
+            ...(proposal ? { responsibilityId: proposal.id } : {}),
             objectivePreview: task.objective.slice(0, 500),
-            resultPreview: (handoff?.detail ?? task.result ?? "").slice(0, 8000),
+            resultPreview: (proposal
+              ? `Review the proposed responsibility: ${proposal.purpose}. Monitoring has not started.`
+              : (handoff?.detail ?? task.result ?? "")
+            ).slice(0, 8000),
             resultTruncated: (task.result?.length ?? 0) > 8000,
           });
           await transaction.execute(sql`

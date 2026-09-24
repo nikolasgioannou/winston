@@ -17,6 +17,7 @@ export const cliScheduleRequestSchema = z.discriminatedUnion("command", [
     ...timing,
     command: z.literal("schedules.create"),
     key: z.string().min(1).max(100),
+    responsibility: scheduleRequestSchema.shape.responsibility,
   }),
   z.strictObject({ ...base, command: z.literal("schedules.list"), after: z.uuid().optional() }),
   z.strictObject({ ...base, ...identity, command: z.literal("schedules.inspect") }),

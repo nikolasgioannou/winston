@@ -2,6 +2,27 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "responsibilities.propose",
+    description:
+      "Propose ongoing work and pause for owner agreement. Reuse the same key after approval; a proposal does not start monitoring.",
+    id: false,
+    flags: ["key", "purpose", "scope"],
+    usage: "--key <stable-key> --purpose <purpose> --scope <JSON-authorization-request-array>",
+  },
+  {
+    command: "responsibilities.list",
+    description: "List responsibility proposals and agreements.",
+    id: false,
+    flags: ["after"],
+    usage: "[--after <uuid>]",
+  },
+  {
+    command: "responsibilities.inspect",
+    description: "Read the current purpose, scope and agreement revision.",
+    id: true,
+    flags: ["id"],
+  },
+  {
     command: "schedules.pause",
     description: "Pause future runs and cancel outstanding scheduled work.",
     id: true,
@@ -20,9 +41,9 @@ export const commands = [
     description:
       "Create a durable reminder or recurring task. Reuse the same key after interruption.",
     id: false,
-    flags: ["key", "objective", "at", "timezone", "rule"],
+    flags: ["key", "objective", "at", "timezone", "rule", "responsibility", "agreement-revision"],
     usage:
-      "--key <stable-key> --objective <task> --at <UTC-timestamp> [--timezone <IANA-zone>] [--rule <RRULE>]",
+      "--key <stable-key> --objective <task> --at <UTC-timestamp> [--timezone <IANA-zone>] [--rule <RRULE>] [--responsibility <uuid> --agreement-revision <number>]",
   },
   {
     command: "schedules.list",

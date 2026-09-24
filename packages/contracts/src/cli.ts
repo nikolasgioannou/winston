@@ -2,6 +2,11 @@ import { z } from "zod";
 import { googleServiceSchema } from "./connections";
 import { cliReadRequestSchema } from "./cli-reads";
 import { cliScheduleRequestSchema } from "./cli-schedules";
+import { cliResponsibilityRequestSchema } from "./cli-responsibilities";
+export {
+  cliResponsibilityRequestSchema,
+  type CliResponsibilityRequest,
+} from "./cli-responsibilities";
 export {
   cliScheduleRequestSchema,
   isScheduleMutation,
@@ -10,6 +15,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliResponsibilityRequestSchema.options,
   ...cliScheduleRequestSchema.options,
   z.strictObject({
     version: z.literal(1),

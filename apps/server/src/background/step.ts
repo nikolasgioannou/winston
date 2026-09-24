@@ -183,6 +183,7 @@ export function createBackgroundStep(options: {
       const context = taskContext({
         task: snapshot.context.task,
         scheduled: snapshot.context.scheduled,
+        responsibilitySetup: snapshot.context.responsibilitySetup,
         resources: snapshot.context.resources,
         workspaces: snapshot.context.workspaces,
         effects: snapshot.effects,

@@ -13,6 +13,7 @@ export const taskUpdateSchema = z.strictObject({
   revision: taskSchema.shape.revision,
   state: z.enum(["succeeded", "failed", "waiting"]),
   handoffId: z.uuid().optional(),
+  responsibilityId: z.uuid().optional(),
   objectivePreview: z.string().max(500),
   resultPreview: z.string().max(8000),
   resultTruncated: z.boolean(),

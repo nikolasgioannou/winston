@@ -9,9 +9,13 @@ import { actionRepository } from "./actions";
 import { handoffRepository } from "./handoffs";
 import { executeScheduleCommand } from "./cli-schedules";
 import type { CliScheduleRequest } from "@winston/contracts/cli";
+import { executeResponsibilityCommand } from "./cli-responsibilities";
+import type { CliResponsibilityRequest } from "@winston/contracts/cli";
 
 export function cliRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
+    responsibility: (credential: ServiceRequest, request: CliResponsibilityRequest) =>
+      executeResponsibilityCommand(transaction, ownerId, credential, request),
     schedule: (credential: ServiceRequest, request: CliScheduleRequest) =>
       executeScheduleCommand(transaction, ownerId, credential, request),
     async connect(

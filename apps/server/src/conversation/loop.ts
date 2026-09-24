@@ -27,12 +27,17 @@ export function createConversationLoop(options: {
 }) {
   function present(updates: TaskUpdate[]) {
     return updates.map((update) => {
-      if (!update.handoffId) return update;
+      if (!update.handoffId && !update.responsibilityId) return update;
       if (!options.webOrigin)
         throw new Error("Handoff presentation requires the configured web origin.");
       return {
         ...update,
-        handoffUrl: new URL(`/handoffs/${update.handoffId}`, options.webOrigin).href,
+        ...(update.handoffId
+          ? { handoffUrl: new URL(`/handoffs/${update.handoffId}`, options.webOrigin).href }
+          : {}),
+        ...(update.responsibilityId
+          ? { responsibilityUrl: new URL("/responsibilities", options.webOrigin).href }
+          : {}),
       };
     });
   }

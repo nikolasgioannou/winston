@@ -3,6 +3,7 @@ import {
   cliRequestSchema,
   cliReadRequestSchema,
   cliScheduleRequestSchema,
+  cliResponsibilityRequestSchema,
   type CliReadRequest,
   type CliResult,
 } from "@winston/contracts/cli";
@@ -57,6 +58,13 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const responsibility = cliResponsibilityRequestSchema.safeParse(request);
+    if (responsibility.success)
+      return context.json(
+        await database.transaction(identity.ownerId, ({ cli }) =>
+          cli.responsibility(authority, responsibility.data),
+        ),
+      );
     const schedule = cliScheduleRequestSchema.safeParse(request);
     if (schedule.success)
       return context.json(
@@ -93,6 +101,13 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const responsibility = cliResponsibilityRequestSchema.safeParse(request);
+    if (responsibility.success)
+      return context.json(
+        await database.transaction(identity.ownerId, ({ cli }) =>
+          cli.responsibility(authority, responsibility.data),
+        ),
+      );
     const schedule = cliScheduleRequestSchema.safeParse(request);
     if (schedule.success)
       return context.json(

@@ -16,7 +16,16 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let reads = 0;
   let fileCalls = 0;
   let scheduleCalls = 0;
+  let responsibilityCalls = 0;
   const cli: OwnerTransaction["cli"] = {
+    responsibility: (credential, input) => {
+      assert.equal(
+        credential.token,
+        input.command === "responsibilities.propose" ? controlToken : token,
+      );
+      responsibilityCalls++;
+      return Promise.resolve({ version: 1, status: "ok", data: {} });
+    },
     schedule: (credential, input) => {
       assert.equal(credential.token, input.command === "schedules.cancel" ? controlToken : token);
       scheduleCalls++;
@@ -107,6 +116,32 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  assert.equal((await request({ version: 1, command: "responsibilities.list" })).status, 200);
+  const proposal = {
+    version: 1,
+    command: "responsibilities.propose",
+    key: "fixture",
+    purpose: "Watch changes",
+    scope: [],
+  };
+  assert.equal((await request(proposal, controlToken, workspaceId, controlPath)).status, 200);
+  assert.equal(
+    (await request({ ...proposal, sourceMessageIds: [] }, controlToken, workspaceId, controlPath))
+      .status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(
+        { version: 1, command: "responsibilities.agree", id: randomUUID(), revision: 0 },
+        controlToken,
+        workspaceId,
+        controlPath,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(responsibilityCalls, 2);
   assert.equal((await request({ version: 1, command: "schedules.list" })).status, 200);
   const cancelSchedule = { version: 1, command: "schedules.cancel", id: randomUUID(), revision: 1 };
   assert.equal((await request(cancelSchedule, token, workspaceId, controlPath)).status, 401);

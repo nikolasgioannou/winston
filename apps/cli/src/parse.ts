@@ -34,6 +34,10 @@ export function parseCommand(args: string[]): ParsedCommand {
       rule: { type: "string" },
       revision: { type: "string" },
       after: { type: "string" },
+      purpose: { type: "string" },
+      scope: { type: "string" },
+      responsibility: { type: "string" },
+      "agreement-revision": { type: "string" },
     },
   });
   const flags = tokens.filter((token) => token.kind === "option").map((token) => token.name);
@@ -49,9 +53,33 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (command.command.startsWith("responsibilities.") && "flags" in command) {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected responsibility options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        ...(values.id === undefined ? {} : { id: values.id }),
+        ...(values.after === undefined ? {} : { after: values.after }),
+        ...(values.key === undefined ? {} : { key: values.key }),
+        ...(values.purpose === undefined ? {} : { purpose: values.purpose }),
+        ...(values.scope === undefined ? {} : { scope: JSON.parse(values.scope) as unknown }),
+      }),
+    };
+  }
   if (command.command.startsWith("schedules.") && "flags" in command) {
     if (values.revision !== undefined && !/^\d+$/.test(values.revision))
       throw new Error("Invalid schedule revision.");
+    const agreementRevision = values["agreement-revision"];
+    if (
+      (values.responsibility === undefined) !== (agreementRevision === undefined) ||
+      (agreementRevision !== undefined && !/^\d+$/.test(agreementRevision))
+    )
+      throw new Error("Provide a responsibility and its agreement revision together.");
     const allowed: readonly string[] = command.flags;
     if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
       throw new Error("Unexpected schedule options.");
@@ -69,6 +97,14 @@ export function parseCommand(args: string[]): ParsedCommand {
         ...(values.timezone === undefined ? {} : { timezone: values.timezone }),
         ...(values.revision === undefined ? {} : { revision: Number(values.revision) }),
         ...(values.after === undefined ? {} : { after: values.after }),
+        ...(values.responsibility === undefined
+          ? {}
+          : {
+              responsibility: {
+                id: values.responsibility,
+                agreementRevision: Number(agreementRevision),
+              },
+            }),
       }),
     };
   }

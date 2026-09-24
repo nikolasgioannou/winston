@@ -14,7 +14,7 @@ import { actionTaskSchema, type ActionTask } from "@winston/contracts/actions";
 import { serializeUserMessage, userMessageSchema } from "@winston/contracts/messages";
 import { taskResourceRepository } from "./task-resources";
 import { responsibilitySchema } from "@winston/contracts/responsibilities";
-import { responsibilityTaskAllowed } from "./responsibility-bindings";
+import { responsibilityTaskAllowed, taskResponsibilitySetup } from "./responsibility-bindings";
 
 type TaskRow = { document: unknown; leaseValid: boolean; requestHash: string };
 
@@ -153,6 +153,7 @@ export function taskRepository(transaction: DatabaseTransaction, ownerId: string
       const occurrence = occurrences.rows[0];
       return {
         task,
+        responsibilitySetup: (await taskResponsibilitySetup(transaction, ownerId, task.id)) ?? null,
         scheduled: occurrence
           ? {
               ...occurrence,

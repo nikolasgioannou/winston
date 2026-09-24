@@ -54,5 +54,33 @@ export async function responsibilityTaskAllowed(
   request?: AuthorizationRequest,
 ) {
   const binding = await taskResponsibilityBinding(transaction, ownerId, taskId);
-  return !binding || responsibilityBindingAllowed(transaction, ownerId, binding, request);
+  if (binding) return responsibilityBindingAllowed(transaction, ownerId, binding, request);
+  const setup = await taskResponsibilitySetup(transaction, ownerId, taskId);
+  if (!setup) return true;
+  return (
+    !!setup.agreement &&
+    responsibilityBindingAllowed(
+      transaction,
+      ownerId,
+      {
+        id: setup.id,
+        agreementRevision: setup.agreement.proposalRevision,
+      },
+      request,
+    )
+  );
+}
+
+export async function taskResponsibilitySetup(
+  transaction: DatabaseTransaction,
+  ownerId: string,
+  taskId: string,
+) {
+  const result = await transaction.execute<{ document: unknown }>(sql`
+    SELECT r.document FROM winston.responsibility_requests q
+    JOIN winston.tasks t ON t.owner_id = q.owner_id AND t.id = q.task_id AND t.intent_revision = q.intent_revision
+    JOIN winston.responsibilities r ON r.owner_id = q.owner_id AND r.id = q.responsibility_id
+    WHERE q.owner_id = ${ownerId}::uuid AND q.task_id = ${taskId}::uuid
+  `);
+  return result.rows[0] ? responsibilitySchema.parse(result.rows[0].document) : undefined;
 }

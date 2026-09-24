@@ -6,6 +6,56 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("responsibility commands accept explicit scope and paired agreement references only", () => {
+  const scope = [
+    { target: { kind: "workspace", id, resource: null }, operation: "workspace.command" },
+  ];
+  const parsed = parseCommand([
+    "responsibilities",
+    "propose",
+    "--key",
+    "watch",
+    "--purpose",
+    "Watch changes",
+    "--scope",
+    JSON.stringify(scope),
+  ]);
+  assert.deepEqual(parsed, {
+    kind: "request",
+    json: false,
+    request: {
+      version: 1,
+      command: "responsibilities.propose",
+      key: "watch",
+      purpose: "Watch changes",
+      scope,
+    },
+  });
+  const schedule = [
+    "schedules",
+    "create",
+    "--key",
+    "daily",
+    "--objective",
+    "Check changes",
+    "--at",
+    "2030-01-01T12:00:00.000Z",
+  ];
+  const bound = parseCommand([...schedule, "--responsibility", id, "--agreement-revision", "0"]);
+  assert.equal(bound.kind, "request");
+  assert.equal(bound.request.command, "schedules.create");
+  assert.deepEqual(bound.request.responsibility, { id, agreementRevision: 0 });
+  for (const args of [
+    [...schedule, "--responsibility", id],
+    [...schedule, "--agreement-revision", "0"],
+    [...schedule, "--responsibility", id, "--agreement-revision", "NaN"],
+    ["responsibilities", "agree", "--id", id],
+    ["responsibilities", "propose", "--key", "x", "--purpose", "x", "--scope", "{}"],
+    ["responsibilities", "inspect", "--id", id, "--scope", "[]"],
+  ])
+    assert.throws(() => parseCommand(args));
+});
+
 test("schedule commands require explicit timing and revision-checked edits", () => {
   assert.deepEqual(
     parseCommand([

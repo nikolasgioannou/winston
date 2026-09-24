@@ -274,6 +274,13 @@
       "when": 1790000000038,
       "tag": "0038_responsibilities",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790000000039,
+      "tag": "0039_responsibility_requests",
+      "breakpoints": true
     }
   ]
 }
