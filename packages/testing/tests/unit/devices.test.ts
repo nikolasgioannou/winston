@@ -79,3 +79,22 @@ test("execution acceptance fences session, generation, revision, capability and 
     assert.equal(acceptsDeviceExecution(message, { ...context, ...override }), false);
   }
 });
+
+test("a reconciliation query never grants execution even with a current binding", () => {
+  const item = fixtures.valid.find((item) => item.name === "reconcile-original-command");
+  assert.ok(item);
+  const message = decodeDeviceMessage(JSON.stringify(item.message));
+  const id = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    acceptsDeviceExecution(message, {
+      deviceId: id,
+      sessionId: id,
+      generation: 2,
+      taskId: id,
+      taskRevision: 3,
+      now: 1000,
+      capabilities: ["command"],
+    }),
+    false,
+  );
+});

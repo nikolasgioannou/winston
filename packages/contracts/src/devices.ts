@@ -89,6 +89,33 @@ export const devicePayloadSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("cancel"), ...execution }),
   z.strictObject({
+    kind: z.literal("reconcile"),
+    ...execution,
+    operation: deviceOperationSchema,
+  }),
+  z
+    .strictObject({
+      kind: z.literal("reconciled"),
+      ...execution,
+      state: z.enum([
+        "missing",
+        "conflict",
+        "unavailable",
+        "running",
+        "cancel_requested",
+        "uncertain",
+        "succeeded",
+        "failed",
+        "canceled",
+      ]),
+      exitCode: z.number().int().min(0).max(255).nullable(),
+    })
+    .refine(
+      ({ state, exitCode }) =>
+        state === "failed" ||
+        (state === "succeeded" ? exitCode === null || exitCode === 0 : exitCode === null),
+    ),
+  z.strictObject({
     kind: z.literal("status"),
     ...execution,
     sequence: counter,

@@ -44,6 +44,15 @@ extension DevicePayload {
       ]) { _, new in new }
     case .cancel(let binding):
       return binding.wireValue.merging(["kind": "cancel"]) { _, new in new }
+    case .reconcile(let binding, let operation):
+      return binding.wireValue.merging([
+        "kind": "reconcile", "operation": operation.wireValue,
+      ]) { _, new in new }
+    case .reconciled(let binding, let state, let exitCode):
+      return binding.wireValue.merging([
+        "kind": "reconciled", "state": state,
+        "exitCode": exitCode.map { $0 as Any } ?? NSNull(),
+      ]) { _, new in new }
     case .status(let binding, let sequence, let state, let exitCode):
       return binding.wireValue.merging([
         "kind": "status", "sequence": sequence, "state": state,

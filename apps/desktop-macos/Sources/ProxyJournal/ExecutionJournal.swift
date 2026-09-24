@@ -16,6 +16,29 @@ public actor ExecutionJournal {
 
   public func close() { database.close() }
 
+  /// Read-only evidence for the original operation, even on a replacement session.
+  /// Missing records never authorize replay: storage may have been lost or replaced.
+  public func reconcile(_ message: DeviceMessage) throws -> DevicePayload {
+    guard case .reconcile(let binding, _) = message.payload else {
+      throw JournalError.invalidRequest
+    }
+    let key = try JournalKey(deviceId: message.deviceId, executionId: binding.executionId)
+    let expected = try fingerprint(message)
+    let existing: JournalRecord?
+    do {
+      existing = try record(key)
+    } catch {
+      return .reconciled(binding, state: "unavailable", exitCode: nil)
+    }
+    guard let existing else {
+      return .reconciled(binding, state: "missing", exitCode: nil)
+    }
+    guard existing.fingerprint == expected else {
+      return .reconciled(binding, state: "conflict", exitCode: nil)
+    }
+    return .reconciled(binding, state: existing.state.rawValue, exitCode: existing.exitCode)
+  }
+
   public func hasUncertainExecution(deviceId: String) throws -> Bool {
     guard UUID(uuidString: deviceId) != nil else { throw JournalError.invalidRequest }
     do {
@@ -144,6 +167,7 @@ public actor ExecutionJournal {
     else { throw JournalError.invalidRequest }
     // A reconnect can change transport IDs and deadline, never the bound task or operation.
     payload.removeValue(forKey: "deadline")
+    payload["kind"] = "execute"
     let canonical = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
     return SHA256.hash(data: canonical).map { String(format: "%02x", $0) }.joined()
   }

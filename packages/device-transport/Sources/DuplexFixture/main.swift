@@ -20,6 +20,19 @@ struct DuplexFixture {
     let mode = CommandLine.arguments[2]
     let session = try await transport.connect()
     switch mode {
+    case "reconcile":
+      let request = try await transport.receiveOperation(session: session)
+      guard case .reconcile(let binding, _) = request.payload else {
+        fatalError("Journal query was not delivered")
+      }
+      try await rejected {
+        try await transport.send(
+          request.payload, correlationId: request.messageId, session: session)
+      }
+      try await transport.send(
+        .reconciled(binding, state: "uncertain", exitCode: nil),
+        correlationId: request.messageId, session: session)
+      try await transport.waitForDisconnect(session: session)
     case "duplex", "idle":
       let heartbeat = Task {
         if mode == "duplex" { try await transport.heartbeat(status: "ready") }

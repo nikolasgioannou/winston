@@ -22,6 +22,40 @@ func key(_ index: Int) throws -> JournalKey {
     deviceId: deviceId, executionId: String(format: "20000000-0000-4000-8000-%012d", index))
 }
 
+func query(_ index: Int, text: String = "sample") throws -> DeviceMessage {
+  let original = try request(index, text: text, generation: 9)
+  guard case .execute(let binding, _, let operation) = original.payload else {
+    fatalError("Expected execution fixture")
+  }
+  return try DeviceMessage(
+    messageId: original.messageId, correlationId: original.correlationId,
+    deviceId: original.deviceId, sessionId: original.sessionId, generation: original.generation,
+    payload: .reconcile(binding, operation: operation))
+}
+
+func checkReconciliation(
+  _ journal: ExecutionJournal, index: Int, state: String, exitCode: Int64? = nil,
+  text: String = "sample"
+) async throws {
+  let message = try query(index, text: text)
+  precondition(
+    !message.acceptsExecution(
+      deviceId: message.deviceId, sessionId: message.sessionId, generation: message.generation,
+      taskId: taskId, taskRevision: 1, now: 0, capabilities: [.command]))
+  let result = try await journal.reconcile(message)
+  guard case .reconciled(let binding, let actual, let code) = result else {
+    fatalError("Expected journal evidence")
+  }
+  let expectedKey = try key(index)
+  precondition(binding.executionId == expectedKey.executionId)
+  precondition(actual == state && code == exitCode)
+  // Exercise the exact encoder/decoder used by the native socket.
+  _ = try DeviceMessage(
+    messageId: UUID().uuidString.lowercased(), correlationId: message.messageId,
+    deviceId: message.deviceId, sessionId: message.sessionId, generation: message.generation,
+    payload: result)
+}
+
 func expectError(_ expected: JournalError, _ action: () async throws -> Void) async throws {
   do {
     try await action()
@@ -37,6 +71,9 @@ let directory = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true
 switch mode {
 case "exercise":
   let journal = try ExecutionJournal(directory: directory)
+  try await checkReconciliation(journal, index: 1, state: "missing")
+  let absent = try await journal.record(key(1))
+  precondition(absent == nil)
   let message = try request(1)
   let admissions = try await withThrowingTaskGroup(of: JournalAdmission.self) { group in
     for _ in 0..<20 {
@@ -47,6 +84,25 @@ case "exercise":
     return results
   }
   precondition(admissions.filter { if case .admitted = $0 { true } else { false } }.count == 1)
+  try await checkReconciliation(journal, index: 1, state: "running")
+  try await checkReconciliation(journal, index: 1, state: "conflict", text: "different")
+  guard case .execute(let binding, _, let operation) = message.payload else {
+    fatalError("Expected fixture command")
+  }
+  for changed in [
+    ExecutionBinding(
+      executionId: binding.executionId, taskId: UUID().uuidString.lowercased(), taskRevision: 1),
+    ExecutionBinding(executionId: binding.executionId, taskId: taskId, taskRevision: 2),
+  ] {
+    let mismatched = try DeviceMessage(
+      messageId: message.messageId, correlationId: message.correlationId,
+      deviceId: message.deviceId, sessionId: message.sessionId, generation: message.generation,
+      payload: .reconcile(changed, operation: operation))
+    guard case .reconciled(_, "conflict", nil) = try await journal.reconcile(mismatched) else {
+      fatalError("Different task binding matched the journal")
+    }
+  }
+  try await expectError(.invalidRequest) { _ = try await journal.reconcile(message) }
   try await expectError(.conflictingExecution) {
     _ = try await journal.admit(request(1, text: "different"))
   }
@@ -56,8 +112,10 @@ case "exercise":
   }
   let canceled = try await journal.requestCancellation(key(1))
   precondition(canceled.state == .cancelRequested)
+  try await checkReconciliation(journal, index: 1, state: "cancel_requested")
   let completed = try await journal.finish(key(1), state: .succeeded, exitCode: 0)
   precondition(completed.state == .succeeded && completed.cancellationRequested)
+  try await checkReconciliation(journal, index: 1, state: "succeeded", exitCode: 0)
   let repeated = try await journal.finish(key(1), state: .succeeded, exitCode: 0)
   precondition(repeated == completed)
   let lateCancellation = try await journal.requestCancellation(key(1))
@@ -72,10 +130,12 @@ case "exercise":
     _ = try ExecutionJournal(directory: directory)
   }
   await journal.close()
+  try await checkReconciliation(journal, index: 1, state: "unavailable")
   try await expectError(.unavailable) { _ = try await journal.admit(request(2)) }
   let reopened = try ExecutionJournal(directory: directory)
   let persisted = try await reopened.record(key(1))
   precondition(persisted == completed)
+  try await checkReconciliation(reopened, index: 1, state: "succeeded", exitCode: 0)
   let otherDevice = try JournalKey(
     deviceId: "30000000-0000-4000-8000-000000000001", executionId: key(1).executionId)
   let isolated = try await reopened.record(otherDevice)
@@ -100,6 +160,7 @@ case "recover":
   for index in 1...2 {
     let record = try await journal.record(key(index))
     precondition(record?.state == .uncertain)
+    try await checkReconciliation(journal, index: index, state: "uncertain")
     precondition(record?.cancellationRequested == (index == 2))
     if case .existing = try await journal.admit(request(index)) {
     } else {

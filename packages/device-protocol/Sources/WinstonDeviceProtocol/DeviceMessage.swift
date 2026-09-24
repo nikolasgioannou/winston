@@ -23,6 +23,8 @@ public enum DevicePayload: Sendable {
   case heartbeat(status: String)
   case execute(ExecutionBinding, deadline: Int64, operation: DeviceOperation)
   case cancel(ExecutionBinding)
+  case reconcile(ExecutionBinding, operation: DeviceOperation)
+  case reconciled(ExecutionBinding, state: String, exitCode: Int64?)
   case status(ExecutionBinding, sequence: Int64, state: String, exitCode: Int64?)
   case output(ExecutionBinding, sequence: Int64, stream: String, text: String)
   case file(ExecutionBinding, sequence: Int64, transferId: String, size: Int64, sha256: String)
@@ -55,6 +57,23 @@ public enum DevicePayload: Sendable {
         operation: DeviceOperation(reader.take("operation")))
     case "cancel":
       self = try .cancel(ExecutionBinding(&reader))
+    case "reconcile":
+      self = try .reconcile(
+        ExecutionBinding(&reader), operation: DeviceOperation(reader.take("operation")))
+    case "reconciled":
+      let binding = try ExecutionBinding(&reader)
+      let state = try reader.choice(
+        "state",
+        [
+          "missing", "conflict", "unavailable", "running", "cancel_requested",
+          "uncertain", "succeeded", "failed", "canceled",
+        ])
+      let exitCode = try reader.exitCode()
+      guard
+        state == "failed"
+          || (state == "succeeded" ? exitCode == nil || exitCode == 0 : exitCode == nil)
+      else { throw DeviceProtocolError.invalidMessage }
+      self = .reconciled(binding, state: state, exitCode: exitCode)
     case "status":
       self = try .status(
         ExecutionBinding(&reader), sequence: reader.number("sequence"),

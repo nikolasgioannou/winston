@@ -43,6 +43,8 @@ test.skipIf(process.platform !== "darwin")(
     for (const mode of [
       "duplex",
       "idle",
+      "reconcile",
+      "wrong-reconciliation-direction",
       "overflow",
       "wrong-generation",
       "wrong-session",
@@ -123,7 +125,31 @@ test.skipIf(process.platform !== "darwin")(
               return;
             const first = execute(sessionId, generation);
             socket.data.executeId = first.messageId;
-            if (mode === "idle") {
+            if (mode === "reconcile") {
+              const query = message(sessionId, generation, {
+                kind: "reconcile",
+                ...binding,
+                operation: {
+                  kind: "command",
+                  executable: "/usr/bin/true",
+                  arguments: [],
+                  directory: "/tmp",
+                },
+              });
+              socket.data.executeId = query.messageId;
+              socket.send(JSON.stringify(query));
+            } else if (mode === "wrong-reconciliation-direction") {
+              socket.send(
+                JSON.stringify(
+                  message(sessionId, generation, {
+                    kind: "reconciled",
+                    ...binding,
+                    state: "succeeded",
+                    exitCode: 0,
+                  }),
+                ),
+              );
+            } else if (mode === "idle") {
               socket.send(JSON.stringify(first));
               socket.send(
                 JSON.stringify(message(sessionId, generation, { kind: "cancel", ...binding })),
@@ -185,7 +211,7 @@ test.skipIf(process.platform !== "darwin")(
               } else {
                 assert.equal(incoming.correlationId, socket.data.executeId);
                 results.push(incoming);
-                if (results.length === 2) socket.close(1000);
+                if (results.length === 2 || mode === "reconcile") socket.close(1000);
               }
             } catch (error) {
               failures.push(error);
@@ -197,6 +223,13 @@ test.skipIf(process.platform !== "darwin")(
       try {
         await runFixture(server.port, mode);
         assert.deepEqual(failures, [], mode);
+        if (mode === "reconcile") {
+          assert.deepEqual(
+            results.map((result) => result.payload),
+            [{ kind: "reconciled", ...binding, state: "uncertain", exitCode: null }],
+          );
+          assert.equal(heartbeats, 0);
+        }
         if (mode === "duplex" || mode === "idle") {
           assert.deepEqual(
             results.map((result) => result.payload),

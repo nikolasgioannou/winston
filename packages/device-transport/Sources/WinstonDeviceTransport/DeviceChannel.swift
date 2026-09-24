@@ -107,7 +107,7 @@ actor DeviceChannel {
 
   func send(_ payload: DevicePayload, correlationId: String) async throws {
     switch payload {
-    case .capabilities, .status, .output, .file, .observation, .error:
+    case .capabilities, .status, .output, .file, .observation, .error, .reconciled:
       try await write(envelope(payload, correlationId: correlationId))
     default:
       throw DeviceTransportError.invalidConfiguration
@@ -153,7 +153,7 @@ actor DeviceChannel {
       heartbeat = nil
       waiting.timeout.cancel()
       waiting.continuation.resume()
-    case .execute, .cancel:
+    case .execute, .cancel, .reconcile:
       if let waiting = operation {
         operation = nil
         waiting.continuation.resume(returning: message)
