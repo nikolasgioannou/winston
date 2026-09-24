@@ -12,33 +12,34 @@ public actor DeviceConnectionLoop {
   public private(set) var state: DeviceConnectionState = .stopped
   private let transport: DeviceTransport
   private var running = false
+  private var failures = 0
 
   public init(transport: DeviceTransport) {
     self.transport = transport
   }
 
   public func run(
-    onState: @Sendable (DeviceConnectionState) async -> Void = { _ in },
-    status: @Sendable () async -> DeviceAvailability
+    onState: @escaping @Sendable (DeviceConnectionState) async -> Void = { _ in },
+    status: @escaping @Sendable () async -> DeviceAvailability
   ) async throws {
     guard !running else { throw DeviceTransportError.busy }
     running = true
     defer { running = false }
-    var failures = 0
+    failures = 0
     while !Task.isCancelled {
       do {
         state = .connecting
         await onState(state)
         try Task.checkCancellation()
-        _ = try await transport.connect()
-        while !Task.isCancelled {
-          let availability = await status()
-          try Task.checkCancellation()
-          try await transport.heartbeat(status: availability.rawValue)
-          state = .connected
-          await onState(state)
-          failures = 0
-          try await Task.sleep(for: .seconds(15))
+        let session = try await transport.connect()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+          group.addTask { try await self.heartbeats(onState: onState, status: status) }
+          group.addTask {
+            try await self.transport.waitForDisconnect(session: session)
+            throw DeviceTransportError.unavailable
+          }
+          defer { group.cancelAll() }
+          _ = try await group.next()
         }
       } catch DeviceTransportError.pairingRequired {
         await transport.disconnect()
@@ -60,5 +61,21 @@ public actor DeviceConnectionLoop {
     await transport.disconnect()
     state = .stopped
     await onState(state)
+  }
+
+  private func heartbeats(
+    onState: @Sendable (DeviceConnectionState) async -> Void,
+    status: @Sendable () async -> DeviceAvailability
+  ) async throws {
+    while !Task.isCancelled {
+      let availability = await status()
+      try Task.checkCancellation()
+      try await transport.heartbeat(status: availability.rawValue)
+      try Task.checkCancellation()
+      state = .connected
+      await onState(state)
+      failures = 0
+      try await Task.sleep(for: .seconds(15))
+    }
   }
 }

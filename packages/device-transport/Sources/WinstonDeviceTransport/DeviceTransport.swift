@@ -15,7 +15,7 @@ public actor DeviceTransport {
   private let credential: String
   private let client: URLSession
   private var socket: URLSessionWebSocketTask?
-  private var session: DeviceSession?
+  private var channel: DeviceChannel?
   private var busy = false
 
   public init(
@@ -41,7 +41,7 @@ public actor DeviceTransport {
     guard !busy else { throw DeviceTransportError.busy }
     busy = true
     defer { busy = false }
-    disconnect()
+    await disconnect()
     var request = URLRequest(url: endpoint)
     request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization")
     let task = client.webSocketTask(with: request)
@@ -54,10 +54,12 @@ public actor DeviceTransport {
       guard socket === task, welcome.deviceId == deviceId else {
         throw DeviceTransportError.invalidSession
       }
-      session = welcome
+      let connected = DeviceChannel(socket: task, session: welcome)
+      channel = connected
+      await connected.start()
       return welcome
     } catch {
-      if socket === task { disconnect() }
+      if socket === task { await disconnect() }
       if let response = task.response as? HTTPURLResponse, [401, 403].contains(response.statusCode)
       {
         throw DeviceTransportError.pairingRequired
@@ -68,44 +70,53 @@ public actor DeviceTransport {
 
   public func heartbeat(status: String) async throws {
     guard !busy else { throw DeviceTransportError.busy }
-    guard let task = socket, let current = session else { throw DeviceTransportError.unavailable }
+    guard let channel else { throw DeviceTransportError.unavailable }
     busy = true
     defer { busy = false }
-    do {
-      let message = try DeviceMessage(
-        messageId: UUID().uuidString.lowercased(), correlationId: UUID().uuidString.lowercased(),
-        deviceId: current.deviceId, sessionId: current.sessionId, generation: current.generation,
-        payload: .heartbeat(status: status))
-      guard let text = String(data: message.encoded(), encoding: .utf8) else {
-        throw DeviceTransportError.invalidSession
-      }
-      let raw = try await receive(task, sending: text)
-      let reply = try DeviceMessage(data: Data(raw.utf8))
-      guard socket === task, reply.deviceId == current.deviceId,
-        reply.sessionId == current.sessionId, reply.generation == current.generation,
-        reply.correlationId == message.messageId,
-        case .heartbeat(let acknowledged) = reply.payload, acknowledged == status
-      else { throw DeviceTransportError.invalidSession }
-    } catch {
-      if socket === task { disconnect() }
-      throw DeviceTransportError.unavailable
-    }
+    try await channel.sendHeartbeat(status: status)
   }
 
-  public func disconnect() {
+  /// Exactly one consumer may await operations for the active connection.
+  public func receiveOperation(session: DeviceSession) async throws -> DeviceMessage {
+    let channel = try activeChannel(session)
+    return try await channel.receiveOperation()
+  }
+
+  public func send(_ payload: DevicePayload, correlationId: String, session: DeviceSession)
+    async throws
+  {
+    let channel = try activeChannel(session)
+    try await channel.send(payload, correlationId: correlationId)
+  }
+
+  public func waitForDisconnect(session: DeviceSession) async throws {
+    let channel = try activeChannel(session)
+    try await channel.waitForDisconnect()
+  }
+
+  private func activeChannel(_ session: DeviceSession) throws -> DeviceChannel {
+    guard let channel, channel.session.deviceId == session.deviceId,
+      channel.session.sessionId == session.sessionId,
+      channel.session.generation == session.generation
+    else { throw DeviceTransportError.unavailable }
+    return channel
+  }
+
+  public func disconnect() async {
+    let prior = channel
+    channel = nil
     socket?.cancel(with: .goingAway, reason: nil)
     socket = nil
-    session = nil
+    await prior?.close()
   }
 }
 
-private func receive(_ task: URLSessionWebSocketTask, sending text: String? = nil) async throws
+private func receive(_ task: URLSessionWebSocketTask) async throws
   -> String
 {
   try await withTaskCancellationHandler {
     try await withThrowingTaskGroup(of: String.self) { group in
       group.addTask {
-        if let text { try await task.send(.string(text)) }
         guard case .string(let value) = try await task.receive() else {
           throw DeviceTransportError.invalidSession
         }
