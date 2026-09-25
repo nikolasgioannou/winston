@@ -20,6 +20,7 @@ export { createCalendarReader, CalendarReadError } from "./calendar-events";
 export { prepareCalendarMutation, readCalendarMutationArguments } from "./calendar-mutation-plan";
 export { createCalendarMutationExecutor } from "./calendar-mutation-executor";
 export { formatCalendarMutationApproval } from "./calendar-mutation-review";
+export { createCalendarMutationGateway } from "./calendar-mutation-gateway";
 export { createCalendarAvailabilityReader } from "./calendar-availability";
 export { createConnectedReadGateway } from "./cli-reads";
 

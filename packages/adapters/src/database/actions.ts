@@ -15,6 +15,7 @@ import {
 import { taskSchema } from "@winston/contracts/tasks";
 import { readCalendarMutationArguments } from "../google/calendar-mutation-plan";
 import { connectionTargetRepository } from "./connection-targets";
+import { assertCalendarMutationResolved } from "./calendar-mutation-blocking";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
 import { deviceExecutionSchema } from "@winston/contracts/device-executions";
 import { deviceSessionRepository } from "./device-sessions";
@@ -660,6 +661,8 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       // The commit of this transition is the cancel-versus-dispatch linearization point.
       if (await priorEffect(worker.id, current.intentRevision))
         return { claimed: false as const, action };
+      if (action.request.authorization.operation === "calendar.write")
+        await assertCalendarMutationResolved(transaction, ownerId, worker.id, action.id);
       // Callers MUST commit before contacting any external executor/provider.
       const token = `wda_${randomBytes(32).toString("base64url")}`;
       await transaction.execute(

@@ -14,6 +14,7 @@ import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
 import { connectionRepository } from "./connections";
 import { connectionTargetRepository } from "./connection-targets";
+import { assertCalendarMutationResolved } from "./calendar-mutation-blocking";
 
 export function calendarActionRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function context(inputTask: ActionTask, key: string, inputIntent: unknown) {
@@ -46,6 +47,7 @@ export function calendarActionRepository(transaction: DatabaseTransaction, owner
     `);
     const stored = previous.rows[0];
     const action = stored ? actionRecordSchema.parse(stored.document) : null;
+    if (!action) await assertCalendarMutationResolved(transaction, ownerId, worker.id);
     if (action) {
       const payload = readCalendarMutationArguments(action.request.arguments);
       if (

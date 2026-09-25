@@ -173,3 +173,9 @@ export const calendarMutationArgumentsSchema = z.strictObject({
 });
 export type CalendarMutationIntent = z.infer<typeof calendarMutationIntentSchema>;
 export type CalendarMutationPlan = z.infer<typeof calendarMutationPlanSchema>;
+
+export const calendarMutationInputSchema = z.strictObject({
+  key: z.string().min(1).max(100),
+  intent: calendarMutationIntentSchema,
+});
+export type CalendarMutationInput = z.infer<typeof calendarMutationInputSchema>;
