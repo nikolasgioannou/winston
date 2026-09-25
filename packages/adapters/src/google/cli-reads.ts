@@ -15,14 +15,20 @@ import { createCalendarAvailabilityReader } from "./calendar-availability";
 import { createConnectionTargets } from "./targets";
 import { GoogleReadError, type GoogleReadOptions } from "./read-request";
 import { prepareReadApproval, completeRead, type ReadDispatch } from "./read-approval";
+import { captureGmailAttachment, type AttachmentStore } from "./gmail-attachment-artifacts";
+import { recoverGmailAttachment } from "./gmail-attachment-recovery";
 
-export function createConnectedReadGateway(options: GoogleReadOptions) {
+export function createConnectedReadGateway(
+  options: GoogleReadOptions & { attachmentStore?: AttachmentStore },
+) {
   return async (
     credential: ServiceRequest,
     input: CliReadRequest,
     signal: AbortSignal,
   ): Promise<CliResult> => {
     const request = cliReadRequestSchema.parse(input);
+    if (request.command === "gmail.attachment" && !options.attachmentStore)
+      return { version: 1, status: "unavailable", message: "Attachment storage is unavailable." };
     const authority = await options.database.authenticateService(credential);
     const keyed = "key" in request && request.key !== undefined;
     if (!authority || authority.operation !== (keyed ? "gateway:control" : "gateway:read"))
@@ -89,10 +95,41 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
             credential,
             { ...request, key: request.key },
           );
-          if (approval.kind === "result") return approval.result;
+          if (approval.kind === "result") {
+            if (
+              request.command === "gmail.attachment" &&
+              options.attachmentStore &&
+              approval.actionId &&
+              ["ok", "unknown"].includes(approval.result.status)
+            )
+              return await recoverGmailAttachment({
+                database: options.database,
+                artifacts: options.attachmentStore,
+                ownerId: authority.ownerId,
+                credential,
+                request,
+                actionId: approval.actionId,
+                signal,
+              });
+            return approval.result;
+          }
           dispatch = approval;
         }
         switch (request.command) {
+          case "gmail.attachment": {
+            if (!dispatch || !options.attachmentStore)
+              throw new Error("Attachment read is not authorized.");
+            const result = await captureGmailAttachment({
+              read: bound,
+              artifacts: options.attachmentStore,
+              ownerId: authority.ownerId,
+              request,
+              target: selected.target,
+              actionId: dispatch.id,
+              signal,
+            });
+            return await completeRead(options.database, authority.ownerId, dispatch, result);
+          }
           case "gmail.labels":
             data = await createGmailLabelReader(bound)(
               authority.ownerId,

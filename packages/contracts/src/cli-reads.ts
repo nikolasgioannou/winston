@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { gmailSearchSchema, gmailDraftSearchSchema, gmailIdSchema } from "./gmail";
+import {
+  gmailSearchSchema,
+  gmailDraftSearchSchema,
+  gmailIdSchema,
+  gmailAttachmentRequestSchema,
+} from "./gmail";
 import {
   calendarEventQuerySchema,
   calendarEventIdSchema,
@@ -9,6 +14,13 @@ import {
 const account = { version: z.literal(1), accountId: z.uuid() };
 const read = { ...account, key: z.string().min(1).max(100).optional() };
 export const cliReadRequestSchema = z.discriminatedUnion("command", [
+  z.strictObject({
+    ...account,
+    command: z.literal("gmail.attachment"),
+    key: z.string().min(1).max(100),
+    id: gmailIdSchema,
+    partId: gmailAttachmentRequestSchema.shape.partId,
+  }),
   z.strictObject({ ...read, command: z.literal("gmail.labels") }),
   calendarAvailabilityQuerySchema.omit({ target: true }).extend({
     ...read,

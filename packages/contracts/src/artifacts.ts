@@ -1,5 +1,20 @@
 import { z } from "zod";
 import { storedObjectSchema } from "./storage";
+import { gmailIdSchema } from "./gmail";
+
+export const gmailAttachmentSourceSchema = z.strictObject({
+  kind: z.literal("connection"),
+  reference: z.string().min(1).max(2048),
+  origin: z.strictObject({
+    service: z.literal("gmail"),
+    connectionId: z.uuid(),
+    messageId: gmailIdSchema,
+    partId: z.string().max(256),
+    // JSON encoding preserves control characters that PostgreSQL text cannot store directly.
+    originalNameJson: z.string().max(24_578),
+    readActionId: z.uuid(),
+  }),
+});
 
 export const artifactMetadataSchema = z.strictObject({
   name: z
@@ -8,10 +23,13 @@ export const artifactMetadataSchema = z.strictObject({
     .max(255)
     .refine((name) => !/[\p{Cc}/\\]/u.test(name)),
   mediaType: z.string().min(1).max(255),
-  source: z.strictObject({
-    kind: z.enum(["telegram", "workspace", "connection", "device"]),
-    reference: z.string().min(1).max(2048),
-  }),
+  source: z.union([
+    z.strictObject({
+      kind: z.enum(["telegram", "workspace", "connection", "device"]),
+      reference: z.string().min(1).max(2048),
+    }),
+    gmailAttachmentSourceSchema,
+  ]),
   size: storedObjectSchema.shape.size,
   sha256: storedObjectSchema.shape.sha256,
 });
@@ -24,6 +42,9 @@ export const artifactSchema = z.strictObject({
 });
 export type ArtifactMetadata = z.infer<typeof artifactMetadataSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
+export const gmailAttachmentArtifactSchema = artifactSchema.extend({
+  metadata: artifactMetadataSchema.extend({ source: gmailAttachmentSourceSchema }),
+});
 
 export const inboxTransferTokenSchema = z.string().regex(/^wit_[A-Za-z0-9_-]{43}$/);
 export const inboxTransferSchema = z.strictObject({

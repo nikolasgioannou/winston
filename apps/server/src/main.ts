@@ -114,7 +114,11 @@ if (connectionConfig) {
     cipher: connectionConfig.cipher,
     oauth: createGoogleOAuth(connectionConfig.oauth),
   });
-  connectedReads = createConnectedReadGateway({ database, google: connections });
+  connectedReads = createConnectedReadGateway({
+    database,
+    google: connections,
+    ...(storage ? { attachmentStore: createArtifactService(database, storage) } : {}),
+  });
   gmailLabelMutations = createGmailLabelMutationGateway({ database, google: connections });
   gmailTrash = createGmailTrashGateway({ database, google: connections });
   calendarMutations = createCalendarMutationGateway({ database, google: connections });

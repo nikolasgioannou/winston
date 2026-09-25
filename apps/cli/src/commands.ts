@@ -242,6 +242,14 @@ export const commands = [
     usage: "--account <uuid> --id <message-id> [--key <request-key>]",
   },
   {
+    command: "gmail.attachment",
+    description:
+      "Capture one exact MIME part as a verified private artifact. Reuse the same key to recover storage confirmation without downloading again.",
+    id: true,
+    flags: ["account", "id", "part", "key"],
+    usage: "--account <uuid> --id <message-id> --part <part-id> --key <request-key>",
+  },
+  {
     command: "gmail.drafts",
     description: "List drafts and their current message IDs in one Gmail account.",
     id: false,

@@ -17,6 +17,7 @@ export async function prepareReadApproval(
       referenceId?: string,
     ) => ({
       kind: "result" as const,
+      actionId: referenceId ?? null,
       result: { version: 1 as const, status, message, ...(referenceId ? { referenceId } : {}) },
     });
     if (authority?.operation !== "gateway:control")
@@ -37,7 +38,7 @@ export async function prepareReadApproval(
     if (receipt.result) {
       if (policy.decision === "ask" && action.decisionSource !== "owner")
         return result("denied", "This read requires a new approval.", action.id);
-      return { kind: "result" as const, result: receipt.result };
+      return { kind: "result" as const, actionId: action.id, result: receipt.result };
     }
     if (action.state === "pending") {
       const current = await scope.actions.expirePending(action.id);

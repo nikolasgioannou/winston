@@ -16,6 +16,10 @@ import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
 import { connectionTargetKey } from "./connection-target-key";
+import type { ServiceRequest } from "@winston/contracts/capabilities";
+import { capabilityRepository } from "./capabilities";
+import { artifactRepository } from "./artifacts";
+import { gmailAttachmentResult } from "../google/gmail-attachment-result";
 
 export function connectedReadRepository(transaction: DatabaseTransaction, ownerId: string) {
   const actions = actionRepository(transaction, ownerId);
@@ -81,6 +85,59 @@ export function connectedReadRepository(transaction: DatabaseTransaction, ownerI
         arguments: actionRequestSchema.shape.arguments.parse(JSON.parse(JSON.stringify(request))),
       });
       return { action, result: null };
+    },
+    async reconcileAttachment(
+      credential: ServiceRequest,
+      actionId: string,
+      artifactId: string,
+      request: Extract<CliReadRequest, { command: "gmail.attachment" }>,
+    ) {
+      await transaction.execute(
+        sql`SELECT id FROM winston.owners WHERE id = ${ownerId}::uuid FOR UPDATE`,
+      );
+      const authority = await capabilityRepository(transaction, ownerId).authenticate(credential);
+      if (authority?.operation !== "gateway:control") return null;
+      const allowed = await actions.authorizeGmailAttachmentReceipt({
+        id: actionId,
+        task: {
+          id: authority.taskId,
+          revision: authority.revision,
+          generation: authority.generation,
+        },
+        request,
+      });
+      if (!allowed) return null;
+      const artifacts = artifactRepository(transaction, ownerId);
+      const located = await artifacts.findByKey(`gmail-attachment:${actionId}`);
+      if (located?.id !== artifactId) return null;
+      const artifact = await artifacts.find(artifactId, true);
+      if (artifact?.id !== artifactId || artifact.state !== "ready") return null;
+      const result = gmailAttachmentResult(artifact, request, actionId);
+      const previous = await transaction.execute<{ result: unknown }>(sql`
+        SELECT result FROM winston.connected_read_results
+        WHERE owner_id = ${ownerId}::uuid AND action_id = ${actionId}::uuid
+      `);
+      if (previous.rows[0]) {
+        const cached = cliResultSchema.parse(previous.rows[0].result);
+        if (cached.status !== "unknown" && canonicalJson(cached) !== canonicalJson(result))
+          return null;
+      }
+      const action = await actions.find(actionId);
+      if (!action) return null;
+      if (action.state === "unknown") {
+        const recorded = await actions.reconcile(actionId, action.operationId, {
+          state: "succeeded",
+          providerReference: artifact.id,
+          detail: "Existing Gmail attachment storage was verified.",
+        });
+        if (!recorded) return null;
+      }
+      await transaction.execute(sql`
+        INSERT INTO winston.connected_read_results (owner_id, action_id, result)
+        VALUES (${ownerId}::uuid, ${actionId}::uuid, ${JSON.stringify(result)}::jsonb)
+        ON CONFLICT (owner_id, action_id) DO UPDATE SET result = EXCLUDED.result
+      `);
+      return result;
     },
     async complete(id: string, token: string, input: CliResult) {
       const result = cliResultSchema.parse(input);

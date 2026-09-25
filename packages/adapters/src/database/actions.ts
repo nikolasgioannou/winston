@@ -13,6 +13,7 @@ import {
   type ActionTask,
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
+import { cliReadRequestSchema, type CliReadRequest } from "@winston/contracts/cli";
 import { readCalendarMutationArguments } from "../google/calendar-mutation-plan";
 import { readGmailMutationPlan } from "../google/gmail-mutation-plan";
 import { gmailActionReferencesCurrent } from "./gmail-action-references";
@@ -442,6 +443,37 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         )
           return false;
       } else if (!["succeeded", "unknown"].includes(action.state)) return false;
+      const current = await task(worker.id);
+      if (!running(current, worker) || !sameIntent(current, action)) return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
+    async authorizeGmailAttachmentReceipt(input: {
+      id: string;
+      task: ActionTask;
+      request: Extract<CliReadRequest, { command: "gmail.attachment" }>;
+    }) {
+      const worker = actionTaskSchema.parse(input.task);
+      const request = cliReadRequestSchema.parse(input.request);
+      if (request.command !== "gmail.attachment") return false;
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      const { target, operation } = action.request.authorization;
+      if (
+        !["succeeded", "unknown"].includes(action.state) ||
+        target.kind !== "connection" ||
+        target.id !== request.accountId ||
+        target.resource !== null ||
+        operation !== "gmail.read" ||
+        action.request.task.id !== worker.id ||
+        canonical(action.request.arguments) !== canonical(request)
+      )
+        return false;
       const current = await task(worker.id);
       if (!running(current, worker) || !sameIntent(current, action)) return false;
       const evaluation = await policy(action);
