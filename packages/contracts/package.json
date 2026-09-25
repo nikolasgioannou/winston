@@ -22,6 +22,7 @@
     "./device-registry": "./src/device-registry.ts",
     "./events": "./src/events.ts",
     "./gmail": "./src/gmail.ts",
+    "./gmail-trash": "./src/gmail-trash.ts",
     "./gmail-label-mutations": "./src/gmail-label-mutations.ts",
     "./gmail-reconciliation": "./src/gmail-reconciliation.ts",
     "./gmail-messages": "./src/gmail-messages.ts",

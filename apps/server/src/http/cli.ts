@@ -24,6 +24,7 @@ import type { FileRequest } from "../files/cli";
 import type { CalendarMutationInput } from "@winston/contracts/calendar-mutations";
 import type { GmailMutationInput } from "@winston/contracts/gmail-mutations";
 import type { GmailLabelMutationInput } from "@winston/contracts/gmail-label-mutations";
+import type { GmailTrashInput } from "@winston/contracts/gmail-trash";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -47,6 +48,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  gmailTrash?: (
+    credential: ServiceRequest,
+    request: GmailTrashInput,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   gmailLabelMutations?: (
     credential: ServiceRequest,
     request: GmailLabelMutationInput,
@@ -99,6 +105,7 @@ export function createCliTaskGroup(
     gmailMutations,
     gmailReconciliation,
     gmailLabelMutations,
+    gmailTrash,
   }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
@@ -113,6 +120,29 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "gmail.trash" || request.command === "gmail.restore") {
+      const { key, accountId, messageId } = request;
+      return context.json(
+        gmailTrash
+          ? await gmailTrash(
+              authority,
+              {
+                key,
+                intent: {
+                  kind: request.command === "gmail.trash" ? "message.trash" : "message.restore",
+                  accountId,
+                  messageId,
+                },
+              },
+              context.req.raw.signal,
+            )
+          : {
+              version: 1,
+              status: "unavailable",
+              message: "Gmail trash/restore is not configured.",
+            },
+      );
+    }
     if (request.command === "gmail.modify") {
       const { key, accountId, messageId, addLabelIds, removeLabelIds } = request;
       return context.json(
@@ -231,7 +261,9 @@ export function createCliTaskGroup(
       cliGmailMutationRequestSchema.safeParse(request).success ||
       request.command === "calendar.reconcile" ||
       request.command === "gmail.reconcile" ||
-      request.command === "gmail.modify"
+      request.command === "gmail.modify" ||
+      request.command === "gmail.trash" ||
+      request.command === "gmail.restore"
     )
       throw new RequestError("invalid_request");
     if (request.command === "devices.result")

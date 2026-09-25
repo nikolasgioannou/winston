@@ -36,7 +36,7 @@ export const gmailProviderEvidenceSchema = z.strictObject({
       gmailMutationReceiptSchema,
       z.strictObject({
         version: z.literal(1),
-        kind: z.literal("labels.modify"),
+        kind: z.enum(["labels.modify", "message.trash", "message.restore"]),
         messageId: gmailIdSchema,
         threadId: gmailIdSchema,
       }),

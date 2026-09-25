@@ -21,6 +21,8 @@ export { createGmailMutationGateway } from "./gmail-mutation-gateway";
 export { formatGmailMutationApproval } from "./gmail-mutation-review";
 export { createGmailLabelMutationGateway } from "./gmail-label-mutation-gateway";
 export { formatGmailLabelMutationApproval } from "./gmail-label-mutation-review";
+export { createGmailTrashGateway } from "./gmail-trash-gateway";
+export { prepareGmailTrash, readGmailTrashPlan, gmailTrashStateMatches } from "./gmail-trash-plan";
 export { readGmailReplySource } from "./gmail-reply-source";
 export {
   prepareGmailMutation,

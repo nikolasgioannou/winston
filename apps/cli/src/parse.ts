@@ -65,6 +65,22 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (command.command === "gmail.trash" || command.command === "gmail.restore") {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected trash/restore options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        key: values.key,
+        accountId: values.account,
+        messageId: values.id,
+      }),
+    };
+  }
   if (command.command === "gmail.modify") {
     const allowed: readonly string[] = command.flags;
     if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))

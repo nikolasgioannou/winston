@@ -5,6 +5,7 @@ import { cliScheduleRequestSchema } from "./cli-schedules";
 import { cliResponsibilityRequestSchema } from "./cli-responsibilities";
 import { cliDeviceRequestSchema } from "./cli-devices";
 import { cliGmailLabelMutationRequestSchema } from "./cli-gmail-labels";
+import { cliGmailTrashRequestSchema } from "./cli-gmail-trash";
 export { cliGmailLabelMutationRequestSchema } from "./cli-gmail-labels";
 import {
   cliGmailMutationRequestSchema,
@@ -46,6 +47,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliGmailTrashRequestSchema.options,
   cliGmailLabelMutationRequestSchema,
   cliGmailReconciliationRequestSchema,
   ...cliGmailMutationRequestSchema.options,

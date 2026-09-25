@@ -5,6 +5,7 @@ export const authorizationOperationSchema = z.enum([
   "gmail.draft",
   "gmail.send",
   "gmail.modify",
+  "gmail.trash",
   "calendar.list",
   "calendar.read",
   "calendar.write",

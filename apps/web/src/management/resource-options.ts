@@ -34,7 +34,13 @@ export function resourceOptions(
               label,
               unavailable,
               target: { kind: "connection", id: connection.id, resource: null },
-              operations: ["gmail.read", "gmail.draft", "gmail.send", "gmail.modify"],
+              operations: [
+                "gmail.read",
+                "gmail.draft",
+                "gmail.send",
+                "gmail.modify",
+                "gmail.trash",
+              ],
             },
           ]
         : [

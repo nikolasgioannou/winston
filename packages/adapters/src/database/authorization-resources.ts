@@ -20,6 +20,7 @@ const googleScopeNames = {
   "gmail.draft": ["gmail.modify", "gmail.compose"],
   "gmail.send": ["gmail.modify", "gmail.compose", "gmail.send"],
   "gmail.modify": ["gmail.modify"],
+  "gmail.trash": ["gmail.modify"],
   "calendar.list": [
     "calendar",
     "calendar.readonly",

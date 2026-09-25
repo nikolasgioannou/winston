@@ -5,6 +5,7 @@ export const connectionOperationSchema = z.enum([
   "gmail.draft",
   "gmail.send",
   "gmail.modify",
+  "gmail.trash",
   "calendar.read",
   "calendar.write",
 ]);
@@ -29,7 +30,7 @@ export const targetPreferencesSchema = z.strictObject({
         target: connectionTargetSchema,
       }),
     )
-    .max(6),
+    .max(connectionOperationSchema.options.length),
 });
 export const targetSelectionSchema = z.strictObject({
   operation: connectionOperationSchema,

@@ -18,6 +18,7 @@ import { connectedReadRepository } from "./connected-reads";
 import { calendarActionRepository } from "./calendar-actions";
 import { gmailActionRepository } from "./gmail-actions";
 import { gmailLabelActionRepository } from "./gmail-label-actions";
+import { gmailTrashActionRepository } from "./gmail-trash-actions";
 import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
 import { telegramIntakeRepository } from "./telegram-intake";
@@ -65,6 +66,7 @@ export type OwnerTransaction = {
   readonly calendarActions: ReturnType<typeof calendarActionRepository>;
   readonly gmailActions: ReturnType<typeof gmailActionRepository>;
   readonly gmailLabelActions: ReturnType<typeof gmailLabelActionRepository>;
+  readonly gmailTrashActions: ReturnType<typeof gmailTrashActionRepository>;
   readonly telegramApprovals: ReturnType<typeof telegramApprovalRepository>;
   readonly handoffs: ReturnType<typeof handoffRepository>;
   readonly taskUpdates: ReturnType<typeof taskUpdateRepository>;
@@ -203,6 +205,7 @@ export function createDatabase(options: {
           calendarActions: calendarActionRepository(transaction, ownerId),
           gmailActions: gmailActionRepository(transaction, ownerId),
           gmailLabelActions: gmailLabelActionRepository(transaction, ownerId),
+          gmailTrashActions: gmailTrashActionRepository(transaction, ownerId),
           filePublications: filePublicationRepository(transaction, ownerId),
           handoffs: handoffRepository(transaction, ownerId),
           taskUpdates: taskUpdateRepository(transaction, ownerId),

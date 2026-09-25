@@ -17,7 +17,7 @@ export async function assertGmailMutationResolved(
   const rows = await transaction.execute<{ id: string }>(sql`
     SELECT id::text AS id FROM winston.actions
     WHERE owner_id = ${ownerId}::uuid AND task_id = ${taskId}::uuid
-      AND document->'request'->'authorization'->>'operation' IN ('gmail.draft', 'gmail.send', 'gmail.modify')
+      AND document->'request'->'authorization'->>'operation' IN ('gmail.draft', 'gmail.send', 'gmail.modify', 'gmail.trash')
       AND document->>'state' IN ('dispatching', 'unknown')
       AND (${excludeId}::uuid IS NULL OR id <> ${excludeId}::uuid)
     ORDER BY id LIMIT 1

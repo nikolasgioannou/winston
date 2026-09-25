@@ -5,6 +5,22 @@ const gmailMessageHelp =
 
 export const commands = [
   {
+    command: "gmail.trash",
+    id: true,
+    flags: ["account", "id", "key"],
+    description:
+      "Move one inspected message to Trash under its separate trash permission. No permanent deletion or whole-thread expansion. Source read and trash may each require approval; reuse the same key and arguments. Reconcile unknown results instead of retrying.",
+    usage: "--account <uuid> --id <message-id> --key <stable-key>",
+  },
+  {
+    command: "gmail.restore",
+    id: true,
+    flags: ["account", "id", "key"],
+    description:
+      "Remove one inspected message from Trash under its separate trash permission. Does not request a destination folder. Reuse the same key through approvals; reconcile unknown results instead of retrying.",
+    usage: "--account <uuid> --id <message-id> --key <stable-key>",
+  },
+  {
     command: "gmail.modify",
     id: true,
     flags: ["account", "id", "key", "add-labels", "remove-labels"],

@@ -7,6 +7,8 @@ import {
 import { readGmailMutationPlan } from "./gmail-mutation-plan";
 import { readGmailLabelMutationPlan } from "./gmail-label-mutation-plan";
 import { observeGmailLabelMutation } from "./gmail-label-reconciliation-observe";
+import { readGmailTrashPlan } from "./gmail-trash-plan";
+import { observeGmailTrash } from "./gmail-trash-reconciliation-observe";
 import { createConnectionTargets } from "./targets";
 import { sameResolvedTarget } from "./target-resolution";
 import { prepareReadApproval, completeRead, type ReadDispatch } from "./read-approval";
@@ -38,7 +40,7 @@ export async function readGmailMutationEvidence(
     if (
       !action ||
       action.state !== "unknown" ||
-      !["gmail.draft", "gmail.send", "gmail.modify"].includes(
+      !["gmail.draft", "gmail.send", "gmail.modify", "gmail.trash"].includes(
         action.request.authorization.operation,
       )
     )
@@ -46,8 +48,10 @@ export async function readGmailMutationEvidence(
     const plan =
       action.request.authorization.operation === "gmail.modify"
         ? readGmailLabelMutationPlan(action.request.arguments)
-        : readGmailMutationPlan(action.request.arguments);
-    const plannedTarget = plan.kind === "labels.modify" ? plan.target : plan.prepared.target;
+        : action.request.authorization.operation === "gmail.trash"
+          ? readGmailTrashPlan(action.request.arguments)
+          : readGmailMutationPlan(action.request.arguments);
+    const plannedTarget = "prepared" in plan ? plan.prepared.target : plan.target;
     if (plannedTarget.connectionId !== request.accountId) throw new Error("Wrong account.");
     const selected = await createConnectionTargets(database, options.google).resolve(
       ownerId,
@@ -91,7 +95,9 @@ export async function readGmailMutationEvidence(
     const evidence =
       plan.kind === "labels.modify"
         ? await observeGmailLabelMutation(bound, ownerId, plan, selected.target, signal)
-        : await observeGmailMutation(bound, ownerId, plan, selected.target, signal);
+        : "prepared" in plan
+          ? await observeGmailMutation(bound, ownerId, plan, selected.target, signal)
+          : await observeGmailTrash(bound, ownerId, plan, selected.target, signal);
     if (!(await authorize())) throw new Error("Task authority expired.");
     signal.throwIfAborted();
     return await completeRead(
