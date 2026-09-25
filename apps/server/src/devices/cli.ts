@@ -6,6 +6,7 @@ import {
   type CliResult,
 } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
+import type { ActionRecord } from "@winston/contracts/actions";
 import type { DeviceServerIdentity } from "@winston/contracts/device-registry";
 import { deviceOperationSchema } from "@winston/contracts/devices";
 import type { createDeviceDispatcher } from "./dispatch";
@@ -67,10 +68,31 @@ export function createDeviceCli(options: {
           revision: authority.revision,
           generation: authority.generation,
         };
-        const action =
-          request.command === "devices.read"
-            ? await scope.deviceActions.prepareFileRead(task, request.key, request.id, request.path)
-            : await scope.deviceActions.prepare(task, request.key, request.id, request.operation);
+        let action: ActionRecord;
+        if (request.command === "devices.write") {
+          const write = await scope.deviceFileWrites.prepare(credential, {
+            version: 1,
+            id: request.id,
+            key: request.key,
+            path: request.path,
+            overwrite: request.overwrite,
+            artifactId: request.artifactId,
+            revision: request.revision,
+          });
+          if (!write)
+            return result("unavailable", "The source file or task authority is unavailable.");
+          action = write.action;
+        } else {
+          action =
+            request.command === "devices.read"
+              ? await scope.deviceActions.prepareFileRead(
+                  task,
+                  request.key,
+                  request.id,
+                  request.path,
+                )
+              : await scope.deviceActions.prepare(task, request.key, request.id, request.operation);
+        }
         const policy = await scope.authorization.evaluate(
           action.request.authorization,
           action.snapshot ?? undefined,

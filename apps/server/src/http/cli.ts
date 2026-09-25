@@ -220,7 +220,11 @@ export function createCliTaskGroup(
               message: "Calendar mutations are not configured.",
             },
       );
-    if (request.command === "devices.command" || request.command === "devices.read")
+    if (
+      request.command === "devices.command" ||
+      request.command === "devices.read" ||
+      request.command === "devices.write"
+    )
       return devices
         ? devices(authority, request, context.req.raw.headers, context.req.raw.signal)
         : context.json({
@@ -273,6 +277,7 @@ export function createCliTaskGroup(
     const request = await parseJson(context, cliRequestSchema);
     if (
       request.command === "devices.read" ||
+      request.command === "devices.write" ||
       request.command === "devices.command" ||
       cliCalendarMutationRequestSchema.safeParse(request).success ||
       cliGmailMutationRequestSchema.safeParse(request).success ||

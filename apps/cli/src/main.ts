@@ -43,7 +43,9 @@ const result = await runCli(process.argv.slice(2), async (request) => {
       file.bytes,
     );
   }
-  return request.command === "devices.command" || request.command === "devices.read"
+  return request.command === "devices.command" ||
+    request.command === "devices.read" ||
+    request.command === "devices.write"
     ? callDeviceCommand(authority, request)
     : callGateway(authority, request);
 });

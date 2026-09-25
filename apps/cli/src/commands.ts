@@ -334,6 +334,15 @@ export const commands = [
   },
   { command: "devices.inspect", description: "Inspect one proxy computer.", id: true },
   {
+    command: "devices.write",
+    id: true,
+    flags: ["id", "key", "path", "artifact", "revision", "overwrite"],
+    description:
+      "Write a published or staged artifact to an exact path on one proxy computer. Creates a new file unless overwrite is explicit. Resume the same key and arguments after approval; inspect uncertain results before retrying.",
+    usage:
+      "--id <computer-uuid> --key <stable-key> --path <absolute-path> --artifact <artifact-uuid> --revision <revision> [--overwrite]",
+  },
+  {
     command: "devices.read",
     id: true,
     flags: ["id", "key", "path"],

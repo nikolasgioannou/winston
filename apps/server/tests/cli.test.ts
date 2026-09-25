@@ -111,10 +111,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
           return Promise.resolve({ version: 1, status: "ok", data: { state: "pending" } });
         },
         devices: (credential, input, headers, signal) => {
-          assert.equal(
-            credential.token,
-            input.command === "devices.command" ? controlToken : token,
-          );
+          assert.equal(credential.token, input.command === "devices.result" ? token : controlToken);
           assert.equal(headers.get("X-Winston-Workspace"), workspaceId);
           assert.equal(signal.aborted, false);
           deviceCalls++;
@@ -231,7 +228,22 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
     (await request({ version: 1, command: "devices.result", id: randomUUID() })).status,
     200,
   );
-  assert.equal(deviceCalls, 2);
+  const deviceWrite = {
+    version: 1,
+    command: "devices.write",
+    id: randomUUID(),
+    key: "write",
+    path: "/fixtures/output.txt",
+    artifactId: randomUUID(),
+    revision: 0,
+    overwrite: false,
+  };
+  assert.equal((await request(deviceWrite)).status, 400);
+  assert.equal((await request(deviceWrite, token, workspaceId, controlPath)).status, 401);
+  const routedWrite = await request(deviceWrite, controlToken, workspaceId, controlPath);
+  assert.equal(routedWrite.status, 200);
+  assert.equal(routedWrite.headers.get("fly-replay"), routed.headers.get("fly-replay"));
+  assert.equal(deviceCalls, 3);
   assert.equal((await request({ version: 1, command: "responsibilities.list" })).status, 200);
   const proposal = {
     version: 1,

@@ -9,12 +9,14 @@ import {
 import { storedObjectSchema } from "@winston/contracts/storage";
 import { artifactSchema } from "@winston/contracts/artifacts";
 import { deviceOperationSchema, type DeviceMessage } from "@winston/contracts/devices";
+import type { DeviceServerIdentity } from "@winston/contracts/device-registry";
 
 export async function deviceWriteFixture(
   database: ReturnType<typeof createDatabase>,
   originPort: number,
   sourceKind: "workspace" | "device" = "workspace",
   content = Buffer.from("write fixture"),
+  server?: DeviceServerIdentity,
 ) {
   const ownerId = randomUUID();
   const workspaceId = randomUUID();
@@ -53,7 +55,7 @@ export async function deviceWriteFixture(
       capabilities: ["file.read", "file.write"],
     });
     assert.ok(pair);
-    const opened = await scope.deviceSessions.open(pair.device.id, pair.credential);
+    const opened = await scope.deviceSessions.open(pair.device.id, pair.credential, server);
     assert.ok(opened);
     const session = {
       deviceId: opened.deviceId,

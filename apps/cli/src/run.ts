@@ -53,7 +53,9 @@ export async function runCli(
     const result = cliResultSchema.parse(await execute(parsed.request));
     const printed = output(result, parsed.json);
     if (
-      (parsed.request.command === "devices.command" || parsed.request.command === "devices.read") &&
+      (parsed.request.command === "devices.command" ||
+        parsed.request.command === "devices.read" ||
+        parsed.request.command === "devices.write") &&
       result.status === "ok"
     ) {
       const receipt = cliDeviceResultSchema.parse(result.data);

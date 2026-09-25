@@ -14,7 +14,9 @@ export async function deviceCommandResult(
     !action ||
     action.request.task.id !== worker.id ||
     action.request.authorization.target.kind !== "device" ||
-    !["device.command", "device.file.read"].includes(action.request.authorization.operation)
+    !["device.command", "device.file.read", "device.file.write"].includes(
+      action.request.authorization.operation,
+    )
   )
     return { version: 1, status: "denied", message: "Operation unavailable to this task." };
   const policy = await scope.authorization.evaluate(

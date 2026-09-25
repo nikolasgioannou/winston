@@ -39,6 +39,8 @@ export function parseCommand(args: string[]): ParsedCommand {
       until: { type: "string" },
       timezone: { type: "string" },
       path: { type: "string" },
+      artifact: { type: "string" },
+      overwrite: { type: "boolean" },
       type: { type: "string" },
       objective: { type: "string" },
       at: { type: "string" },
@@ -134,6 +136,26 @@ export function parseCommand(args: string[]): ParsedCommand {
       kind: "request",
       json: values.json === true,
       request: parseCalendarMutation(command.command, values),
+    };
+  }
+  if (command.command === "devices.write") {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected device write options.");
+    if (!/^\d+$/.test(values.revision ?? "")) throw new Error("Provide an artifact revision.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        id: values.id,
+        key: values.key,
+        path: values.path,
+        artifactId: values.artifact,
+        revision: Number(values.revision),
+        overwrite: values.overwrite === true,
+      }),
     };
   }
   if (command.command === "devices.read") {

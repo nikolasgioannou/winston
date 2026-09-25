@@ -2,9 +2,11 @@ import { z } from "zod";
 import { deviceOperationSchema } from "./devices";
 import { deviceExecutionSchema, deviceOutputCursorSchema } from "./device-executions";
 import { artifactSchema, artifactMetadataSchema } from "./artifacts";
+import { deviceFileWriteRequestSchema } from "./device-file-writes";
 
 export const deviceCommandTimeoutMs = 60_000;
 export const cliDeviceRequestSchema = z.discriminatedUnion("command", [
+  deviceFileWriteRequestSchema.extend({ command: z.literal("devices.write") }),
   z.strictObject({
     version: z.literal(1),
     command: z.literal("devices.read"),
