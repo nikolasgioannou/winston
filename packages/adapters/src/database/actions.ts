@@ -13,6 +13,8 @@ import {
   type ActionTask,
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
+import { readCalendarMutationArguments } from "../google/calendar-mutation-plan";
+import { connectionTargetRepository } from "./connection-targets";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
 import { deviceExecutionSchema } from "@winston/contracts/device-executions";
 import { deviceSessionRepository } from "./device-sessions";
@@ -35,6 +37,13 @@ type Row = {
   valid: boolean;
   tokenHash: string | null;
   cancellationRequested: boolean;
+};
+type ConnectionProof = {
+  id: string;
+  token: string;
+  task: ActionTask;
+  authorization: ActionRequest["authorization"];
+  arguments: ActionRequest["arguments"];
 };
 
 export function actionRepository(transaction: DatabaseTransaction, ownerId: string) {
@@ -158,6 +167,58 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       action.dispatchTask.revision === operation.revision &&
       action.dispatchTask.generation === operation.generation &&
       hash(canonical(command.data)) === operation.inputHash
+    );
+  }
+
+  async function authorizeConnection(input: ConnectionProof, operations: string[]) {
+    const worker = actionTaskSchema.parse(input.task);
+    const expected = actionRequestSchema.parse({
+      key: "connection-proof",
+      task: worker,
+      authorization: input.authorization,
+      arguments: input.arguments,
+    });
+    const target = expected.authorization.target;
+    if (target.kind !== "connection" || !operations.includes(expected.authorization.operation))
+      return false;
+    await lock();
+    const stored = await row(input.id);
+    if (!stored || stored.cancellationRequested || stored.tokenHash !== hash(input.token))
+      return false;
+    const action = actionRecordSchema.parse(stored.document);
+    if (
+      action.state !== "dispatching" ||
+      canonical(action.request.authorization) !== canonical(expected.authorization) ||
+      canonical(action.request.arguments) !== canonical(expected.arguments) ||
+      canonical(action.dispatchTask) !== canonical(worker)
+    )
+      return false;
+    const current = await task(worker.id);
+    if (!running(current, worker) || !sameIntent(current, action)) return false;
+    const evaluation = await policy(action);
+    if (expected.authorization.operation === "calendar.write") {
+      let payload;
+      try {
+        payload = readCalendarMutationArguments(action.request.arguments);
+      } catch {
+        return false;
+      }
+      const planned = payload.plan.request.target;
+      const preferences = await connectionTargetRepository(transaction, ownerId).preferences();
+      if (
+        payload.plan.operationId !== action.operationId ||
+        planned.connectionId !== target.id ||
+        planned.calendarId !== target.resource ||
+        planned.task?.id !== action.request.task.id ||
+        planned.task.revision !== action.request.task.revision ||
+        planned.preferencesRevision !== preferences.revision ||
+        planned.connectionRevision !== evaluation.resourceRevision
+      )
+        return false;
+    }
+    return (
+      evaluation.decision === "allow" ||
+      (evaluation.decision === "ask" && action.decisionSource === "owner")
     );
   }
 
@@ -302,45 +363,12 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       `);
       return deadline.rows.length === 1;
     },
-    // Server-side read adapters only. The dispatch token never leaves the API process.
-    async authorizeConnectionRead(input: {
-      id: string;
-      token: string;
-      task: ActionTask;
-      authorization: ActionRequest["authorization"];
-      arguments: ActionRequest["arguments"];
-    }) {
-      const worker = actionTaskSchema.parse(input.task);
-      const expected = actionRequestSchema.parse({
-        key: "read-proof",
-        task: worker,
-        authorization: input.authorization,
-        arguments: input.arguments,
-      });
-      if (
-        expected.authorization.target.kind !== "connection" ||
-        !["gmail.read", "calendar.read"].includes(expected.authorization.operation)
-      )
-        return false;
-      await lock();
-      const stored = await row(input.id);
-      if (!stored || stored.cancellationRequested || stored.tokenHash !== hash(input.token))
-        return false;
-      const action = actionRecordSchema.parse(stored.document);
-      if (
-        action.state !== "dispatching" ||
-        canonical(action.request.authorization) !== canonical(expected.authorization) ||
-        canonical(action.request.arguments) !== canonical(expected.arguments) ||
-        canonical(action.dispatchTask) !== canonical(worker)
-      )
-        return false;
-      const current = await task(worker.id);
-      if (!running(current, worker) || !sameIntent(current, action)) return false;
-      const evaluation = await policy(action);
-      return (
-        evaluation.decision === "allow" ||
-        (evaluation.decision === "ask" && action.decisionSource === "owner")
-      );
+    // Server-side adapters only. Dispatch tokens never leave the API process.
+    authorizeConnectionRead(input: ConnectionProof) {
+      return authorizeConnection(input, ["gmail.read", "calendar.read"]);
+    },
+    authorizeCalendarMutation(input: ConnectionProof) {
+      return authorizeConnection(input, ["calendar.write"]);
     },
     async unresolvedPriorEffect(input: ActionTask) {
       const worker = actionTaskSchema.parse(input);
@@ -502,8 +530,11 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         ? save(action, { state: "invalidated" })
         : action;
     },
-    async prepare(input: ActionRequest) {
+    async prepare(input: ActionRequest, options?: { operationId: string }) {
       const request = actionRequestSchema.parse(input);
+      const operationId = options
+        ? actionRecordSchema.shape.operationId.parse(options.operationId)
+        : randomUUID();
       const digest = hash(canonical(request));
       await lock();
       const existing = await transaction.execute<{ document: unknown; hash: string }>(sql`
@@ -511,9 +542,17 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       `);
       const previous = existing.rows[0];
       if (previous) {
-        if (previous.hash !== digest)
+        const existingAction = actionRecordSchema.parse(previous.document);
+        if (previous.hash !== digest || (options && existingAction.operationId !== operationId))
           throw new Error("Action key conflicts with its original arguments or authority.");
-        return actionRecordSchema.parse(previous.document);
+        return existingAction;
+      }
+      if (options) {
+        const reused = await transaction.execute(sql`
+          SELECT id FROM winston.actions WHERE owner_id = ${ownerId}::uuid
+            AND document->>'operationId' = ${operationId} LIMIT 1
+        `);
+        if (reused.rows.length) throw new Error("Action operation identity is already in use.");
       }
       const current = await task(request.task.id);
       if (!running(current, request.task) || !current)
@@ -563,7 +602,7 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         revision: 0,
         expiresAt,
         decisionSource: decision.decision === "ask" ? null : "policy",
-        operationId: randomUUID(),
+        operationId,
         dispatchTask: null,
         outcome: null,
       });

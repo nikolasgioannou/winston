@@ -1,4 +1,7 @@
 import {
+  calendarMutationArgumentsSchema,
+  calendarMutationIntentSchema,
+  calendarMutationPlanSchema,
   calendarMutationRequestSchema,
   calendarMutationOperationIdSchema,
   calendarMutationSnapshotSchema,
@@ -9,6 +12,31 @@ import {
 import { canonicalJson, type JsonValue } from "@winston/contracts/json";
 
 type Attendee = CalendarMutationSnapshot["event"]["attendees"][number];
+
+// Rebuild every provider-facing field before trusting a persisted plan's shape.
+// This verifies consistency; the durable action supplies the actual authority.
+export function readCalendarMutationArguments(input: unknown) {
+  const value = calendarMutationArgumentsSchema.parse(input);
+  const { plan, intent } = value;
+  const { target, ...details } = plan.request;
+  const expectedIntent = calendarMutationIntentSchema.parse({
+    ...details,
+    accountId: target.connectionId,
+    calendarId: target.calendarId,
+  });
+  if (canonicalJson(intent) !== canonicalJson(expectedIntent))
+    throw new Error("Calendar plan does not match its requested intent.");
+  const rebuilt = prepareCalendarMutation(
+    plan.operationId,
+    plan.request,
+    plan.before
+      ? { source: { ...target, operation: "calendar.read" }, event: plan.before }
+      : undefined,
+  );
+  if (canonicalJson(plan) !== canonicalJson(rebuilt))
+    throw new Error("Calendar plan does not match its reviewed provider operation.");
+  return value;
+}
 
 function timingBody(timing: CalendarMutationTiming) {
   const { start, end, timezone } = timing;
@@ -152,5 +180,5 @@ export function prepareCalendarMutation(operationId: string, input: unknown, sna
   };
   if (Buffer.byteLength(JSON.stringify(plan)) > 100_000)
     throw new Error("Calendar mutation plan is too large to review safely.");
-  return plan;
+  return calendarMutationPlanSchema.parse(plan);
 }

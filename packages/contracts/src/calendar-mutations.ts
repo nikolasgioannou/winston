@@ -144,3 +144,32 @@ export const calendarMutationSnapshotSchema = z
     "Every affected attendee must have a complete email address.",
   );
 export type CalendarMutationSnapshot = z.infer<typeof calendarMutationSnapshotSchema>;
+
+const intentTarget = {
+  accountId: z.uuid(),
+  calendarId: z.string().min(1).max(1024),
+};
+export const calendarMutationIntentSchema = z.discriminatedUnion("kind", [
+  calendarMutationRequestSchema.options[0].omit({ target: true }).extend(intentTarget),
+  calendarMutationRequestSchema.options[1].omit({ target: true }).extend(intentTarget),
+  calendarMutationRequestSchema.options[2].omit({ target: true }).extend(intentTarget),
+]);
+export const calendarMutationPlanSchema = z.strictObject({
+  version: z.literal(1),
+  operationId: calendarMutationOperationIdSchema,
+  request: calendarMutationRequestSchema,
+  eventId: calendarEventIdSchema,
+  method: z.enum(["POST", "PATCH", "DELETE"]),
+  path: z.string().min(1).max(8192),
+  ifMatch: etag.nullable(),
+  sendUpdates: z.enum(["all", "externalOnly", "none"]),
+  body: z.record(z.string(), z.json()).nullable(),
+  before: calendarProviderEventSchema.nullable(),
+  potentialNotificationRecipients: z.array(z.email()).max(5000),
+});
+export const calendarMutationArgumentsSchema = z.strictObject({
+  intent: calendarMutationIntentSchema,
+  plan: calendarMutationPlanSchema,
+});
+export type CalendarMutationIntent = z.infer<typeof calendarMutationIntentSchema>;
+export type CalendarMutationPlan = z.infer<typeof calendarMutationPlanSchema>;

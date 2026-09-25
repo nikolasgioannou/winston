@@ -3,7 +3,7 @@ import {
   calendarMutationRequestSchema,
   calendarMutationTimingSchema,
 } from "@winston/contracts/calendar-mutations";
-import { prepareCalendarMutation } from "@winston/adapters/google";
+import { prepareCalendarMutation, readCalendarMutationArguments } from "@winston/adapters/google";
 import { canonicalJson } from "@winston/contracts/json";
 
 const operationId = "11111111-1111-4111-8111-111111111111";
@@ -32,6 +32,35 @@ const event = {
   transparency: "opaque" as const,
 };
 const create = { kind: "create", target, sendUpdates: "all", event };
+
+test("persisted Calendar plans reject changed provider operations or mismatched intent", () => {
+  const plan = prepareCalendarMutation(operationId, create);
+  const intent = {
+    kind: "create",
+    accountId: target.connectionId,
+    calendarId: target.calendarId,
+    sendUpdates: "all",
+    event,
+  };
+  expect(readCalendarMutationArguments({ intent, plan }).plan).toEqual(plan);
+  for (const change of [
+    { method: "DELETE" },
+    { path: "/another-calendar/events" },
+    { body: { ...plan.body, summary: "Changed" } },
+    { sendUpdates: "none" },
+    { eventId: "another-event" },
+    { potentialNotificationRecipients: [] },
+    { ifMatch: '"injected"' },
+  ]) {
+    expect(() => readCalendarMutationArguments({ intent, plan: { ...plan, ...change } })).toThrow();
+  }
+  expect(() =>
+    readCalendarMutationArguments({
+      intent: { ...intent, calendarId: "another@example.com" },
+      plan,
+    }),
+  ).toThrow(/intent/);
+});
 const snapshot = {
   source: { ...target, operation: "calendar.read" },
   trust: "untrusted_external_content",

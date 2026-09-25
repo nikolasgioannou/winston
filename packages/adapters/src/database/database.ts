@@ -15,6 +15,7 @@ import { taskUpdateRepository } from "./task-updates";
 import { handoffRepository } from "./handoffs";
 import { telegramApprovalRepository } from "./telegram-approvals";
 import { connectedReadRepository } from "./connected-reads";
+import { calendarActionRepository } from "./calendar-actions";
 import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
 import { telegramIntakeRepository } from "./telegram-intake";
@@ -59,6 +60,7 @@ export type OwnerTransaction = {
   readonly telegramFiles: ReturnType<typeof telegramFileRepository>;
   readonly filePublications: ReturnType<typeof filePublicationRepository>;
   readonly connectedReads: ReturnType<typeof connectedReadRepository>;
+  readonly calendarActions: ReturnType<typeof calendarActionRepository>;
   readonly telegramApprovals: ReturnType<typeof telegramApprovalRepository>;
   readonly handoffs: ReturnType<typeof handoffRepository>;
   readonly taskUpdates: ReturnType<typeof taskUpdateRepository>;
@@ -194,6 +196,7 @@ export function createDatabase(options: {
           telegramFiles: telegramFileRepository(transaction, ownerId),
           telegramApprovals: telegramApprovalRepository(transaction, ownerId),
           connectedReads: connectedReadRepository(transaction, ownerId),
+          calendarActions: calendarActionRepository(transaction, ownerId),
           filePublications: filePublicationRepository(transaction, ownerId),
           handoffs: handoffRepository(transaction, ownerId),
           taskUpdates: taskUpdateRepository(transaction, ownerId),
