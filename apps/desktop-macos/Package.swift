@@ -16,6 +16,7 @@ let package = Package(
       dependencies: [.product(name: "WinstonDeviceProtocol", package: "device-protocol")]),
     .target(name: "ProxyExecution", dependencies: ["ProxyJournal", "ProxyCommands"]),
     .target(name: "ProxyCommands"),
+    .target(name: "ProxyFiles"),
     .target(
       name: "ProxyRuntime",
       dependencies: [
@@ -38,6 +39,7 @@ let package = Package(
     .executableTarget(name: "JournalFixture", dependencies: ["ProxyJournal"]),
     .executableTarget(name: "ExecutionFixture", dependencies: ["ProxyExecution"]),
     .executableTarget(name: "CommandFixture", dependencies: ["ProxyCommands"]),
+    .executableTarget(name: "FilesFixture", dependencies: ["ProxyFiles"]),
     .executableTarget(
       name: "CommandHandlerFixture", dependencies: ["ProxyExecution", "ProxyCommands"]),
     .executableTarget(name: "CommandSessionFixture", dependencies: ["ProxyRuntime"]),
