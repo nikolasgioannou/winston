@@ -20,6 +20,14 @@ const text = (limit: number) =>
     );
 const path = text(4096).regex(/^\//);
 
+export const deviceFileSourceSchema = z.strictObject({
+  artifactId: identifier,
+  revision: counter,
+  size: counter.max(50 * 1024 * 1024),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type DeviceFileSource = z.infer<typeof deviceFileSourceSchema>;
+
 export const deviceCapabilitySchema = z.enum([
   "command",
   "file.read",
@@ -42,6 +50,7 @@ export const deviceOperationSchema = z.discriminatedUnion("kind", [
     path,
     transferId: identifier,
     overwrite: z.boolean(),
+    source: deviceFileSourceSchema,
   }),
   z.strictObject({
     kind: z.literal("observe"),

@@ -96,7 +96,13 @@
             "kind": "file.write",
             "path": "/tmp/report.pdf",
             "transferId": "11111111-1111-4111-8111-111111111111",
-            "overwrite": false
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
           }
         }
       }
@@ -377,6 +383,66 @@
           "sequence": 0,
           "state": "failed",
           "exitCode": 12
+        }
+      }
+    },
+    {
+      "name": "file-write-empty-source",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 0,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "file-write-maximum-source",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 52428800,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
         }
       }
     }
@@ -1040,7 +1106,13 @@
             "kind": "file.write",
             "path": "/tmp/report.pdf",
             "transferId": "11111111-1111-4111-8111-111111111111",
-            "overwrite": 1
+            "overwrite": 1,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
           }
         }
       }
@@ -1089,6 +1161,587 @@
             "executable": "/usr/bin/printf",
             "arguments": ["hello 😀"],
             "directory": "/tmp"
+          }
+        }
+      }
+    },
+    {
+      "name": "source-too-large",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 52428801,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-negative-size",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": -1,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-fractional-size",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 0.5,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-boolean-size",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": true,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-negative-revision",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": -1,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-fractional-revision",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 0.5,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-unsafe-revision",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 9007199254740992,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-boolean-revision",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": true,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-invalid-id",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "other",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-uppercase-id",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-invalid-digest",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-short-digest",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-extra-url",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "url": "https://untrusted.example/file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-missing-artifactId",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "revision": 2,
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-missing-revision",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "size": 1024,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-missing-size",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-missing-sha256",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": {
+              "artifactId": "11111111-1111-4111-8111-111111111111",
+              "revision": 2,
+              "size": 1024
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "source-null",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": null
+          }
+        }
+      }
+    },
+    {
+      "name": "source-array",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false,
+            "source": []
+          }
+        }
+      }
+    },
+    {
+      "name": "file-write-missing-source",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.write",
+            "path": "/tmp/report.pdf",
+            "transferId": "11111111-1111-4111-8111-111111111111",
+            "overwrite": false
           }
         }
       }

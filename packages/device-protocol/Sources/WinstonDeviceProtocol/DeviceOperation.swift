@@ -12,7 +12,7 @@ public enum DeviceCapability: String, Sendable, CaseIterable {
 public enum DeviceOperation: Sendable {
   case command(executable: String, arguments: [String], directory: String)
   case fileRead(path: String, transferId: String)
-  case fileWrite(path: String, transferId: String, overwrite: Bool)
+  case fileWrite(path: String, transferId: String, overwrite: Bool, source: DeviceFileSource)
   case observe(application: String, format: String)
   case input(observationId: String, elementId: String, action: String, text: String)
   case application(application: String, action: String, observationId: String)
@@ -46,7 +46,7 @@ public enum DeviceOperation: Sendable {
     case "file.write":
       self = try .fileWrite(
         path: reader.path("path"), transferId: reader.identifier("transferId"),
-        overwrite: reader.boolean("overwrite"))
+        overwrite: reader.boolean("overwrite"), source: DeviceFileSource(reader.take("source")))
     case "observe":
       self = try .observe(
         application: reader.string("application", limit: 255, minimum: 1),

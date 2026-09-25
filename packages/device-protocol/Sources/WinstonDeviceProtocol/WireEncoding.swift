@@ -13,8 +13,11 @@ extension DeviceOperation {
       ["kind": "command", "executable": executable, "arguments": arguments, "directory": directory]
     case .fileRead(let path, let transferId):
       ["kind": "file.read", "path": path, "transferId": transferId]
-    case .fileWrite(let path, let transferId, let overwrite):
-      ["kind": "file.write", "path": path, "transferId": transferId, "overwrite": overwrite]
+    case .fileWrite(let path, let transferId, let overwrite, let source):
+      [
+        "kind": "file.write", "path": path, "transferId": transferId, "overwrite": overwrite,
+        "source": source.wireValue,
+      ]
     case .observe(let application, let format):
       ["kind": "observe", "application": application, "format": format]
     case .input(let observationId, let elementId, let action, let text):

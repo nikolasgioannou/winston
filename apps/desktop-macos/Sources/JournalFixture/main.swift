@@ -129,6 +129,7 @@ case "exercise":
   try await expectError(.alreadyOpen) {
     _ = try ExecutionJournal(directory: directory)
   }
+  try await checkWriteSources(journal)
   await journal.close()
   try await checkReconciliation(journal, index: 1, state: "unavailable")
   try await expectError(.unavailable) { _ = try await journal.admit(request(2)) }

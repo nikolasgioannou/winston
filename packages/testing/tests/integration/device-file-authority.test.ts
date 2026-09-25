@@ -73,6 +73,12 @@ test("native file authority requires a reserved exact operation and rechecks all
                     path: "/fixtures/report.txt",
                     transferId,
                     overwrite: false,
+                    source: {
+                      artifactId: randomUUID(),
+                      revision: 1,
+                      size: 1024,
+                      sha256: "a".repeat(64),
+                    },
                   };
             const action = await scope.deviceActions.prepare(
               task,
