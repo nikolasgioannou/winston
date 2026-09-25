@@ -10,6 +10,7 @@ import {
 import type { HttpEnvironment, Identity } from "./app";
 import { parseJson, RequestError } from "./errors";
 import { receiveDeviceFileResponse, type DeviceFileReceiver } from "./device-files";
+import { downloadDeviceFileResponse, type DeviceFileDownloader } from "./device-file-download";
 
 type Database = Pick<
   ReturnType<typeof createDatabase>,
@@ -110,9 +111,14 @@ export async function authenticateDevicePairing(
     : null;
 }
 
-export function createDeviceGroup(database: Database, receive?: DeviceFileReceiver) {
+export function createDeviceGroup(
+  database: Database,
+  receive?: DeviceFileReceiver,
+  download?: DeviceFileDownloader,
+) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/upload", (context) => receiveDeviceFileResponse(context, receive));
+  router.post("/files/download", (context) => downloadDeviceFileResponse(context, download));
   router.get("/self", async (context) => {
     const identity = context.get("identity");
     if (identity.kind !== "device") throw new RequestError("unauthorized");

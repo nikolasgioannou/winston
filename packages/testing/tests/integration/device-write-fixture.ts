@@ -14,10 +14,10 @@ export async function deviceWriteFixture(
   database: ReturnType<typeof createDatabase>,
   originPort: number,
   sourceKind: "workspace" | "device" = "workspace",
+  content = Buffer.from("write fixture"),
 ) {
   const ownerId = randomUUID();
   const workspaceId = randomUUID();
-  const content = Buffer.from("write fixture");
   const sha256 = createHash("sha256").update(content).digest("hex");
   const initialized = await database.transaction(ownerId, async (scope) => {
     await scope.owners.ensure();

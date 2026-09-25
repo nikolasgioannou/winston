@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { deviceOperationSchema } from "./devices";
 import { artifactSchema } from "./artifacts";
+import { deviceFileAuthoritySchema } from "./device-executions";
+
+export const deviceFileDownloadSchema = z.strictObject({
+  version: z.literal(1),
+  authority: deviceFileAuthoritySchema.extend({ operation: z.literal("file.write") }),
+});
+export type DeviceFileDownload = z.infer<typeof deviceFileDownloadSchema>;
 
 export const deviceFileWriteRequestSchema = z.strictObject({
   version: z.literal(1),

@@ -5,6 +5,7 @@ export { createWorkspaceFilePublisher } from "./workspace-files";
 export { createArtifactReader } from "./read";
 export { createArtifactStager } from "./stage-artifact";
 export { createDeviceFileReceiver } from "./device-file-upload";
+export { createDeviceFileDownloader } from "./device-file-download";
 export { stageInboxFile } from "./stage-inbox";
 export { createDeliveryDownloadService } from "./delivery-downloads";
 

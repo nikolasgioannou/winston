@@ -20,6 +20,7 @@ import {
   createArtifactStager,
   createDeliveryDownloadService,
   createDeviceFileReceiver,
+  createDeviceFileDownloader,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
 import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
@@ -284,6 +285,7 @@ const host = startServer(readConfig(process.env), {
             artifacts: createArtifactService(database, storage),
           })
         : undefined,
+      storage ? createDeviceFileDownloader({ database, storage }) : undefined,
     ),
     callback: {
       router: callbacks,
