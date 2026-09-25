@@ -66,6 +66,10 @@ Build the workspace image with `docker build -f apps/workspace/Dockerfile -t win
 
 The entrypoint requires a real volume mount with a root-owned directory that other users cannot write. A kernel lock prevents a second runtime from opening it concurrently. Startup stops prior execution-user processes before recovering uncertain operations. The runtime and its configuration belong to root; `/data/home` belongs to UID/GID 1000. The image removes setuid/setgid bits. Local integration tests build this image and verify protected-file access, exclusive ownership and crash recovery on disposable volumes, including with a read-only root filesystem. Fly deployment must additionally isolate its network from databases and other owners; container user permissions are not a network boundary.
 
+## Browser ownership
+
+`apps/browser` contains the browser control gate. It fences agent and human access by holder and epoch, drains active automation before takeover, drops observations after ownership changes, and starts frozen after restart. Leases last at most ten minutes; expiry aborts active work and requires an explicit authority transition. The integrating service must hold an exclusive profile lock, persist every transition, validate the current owner/task/permissions before granting a lease, and check every viewer input/output frame through the gate. Authenticated browser hosting and its web viewer are not yet wired into the application.
+
 ## Google sign-in
 
 Set `DATABASE_URL`, `DIRECT_DATABASE_URL`, `BETTER_AUTH_URL`, `WEB_ORIGIN`, `BETTER_AUTH_SECRET` (at least 32 random characters), `OWNER_EMAIL`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` in the root `.env.local`. Use a local database and a development Google Web application client. Register `http://127.0.0.1:3001/api/auth/callback/google` as its redirect URI. Run `bun run db:migrate`, then `bun run dev:server` and `bun run dev` in separate terminals. Open `http://127.0.0.1:5173`; Vite proxies `/api` to the local API. Use `127.0.0.1` consistently for local cookies and redirects. Production requires HTTPS origins, a separate OAuth client, and same-origin API routing.

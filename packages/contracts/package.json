@@ -7,6 +7,7 @@
     "./actions": "./src/actions.ts",
     "./artifacts": "./src/artifacts.ts",
     "./authorization": "./src/authorization.ts",
+    "./browser": "./src/browser.ts",
     "./bursts": "./src/bursts.ts",
     "./calendar": "./src/calendar.ts",
     "./capabilities": "./src/capabilities.ts",
