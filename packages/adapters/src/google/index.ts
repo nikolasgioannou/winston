@@ -21,6 +21,8 @@ export { prepareCalendarMutation, readCalendarMutationArguments } from "./calend
 export { createCalendarMutationExecutor } from "./calendar-mutation-executor";
 export { formatCalendarMutationApproval } from "./calendar-mutation-review";
 export { createCalendarMutationGateway } from "./calendar-mutation-gateway";
+export { createCalendarReconciliationGateway } from "./calendar-reconciliation-gateway";
+export { calendarMutationStateMatches } from "./calendar-reconciliation-evidence";
 export { createCalendarAvailabilityReader } from "./calendar-availability";
 export { createConnectedReadGateway } from "./cli-reads";
 

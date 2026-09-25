@@ -35,6 +35,26 @@ const event = {
   transparency: "opaque",
 };
 
+test("Calendar reconciliation takes only an operation and explicit observation key", () => {
+  const args = ["calendar", "reconcile", "--id", accountId, "--key", "check-result"];
+  const parsed = parseCommand(args);
+  assert.equal(parsed.kind, "request");
+  assert.deepEqual(parsed.request, {
+    version: 1,
+    command: "calendar.reconcile",
+    id: accountId,
+    key: "check-result",
+  });
+  for (const invalid of [
+    args.slice(0, -2),
+    [...args, "--account", accountId],
+    [...args, "--key", "second"],
+    ["calendar", "reconcile", "--id", "invalid", "--key", "check"],
+  ]) {
+    assert.throws(() => parseCommand(invalid));
+  }
+});
+
 test("Calendar CLI preserves typed event, changes, exact version and recurrence scope", () => {
   const create = parseCommand([
     "calendar",

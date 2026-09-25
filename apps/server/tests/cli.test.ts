@@ -19,6 +19,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let responsibilityCalls = 0;
   let deviceCalls = 0;
   let calendarCalls = 0;
+  let reconciliationCalls = 0;
   const cli: OwnerTransaction["cli"] = {
     responsibility: (credential, input) => {
       assert.equal(
@@ -73,6 +74,13 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const { app } = createApi({
     groups: {
       task: createCliTaskGroup(database, {
+        calendarReconciliation: (credential, input, signal) => {
+          assert.equal(credential.token, controlToken);
+          assert.equal(input.command, "calendar.reconcile");
+          assert.equal(signal.aborted, false);
+          reconciliationCalls++;
+          return Promise.resolve({ version: 1, status: "unknown", message: "Not verified." });
+        },
         calendarMutations: (credential, input, signal) => {
           assert.equal(credential.token, controlToken);
           assert.equal(input.intent.kind, "delete");
@@ -160,6 +168,21 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
     );
   }
   assert.equal(calendarCalls, 1);
+  const reconciliation = {
+    version: 1,
+    command: "calendar.reconcile",
+    id: randomUUID(),
+    key: "readback",
+  };
+  assert.equal((await request(reconciliation, controlToken, workspaceId, controlPath)).status, 200);
+  assert.equal((await request(reconciliation, token, workspaceId, controlPath)).status, 401);
+  assert.equal((await request(reconciliation)).status, 400);
+  assert.equal(
+    (await request({ ...reconciliation, event: {} }, controlToken, workspaceId, controlPath))
+      .status,
+    400,
+  );
+  assert.equal(reconciliationCalls, 1);
   const deviceCommand = {
     version: 1,
     command: "devices.command",

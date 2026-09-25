@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
-import { createCalendarMutationGateway, prepareCalendarMutation } from "@winston/adapters/google";
+import {
+  createCalendarMutationGateway,
+  createCalendarReconciliationGateway,
+  prepareCalendarMutation,
+  readCalendarMutationArguments,
+} from "@winston/adapters/google";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import type { CalendarMutationInput } from "@winston/contracts/calendar-mutations";
 import type { CliResult } from "@winston/contracts/cli";
@@ -95,8 +100,33 @@ test("Calendar gateway preserves read/write approvals and prevents replacement r
       fetch: (url, init) => provider(url, init),
     });
     const { app } = createApi({
-      groups: { task: createCliTaskGroup(database, { calendarMutations: mutation }) },
+      groups: {
+        task: createCliTaskGroup(database, {
+          calendarMutations: mutation,
+          calendarReconciliation: createCalendarReconciliationGateway({
+            database,
+            google,
+            fetch: (url, init) => provider(url, init),
+          }),
+        }),
+      },
     });
+    async function reconcile(authority: ServiceRequest, id: string, key: string) {
+      const parsed = parseCommand(["calendar", "reconcile", "--id", id, "--key", key]);
+      assert.equal(parsed.kind, "request");
+      return callGateway(
+        {
+          version: 1,
+          environment: "local",
+          workspaceId,
+          token: `wst_${"r".repeat(43)}`,
+          controlToken: authority.token,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        parsed.request,
+        (url, init) => Promise.resolve(app.request(new URL(url).pathname, init)),
+      );
+    }
     async function gateway(
       authority: ServiceRequest,
       input: CalendarMutationInput,
@@ -369,6 +399,11 @@ test("Calendar gateway preserves read/write approvals and prevents replacement r
       try {
         const blocked = await gateway(access, { ...create, key: "replacement" }, signal);
         assert.equal(blocked.status, "unknown");
+        assert.ok(blocked.referenceId);
+        assert.equal(
+          (await reconcile(access, blocked.referenceId, "still-dispatching")).status,
+          "unknown",
+        );
         assert.equal(uncertainCalls, 1);
       } finally {
         release.resolve(undefined);
@@ -380,6 +415,214 @@ test("Calendar gateway preserves read/write approvals and prevents replacement r
         "unknown",
       );
       assert.equal(uncertainCalls, 1);
+
+      assert.ok(unknown.referenceId);
+      const unknownId = unknown.referenceId;
+      const saved = await database.transaction(ownerId, ({ actions }) => actions.find(unknownId));
+      assert.ok(saved);
+      const lostPlan = readCalendarMutationArguments(saved.request.arguments).plan;
+      let observations = 0;
+      provider = (url, init) => {
+        assert.equal(init.method, "GET");
+        assert.equal(url.pathname.endsWith(`/${lostPlan.eventId}`), true);
+        observations++;
+        return Promise.resolve(
+          Response.json({ ...lostPlan.body, eventType: "default", etag: '"observed"' }),
+        );
+      };
+      const readApproval = await reconcile(access, unknownId, "check-lost-response");
+      assert.equal(readApproval.status, "waiting");
+      assert.equal(observations, 0);
+      current = await approve(readApproval, current);
+      access = await credential(current);
+      const verified = await reconcile(access, unknownId, "check-lost-response");
+      assert.equal(verified.status, "ok");
+      assert.match(JSON.stringify(verified), /does not establish who/);
+      assert.equal(observations, 1);
+      assert.equal((await reconcile(access, unknownId, "check-lost-response")).status, "ok");
+      assert.equal(observations, 1);
+      assert.equal((await reconcile(access, randomUUID(), "missing")).status, "denied");
+      assert.equal(uncertainCalls, 1);
+
+      await database.transaction(ownerId, ({ authorization }) =>
+        authorization.put({
+          revision: 1,
+          target: { kind: "connection", id: accountId, resource: calendarId },
+          operation: "calendar.read",
+          decision: "allow",
+        }),
+      );
+      current = await task();
+      access = await credential(current);
+      let inserted: Record<string, unknown> = {};
+      let readStatus = 200;
+      let mismatch = true;
+      provider = (_url, init) => {
+        if (init.method === "POST") {
+          assert.equal(typeof init.body, "string");
+          if (typeof init.body !== "string") throw new Error("Expected body");
+          inserted = JSON.parse(init.body) as Record<string, unknown>;
+          uncertainCalls++;
+          return Promise.reject(new Error("Response lost after insertion"));
+        }
+        assert.equal(init.method, "GET");
+        observations++;
+        return Promise.resolve(
+          readStatus === 200
+            ? Response.json({
+                ...inserted,
+                ...(mismatch ? { summary: "Different" } : {}),
+                eventType: "default",
+                etag: '"observed"',
+              })
+            : new Response(null, { status: readStatus }),
+        );
+      };
+      const another = await gateway(access, create, signal);
+      assert.equal(another.status, "unknown");
+      assert.ok(another.referenceId);
+      const anotherId = another.referenceId;
+      assert.equal((await reconcile(access, anotherId, "first-observation")).status, "unknown");
+      const beforeCached = observations;
+      mismatch = false;
+      assert.equal((await reconcile(access, anotherId, "first-observation")).status, "unknown");
+      assert.equal(observations, beforeCached);
+      for (const status of [404, 410, 503]) {
+        readStatus = status;
+        assert.equal(
+          (await reconcile(access, anotherId, `status-${String(status)}`)).status,
+          "unknown",
+        );
+      }
+      readStatus = 200;
+      assert.equal((await reconcile(access, anotherId, "fresh-observation")).status, "ok");
+      assert.equal(uncertainCalls, 2);
+
+      for (const kind of ["update", "delete"] as const) {
+        current = await task();
+        access = await credential(current);
+        let written = false;
+        provider = (_url, init) => {
+          if (init.method === "GET")
+            return Promise.resolve(
+              Response.json(
+                written
+                  ? kind === "delete"
+                    ? { id: original.id, etag: '"deleted"', status: "cancelled" }
+                    : { ...original, summary: "After", etag: '"changed"' }
+                  : original,
+              ),
+            );
+          assert.equal(init.method, kind === "delete" ? "DELETE" : "PATCH");
+          assert.equal(written, false);
+          written = true;
+          uncertainCalls++;
+          return Promise.reject(new Error("Accepted but reply lost"));
+        };
+        const selection = {
+          accountId,
+          calendarId,
+          eventId: original.id,
+          etag: original.etag,
+          sendUpdates: "none" as const,
+          scope: { kind: "single" as const },
+        };
+        const operation = await gateway(
+          access,
+          {
+            key: `lost-${kind}`,
+            intent:
+              kind === "update"
+                ? { ...selection, kind, changes: { summary: "After" } }
+                : { ...selection, kind },
+          },
+          signal,
+        );
+        assert.equal(operation.status, "unknown");
+        assert.ok(operation.referenceId);
+        assert.equal((await reconcile(access, operation.referenceId, "check")).status, "ok");
+      }
+      assert.equal(uncertainCalls, 4);
+
+      current = await task();
+      access = await credential(current);
+      let deniedReads = 0;
+      provider = (_url, init) => {
+        if (init.method === "GET") deniedReads++;
+        return Promise.reject(new Error("Uncertain synthetic provider"));
+      };
+      const revoked = await gateway(access, create, signal);
+      assert.equal(revoked.status, "unknown");
+      assert.ok(revoked.referenceId);
+      await database.transaction(ownerId, async ({ authorization }) => {
+        assert.ok(
+          await authorization.put({
+            revision: 2,
+            target: { kind: "connection", id: accountId, resource: calendarId },
+            operation: "calendar.read",
+            decision: "deny",
+          }),
+        );
+      });
+      assert.equal(
+        (await reconcile(access, revoked.referenceId, "revoked-read")).status,
+        "unknown",
+      );
+      assert.equal(deniedReads, 0);
+      assert.equal(
+        (
+          await database.transaction(ownerId, ({ actions }) =>
+            actions.find(revoked.referenceId ?? ""),
+          )
+        )?.state,
+        "unknown",
+      );
+
+      const otherOwner = randomUUID();
+      const otherWorkspace = randomUUID();
+      const otherCredential = await database.transaction(
+        otherOwner,
+        async ({ owners, workspaces, tasks, capabilities }) => {
+          await owners.ensure();
+          await workspaces.register(otherWorkspace, "Other owner");
+          await workspaces.setState(otherWorkspace, 0, "active");
+          const queued = await tasks.create({
+            key: "other",
+            objective: "Other task",
+            sourceMessageIds: [],
+          });
+          const running = await tasks.claim(queued.id, queued.revision);
+          const issued = await capabilities.issue({
+            kind: "workspace",
+            subjectId: otherWorkspace,
+            resourceId: otherWorkspace,
+            resourceRevision: 1,
+            taskId: running.id,
+            revision: running.revision,
+            generation: running.generation,
+            operation: "gateway:control",
+            credential: null,
+          });
+          return {
+            token: issued.token,
+            kind: "workspace" as const,
+            subjectId: otherWorkspace,
+            resourceId: otherWorkspace,
+            operation: "gateway:control" as const,
+          };
+        },
+      );
+      const otherResult = await createCalendarReconciliationGateway({
+        database,
+        google,
+        fetch: (url, init) => provider(url, init),
+      })(
+        otherCredential,
+        { version: 1, command: "calendar.reconcile", id: unknownId, key: "other-owner" },
+        signal,
+      );
+      assert.equal(otherResult.status, "denied");
+      assert.equal(deniedReads, 0);
 
       // Both plans may be prepared before either is claimed; claiming must fence them too.
       current = await task();

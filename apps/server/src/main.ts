@@ -40,6 +40,7 @@ import { Hono } from "hono";
 import type { HttpEnvironment, Identity } from "./http/app";
 import {
   createGoogleConnections,
+  createCalendarReconciliationGateway,
   createGoogleOAuth,
   createConnectedReadGateway,
   createCalendarMutationGateway,
@@ -98,6 +99,7 @@ callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
 let calendarMutations: ReturnType<typeof createCalendarMutationGateway> | undefined;
+let calendarReconciliation: ReturnType<typeof createCalendarReconciliationGateway> | undefined;
 if (connectionConfig) {
   const connections = createGoogleConnections({
     database,
@@ -106,6 +108,7 @@ if (connectionConfig) {
   });
   connectedReads = createConnectedReadGateway({ database, google: connections });
   calendarMutations = createCalendarMutationGateway({ database, google: connections });
+  calendarReconciliation = createCalendarReconciliationGateway({ database, google: connections });
   owner.route("/connections", createConnectionOwnerRouter(connections));
   owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
   callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
@@ -205,6 +208,7 @@ const deviceTransport = createDeviceSocketTransport(database, {
 const cliTasks = createCliTaskGroup(database, {
   ...(connectedReads ? { read: connectedReads } : {}),
   ...(calendarMutations ? { calendarMutations } : {}),
+  ...(calendarReconciliation ? { calendarReconciliation } : {}),
   ...(storage
     ? {
         publish: createWorkspaceFilePublisher({

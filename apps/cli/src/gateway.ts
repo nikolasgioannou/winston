@@ -47,7 +47,8 @@ export async function callGateway(
       credentials: "omit",
       signal: AbortSignal.timeout(
         Math.min(
-          cliCalendarMutationRequestSchema.safeParse(request).success
+          cliCalendarMutationRequestSchema.safeParse(request).success ||
+            request.command === "calendar.reconcile"
             ? 55_000
             : cliReadRequestSchema.safeParse(request).success
               ? 45_000

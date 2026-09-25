@@ -184,7 +184,12 @@ export function createCalendarMutationGateway(options: Options) {
         return {
           version: 1,
           status: "ok",
-          data: { actionId: action.id, eventId: plan.eventId, kind: plan.request.kind },
+          data: {
+            actionId: action.id,
+            eventId: plan.eventId,
+            kind: plan.request.kind,
+            outcome: action.outcome,
+          },
         };
       }
       if (["denied", "invalidated"].includes(action.state))

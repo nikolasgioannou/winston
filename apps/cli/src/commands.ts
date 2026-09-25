@@ -2,6 +2,14 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "calendar.reconcile",
+    id: true,
+    flags: ["id", "key"],
+    description:
+      "Read back an uncertain Calendar operation under current read permissions. This never resends the write. Reuse the observation key after read approval; use a new key only for a deliberate later refresh. Only a succeeded state confirms the requested event state; notification delivery remains unverified.",
+    usage: "--id <action-uuid> --key <stable-observation-key>",
+  },
+  {
     command: "calendar.create",
     id: false,
     flags: ["account", "calendar", "key", "notify", "event"],

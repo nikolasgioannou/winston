@@ -10,7 +10,7 @@ import { timestampSnapshot, validTimezone } from "./timezone";
 
 const timezone = z.string().refine(validTimezone);
 const instant = z.iso.datetime({ offset: true });
-const etag = z
+export const calendarMutationEtagSchema = z
   .string()
   .min(1)
   .max(1024)
@@ -114,7 +114,7 @@ const common = {
 const existing = {
   ...common,
   eventId: calendarEventIdSchema,
-  etag,
+  etag: calendarMutationEtagSchema,
   scope: calendarMutationScopeSchema,
 };
 
@@ -161,7 +161,7 @@ export const calendarMutationPlanSchema = z.strictObject({
   eventId: calendarEventIdSchema,
   method: z.enum(["POST", "PATCH", "DELETE"]),
   path: z.string().min(1).max(8192),
-  ifMatch: etag.nullable(),
+  ifMatch: calendarMutationEtagSchema.nullable(),
   sendUpdates: z.enum(["all", "externalOnly", "none"]),
   body: z.record(z.string(), z.json()).nullable(),
   before: calendarProviderEventSchema.nullable(),

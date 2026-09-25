@@ -2,6 +2,14 @@ import { z } from "zod";
 import { calendarMutationIntentSchema, calendarMutationInputSchema } from "./calendar-mutations";
 
 const common = { version: z.literal(1), key: z.string().min(1).max(100) };
+export const cliCalendarReconciliationRequestSchema = z.strictObject({
+  ...common,
+  command: z.literal("calendar.reconcile"),
+  id: z.uuid(),
+});
+export type CliCalendarReconciliationRequest = z.infer<
+  typeof cliCalendarReconciliationRequestSchema
+>;
 export const cliCalendarMutationRequestSchema = z.discriminatedUnion("command", [
   calendarMutationIntentSchema.options[0]
     .omit({ kind: true })

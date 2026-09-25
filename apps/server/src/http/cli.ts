@@ -9,6 +9,7 @@ import {
   type CliReadRequest,
   type CliResult,
   type CliDeviceRequest,
+  type CliCalendarReconciliationRequest,
 } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { serviceRequestSchema } from "@winston/contracts/capabilities";
@@ -41,6 +42,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  calendarReconciliation?: (
+    credential: ServiceRequest,
+    request: CliCalendarReconciliationRequest,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   read?: (
     credential: ServiceRequest,
     request: CliReadRequest,
@@ -63,7 +69,7 @@ type Handlers = {
 
 export function createCliTaskGroup(
   database: Database,
-  { read, publish, files, devices, calendarMutations }: Handlers = {},
+  { read, publish, files, devices, calendarMutations, calendarReconciliation }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/publish", async (context) => {
@@ -77,6 +83,16 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "calendar.reconcile")
+      return context.json(
+        calendarReconciliation
+          ? await calendarReconciliation(authority, request, context.req.raw.signal)
+          : {
+              version: 1,
+              status: "unavailable",
+              message: "Calendar reconciliation is not configured.",
+            },
+      );
     const calendar = cliCalendarMutationRequestSchema.safeParse(request);
     if (calendar.success)
       return context.json(
@@ -143,7 +159,10 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
-    if (cliCalendarMutationRequestSchema.safeParse(request).success)
+    if (
+      cliCalendarMutationRequestSchema.safeParse(request).success ||
+      request.command === "calendar.reconcile"
+    )
       throw new RequestError("invalid_request");
     if (request.command === "devices.result")
       return devices
