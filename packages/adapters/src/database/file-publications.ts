@@ -7,13 +7,18 @@ import type { DatabaseTransaction } from "./owners";
 import { capabilityRepository } from "./capabilities";
 import { authorizationRepository } from "./authorization";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
+import { actionRepository } from "./actions";
+import { prepareFilePublication } from "./file-publication-actions";
 
 export function filePublicationRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
+    prepare: (credential: ServiceRequest, input: FilePublication) =>
+      prepareFilePublication(transaction, ownerId, credential, input),
     async authorize(
       credential: ServiceRequest,
       input: FilePublication,
       expected?: AuthorizationSnapshot,
+      proof?: { id: string; token?: string },
     ) {
       const request = filePublicationSchema.parse(input);
       await transaction.execute(
@@ -35,7 +40,20 @@ export function filePublicationRepository(transaction: DatabaseTransaction, owne
         },
         expected,
       );
-      if (policy.decision !== "allow" || !policy.snapshot)
+      const approved = proof
+        ? await actionRepository(transaction, ownerId).authorizeFilePublication({
+            ...proof,
+            task: {
+              id: authority.taskId,
+              revision: authority.revision,
+              generation: authority.generation,
+            },
+            workspaceId: authority.resourceId,
+            publication: request,
+          })
+        : false;
+      if ((proof && !approved) || policy.decision === "deny") return { status: "denied" as const };
+      if ((policy.decision !== "allow" && !approved) || !policy.snapshot)
         return {
           status: policy.decision === "ask" ? ("approval_required" as const) : ("denied" as const),
         };

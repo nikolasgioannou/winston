@@ -177,7 +177,7 @@ export const commands = [
   {
     command: "files.publish",
     description:
-      "Publish a completed staged file to private storage. Reuse the same key and unchanged file to recover its artifact reference.",
+      "Publish a completed staged file to private storage after any required exact-file approval. Reuse the same key and unchanged file after approval or interruption. Unknown outcomes inspect the existing upload without repeating it. Publishing does not send the file to Telegram.",
     id: false,
     flags: ["path", "key", "type"],
     usage: "--path <absolute-file-path> --key <request-key> [--type <media-type>]",

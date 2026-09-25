@@ -54,6 +54,14 @@ export function artifactRepository(transaction: DatabaseTransaction, ownerId: st
 
   return {
     find,
+    async findByKey(key: string) {
+      if (!key || key.length > 200) throw new Error("Invalid artifact request key.");
+      const result = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.artifacts
+        WHERE owner_id = ${ownerId}::uuid AND request_key = ${key}
+      `);
+      return result.rows[0] ? artifactSchema.parse(result.rows[0].document) : null;
+    },
     async prepare(inputKey: string, inputMetadata: ArtifactMetadata) {
       if (!inputKey || inputKey.length > 200) throw new Error("Invalid artifact request key.");
       const metadata = artifactMetadataSchema.parse(inputMetadata);

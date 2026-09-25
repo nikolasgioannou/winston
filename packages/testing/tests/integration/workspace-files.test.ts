@@ -89,7 +89,7 @@ test("workspace publication derives provenance and keeps incomplete or unauthori
       assert.equal(
         (await publish(first.credential, { ...request, name: "changed.txt" }, bytes(), signal))
           .status,
-        "unknown",
+        "unavailable",
       );
       assert.equal(count(), 1);
       const second = await start();
@@ -150,7 +150,7 @@ test("workspace publication derives provenance and keeps incomplete or unauthori
       );
       assert.equal(
         (await publish(second.credential, { ...request, key: "approval" }, bytes(), signal)).status,
-        "approval_required",
+        "waiting",
       );
       assert.equal(count(), before);
       await database.transaction(ownerId, ({ authorization }) =>

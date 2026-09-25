@@ -26,6 +26,7 @@ import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devi
 import { deviceExecutionSchema } from "@winston/contracts/device-executions";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
+import { filePublicationSchema, type FilePublication } from "@winston/contracts/artifacts";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
 import { eventRepository } from "./events";
@@ -410,6 +411,45 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       return deadline.rows.length === 1;
     },
     // Server-side adapters only. Dispatch tokens never leave the API process.
+    async authorizeFilePublication(input: {
+      id: string;
+      token?: string;
+      task: ActionTask;
+      workspaceId: string;
+      publication: FilePublication;
+    }) {
+      const worker = actionTaskSchema.parse(input.task);
+      const publication = filePublicationSchema.parse(input.publication);
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      const { target, operation } = action.request.authorization;
+      if (
+        target.kind !== "workspace" ||
+        target.id !== input.workspaceId ||
+        target.resource !== null ||
+        operation !== "workspace.file.read" ||
+        action.request.task.id !== worker.id ||
+        canonical(action.request.arguments) !== canonical(publication)
+      )
+        return false;
+      if (input.token) {
+        if (
+          stored.tokenHash !== hash(input.token) ||
+          action.state !== "dispatching" ||
+          canonical(action.dispatchTask) !== canonical(worker)
+        )
+          return false;
+      } else if (!["succeeded", "unknown"].includes(action.state)) return false;
+      const current = await task(worker.id);
+      if (!running(current, worker) || !sameIntent(current, action)) return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
     authorizeConnectionRead(input: ConnectionProof) {
       return authorizeConnection(input, ["gmail.read", "calendar.read"]);
     },
