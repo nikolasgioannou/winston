@@ -86,6 +86,7 @@ export const calendarProviderEventSchema = z
           resource: z.boolean().optional(),
           comment: z.string().max(16384).optional(),
           additionalGuests: z.number().int().nonnegative().optional(),
+          organizer: z.boolean().optional(),
           responseStatus: z.enum(["needsAction", "declined", "tentative", "accepted"]).optional(),
         }),
       )

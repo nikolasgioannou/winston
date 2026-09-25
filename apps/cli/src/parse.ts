@@ -46,6 +46,7 @@ export function parseCommand(args: string[]): ParsedCommand {
       after: { type: "string" },
       purpose: { type: "string" },
       scope: { type: "string" },
+      response: { type: "string" },
       responsibility: { type: "string" },
       "agreement-revision": { type: "string" },
       argv: { type: "string" },
@@ -117,7 +118,8 @@ export function parseCommand(args: string[]): ParsedCommand {
   if (
     command.command === "calendar.create" ||
     command.command === "calendar.update" ||
-    command.command === "calendar.delete"
+    command.command === "calendar.delete" ||
+    command.command === "calendar.rsvp"
   ) {
     const allowed: readonly string[] = command.flags;
     if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))

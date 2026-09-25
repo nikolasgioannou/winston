@@ -20,6 +20,9 @@ export const cliCalendarMutationRequestSchema = z.discriminatedUnion("command", 
   calendarMutationIntentSchema.options[2]
     .omit({ kind: true })
     .extend({ ...common, command: z.literal("calendar.delete") }),
+  calendarMutationIntentSchema.options[3]
+    .omit({ kind: true })
+    .extend({ ...common, command: z.literal("calendar.rsvp") }),
 ]);
 export type CliCalendarMutationRequest = z.infer<typeof cliCalendarMutationRequestSchema>;
 
@@ -35,11 +38,17 @@ export function calendarMutationInputFromCli(input: CliCalendarMutationRequest) 
       ? { ...target, kind: "create", event: request.event }
       : {
           ...target,
-          kind: request.command === "calendar.update" ? "update" : "delete",
+          kind:
+            request.command === "calendar.update"
+              ? "update"
+              : request.command === "calendar.rsvp"
+                ? "rsvp"
+                : "delete",
           eventId: request.eventId,
           etag: request.etag,
           scope: request.scope,
           ...(request.command === "calendar.update" ? { changes: request.changes } : {}),
+          ...(request.command === "calendar.rsvp" ? { response: request.response } : {}),
         };
   return calendarMutationInputSchema.parse({ key: request.key, intent });
 }

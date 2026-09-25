@@ -10,6 +10,7 @@ import {
   type CalendarMutationTiming,
 } from "@winston/contracts/calendar-mutations";
 import { canonicalJson, type JsonValue } from "@winston/contracts/json";
+import { calendarRsvpBody } from "./calendar-rsvp";
 
 type Attendee = CalendarMutationSnapshot["event"]["attendees"][number];
 
@@ -145,7 +146,9 @@ export function prepareCalendarMutation(operationId: string, input: unknown, sna
       ? { id: eventId, ...fieldsBody(request.event) }
       : request.kind === "update"
         ? fieldsBody(request.changes, previous?.event.attendees)
-        : null;
+        : request.kind === "rsvp" && previous
+          ? calendarRsvpBody(request, previous.event)
+          : null;
   const changedAttendees =
     request.kind === "create"
       ? request.event.attendees
@@ -156,6 +159,9 @@ export function prepareCalendarMutation(operationId: string, input: unknown, sna
     [
       ...(previous?.event.attendees.flatMap((item) => (item.email ? [item.email] : [])) ?? []),
       ...(changedAttendees?.map((item) => item.email) ?? []),
+      ...(request.kind === "rsvp" && previous?.event.organizer?.email
+        ? [previous.event.organizer.email]
+        : []),
     ].map((email) => email.toLowerCase()),
   );
 
@@ -167,7 +173,7 @@ export function prepareCalendarMutation(operationId: string, input: unknown, sna
     method:
       request.kind === "create"
         ? ("POST" as const)
-        : request.kind === "update"
+        : request.kind === "update" || request.kind === "rsvp"
           ? ("PATCH" as const)
           : ("DELETE" as const),
     path: request.kind === "create" ? base : `${base}/${encodeURIComponent(eventId)}`,

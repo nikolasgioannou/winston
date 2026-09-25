@@ -126,6 +126,11 @@ export const calendarMutationRequestSchema = z.discriminatedUnion("kind", [
     changes: calendarMutationChangesSchema,
   }),
   z.strictObject({ ...existing, kind: z.literal("delete") }),
+  z.strictObject({
+    ...existing,
+    kind: z.literal("rsvp"),
+    response: z.enum(["accepted", "tentative", "declined", "needsAction"]),
+  }),
 ]);
 
 export type CalendarMutationRequest = z.infer<typeof calendarMutationRequestSchema>;
@@ -153,6 +158,7 @@ export const calendarMutationIntentSchema = z.discriminatedUnion("kind", [
   calendarMutationRequestSchema.options[0].omit({ target: true }).extend(intentTarget),
   calendarMutationRequestSchema.options[1].omit({ target: true }).extend(intentTarget),
   calendarMutationRequestSchema.options[2].omit({ target: true }).extend(intentTarget),
+  calendarMutationRequestSchema.options[3].omit({ target: true }).extend(intentTarget),
 ]);
 export const calendarMutationPlanSchema = z.strictObject({
   version: z.literal(1),

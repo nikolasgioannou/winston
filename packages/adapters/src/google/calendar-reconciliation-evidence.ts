@@ -5,6 +5,7 @@ import {
   type CalendarMutationPlan,
 } from "@winston/contracts/calendar-mutations";
 import { canonicalJson } from "@winston/contracts/json";
+import { calendarRsvpMatches } from "./calendar-rsvp";
 
 function sameTime(expected: unknown, observed: unknown) {
   const left = calendarEventTimeSchema.safeParse(expected);
@@ -45,7 +46,12 @@ export function calendarMutationStateMatches(inputPlan: CalendarMutationPlan, in
     event.endTimeUnspecified
   )
     return false;
-  const fields = plan.request.kind === "create" ? plan.request.event : plan.request.changes;
+  const fields =
+    plan.request.kind === "create"
+      ? plan.request.event
+      : plan.request.kind === "update"
+        ? plan.request.changes
+        : {};
   const scope = plan.request.kind === "create" ? null : plan.request.scope;
   if (scope?.kind === "instance") {
     if (
@@ -56,6 +62,7 @@ export function calendarMutationStateMatches(inputPlan: CalendarMutationPlan, in
   } else if (event.recurringEventId) return false;
   const expectedRecurrence = fields.recurrence ?? plan.before?.recurrence ?? [];
   if (canonicalJson(event.recurrence ?? []) !== canonicalJson(expectedRecurrence)) return false;
+  if (plan.request.kind === "rsvp") return calendarRsvpMatches(plan.request, event);
   for (const key of ["summary", "description", "location"] as const) {
     if (fields[key] !== undefined && fields[key] !== (event[key] ?? "")) return false;
   }

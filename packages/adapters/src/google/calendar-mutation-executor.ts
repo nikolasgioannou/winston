@@ -2,6 +2,7 @@ import type { ActionOutcome, ActionTask } from "@winston/contracts/actions";
 import { calendarProviderEventSchema } from "@winston/contracts/calendar";
 import type { GoogleReadOptions } from "./read-request";
 import { readCalendarMutationArguments } from "./calendar-mutation-plan";
+import { calendarMutationStateMatches } from "./calendar-reconciliation-evidence";
 import { createConnectionTargets } from "./targets";
 
 async function responseEvent(response: Response) {
@@ -117,6 +118,8 @@ export function createCalendarMutationExecutor(options: Options) {
           const event = await responseEvent(response);
           if (event.id !== plan.eventId || !event.etag || event.status === "cancelled")
             throw new Error("Calendar result did not confirm the planned event.");
+          if (plan.request.kind === "rsvp" && !calendarMutationStateMatches(plan, event))
+            throw new Error("Calendar result did not confirm the selected attendee's response.");
         }
         outcome = {
           state: "succeeded",

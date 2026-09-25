@@ -5,6 +5,7 @@ import type {
   CalendarMutationTiming,
 } from "@winston/contracts/calendar-mutations";
 import { readCalendarMutationArguments } from "./calendar-mutation-plan";
+import { calendarRsvpAttendee } from "./calendar-rsvp";
 
 // Keep provider/user text visibly inside a quoted value, including directional controls.
 function quote(value: string) {
@@ -97,7 +98,9 @@ export function formatCalendarMutationApproval(action: ActionRecord) {
       ? "Create Calendar event"
       : request.kind === "update"
         ? "Update Calendar event"
-        : "Delete Calendar event",
+        : request.kind === "rsvp"
+          ? "Respond to Calendar invitation"
+          : "Delete Calendar event",
     `Account: ${quote(request.target.email)}`,
     `Calendar: ${quote(request.target.label)} · ${quote(request.target.calendarId)}`,
     `Scope: ${scope}`,
@@ -119,6 +122,12 @@ export function formatCalendarMutationApproval(action: ActionRecord) {
     );
   if (request.kind === "create") lines.push("", ...fields(request.event));
   if (request.kind === "update") lines.push("", "Changes:", ...fields(request.changes));
+  if (request.kind === "rsvp" && plan.before)
+    lines.push(
+      "",
+      `Responding as: ${quote(request.target.email)}`,
+      `Response: ${calendarRsvpAttendee(request, plan.before).responseStatus ?? "Unspecified"} → ${request.response}`,
+    );
   const notifications = {
     all: "Request update emails to all guests.",
     externalOnly: "Request update emails only to guests using non-Google calendars.",

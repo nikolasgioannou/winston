@@ -72,6 +72,15 @@ export const commands = [
       "--account <uuid> --calendar <calendar-id> --key <stable-key> --notify <all|externalOnly|none> --id <event-id> --etag <quoted-provider-etag> --scope <JSON> --changes <JSON>",
   },
   {
+    command: "calendar.rsvp",
+    id: true,
+    flags: ["account", "calendar", "key", "notify", "id", "etag", "scope", "response"],
+    description:
+      "Respond only as the selected account's own attendee on an inspected invitation. Requires the exact ETag, explicit recurrence scope and notification intent. Other guests remain unchanged. Resume the exact key and arguments after approval; reconcile uncertainty instead of resending.",
+    usage:
+      "--account <uuid> --calendar <calendar-id> --key <stable-key> --notify <all|externalOnly|none> --id <event-id> --etag <quoted-provider-etag> --scope <JSON> --response <accepted|tentative|declined|needsAction>",
+  },
+  {
     command: "calendar.delete",
     id: true,
     flags: ["account", "calendar", "key", "notify", "id", "etag", "scope"],

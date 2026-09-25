@@ -13,6 +13,7 @@ type Options = {
   id?: string;
   etag?: string;
   scope?: string;
+  response?: string;
 };
 
 export function parseCalendarMutation(
@@ -31,5 +32,6 @@ export function parseCalendarMutation(
     ...(values.id === undefined ? {} : { eventId: values.id }),
     ...(values.etag === undefined ? {} : { etag: values.etag }),
     ...(values.scope === undefined ? {} : { scope: JSON.parse(values.scope) as unknown }),
+    ...(values.response === undefined ? {} : { response: values.response }),
   });
 }
