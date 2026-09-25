@@ -7,6 +7,7 @@ import {
 } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import type { DeviceServerIdentity } from "@winston/contracts/device-registry";
+import { deviceOperationSchema } from "@winston/contracts/devices";
 import type { createDeviceDispatcher } from "./dispatch";
 import { createDeviceRequestRouting } from "./routing";
 import { deviceCommandResult } from "./result";
@@ -31,7 +32,7 @@ export function createDeviceCli(options: {
   ): Promise<Response> => {
     const request = cliDeviceRequestSchema.parse(input);
     const identity = await database.authenticateService(credential);
-    const expected = request.command === "devices.command" ? "gateway:control" : "gateway:read";
+    const expected = request.command === "devices.result" ? "gateway:read" : "gateway:control";
     if (!identity || identity.operation !== expected)
       return result("denied", "Task authority is unavailable or expired.");
     signal.throwIfAborted();
@@ -44,7 +45,16 @@ export function createDeviceCli(options: {
             status: "denied",
             message: "Task read authority is unavailable or expired.",
           };
-        return deviceCommandResult(scope, authority.taskId, id, after);
+        return deviceCommandResult(
+          scope,
+          {
+            id: authority.taskId,
+            revision: authority.revision,
+            generation: authority.generation,
+          },
+          id,
+          after,
+        );
       });
     if (request.command === "devices.result")
       return Response.json(await read(request.id, request.after));
@@ -57,12 +67,10 @@ export function createDeviceCli(options: {
           revision: authority.revision,
           generation: authority.generation,
         };
-        const action = await scope.deviceActions.prepare(
-          task,
-          request.key,
-          request.id,
-          request.operation,
-        );
+        const action =
+          request.command === "devices.read"
+            ? await scope.deviceActions.prepareFileRead(task, request.key, request.id, request.path)
+            : await scope.deviceActions.prepare(task, request.key, request.id, request.operation);
         const policy = await scope.authorization.evaluate(
           action.request.authorization,
           action.snapshot ?? undefined,
@@ -76,7 +84,7 @@ export function createDeviceCli(options: {
             blocker: {
               kind: "approval",
               referenceId: action.id,
-              detail: "Waiting for permission to run this command on the selected computer.",
+              detail: "Waiting for permission to perform this operation on the selected computer.",
             },
           });
         }
@@ -87,7 +95,7 @@ export function createDeviceCli(options: {
           return error.reason === "conflict"
             ? result(
                 "invalid_input",
-                "This key belongs to a different device command. Keep its original target and arguments.",
+                "This key belongs to a different device operation. Keep its original target and arguments.",
               )
             : result("unavailable", "The computer is unavailable to this task.");
         throw error;
@@ -100,12 +108,13 @@ export function createDeviceCli(options: {
     if (action.state === "pending")
       return result(
         "approval_required",
-        "Waiting for approval of this exact command. Resume with the same key and arguments.",
+        "Waiting for approval of this exact operation. Resume with the same key and arguments.",
         action.id,
       );
     if (action.state === "denied" || action.state === "invalidated")
       return result("denied", "This command is no longer permitted.", action.id);
     if (action.state !== "approved") return Response.json(await read(action.id));
+    const operation = deviceOperationSchema.parse(action.request.arguments);
     const destination = await route(credential, request.id, headers);
     if (destination.kind === "response") return destination.response;
     if (
@@ -116,10 +125,10 @@ export function createDeviceCli(options: {
     )
       return result("denied", "Task authority changed before dispatch.", action.id);
     const ready = await database.transaction(identity.ownerId, ({ deviceSessions }) =>
-      deviceSessions.supports(destination.session, "command"),
+      deviceSessions.supports(destination.session, operation.kind),
     );
     if (!ready)
-      return result("unavailable", "The computer is not ready to run commands.", action.id);
+      return result("unavailable", "The computer is not ready for this operation.", action.id);
     signal.throwIfAborted();
     const dispatched = await options
       .dispatch(identity.ownerId, {
@@ -137,7 +146,7 @@ export function createDeviceCli(options: {
             taskId: task.id,
             taskRevision: task.revision,
             deadline: Date.now() + deviceCommandTimeoutMs,
-            operation: request.operation,
+            operation,
           },
         },
       })

@@ -1,9 +1,17 @@
 import { z } from "zod";
 import { deviceOperationSchema } from "./devices";
 import { deviceExecutionSchema, deviceOutputCursorSchema } from "./device-executions";
+import { artifactSchema, artifactMetadataSchema } from "./artifacts";
 
 export const deviceCommandTimeoutMs = 60_000;
 export const cliDeviceRequestSchema = z.discriminatedUnion("command", [
+  z.strictObject({
+    version: z.literal(1),
+    command: z.literal("devices.read"),
+    id: z.uuid(),
+    key: z.string().min(1).max(100),
+    path: deviceOperationSchema.options[1].shape.path,
+  }),
   z.strictObject({
     version: z.literal(1),
     command: z.literal("devices.command"),
@@ -38,4 +46,11 @@ export const cliDeviceResultSchema = z.strictObject({
     .max(16),
   afterSequence: deviceOutputCursorSchema,
   hasMore: z.boolean(),
+  artifact: artifactMetadataSchema
+    .pick({ name: true, mediaType: true, size: true, sha256: true })
+    .extend({
+      id: artifactSchema.shape.id,
+      revision: artifactSchema.shape.revision,
+    })
+    .optional(),
 });

@@ -11,7 +11,7 @@ import { callGateway } from "./gateway";
 
 export async function callDeviceCommand(
   authority: CliAuthority,
-  request: Extract<CliDeviceRequest, { command: "devices.command" }>,
+  request: Exclude<CliDeviceRequest, { command: "devices.result" }>,
   options: {
     call?: (authority: CliAuthority, request: CliRequest) => Promise<CliResult>;
     wait?: () => Promise<void>;
@@ -34,7 +34,7 @@ export async function callDeviceCommand(
     version: 1,
     status: "unknown",
     referenceId: id,
-    message: "The command outcome is not confirmed. Inspect this operation before retrying.",
+    message: "The operation outcome is not confirmed. Inspect this operation before retrying.",
   });
   try {
     for (;;) {
@@ -43,6 +43,8 @@ export async function callDeviceCommand(
         receipt.executionId !== executionId ||
         receipt.deviceId !== request.id
       )
+        return unknown();
+      if (request.command === "devices.read" && receipt.state === "succeeded" && !receipt.artifact)
         return unknown();
       if (["succeeded", "failed", "canceled"].includes(receipt.state)) return result;
       if (receipt.state === "unknown" || now() >= deadline) return unknown();

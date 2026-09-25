@@ -334,6 +334,14 @@ export const commands = [
   },
   { command: "devices.inspect", description: "Inspect one proxy computer.", id: true },
   {
+    command: "devices.read",
+    id: true,
+    flags: ["id", "key", "path"],
+    description:
+      "Capture one regular file of at most 50 MiB from a proxy computer. Resume the same key and path after approval. Returns a verified artifact for files stage and files send.",
+    usage: "--id <computer-uuid> --key <stable-key> --path <absolute-path>",
+  },
+  {
     command: "devices.command",
     id: true,
     flags: ["id", "key", "cwd", "argv"],
@@ -346,7 +354,7 @@ export const commands = [
     id: true,
     flags: ["id", "after"],
     description:
-      "Read a device command's saved state and bounded output. Use afterSequence to retrieve remaining output when hasMore is true.",
+      "Read a device operation's saved state, captured file receipt, and bounded output. Use afterSequence to retrieve remaining output when hasMore is true.",
     usage: "--id <action-uuid> [--after <sequence>]",
   },
   {

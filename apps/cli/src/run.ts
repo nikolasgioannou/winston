@@ -52,8 +52,17 @@ export async function runCli(
   try {
     const result = cliResultSchema.parse(await execute(parsed.request));
     const printed = output(result, parsed.json);
-    if (parsed.request.command === "devices.command" && result.status === "ok") {
+    if (
+      (parsed.request.command === "devices.command" || parsed.request.command === "devices.read") &&
+      result.status === "ok"
+    ) {
       const receipt = cliDeviceResultSchema.parse(result.data);
+      if (
+        parsed.request.command === "devices.read" &&
+        receipt.state === "succeeded" &&
+        !receipt.artifact
+      )
+        throw new Error("Missing captured file receipt.");
       return {
         ...printed,
         exitCode:

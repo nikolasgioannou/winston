@@ -136,6 +136,21 @@ export function parseCommand(args: string[]): ParsedCommand {
       request: parseCalendarMutation(command.command, values),
     };
   }
+  if (command.command === "devices.read") {
+    if (flags.some((flag) => !["json", "id", "key", "path"].includes(flag)))
+      throw new Error("Unexpected device read options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        id: values.id,
+        key: values.key,
+        path: values.path,
+      }),
+    };
+  }
   if (command.command === "devices.command") {
     if (flags.some((flag) => !["json", "id", "key", "argv", "cwd"].includes(flag)))
       throw new Error("Unexpected device command options.");
