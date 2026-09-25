@@ -16,6 +16,7 @@ export const deviceFileSourceSchema = z.strictObject({
     readActionId: z.uuid(),
   }),
 });
+export type DeviceFileOrigin = z.infer<typeof deviceFileSourceSchema.shape.origin>;
 
 export const gmailAttachmentSourceSchema = z.strictObject({
   kind: z.literal("connection"),

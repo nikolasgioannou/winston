@@ -29,6 +29,7 @@ import {
   type DeviceFileAuthority,
 } from "@winston/contracts/device-executions";
 import { reservedDeviceFile } from "./reserved-device-file";
+import { deviceArtifactEvidence } from "./device-artifact-evidence";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import {
@@ -40,6 +41,7 @@ import {
   type ArtifactStageReceipt,
   fileDeliveryPlanSchema,
   type FileDeliveryPlan,
+  type DeviceFileOrigin,
 } from "@winston/contracts/artifacts";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
@@ -618,8 +620,10 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       id: string;
       taskId: string;
       intentRevision: number;
+      worker?: ActionTask;
       proof:
         | { kind: "source"; request: Extract<CliReadRequest, { command: "gmail.attachment" }> }
+        | { kind: "device-source"; origin: DeviceFileOrigin }
         | { kind: "staging"; transferId: string; plan: ArtifactStagePlan };
     }) {
       await lock();
@@ -646,6 +650,9 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
           canonical(action.request.arguments) !== canonical(request)
         )
           return false;
+      } else if (input.proof.kind === "device-source") {
+        if (!(await deviceArtifactEvidence(transaction, ownerId, action, input.proof.origin)))
+          return false;
       } else {
         const plan = artifactStagePlanSchema.parse(input.proof.plan);
         if (
@@ -664,6 +671,7 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       if (
         !current ||
         current.intentRevision !== input.intentRevision ||
+        (input.worker && !running(current, actionTaskSchema.parse(input.worker))) ||
         ["failed", "canceled"].includes(current.task.state)
       )
         return false;

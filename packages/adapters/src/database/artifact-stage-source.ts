@@ -1,14 +1,12 @@
 import {
   artifactStageRequestSchema,
-  gmailAttachmentArtifactSchema,
   type ArtifactStageRequest,
 } from "@winston/contracts/artifacts";
-import { cliReadRequestSchema } from "@winston/contracts/cli";
 import type { ActionTask } from "@winston/contracts/actions";
 import type { DatabaseTransaction } from "./owners";
 import { artifactRepository } from "./artifacts";
 import { actionRepository } from "./actions";
-import { readGmailAttachmentArtifact } from "../google/gmail-attachment-result";
+import { artifactSourceProof } from "./artifact-source-proof";
 
 // Existing intake proof is required; owning an arbitrary artifact ID is insufficient.
 export async function authorizedStageSource(
@@ -19,26 +17,20 @@ export async function authorizedStageSource(
 ) {
   const request = artifactStageRequestSchema.parse(input);
   const artifacts = artifactRepository(transaction, ownerId);
-  const parsed = gmailAttachmentArtifactSchema.safeParse(await artifacts.find(request.id, true));
-  if (!parsed.success || parsed.data.state !== "ready" || parsed.data.revision !== request.revision)
-    return null;
-  const artifact = parsed.data;
-  const readActionId = artifact.metadata.source.origin.readActionId;
-  const original = await artifacts.findByKey(`gmail-attachment:${readActionId}`);
-  if (original?.id !== artifact.id) return null;
+  const artifact = await artifacts.find(request.id, true);
+  if (!artifact || artifact.revision !== request.revision) return null;
+  const source = await artifactSourceProof(transaction, ownerId, artifact);
+  if (!source) return null;
   const actions = actionRepository(transaction, ownerId);
-  const action = await actions.find(readActionId);
-  if (action?.state !== "succeeded") return null;
-  const read = cliReadRequestSchema.safeParse(action.request.arguments);
-  if (!read.success || read.data.command !== "gmail.attachment") return null;
   if (
-    !(await actions.authorizeGmailAttachmentReceipt({
-      id: action.id,
-      task: worker,
-      request: read.data,
+    !(await actions.authorizeCompletedArtifactReceipt({
+      id: source.readActionId,
+      taskId: worker.id,
+      intentRevision: source.intentRevision,
+      worker,
+      proof: source.proof,
     }))
   )
     return null;
-  readGmailAttachmentArtifact(artifact, read.data, readActionId);
-  return { artifact, readActionId };
+  return { artifact, readActionId: source.readActionId };
 }

@@ -3,16 +3,13 @@ import {
   artifactStagePlanSchema,
   artifactStageReceiptSchema,
   artifactTransferSchema,
-  gmailAttachmentArtifactSchema,
   type Artifact,
 } from "@winston/contracts/artifacts";
-import { cliReadRequestSchema } from "@winston/contracts/cli";
 import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
-import { artifactRepository } from "./artifacts";
 import { findArtifactTransfer } from "./artifact-transfer-record";
 import { findWorkspace } from "./workspace-record";
-import { readGmailAttachmentArtifact } from "../google/gmail-attachment-result";
+import { artifactSourceProof } from "./artifact-source-proof";
 
 export async function stagedArtifactDeliveryProof(
   transaction: DatabaseTransaction,
@@ -25,9 +22,9 @@ export async function stagedArtifactDeliveryProof(
     transferId?: string;
   },
 ) {
-  const parsed = gmailAttachmentArtifactSchema.safeParse(input.artifact);
-  if (!parsed.success || parsed.data.state !== "ready") return null;
-  const artifact = parsed.data;
+  const source = await artifactSourceProof(transaction, ownerId, input.artifact);
+  if (!source) return null;
+  const artifact = source.artifact;
   const candidates = await transaction.execute<{ id: string }>(sql`
     SELECT id FROM winston.artifact_transfers
     WHERE owner_id = ${ownerId}::uuid AND artifact_id = ${artifact.id}::uuid
@@ -72,26 +69,14 @@ export async function stagedArtifactDeliveryProof(
     plan.workspaceRevision !== transfer.workspaceRevision ||
     plan.size !== transfer.size ||
     plan.sha256 !== transfer.sha256 ||
-    plan.sourceReadActionId !== artifact.metadata.source.origin.readActionId
+    plan.sourceReadActionId !== source.readActionId
   )
     return null;
-  const original = await artifactRepository(transaction, ownerId).findByKey(
-    `gmail-attachment:${plan.sourceReadActionId}`,
-  );
-  if (original?.id !== artifact.id) return null;
-  const readAction = await actions.find(plan.sourceReadActionId);
-  const read = cliReadRequestSchema.safeParse(readAction?.request.arguments);
-  if (!read.success || read.data.command !== "gmail.attachment") return null;
-  try {
-    readGmailAttachmentArtifact(artifact, read.data, plan.sourceReadActionId);
-  } catch {
-    return null;
-  }
   const sourceAllowed = await actions.authorizeCompletedArtifactReceipt({
     id: plan.sourceReadActionId,
     taskId: input.taskId,
     intentRevision: input.intentRevision,
-    proof: { kind: "source", request: read.data },
+    proof: source.proof,
   });
   const stageAllowed =
     sourceAllowed &&
