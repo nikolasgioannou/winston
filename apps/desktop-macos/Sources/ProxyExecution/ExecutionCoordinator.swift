@@ -87,7 +87,7 @@ public actor ExecutionCoordinator {
     }
 
     do {
-      let uncertain = try await journal.hasUncertainExecution(deviceId: message.deviceId)
+      let uncertain = try await journal.hasUncertainExecution()
       guard !uncertain else {
         failClosed()
         throw ExecutionRejection.reconciliationRequired

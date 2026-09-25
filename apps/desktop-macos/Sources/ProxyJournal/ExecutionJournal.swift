@@ -39,12 +39,12 @@ public actor ExecutionJournal {
     return .reconciled(binding, state: existing.state.rawValue, exitCode: existing.exitCode)
   }
 
-  public func hasUncertainExecution(deviceId: String) throws -> Bool {
-    guard UUID(uuidString: deviceId) != nil else { throw JournalError.invalidRequest }
+  /// A replacement pairing still controls this Mac and must retain its unresolved work.
+  public func hasUncertainExecution() throws -> Bool {
     do {
       return try database.query(
-        "SELECT 1 FROM executions WHERE device_id = ? AND state = 'uncertain' LIMIT 1",
-        values: [deviceId.lowercased()], read: { _ in true }
+        "SELECT 1 FROM executions WHERE state = 'uncertain' LIMIT 1",
+        read: { _ in true }
       ).first ?? false
     } catch {
       database.close()

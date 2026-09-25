@@ -32,7 +32,7 @@ public actor CommandSession {
     running = true
     defer { running = false }
     do {
-      let uncertain = try await journal.hasUncertainExecution(deviceId: session.deviceId)
+      let uncertain = try await journal.hasUncertainExecution()
       let blocked = await coordinator.requiresReconciliation
       let capabilities: Set<DeviceCapability> = uncertain || blocked ? [] : [.command]
       await coordinator.setSession(session, capabilities: capabilities)

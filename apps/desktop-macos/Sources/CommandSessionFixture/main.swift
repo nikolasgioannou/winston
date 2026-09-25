@@ -17,11 +17,11 @@ struct CommandSessionFixture {
       at: journalDirectory, withIntermediateDirectories: false,
       attributes: [.posixPermissions: 0o700])
     let journal = try ExecutionJournal(directory: journalDirectory)
-    if mode == "uncertain" {
+    if mode == "uncertain" || mode == "repaired" {
       let request = try DeviceMessage(
         data: Data(contentsOf: directory.appendingPathComponent("request.json")))
       _ = try await journal.admit(request)
-      _ = try await journal.markUncertain(JournalKey(deviceId: id, executionId: id))
+      _ = try await journal.markUncertain(JournalKey(deviceId: request.deviceId, executionId: id))
     }
     let runtime = CommandSession(journal: journal, environment: ["PATH": "/usr/bin:/bin"])
     let transport = try DeviceTransport(
@@ -51,7 +51,7 @@ struct CommandSessionFixture {
     switch mode {
     case "complete", "duplicate": precondition(record?.state == .succeeded)
     case "cancel", "disconnect": precondition(record?.state == .canceled)
-    case "paused": precondition(record == nil)
+    case "paused", "repaired": precondition(record == nil)
     case "uncertain": precondition(record?.state == .uncertain)
     default: fatalError("Unknown fixture mode")
     }

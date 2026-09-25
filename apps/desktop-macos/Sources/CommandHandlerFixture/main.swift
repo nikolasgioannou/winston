@@ -171,7 +171,7 @@ struct CommandHandlerFixture {
       let detail = await escapedOutput.stderr
       fatalError("Escaped pipe owner returned \(result.state): \(detail)")
     } catch CommandExecutionError.uncertain {}
-    let uncertain = try await journal.hasUncertainExecution(deviceId: device)
+    let uncertain = try await journal.hasUncertainExecution()
     let requiresReconciliation = await coordinator.requiresReconciliation
     precondition(uncertain && requiresReconciliation)
     // The disposable detached fixture exits by itself; allow it to finish before teardown.

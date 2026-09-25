@@ -26,8 +26,8 @@ private actor SuspendedJournal: JournalStore {
 
   init(_ journal: ExecutionJournal) { self.journal = journal }
 
-  func hasUncertainExecution(deviceId: String) async throws -> Bool {
-    try await journal.hasUncertainExecution(deviceId: deviceId)
+  func hasUncertainExecution() async throws -> Bool {
+    try await journal.hasUncertainExecution()
   }
 
   func admit(_ message: DeviceMessage) async throws -> JournalAdmission {
@@ -59,7 +59,7 @@ struct ExecutionTests {
 
   static func message(
     _ index: Int, desktop: Bool = false, file: Bool = false,
-    generation: Int64 = 1, deadline: Int64 = 10_000
+    generation: Int64 = 1, deadline: Int64 = 10_000, deviceId: String = device
   ) throws -> DeviceMessage {
     let operation: DeviceOperation
     if desktop {
@@ -71,7 +71,7 @@ struct ExecutionTests {
     }
     return try DeviceMessage(
       messageId: UUID().uuidString.lowercased(), correlationId: UUID().uuidString.lowercased(),
-      deviceId: device, sessionId: sessionId, generation: generation,
+      deviceId: deviceId, sessionId: sessionId, generation: generation,
       payload: .execute(
         ExecutionBinding(
           executionId: String(format: "20000000-0000-4000-8000-%012d", index),
@@ -79,10 +79,10 @@ struct ExecutionTests {
         operation: operation))
   }
 
-  static func session() throws -> DeviceSession {
+  static func session(deviceId: String = device) throws -> DeviceSession {
     try DeviceSession(
       data: JSONSerialization.data(withJSONObject: [
-        "kind": "session", "version": 1, "deviceId": device, "sessionId": sessionId,
+        "kind": "session", "version": 1, "deviceId": deviceId, "sessionId": sessionId,
         "generation": 1, "expiresAt": "2099-01-01T00:00:00Z",
       ]))
   }
@@ -103,6 +103,7 @@ struct ExecutionTests {
     try await checkStopAndResources(root.appendingPathComponent("stop"))
     try await checkAdmissionRace(root.appendingPathComponent("race"))
     try await checkUncertainAndDeadline(root.appendingPathComponent("uncertain"))
+    try await checkRepairedUncertainty(root.appendingPathComponent("repaired"))
     print("Native execution admission and stop checks passed")
   }
 
@@ -237,5 +238,26 @@ struct ExecutionTests {
     await replacement.resume()
     try await rejected(.reconciliationRequired, replacement, message(3))
     await journal.close()
+  }
+
+  static func checkRepairedUncertainty(_ directory: URL) async throws {
+    let original = try journal(directory)
+    _ = try await original.admit(message(1))
+    await original.close()
+
+    // Reopening recovers unfinished work from the old pairing as uncertain.
+    let recovered = try ExecutionJournal(directory: directory)
+    let newDevice = "30000000-0000-4000-8000-000000000001"
+    let coordinator = ExecutionCoordinator(journal: recovered, now: { 1000 })
+    await coordinator.setSession(try session(deviceId: newDevice), capabilities: [.command])
+    await coordinator.resume()
+    try await rejected(
+      .reconciliationRequired, coordinator, message(2, deviceId: newDevice))
+    let oldRecord = try await recovered.record(
+      JournalKey(deviceId: device, executionId: "20000000-0000-4000-8000-000000000001"))
+    let newRecord = try await recovered.record(
+      JournalKey(deviceId: newDevice, executionId: "20000000-0000-4000-8000-000000000002"))
+    precondition(oldRecord?.state == .uncertain && newRecord == nil)
+    await recovered.close()
   }
 }

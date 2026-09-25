@@ -16,7 +16,15 @@ const binding = { executionId: id, taskId: id, taskRevision: 1 };
 test.skipIf(process.platform !== "darwin")(
   "native commands stream journal-backed results while cancellation, queries and heartbeats remain responsive",
   async () => {
-    for (const mode of ["complete", "duplicate", "cancel", "disconnect", "paused", "uncertain"]) {
+    for (const mode of [
+      "complete",
+      "duplicate",
+      "cancel",
+      "disconnect",
+      "paused",
+      "uncertain",
+      "repaired",
+    ]) {
       const directory = await mkdtemp(join(tmpdir(), "winston-command-session-"));
       const effect = join(directory, "effects");
       const session = { deviceId: id, sessionId: crypto.randomUUID(), generation: 1 };
@@ -47,7 +55,12 @@ test.skipIf(process.platform !== "darwin")(
         operation,
       });
       const query = envelope({ kind: "reconcile", ...binding, operation });
-      await writeFile(join(directory, "request.json"), JSON.stringify(execute));
+      await writeFile(
+        join(directory, "request.json"),
+        JSON.stringify(
+          mode === "repaired" ? { ...execute, deviceId: crypto.randomUUID() } : execute,
+        ),
+      );
       const failures: unknown[] = [];
       let stdout = "";
       let stderr = "";
@@ -93,8 +106,9 @@ test.skipIf(process.platform !== "darwin")(
                   }),
                 );
               } else if (payload.kind === "capabilities") {
-                assert.deepEqual(payload.capabilities, mode === "uncertain" ? [] : ["command"]);
-                socket.send(encodeDeviceMessage(mode === "uncertain" ? query : execute));
+                const blocked = mode === "uncertain" || mode === "repaired";
+                assert.deepEqual(payload.capabilities, blocked ? [] : ["command"]);
+                socket.send(encodeDeviceMessage(blocked ? query : execute));
               } else if (payload.kind === "reconciled") {
                 assert.equal(message.correlationId, query.messageId);
                 assert.equal(
@@ -103,10 +117,12 @@ test.skipIf(process.platform !== "darwin")(
                     ? "succeeded"
                     : mode === "uncertain"
                       ? "uncertain"
-                      : "running",
+                      : mode === "repaired"
+                        ? "missing"
+                        : "running",
                 );
                 queried = true;
-                if (mode === "uncertain") socket.close();
+                if (mode === "uncertain" || mode === "repaired") socket.close();
                 else if (mode === "duplicate") socket.send(encodeDeviceMessage(execute));
                 else cancelReady = true;
               } else if (payload.kind === "status" || payload.kind === "output") {
@@ -179,7 +195,7 @@ test.skipIf(process.platform !== "darwin")(
         assert.deepEqual(failures, [], mode);
         assert.equal(code, 0, `${mode}: ${error}`);
         assert.match(output, /Native command session checks passed/);
-        if (mode === "paused" || mode === "uncertain")
+        if (mode === "paused" || mode === "uncertain" || mode === "repaired")
           await assert.rejects(() => readFile(effect), { code: "ENOENT" });
         else assert.equal(await readFile(effect, "utf8"), "once\n");
         if (mode === "complete" || mode === "duplicate") {
