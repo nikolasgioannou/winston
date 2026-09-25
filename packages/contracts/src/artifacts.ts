@@ -74,6 +74,29 @@ export const artifactTransferSchema = z.strictObject({
 });
 export type ArtifactTransfer = z.infer<typeof artifactTransferSchema>;
 
+export const artifactStageRequestSchema = z.strictObject({
+  version: z.literal(1),
+  key: z.string().min(1).max(100),
+  id: z.uuid(),
+  revision: z.number().int().nonnegative(),
+});
+export const artifactStagePlanSchema = z.strictObject({
+  request: artifactStageRequestSchema,
+  workspaceId: z.uuid(),
+  workspaceRevision: z.number().int().nonnegative(),
+  size: artifactTransferSchema.shape.size,
+  sha256: storedObjectSchema.shape.sha256,
+  sourceReadActionId: z.uuid(),
+});
+export const artifactStageReceiptSchema = z.strictObject({
+  path: z.string().regex(/^\/data\/inbox\/[0-9a-f-]{36}$/),
+  size: artifactTransferSchema.shape.size,
+  sha256: storedObjectSchema.shape.sha256,
+});
+export type ArtifactStageRequest = z.infer<typeof artifactStageRequestSchema>;
+export type ArtifactStagePlan = z.infer<typeof artifactStagePlanSchema>;
+export type ArtifactStageReceipt = z.infer<typeof artifactStageReceiptSchema>;
+
 export const filePublicationSchema = artifactMetadataSchema.omit({ source: true }).extend({
   version: z.literal(1),
   key: z.string().min(1).max(100),

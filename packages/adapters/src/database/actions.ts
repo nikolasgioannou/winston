@@ -27,7 +27,14 @@ import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devi
 import { deviceExecutionSchema } from "@winston/contracts/device-executions";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
-import { filePublicationSchema, type FilePublication } from "@winston/contracts/artifacts";
+import {
+  filePublicationSchema,
+  type FilePublication,
+  artifactStagePlanSchema,
+  artifactStageReceiptSchema,
+  type ArtifactStagePlan,
+  type ArtifactStageReceipt,
+} from "@winston/contracts/artifacts";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
 import { eventRepository } from "./events";
@@ -149,6 +156,42 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       current.intentRevision === action.intentRevision &&
       !["succeeded", "failed", "canceled"].includes(current.task.state)
     );
+  }
+
+  async function stagingProof(input: {
+    id: string;
+    transferId: string;
+    task: ActionTask;
+    plan: ArtifactStagePlan;
+  }) {
+    const worker = actionTaskSchema.parse(input.task);
+    const plan = artifactStagePlanSchema.parse(input.plan);
+    await lock();
+    const stored = await row(input.id);
+    if (!stored || stored.cancellationRequested) return null;
+    const action = actionRecordSchema.parse(stored.document);
+    const { target, operation } = action.request.authorization;
+    if (
+      !["dispatching", "unknown", "succeeded"].includes(action.state) ||
+      !action.dispatchTask ||
+      action.operationId !== input.transferId ||
+      target.kind !== "workspace" ||
+      target.id !== plan.workspaceId ||
+      target.resource !== null ||
+      operation !== "workspace.file.write" ||
+      action.request.task.id !== worker.id ||
+      canonical(action.request.arguments) !== canonical(plan)
+    )
+      return null;
+    const current = await task(worker.id);
+    if (!running(current, worker) || !sameIntent(current, action)) return null;
+    const evaluation = await policy(action);
+    if (
+      evaluation.decision !== "allow" &&
+      !(evaluation.decision === "ask" && action.decisionSource === "owner")
+    )
+      return null;
+    return action;
   }
 
   async function priorEffect(taskId: string, intentRevision: number) {
@@ -481,6 +524,33 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         evaluation.decision === "allow" ||
         (evaluation.decision === "ask" && action.decisionSource === "owner")
       );
+    },
+    async authorizeArtifactStaging(input: Parameters<typeof stagingProof>[0]) {
+      return Boolean(await stagingProof(input));
+    },
+    // Trusted transfer adapter only, after independently verifying the immutable runtime receipt.
+    async confirmArtifactStaging(
+      input: Parameters<typeof stagingProof>[0],
+      received: ArtifactStageReceipt,
+    ) {
+      const receipt = artifactStageReceiptSchema.parse(received);
+      const action = await stagingProof(input);
+      if (
+        !action ||
+        receipt.path !== `/data/inbox/${input.plan.request.id}` ||
+        receipt.size !== input.plan.size ||
+        receipt.sha256 !== input.plan.sha256
+      )
+        return null;
+      if (action.state === "succeeded") return action;
+      return save(action, {
+        state: "succeeded",
+        outcome: {
+          state: "succeeded",
+          detail: "Immutable artifact staging was verified on the selected workspace.",
+          providerReference: input.plan.request.id,
+        },
+      });
     },
     authorizeConnectionRead(input: ConnectionProof) {
       return authorizeConnection(input, ["gmail.read", "calendar.read"]);

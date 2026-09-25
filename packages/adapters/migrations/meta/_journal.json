@@ -330,6 +330,13 @@
       "when": 1790000000046,
       "tag": "0046_device_session_routing",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790000000047,
+      "tag": "0047_artifact_transfers",
+      "breakpoints": true
     }
   ]
 }

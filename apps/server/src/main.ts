@@ -21,7 +21,7 @@ import {
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
 import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
-import { createInboxTransferGroup } from "./http/inbox-transfers";
+import { createFileTransferGroup } from "./http/artifact-transfers";
 import { startVoiceRuntime } from "./files/voice-runtime";
 import { createFileCommands } from "./files/cli";
 import { readStorageConfig } from "./storage-config";
@@ -267,7 +267,7 @@ const host = startServer(readConfig(process.env), {
   authHandler: (request) => auth.handle(request),
   ownerOrigin: config.auth.webOrigin,
   groups: {
-    transfer: createInboxTransferGroup(database),
+    transfer: createFileTransferGroup(database),
     task: {
       router: taskRouter,
       authenticate: async (request) =>

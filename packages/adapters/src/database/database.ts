@@ -23,8 +23,12 @@ import { filePublicationRepository } from "./file-publications";
 import { telegramFileRepository } from "./telegram-files";
 import { telegramIntakeRepository } from "./telegram-intake";
 import { inboxTransferRepository } from "./inbox-transfers";
+import { artifactTransferRepository } from "./artifact-transfers";
 import { voiceRepository } from "./voice";
-import { inboxTransferTokenSchema } from "@winston/contracts/artifacts";
+import {
+  inboxTransferTokenSchema,
+  artifactTransferTokenSchema,
+} from "@winston/contracts/artifacts";
 import { telegramOutboundRepository, type TelegramOutboundRepository } from "./telegram-outbound";
 import { memoryRepository, type MemoryRepository } from "./memory";
 import { turnRepository, type TurnRepository } from "./turns";
@@ -59,6 +63,7 @@ export type OwnerTransaction = {
   readonly schedules: ReturnType<typeof scheduleRepository>;
   readonly voice: ReturnType<typeof voiceRepository>;
   readonly inboxTransfers: ReturnType<typeof inboxTransferRepository>;
+  readonly artifactTransfers: ReturnType<typeof artifactTransferRepository>;
   readonly telegramIntake: ReturnType<typeof telegramIntakeRepository>;
   readonly telegramFiles: ReturnType<typeof telegramFileRepository>;
   readonly filePublications: ReturnType<typeof filePublicationRepository>;
@@ -119,6 +124,19 @@ export function createDatabase(options: {
   return {
     assertCompatible: () => checkSchema(pool),
     close: () => pool.end(),
+    async authenticateArtifactTransfer(token: string) {
+      if (!artifactTransferTokenSchema.safeParse(token).success) return null;
+      const rows = await pool.query<{ ownerId: string }>(
+        "SELECT owner_id AS \"ownerId\" FROM winston.artifact_transfers WHERE token_hash = $1 AND state = 'active' AND expires_at > clock_timestamp()",
+        [capabilityHash(token)],
+      );
+      const ownerId = rows.rows[0]?.ownerId;
+      return ownerId
+        ? database.transaction((transaction) =>
+            artifactTransferRepository(transaction, ownerId).authenticate(token),
+          )
+        : null;
+    },
     async authenticateInboxTransfer(token: string) {
       if (!inboxTransferTokenSchema.safeParse(token).success) return null;
       const rows = await pool.query<{ ownerId: string }>(
@@ -198,6 +216,7 @@ export function createDatabase(options: {
             responsibilityTaskAllowed(transaction, ownerId, taskId, request),
           voice: voiceRepository(transaction, ownerId),
           inboxTransfers: inboxTransferRepository(transaction, ownerId),
+          artifactTransfers: artifactTransferRepository(transaction, ownerId),
           telegramIntake: telegramIntakeRepository(transaction, ownerId),
           telegramFiles: telegramFileRepository(transaction, ownerId),
           telegramApprovals: telegramApprovalRepository(transaction, ownerId),
