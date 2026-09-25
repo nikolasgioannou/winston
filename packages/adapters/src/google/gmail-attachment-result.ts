@@ -1,6 +1,22 @@
 import { createHash } from "node:crypto";
 import { gmailAttachmentArtifactSchema } from "@winston/contracts/artifacts";
-import { cliResultSchema, type CliReadRequest } from "@winston/contracts/cli";
+import { cliResultSchema, type CliReadRequest, type CliResult } from "@winston/contracts/cli";
+import { canonicalJson } from "@winston/contracts/json";
+
+export function matchesAttachmentReceipt(cached: CliResult, current: CliResult) {
+  if (canonicalJson(cached) === canonicalJson(current)) return true;
+  if (
+    current.status !== "ok" ||
+    !current.data ||
+    typeof current.data !== "object" ||
+    Array.isArray(current.data)
+  )
+    return false;
+  // Older verified receipts omitted only the catalog revision. Every other field must match.
+  const legacy = { ...current.data };
+  delete legacy.revision;
+  return canonicalJson(cached) === canonicalJson({ ...current, data: legacy });
+}
 
 export function readGmailAttachmentArtifact(
   input: unknown,
@@ -33,6 +49,11 @@ export function gmailAttachmentResult(
   return cliResultSchema.parse({
     version: 1,
     status: "ok",
-    data: { artifactId: artifact.id, ...artifact.metadata, trust: "untrusted_external_content" },
+    data: {
+      artifactId: artifact.id,
+      revision: artifact.revision,
+      ...artifact.metadata,
+      trust: "untrusted_external_content",
+    },
   });
 }

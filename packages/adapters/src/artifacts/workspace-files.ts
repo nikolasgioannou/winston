@@ -90,7 +90,7 @@ export function createWorkspaceFilePublisher(options: {
     const result = (artifact: Artifact): CliResult => ({
       version: 1,
       status: "ok",
-      data: { artifactId: artifact.id, ...artifact.metadata },
+      data: { artifactId: artifact.id, revision: artifact.revision, ...artifact.metadata },
     });
     if (prepared.kind === "receipt") {
       try {

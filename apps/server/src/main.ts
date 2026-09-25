@@ -17,6 +17,7 @@ import {
   createArtifactService,
   createWorkspaceFilePublisher,
   createArtifactReader,
+  createArtifactStager,
   createDeliveryDownloadService,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
@@ -243,6 +244,7 @@ const cliTasks = createCliTaskGroup(database, {
           database,
           artifacts: createArtifactService(database, storage),
         }),
+        stage: createArtifactStager({ database, read: createArtifactReader(database, storage) }),
       }
     : {}),
   ...(fileCommands ? { files: fileCommands } : {}),

@@ -19,7 +19,7 @@ import { connectionTargetKey } from "./connection-target-key";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { capabilityRepository } from "./capabilities";
 import { artifactRepository } from "./artifacts";
-import { gmailAttachmentResult } from "../google/gmail-attachment-result";
+import { gmailAttachmentResult, matchesAttachmentReceipt } from "../google/gmail-attachment-result";
 
 export function connectedReadRepository(transaction: DatabaseTransaction, ownerId: string) {
   const actions = actionRepository(transaction, ownerId);
@@ -119,8 +119,7 @@ export function connectedReadRepository(transaction: DatabaseTransaction, ownerI
       `);
       if (previous.rows[0]) {
         const cached = cliResultSchema.parse(previous.rows[0].result);
-        if (cached.status !== "unknown" && canonicalJson(cached) !== canonicalJson(result))
-          return null;
+        if (cached.status !== "unknown" && !matchesAttachmentReceipt(cached, result)) return null;
       }
       const action = await actions.find(actionId);
       if (!action) return null;

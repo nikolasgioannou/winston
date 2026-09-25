@@ -163,6 +163,14 @@ export const commands = [
     usage: "--id <uuid> --revision <number>",
   },
   {
+    command: "files.stage",
+    description:
+      "Stage an authorized Gmail artifact on the current workspace. Reuse its exact ID, revision and key after approval or interruption. Only an ok receipt confirms the path; staging does not send the file to Telegram.",
+    id: true,
+    flags: ["id", "revision", "key"],
+    usage: "--id <artifact-uuid> --revision <number> --key <request-key>",
+  },
+  {
     command: "files.send",
     description:
       "Queue a published artifact for delivery to the owner in Telegram. Reuse the same key on retry.",

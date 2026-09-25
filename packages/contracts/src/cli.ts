@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { artifactStageRequestSchema } from "./artifacts";
 import { googleServiceSchema } from "./connections";
 import { cliReadRequestSchema } from "./cli-reads";
 import { cliScheduleRequestSchema } from "./cli-schedules";
@@ -47,6 +48,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  artifactStageRequestSchema.extend({ command: z.literal("files.stage") }),
   ...cliGmailTrashRequestSchema.options,
   cliGmailLabelMutationRequestSchema,
   cliGmailReconciliationRequestSchema,

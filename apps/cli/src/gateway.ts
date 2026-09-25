@@ -55,7 +55,8 @@ export async function callGateway(
             request.command === "gmail.modify" ||
             request.command === "gmail.trash" ||
             request.command === "gmail.restore" ||
-            request.command === "gmail.attachment"
+            request.command === "gmail.attachment" ||
+            request.command === "files.stage"
             ? 55_000
             : cliReadRequestSchema.safeParse(request).success
               ? 45_000

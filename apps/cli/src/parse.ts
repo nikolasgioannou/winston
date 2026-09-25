@@ -253,6 +253,23 @@ export function parseCommand(args: string[]): ParsedCommand {
       }),
     };
   }
+  if (command.command === "files.stage") {
+    if (flags.some((flag) => !["json", "id", "revision", "key"].includes(flag)))
+      throw new Error("Unexpected command options.");
+    if (values.revision === undefined || !/^\d+$/.test(values.revision))
+      throw new Error("An exact artifact revision is required.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        id: values.id,
+        revision: Number(values.revision),
+        key: values.key,
+      }),
+    };
+  }
   if (command.command === "files.publish") {
     if (flags.some((flag) => !["json", "path", "key", "type"].includes(flag)))
       throw new Error("Unexpected command options.");

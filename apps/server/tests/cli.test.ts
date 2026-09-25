@@ -20,6 +20,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let deviceCalls = 0;
   let calendarCalls = 0;
   let reconciliationCalls = 0;
+  let stagingCalls = 0;
   const cli: OwnerTransaction["cli"] = {
     responsibility: (credential, input) => {
       assert.equal(
@@ -74,6 +75,15 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   const { app } = createApi({
     groups: {
       task: createCliTaskGroup(database, {
+        stage: (credential, input, signal) => {
+          stagingCalls++;
+          assert.equal(credential.token, controlToken);
+          assert.equal(input.revision, 2);
+          assert.equal(input.key, "stage");
+          assert.ok(!("command" in input));
+          assert.equal(signal.aborted, false);
+          return Promise.resolve({ version: 1, status: "waiting", message: "Approve staging." });
+        },
         calendarReconciliation: (credential, input, signal) => {
           assert.equal(credential.token, controlToken);
           assert.equal(input.command, "calendar.reconcile");
@@ -147,6 +157,26 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  const stage = { version: 1, command: "files.stage", id: randomUUID(), revision: 2, key: "stage" };
+  assert.equal((await request(stage)).status, 400);
+  assert.equal((await request(stage, token, workspaceId, controlPath)).status, 401);
+  assert.equal((await request(stage, controlToken, workspaceId, controlPath)).status, 200);
+  assert.equal(stagingCalls, 1);
+  const unconfigured = createApi({ groups: { task: createCliTaskGroup(database) } }).app;
+  const noStorage = await unconfigured.request(controlPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${controlToken}`,
+      "X-Winston-Workspace": workspaceId,
+    },
+    body: JSON.stringify(stage),
+  });
+  assert.deepEqual(await noStorage.json(), {
+    version: 1,
+    status: "unavailable",
+    message: "Artifact staging is not configured.",
+  });
   const calendar = {
     version: 1,
     command: "calendar.delete",

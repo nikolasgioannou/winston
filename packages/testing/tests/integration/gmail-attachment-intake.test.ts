@@ -207,6 +207,10 @@ test("Gmail attachment intake preserves origin and recovers without another prov
           artifacts.findByKey(`gmail-attachment:${actionId}`),
         );
         if (stored) {
+          if (scenario === "inline") {
+            await sql`UPDATE winston.connected_read_results SET result = result #- '{data,revision}'
+              WHERE owner_id = ${ownerId}::uuid AND action_id = ${actionId}::uuid`;
+          }
           assert.equal(
             await database.transaction(ownerId, ({ connectedReads }) =>
               connectedReads.reconcileAttachment(access, actionId, stored.id, {
@@ -272,6 +276,11 @@ test("Gmail attachment intake preserves origin and recovers without another prov
             recovered.data && typeof recovered.data === "object" && !Array.isArray(recovered.data),
           );
           assert.equal(recovered.data.name, "_private_report_.txt");
+          assert.ok(stored);
+          const ready = await database.transaction(ownerId, ({ artifacts }) =>
+            artifacts.find(stored.id),
+          );
+          assert.equal(recovered.data.revision, ready?.revision);
           assert.ok(
             JSON.stringify(recovered.data).includes(JSON.stringify(JSON.stringify(originalName))),
           );

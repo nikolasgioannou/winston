@@ -20,10 +20,18 @@ import { currentArtifactTransfer } from "./artifact-transfer-current";
 import { findArtifactTransfer } from "./artifact-transfer-record";
 
 type Beginning =
-  | { status: "denied" | "unavailable" }
-  | { status: "waiting" | "unknown"; actionId: string }
+  | { status: "denied" }
+  | { status: "unavailable" }
+  | { status: "waiting"; actionId: string }
+  | { status: "unknown"; actionId: string }
   | { status: "staged"; transfer: ArtifactTransfer; receipt: ArtifactStageReceipt }
-  | { status: "transfer"; token: string; transfer: ArtifactTransfer; origin: string };
+  | {
+      status: "transfer";
+      actionId: string;
+      token: string;
+      transfer: ArtifactTransfer;
+      origin: string;
+    };
 
 export function artifactTransferRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -137,7 +145,7 @@ export function artifactTransferRepository(transaction: DatabaseTransaction, own
           descriptor = ${JSON.stringify(transfer)}::jsonb
         WHERE owner_id = ${ownerId}::uuid AND id = ${row.id}::uuid
       `);
-      return { status: "transfer", token, transfer, origin: runtime.origin };
+      return { status: "transfer", actionId: action.id, token, transfer, origin: runtime.origin };
     },
     async retry(token: string) {
       if (!artifactTransferTokenSchema.safeParse(token).success) return;

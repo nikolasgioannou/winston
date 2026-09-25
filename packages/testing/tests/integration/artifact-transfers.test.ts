@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
-import { createArtifactService } from "@winston/adapters/artifacts";
+import { createArtifactService, createArtifactStager } from "@winston/adapters/artifacts";
 import { createConnectedReadGateway } from "@winston/adapters/google";
 import { storedObjectSchema } from "@winston/contracts/storage";
-import { artifactStagePlanSchema } from "@winston/contracts/artifacts";
+import { artifactStagePlanSchema, artifactTransferSchema } from "@winston/contracts/artifacts";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import { withTestPostgres } from "../../src/postgres";
 
@@ -278,6 +278,76 @@ test("artifact staging fences exact source approval, worker credentials and immu
         ).status,
         "denied",
       );
+      let storageReads = 0;
+      let transfers = 0;
+      let readMode = "corrupt";
+      const stager = createArtifactStager({
+        database,
+        read: async (owner, id, maximum, deadline) => {
+          assert.equal(owner, ownerId);
+          assert.equal(id, artifact.id);
+          assert.equal(maximum, 50 * 1024 * 1024);
+          assert.ok(deadline);
+          assert.equal(deadline.aborted, false);
+          storageReads++;
+          if (readMode === "revoke")
+            await database.transaction(ownerId, ({ capabilities }) =>
+              capabilities.revoke(access.id),
+            );
+          return { artifact, bytes: Buffer.from(readMode === "corrupt" ? "bad" : "abc") };
+        },
+        send: async (url, init) => {
+          transfers++;
+          assert.equal(url.href, "http://127.0.0.1:9099/v1/artifacts");
+          assert.equal(init.redirect, "error");
+          assert.equal(init.credentials, "omit");
+          assert.deepEqual(init.body, Buffer.from("abc"));
+          const headers = new Headers(init.headers);
+          const token = headers.get("Authorization")?.slice(7);
+          assert.ok(token);
+          const descriptor = artifactTransferSchema.parse(
+            JSON.parse(
+              Buffer.from(headers.get("X-Winston-Transfer") ?? "", "base64url").toString(),
+            ),
+          );
+          assert.deepEqual(await database.authenticateArtifactTransfer(token), descriptor);
+          assert.equal(descriptor.artifactId, artifact.id);
+          return Response.json(transfers === 1 ? { ...receipt, size: 4 } : receipt);
+        },
+      });
+      const cliInput = { ...input, key: "cli-stage" };
+      const cliPending = await stager(access.request, cliInput, signal);
+      assert.equal(cliPending.status, "waiting");
+      assert.ok(cliPending.referenceId);
+      assert.equal(storageReads, 0);
+      await approve(cliPending.referenceId);
+      access = await credential();
+      assert.equal((await stager(access.request, cliInput, signal)).status, "unknown");
+      assert.equal(transfers, 0);
+      readMode = "valid";
+      const malformed = await stager(access.request, cliInput, signal);
+      assert.equal(malformed.status, "unknown");
+      readMode = "revoke";
+      assert.equal((await stager(access.request, cliInput, signal)).status, "unknown");
+      assert.equal(transfers, 1);
+      access = await credential();
+      readMode = "valid";
+      const cliResult = await stager(access.request, cliInput, signal);
+      assert.equal(cliResult.status, "ok");
+      assert.deepEqual(cliResult.data, {
+        artifactId: artifact.id,
+        revision: artifact.revision,
+        workspaceId,
+        path: receipt.path,
+        size: 3,
+        sha256: artifact.metadata.sha256,
+        trust: "untrusted_external_content",
+      });
+      assert.deepEqual(await stager(access.request, cliInput, signal), cliResult);
+      assert.equal(storageReads, 4);
+      assert.equal(transfers, 2);
+      assert.equal(reads, 1);
+
       await database.transaction(ownerId, async ({ authorization, actions }) => {
         const current = await authorization.list();
         assert.ok(

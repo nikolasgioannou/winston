@@ -25,6 +25,7 @@ import type { CalendarMutationInput } from "@winston/contracts/calendar-mutation
 import type { GmailMutationInput } from "@winston/contracts/gmail-mutations";
 import type { GmailLabelMutationInput } from "@winston/contracts/gmail-label-mutations";
 import type { GmailTrashInput } from "@winston/contracts/gmail-trash";
+import type { ArtifactStageRequest } from "@winston/contracts/artifacts";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -48,6 +49,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  stage?: (
+    credential: ServiceRequest,
+    request: ArtifactStageRequest,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   gmailTrash?: (
     credential: ServiceRequest,
     request: GmailTrashInput,
@@ -98,6 +104,7 @@ export function createCliTaskGroup(
   {
     read,
     publish,
+    stage,
     files,
     devices,
     calendarMutations,
@@ -120,6 +127,14 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "files.stage") {
+      const { version, key, id, revision } = request;
+      return context.json(
+        stage
+          ? await stage(authority, { version, key, id, revision }, context.req.raw.signal)
+          : { version: 1, status: "unavailable", message: "Artifact staging is not configured." },
+      );
+    }
     if (request.command === "gmail.trash" || request.command === "gmail.restore") {
       const { key, accountId, messageId } = request;
       return context.json(
@@ -263,7 +278,8 @@ export function createCliTaskGroup(
       request.command === "gmail.reconcile" ||
       request.command === "gmail.modify" ||
       request.command === "gmail.trash" ||
-      request.command === "gmail.restore"
+      request.command === "gmail.restore" ||
+      request.command === "files.stage"
     )
       throw new RequestError("invalid_request");
     if (request.command === "devices.result")
