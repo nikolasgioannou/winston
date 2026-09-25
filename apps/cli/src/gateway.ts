@@ -3,6 +3,7 @@ import {
   cliRequestSchema,
   cliResultSchema,
   cliReadRequestSchema,
+  cliCalendarMutationRequestSchema,
   isScheduleMutation,
   type CliAuthority,
   type CliRequest,
@@ -45,7 +46,14 @@ export async function callGateway(
       redirect: "error",
       credentials: "omit",
       signal: AbortSignal.timeout(
-        Math.min(cliReadRequestSchema.safeParse(request).success ? 45_000 : 15_000, remaining),
+        Math.min(
+          cliCalendarMutationRequestSchema.safeParse(request).success
+            ? 55_000
+            : cliReadRequestSchema.safeParse(request).success
+              ? 45_000
+              : 15_000,
+          remaining,
+        ),
       ),
     },
   );

@@ -42,6 +42,7 @@ import {
   createGoogleConnections,
   createGoogleOAuth,
   createConnectedReadGateway,
+  createCalendarMutationGateway,
 } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
@@ -96,6 +97,7 @@ owner.route("/connection-targets", createTargetPreferencesRouter(database));
 callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
+let calendarMutations: ReturnType<typeof createCalendarMutationGateway> | undefined;
 if (connectionConfig) {
   const connections = createGoogleConnections({
     database,
@@ -103,6 +105,7 @@ if (connectionConfig) {
     oauth: createGoogleOAuth(connectionConfig.oauth),
   });
   connectedReads = createConnectedReadGateway({ database, google: connections });
+  calendarMutations = createCalendarMutationGateway({ database, google: connections });
   owner.route("/connections", createConnectionOwnerRouter(connections));
   owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
   callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
@@ -199,22 +202,24 @@ const deviceTransport = createDeviceSocketTransport(database, {
   serverId: crypto.randomUUID(),
   machineId: process.env.FLY_MACHINE_ID ?? null,
 });
-const cliTasks = createCliTaskGroup(
-  database,
-  connectedReads,
-  storage
-    ? createWorkspaceFilePublisher({
-        database,
-        artifacts: createArtifactService(database, storage),
-      })
-    : undefined,
-  fileCommands,
-  createDeviceCli({
+const cliTasks = createCliTaskGroup(database, {
+  ...(connectedReads ? { read: connectedReads } : {}),
+  ...(calendarMutations ? { calendarMutations } : {}),
+  ...(storage
+    ? {
+        publish: createWorkspaceFilePublisher({
+          database,
+          artifacts: createArtifactService(database, storage),
+        }),
+      }
+    : {}),
+  ...(fileCommands ? { files: fileCommands } : {}),
+  devices: createDeviceCli({
     database,
     dispatch: deviceTransport.dispatch,
     server: deviceTransport.routing,
   }),
-);
+});
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);

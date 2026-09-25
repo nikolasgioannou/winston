@@ -32,8 +32,9 @@ export function createCalendarMutationGateway(options: Options) {
   return async (
     credential: ServiceRequest,
     input: CalendarMutationInput,
-    signal: AbortSignal,
+    inputSignal: AbortSignal,
   ): Promise<CliResult> => {
+    const signal = AbortSignal.any([inputSignal, AbortSignal.timeout(45_000)]);
     const parsed = calendarMutationInputSchema.safeParse(input);
     if (!parsed.success)
       return result("invalid_input", "Provide a valid Calendar change and stable request key.");

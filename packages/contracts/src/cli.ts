@@ -4,6 +4,12 @@ import { cliReadRequestSchema } from "./cli-reads";
 import { cliScheduleRequestSchema } from "./cli-schedules";
 import { cliResponsibilityRequestSchema } from "./cli-responsibilities";
 import { cliDeviceRequestSchema } from "./cli-devices";
+import { cliCalendarMutationRequestSchema } from "./cli-calendar-mutations";
+export {
+  cliCalendarMutationRequestSchema,
+  calendarMutationInputFromCli,
+  type CliCalendarMutationRequest,
+} from "./cli-calendar-mutations";
 export {
   cliDeviceRequestSchema,
   cliDeviceResultSchema,
@@ -22,6 +28,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliCalendarMutationRequestSchema.options,
   ...cliDeviceRequestSchema.options,
   ...cliResponsibilityRequestSchema.options,
   ...cliScheduleRequestSchema.options,

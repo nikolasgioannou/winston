@@ -2,6 +2,33 @@ import type { CliRequest } from "@winston/contracts/cli";
 
 export const commands = [
   {
+    command: "calendar.create",
+    id: false,
+    flags: ["account", "calendar", "key", "notify", "event"],
+    description:
+      "Create an event after any required approval. Event JSON requires exactly summary, description, location, timing {kind: timed|all-day, start, end, timezone}, attendees [{email, displayName?, optional?}], recurrence [RRULE lines], and transparency opaque|transparent. Other event fields, including visibility, are not supported; ask before omitting a requested unsupported setting. Timed boundaries need explicit offsets; all-day end dates are exclusive. Reuse the exact key and fields after approval; never repeat an uncertain write.",
+    usage:
+      "--account <uuid> --calendar <calendar-id> --key <stable-key> --notify <all|externalOnly|none> --event <JSON>",
+  },
+  {
+    command: "calendar.update",
+    id: true,
+    flags: ["account", "calendar", "key", "notify", "id", "etag", "scope", "changes"],
+    description:
+      "Change an event using its exact inspected ETag. Changes JSON is a nonempty subset of create fields. Scope JSON is {kind:single}, {kind:series}, or {kind:instance,recurringEventId,originalStartTime}. Instance scope affects only the selected occurrence. Inspection and mutation can require separate approvals; reuse the same key and arguments through both. Do not retry uncertainty with a new key.",
+    usage:
+      "--account <uuid> --calendar <calendar-id> --key <stable-key> --notify <all|externalOnly|none> --id <event-id> --etag <quoted-provider-etag> --scope <JSON> --changes <JSON>",
+  },
+  {
+    command: "calendar.delete",
+    id: true,
+    flags: ["account", "calendar", "key", "notify", "id", "etag", "scope"],
+    description:
+      "Delete the exact inspected event version after any required approval. Scope JSON is {kind:single}, {kind:series}, or {kind:instance,recurringEventId,originalStartTime}. Series deletes all occurrences; instance deletes only the selected occurrence. Reuse the exact key and arguments after approval. An unknown outcome must be inspected, never resent.",
+    usage:
+      "--account <uuid> --calendar <calendar-id> --key <stable-key> --notify <all|externalOnly|none> --id <event-id> --etag <quoted-provider-etag> --scope <JSON>",
+  },
+  {
     command: "responsibilities.propose",
     description:
       "Propose ongoing work and pause for owner agreement. Reuse the same key after approval; a proposal does not start monitoring.",

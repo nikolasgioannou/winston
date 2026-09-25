@@ -4,6 +4,8 @@ import {
   cliReadRequestSchema,
   cliScheduleRequestSchema,
   cliResponsibilityRequestSchema,
+  cliCalendarMutationRequestSchema,
+  calendarMutationInputFromCli,
   type CliReadRequest,
   type CliResult,
   type CliDeviceRequest,
@@ -15,6 +17,7 @@ import type { HttpEnvironment, Identity } from "./app";
 import { parseJson, RequestError } from "./errors";
 import { publishFileResponse, type FilePublisher } from "./file-publication";
 import type { FileRequest } from "../files/cli";
+import type { CalendarMutationInput } from "@winston/contracts/calendar-mutations";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -37,21 +40,30 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
   ): Promise<Result>;
 };
 
-export function createCliTaskGroup(
-  database: Database,
+type Handlers = {
   read?: (
     credential: ServiceRequest,
     request: CliReadRequest,
     signal: AbortSignal,
-  ) => Promise<CliResult>,
-  publish?: FilePublisher,
-  files?: (credential: ServiceRequest, request: FileRequest) => Promise<CliResult>,
+  ) => Promise<CliResult>;
+  publish?: FilePublisher;
+  files?: (credential: ServiceRequest, request: FileRequest) => Promise<CliResult>;
   devices?: (
     credential: ServiceRequest,
     request: CliDeviceRequest,
     headers: Headers,
     signal: AbortSignal,
-  ) => Promise<Response>,
+  ) => Promise<Response>;
+  calendarMutations?: (
+    credential: ServiceRequest,
+    request: CalendarMutationInput,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
+};
+
+export function createCliTaskGroup(
+  database: Database,
+  { read, publish, files, devices, calendarMutations }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/publish", async (context) => {
@@ -65,6 +77,21 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const calendar = cliCalendarMutationRequestSchema.safeParse(request);
+    if (calendar.success)
+      return context.json(
+        calendarMutations
+          ? await calendarMutations(
+              authority,
+              calendarMutationInputFromCli(calendar.data),
+              context.req.raw.signal,
+            )
+          : {
+              version: 1,
+              status: "unavailable",
+              message: "Calendar mutations are not configured.",
+            },
+      );
     if (request.command === "devices.command")
       return devices
         ? devices(authority, request, context.req.raw.headers, context.req.raw.signal)
@@ -116,6 +143,8 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (cliCalendarMutationRequestSchema.safeParse(request).success)
+      throw new RequestError("invalid_request");
     if (request.command === "devices.result")
       return devices
         ? devices(authority, request, context.req.raw.headers, context.req.raw.signal)

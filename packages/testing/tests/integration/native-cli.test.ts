@@ -41,7 +41,7 @@ test.skipIf(process.platform !== "darwin")(
         { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 5000 },
         {
           deviceTransport: transport,
-          groups: { task: createCliTaskGroup(database, undefined, undefined, undefined, devices) },
+          groups: { task: createCliTaskGroup(database, { devices }) },
         },
       );
       let stopChild: (() => Promise<void>) | undefined;

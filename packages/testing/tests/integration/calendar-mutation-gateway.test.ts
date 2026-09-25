@@ -9,6 +9,10 @@ import type { CalendarMutationInput } from "@winston/contracts/calendar-mutation
 import type { CliResult } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { withTestPostgres } from "../../src/postgres";
+import { parseCommand } from "../../../../apps/cli/src/parse";
+import { callGateway } from "../../../../apps/cli/src/gateway";
+import { createApi } from "../../../../apps/server/src/http/app";
+import { createCliTaskGroup } from "../../../../apps/server/src/http/cli";
 
 test("Calendar gateway preserves read/write approvals and prevents replacement retries", async () => {
   await withTestPostgres(async (sql, connectionString) => {
@@ -85,11 +89,67 @@ test("Calendar gateway preserves read/write approvals and prevents replacement r
       }
       return Promise.resolve(Response.json({ ...original, ...body, etag: '"after"' }));
     };
-    const gateway = createCalendarMutationGateway({
+    const mutation = createCalendarMutationGateway({
       database,
       google,
       fetch: (url, init) => provider(url, init),
     });
+    const { app } = createApi({
+      groups: { task: createCliTaskGroup(database, { calendarMutations: mutation }) },
+    });
+    async function gateway(
+      authority: ServiceRequest,
+      input: CalendarMutationInput,
+      signal: AbortSignal,
+    ) {
+      const { intent } = input;
+      const args = [
+        "calendar",
+        intent.kind,
+        "--account",
+        intent.accountId,
+        "--calendar",
+        intent.calendarId,
+        "--key",
+        input.key,
+        "--notify",
+        intent.sendUpdates,
+      ];
+      if (intent.kind === "create") args.push("--event", JSON.stringify(intent.event));
+      else {
+        args.push(
+          "--id",
+          intent.eventId,
+          "--etag",
+          intent.etag,
+          "--scope",
+          JSON.stringify(intent.scope),
+        );
+        if (intent.kind === "update") args.push("--changes", JSON.stringify(intent.changes));
+      }
+      const parsed = parseCommand(args);
+      assert.equal(parsed.kind, "request");
+      return callGateway(
+        {
+          version: 1,
+          environment: "local",
+          workspaceId: authority.resourceId,
+          token: authority.operation === "gateway:read" ? authority.token : `wst_${"r".repeat(43)}`,
+          ...(authority.operation === "gateway:control" ? { controlToken: authority.token } : {}),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        parsed.request,
+        (url, init) => {
+          assert.equal(url, "http://127.0.0.1:3001/api/tasks/cli/control");
+          return Promise.resolve(
+            app.request(new URL(url).pathname, {
+              ...init,
+              signal: AbortSignal.any([signal, ...(init.signal ? [init.signal] : [])]),
+            }),
+          );
+        },
+      );
+    }
 
     async function task() {
       return database.transaction(ownerId, async ({ tasks }) => {

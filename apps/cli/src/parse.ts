@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import { cliRequestSchema, type CliRequest } from "@winston/contracts/cli";
 import { commands, help } from "./commands";
+import { parseCalendarMutation } from "./calendar-mutation";
 
 export type ParsedCommand =
   | { kind: "help"; json: boolean; content: ReturnType<typeof help> }
@@ -21,6 +22,10 @@ export function parseCommand(args: string[]): ParsedCommand {
       detail: { type: "string" },
       account: { type: "string" },
       calendar: { type: "string" },
+      event: { type: "string" },
+      changes: { type: "string" },
+      etag: { type: "string" },
+      notify: { type: "string" },
       query: { type: "string" },
       limit: { type: "string" },
       cursor: { type: "string" },
@@ -55,6 +60,20 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (
+    command.command === "calendar.create" ||
+    command.command === "calendar.update" ||
+    command.command === "calendar.delete"
+  ) {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected Calendar mutation options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: parseCalendarMutation(command.command, values),
+    };
+  }
   if (command.command === "devices.command") {
     if (flags.some((flag) => !["json", "id", "key", "argv", "cwd"].includes(flag)))
       throw new Error("Unexpected device command options.");

@@ -18,6 +18,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let scheduleCalls = 0;
   let responsibilityCalls = 0;
   let deviceCalls = 0;
+  let calendarCalls = 0;
   const cli: OwnerTransaction["cli"] = {
     responsibility: (credential, input) => {
       assert.equal(
@@ -71,21 +72,27 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   };
   const { app } = createApi({
     groups: {
-      task: createCliTaskGroup(
-        database,
-        (credential, input) => {
+      task: createCliTaskGroup(database, {
+        calendarMutations: (credential, input, signal) => {
+          assert.equal(credential.token, controlToken);
+          assert.equal(input.intent.kind, "delete");
+          assert.equal(input.key, "remove-event");
+          assert.equal(signal.aborted, false);
+          calendarCalls++;
+          return Promise.resolve({ version: 1, status: "waiting", message: "Approval required." });
+        },
+        read: (credential, input) => {
           assert.equal(credential.token, "key" in input ? controlToken : token);
           assert.equal(input.command, "gmail.search");
           reads += 1;
           return Promise.resolve({ version: 1, status: "ok", data: [] });
         },
-        undefined,
-        (credential, request) => {
+        files: (credential, request) => {
           assert.equal(credential.token, request.command === "files.send" ? controlToken : token);
           fileCalls++;
           return Promise.resolve({ version: 1, status: "ok", data: { state: "pending" } });
         },
-        (credential, input, headers, signal) => {
+        devices: (credential, input, headers, signal) => {
           assert.equal(
             credential.token,
             input.command === "devices.command" ? controlToken : token,
@@ -100,7 +107,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
             ),
           );
         },
-      ),
+      }),
     },
   });
   const request = (
@@ -132,6 +139,27 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  const calendar = {
+    version: 1,
+    command: "calendar.delete",
+    accountId: randomUUID(),
+    calendarId: "primary",
+    key: "remove-event",
+    eventId: "event1",
+    etag: '"version1"',
+    scope: { kind: "single" },
+    sendUpdates: "none",
+  };
+  assert.equal((await request(calendar, controlToken, workspaceId, controlPath)).status, 200);
+  assert.equal((await request(calendar, token, workspaceId, controlPath)).status, 401);
+  assert.equal((await request(calendar)).status, 400);
+  for (const injection of [{ ownerId }, { plan: {} }, { sendUpdates: undefined }]) {
+    assert.equal(
+      (await request({ ...calendar, ...injection }, controlToken, workspaceId, controlPath)).status,
+      400,
+    );
+  }
+  assert.equal(calendarCalls, 1);
   const deviceCommand = {
     version: 1,
     command: "devices.command",

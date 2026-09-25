@@ -43,14 +43,16 @@ test("binary file publication authenticates separately and preserves ordinary JS
   };
   const { app } = createApi({
     groups: {
-      task: createCliTaskGroup(database, undefined, async (_credential, input, source) => {
-        calls += 1;
-        if (input.key === "cached")
+      task: createCliTaskGroup(database, {
+        publish: async (_credential, input, source) => {
+          calls += 1;
+          if (input.key === "cached")
+            return { version: 1, status: "ok", data: { artifactId: randomUUID() } };
+          let size = 0;
+          for await (const chunk of source) size += chunk.byteLength;
+          assert.equal(size, input.size);
           return { version: 1, status: "ok", data: { artifactId: randomUUID() } };
-        let size = 0;
-        for await (const chunk of source) size += chunk.byteLength;
-        assert.equal(size, input.size);
-        return { version: 1, status: "ok", data: { artifactId: randomUUID() } };
+        },
       }),
     },
   });
