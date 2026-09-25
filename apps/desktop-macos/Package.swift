@@ -40,6 +40,7 @@ let package = Package(
     .executableTarget(name: "ExecutionFixture", dependencies: ["ProxyExecution"]),
     .executableTarget(name: "CommandFixture", dependencies: ["ProxyCommands"]),
     .executableTarget(name: "FilesFixture", dependencies: ["ProxyFiles"]),
+    .executableTarget(name: "FileWritesFixture", dependencies: ["ProxyFiles"]),
     .executableTarget(
       name: "CommandHandlerFixture", dependencies: ["ProxyExecution", "ProxyCommands"]),
     .executableTarget(name: "CommandSessionFixture", dependencies: ["ProxyRuntime"]),
