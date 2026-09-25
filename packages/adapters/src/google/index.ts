@@ -18,6 +18,7 @@ export { createConnectionTargets, labelSearchResults } from "./targets";
 export { createGmailReader, GmailReadError } from "./gmail";
 export { createCalendarReader, CalendarReadError } from "./calendar-events";
 export { prepareCalendarMutation, readCalendarMutationArguments } from "./calendar-mutation-plan";
+export { createCalendarMutationExecutor } from "./calendar-mutation-executor";
 export { createCalendarAvailabilityReader } from "./calendar-availability";
 export { createConnectedReadGateway } from "./cli-reads";
 
