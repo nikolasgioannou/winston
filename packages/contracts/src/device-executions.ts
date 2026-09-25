@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { actionTaskSchema } from "./actions";
 import { deviceMessageSchema } from "./devices";
+import { deviceSessionIdentitySchema } from "./device-registry";
+
+export const deviceFileAuthoritySchema = z.strictObject({
+  session: deviceSessionIdentitySchema,
+  executionId: z.uuid(),
+  transferId: z.uuid(),
+  operation: z.enum(["file.read", "file.write"]),
+});
+export type DeviceFileAuthority = z.infer<typeof deviceFileAuthoritySchema>;
 
 export const deviceOutputByteLimit = 3 * 1024 * 1024;
 export const deviceOutputChunkLimit = 4096;

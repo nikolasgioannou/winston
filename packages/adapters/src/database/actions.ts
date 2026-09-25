@@ -24,7 +24,11 @@ import { assertGmailMutationResolved } from "./gmail-mutation-blocking";
 import { connectionTargetRepository } from "./connection-targets";
 import { assertCalendarMutationResolved } from "./calendar-mutation-blocking";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
-import { deviceExecutionSchema } from "@winston/contracts/device-executions";
+import {
+  deviceExecutionSchema,
+  type DeviceFileAuthority,
+} from "@winston/contracts/device-executions";
+import { reservedDeviceFile } from "./reserved-device-file";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import {
@@ -158,6 +162,47 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       current.intentRevision === action.intentRevision &&
       !["succeeded", "failed", "canceled"].includes(current.task.state)
     );
+  }
+
+  async function deviceAuthority(action: ActionRecord, worker: ActionTask, message: DeviceMessage) {
+    const operation = message.payload;
+    if (operation.kind !== "execute") return false;
+    const { target } = action.request.authorization;
+    if (
+      action.state !== "dispatching" ||
+      target.kind !== "device" ||
+      target.id !== message.deviceId ||
+      target.resource !== null ||
+      action.operationId !== operation.executionId ||
+      action.request.authorization.operation !== `device.${operation.operation.kind}` ||
+      canonical(action.request.arguments) !== canonical(operation.operation) ||
+      canonical(action.dispatchTask) !== canonical(worker) ||
+      operation.taskId !== worker.id ||
+      operation.taskRevision !== worker.revision
+    )
+      return false;
+    const current = await task(worker.id);
+    if (!running(current, worker) || !sameIntent(current, action)) return false;
+    const evaluation = await policy(action);
+    if (
+      evaluation.decision !== "allow" &&
+      !(evaluation.decision === "ask" && action.decisionSource === "owner")
+    )
+      return false;
+    const supported = await deviceSessionRepository(transaction, ownerId).supports(
+      {
+        deviceId: message.deviceId,
+        sessionId: message.sessionId,
+        generation: message.generation,
+      },
+      operation.operation.kind,
+    );
+    if (!supported) return false;
+    // Use database time after lock acquisition, matching task and device leases.
+    const deadline = await transaction.execute(sql`
+      SELECT 1 WHERE ${operation.deadline}::numeric > extract(epoch FROM clock_timestamp()) * 1000
+    `);
+    return deadline.rows.length === 1;
   }
 
   async function stagingProof(input: {
@@ -403,6 +448,23 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       if (!["dispatching", "unknown"].includes(action.state)) return null;
       return save(action, { state: outcome.state, outcome });
     },
+    // Native transfer routes only: pairing identity plus an existing exact reservation.
+    // This does not authorize dispatch and never replaces the dispatch-token proof below.
+    async authorizeDeviceFileTransfer(authenticatedDeviceId: string, input: DeviceFileAuthority) {
+      await lock();
+      const execution = await reservedDeviceFile(
+        transaction,
+        ownerId,
+        authenticatedDeviceId,
+        input,
+      );
+      if (!execution) return null;
+      const stored = await row(execution.actionId);
+      if (!stored || stored.cancellationRequested || !stored.tokenHash) return null;
+      const action = actionRecordSchema.parse(stored.document);
+      if (!action.snapshot) return null;
+      return (await deviceAuthority(action, execution.task, execution.message)) ? execution : null;
+    },
     // A proof check only: the dispatcher must reserve durably before sending once.
     async authorizeDevice(input: {
       id: string;
@@ -419,42 +481,7 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       if (!stored || stored.cancellationRequested || stored.tokenHash !== hash(input.token))
         return false;
       const action = actionRecordSchema.parse(stored.document);
-      const { target } = action.request.authorization;
-      if (
-        action.state !== "dispatching" ||
-        target.kind !== "device" ||
-        target.id !== message.deviceId ||
-        target.resource !== null ||
-        action.operationId !== operation.executionId ||
-        action.request.authorization.operation !== `device.${operation.operation.kind}` ||
-        canonical(action.request.arguments) !== canonical(operation.operation) ||
-        canonical(action.dispatchTask) !== canonical(worker) ||
-        operation.taskId !== worker.id ||
-        operation.taskRevision !== worker.revision
-      )
-        return false;
-      const current = await task(worker.id);
-      if (!running(current, worker) || !sameIntent(current, action)) return false;
-      const evaluation = await policy(action);
-      if (
-        evaluation.decision !== "allow" &&
-        !(evaluation.decision === "ask" && action.decisionSource === "owner")
-      )
-        return false;
-      const supported = await deviceSessionRepository(transaction, ownerId).supports(
-        {
-          deviceId: message.deviceId,
-          sessionId: message.sessionId,
-          generation: message.generation,
-        },
-        operation.operation.kind,
-      );
-      if (!supported) return false;
-      // Use database time after lock acquisition, matching task and device leases.
-      const deadline = await transaction.execute(sql`
-        SELECT 1 WHERE ${operation.deadline}::numeric > extract(epoch FROM clock_timestamp()) * 1000
-      `);
-      return deadline.rows.length === 1;
+      return deviceAuthority(action, worker, message);
     },
     // Server-side adapters only. Dispatch tokens never leave the API process.
     async authorizeFilePublication(input: {
