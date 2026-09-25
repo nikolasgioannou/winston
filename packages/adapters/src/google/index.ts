@@ -16,6 +16,12 @@ export { createGoogleOAuth, type GoogleOAuth } from "./oauth";
 export { GoogleAccessError } from "./errors";
 export { createConnectionTargets, labelSearchResults } from "./targets";
 export { createGmailReader, GmailReadError } from "./gmail";
+export {
+  prepareGmailMutation,
+  rebuildGmailMutation,
+  readGmailMutationPlan,
+  gmailMutationIntent,
+} from "./gmail-mutation-plan";
 export { createCalendarReader, CalendarReadError } from "./calendar-events";
 export { prepareCalendarMutation, readCalendarMutationArguments } from "./calendar-mutation-plan";
 export { createCalendarMutationExecutor } from "./calendar-mutation-executor";
