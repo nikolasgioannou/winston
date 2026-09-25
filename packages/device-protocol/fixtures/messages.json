@@ -445,6 +445,98 @@
           }
         }
       }
+    },
+    {
+      "name": "file-metadata",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.metadata",
+            "path": "/fixtures/report.txt"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-minimum",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-maximum",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": 200
+          }
+        }
+      }
+    },
+    {
+      "name": "all-eight-capabilities",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "capabilities",
+          "capabilities": [
+            "command",
+            "file.read",
+            "file.write",
+            "observe",
+            "input",
+            "application",
+            "file.metadata",
+            "file.list"
+          ]
+        }
+      }
     }
   ],
   "invalid": [
@@ -1742,6 +1834,255 @@
             "path": "/tmp/report.pdf",
             "transferId": "11111111-1111-4111-8111-111111111111",
             "overwrite": false
+          }
+        }
+      }
+    },
+    {
+      "name": "file-metadata-relative",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.metadata",
+            "path": "fixtures/report.txt"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-metadata-missing-path",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.metadata"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-metadata-no-transfer",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.metadata",
+            "path": "/fixtures/report.txt",
+            "transferId": "11111111-1111-4111-8111-111111111111"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-missing-limit",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-relative",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "fixtures",
+            "limit": 200
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-zero",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-too-many",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": 201
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-fraction",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": 1.5
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-string",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": "2"
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-boolean",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": true
+          }
+        }
+      }
+    },
+    {
+      "name": "file-list-limit-negative",
+      "message": {
+        "version": 1,
+        "messageId": "11111111-1111-4111-8111-111111111111",
+        "correlationId": "11111111-1111-4111-8111-111111111111",
+        "deviceId": "11111111-1111-4111-8111-111111111111",
+        "sessionId": "11111111-1111-4111-8111-111111111111",
+        "generation": 2,
+        "payload": {
+          "kind": "execute",
+          "executionId": "11111111-1111-4111-8111-111111111111",
+          "taskId": "11111111-1111-4111-8111-111111111111",
+          "taskRevision": 3,
+          "deadline": 2000,
+          "operation": {
+            "kind": "file.list",
+            "path": "/fixtures",
+            "limit": -1
           }
         }
       }

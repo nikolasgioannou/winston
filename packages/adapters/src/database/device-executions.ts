@@ -245,7 +245,9 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       }
 
       // Commands can invoke desktop automation, so they share the desktop resource.
-      const resource = ["file.read", "file.write"].includes(payload.operation.kind)
+      const resource = ["file.read", "file.write", "file.metadata", "file.list"].includes(
+        payload.operation.kind,
+      )
         ? "file"
         : "desktop";
       const occupied = await transaction.execute<{ slot: number }>(sql`

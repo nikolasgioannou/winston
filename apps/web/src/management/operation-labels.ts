@@ -12,6 +12,8 @@ export const operationLabels: Record<AuthorizationRequest["operation"], string> 
   "device.command": "Run commands",
   "device.file.read": "Read files",
   "device.file.write": "Change files",
+  "device.file.metadata": "Inspect file metadata",
+  "device.file.list": "List folders",
   "device.observe": "Observe screen",
   "device.input": "Use keyboard and mouse",
   "device.application": "Control applications",

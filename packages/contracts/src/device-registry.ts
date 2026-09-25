@@ -25,7 +25,7 @@ export const deviceRegistrationSchema = z.strictObject({
   protocolVersion: z.literal(deviceProtocolVersion),
   capabilities: z
     .array(deviceCapabilitySchema)
-    .max(6)
+    .max(8)
     .refine((items) => new Set(items).size === items.length),
 });
 

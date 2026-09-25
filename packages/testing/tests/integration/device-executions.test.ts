@@ -474,6 +474,33 @@ test("command output enforces original authority, shared ordering, quotas and bo
   });
 });
 
+test("metadata and listing share bounded file slots without taking the desktop slot", async () => {
+  await withTestPostgres(async (_sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      const f = await fixture(database);
+      const operations: Operation[] = [
+        { kind: "file.metadata", path: "/fixtures/item" },
+        { kind: "file.list", path: "/fixtures", limit: 200 },
+        { kind: "file.read", path: "/fixtures/item", transferId: randomUUID() },
+      ];
+      const files = await Promise.all(
+        operations.map((operation) => f.prepare(f.device, operation)),
+      );
+      const results = await Promise.all(files.map((proof) => f.reserve(proof)));
+      assert.deepEqual(results.map((result) => result.status).sort(), [
+        "busy",
+        "reserved",
+        "reserved",
+      ]);
+      assert.equal((await f.reserve(await f.prepare())).status, "reserved");
+    } finally {
+      await database.close();
+    }
+  });
+});
+
 test("device reservations serialize desktop work, bound file work and never grant duplicate sends", async () => {
   await withTestPostgres(async (_sql, connectionString) => {
     await migrateDatabase(connectionString);

@@ -4,6 +4,8 @@ public enum DeviceCapability: String, Sendable, CaseIterable {
   case command
   case fileRead = "file.read"
   case fileWrite = "file.write"
+  case fileMetadata = "file.metadata"
+  case fileList = "file.list"
   case observe
   case input
   case application
@@ -13,6 +15,8 @@ public enum DeviceOperation: Sendable {
   case command(executable: String, arguments: [String], directory: String)
   case fileRead(path: String, transferId: String)
   case fileWrite(path: String, transferId: String, overwrite: Bool, source: DeviceFileSource)
+  case fileMetadata(path: String)
+  case fileList(path: String, limit: Int64)
   case observe(application: String, format: String)
   case input(observationId: String, elementId: String, action: String, text: String)
   case application(application: String, action: String, observationId: String)
@@ -22,6 +26,8 @@ public enum DeviceOperation: Sendable {
     case .command: .command
     case .fileRead: .fileRead
     case .fileWrite: .fileWrite
+    case .fileMetadata: .fileMetadata
+    case .fileList: .fileList
     case .observe: .observe
     case .input: .input
     case .application: .application
@@ -47,6 +53,13 @@ public enum DeviceOperation: Sendable {
       self = try .fileWrite(
         path: reader.path("path"), transferId: reader.identifier("transferId"),
         overwrite: reader.boolean("overwrite"), source: DeviceFileSource(reader.take("source")))
+    case "file.metadata":
+      self = try .fileMetadata(path: reader.path("path"))
+    case "file.list":
+      let path = try reader.path("path")
+      let limit = try reader.number("limit")
+      guard (1...200).contains(limit) else { throw DeviceProtocolError.invalidMessage }
+      self = .fileList(path: path, limit: limit)
     case "observe":
       self = try .observe(
         application: reader.string("application", limit: 255, minimum: 1),

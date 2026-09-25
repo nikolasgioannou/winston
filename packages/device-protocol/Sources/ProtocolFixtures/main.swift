@@ -61,6 +61,23 @@ require(!accepts(revision: 4), "stale task revision")
 require(!accepts(now: 2000), "expired deadline")
 require(!accepts(capabilities: []), "missing capability")
 
+for fixture in valid
+where ["file-metadata", "file-list-minimum"].contains(fixture["name"] as! String) {
+  let inspection = try DeviceMessage(
+    data: JSONSerialization.data(withJSONObject: fixture["message"]!))
+  guard case .execute(_, _, let operation) = inspection.payload else {
+    fatalError("Expected an inspection execution")
+  }
+  for supported in [false, true] {
+    let capabilities: Set<DeviceCapability> = supported ? [operation.capability] : [.fileRead]
+    require(
+      inspection.acceptsExecution(
+        deviceId: id, sessionId: id, generation: 2,
+        taskId: id, taskRevision: 3, now: 1000, capabilities: capabilities) == supported,
+      "inspection requires its exact advertised capability")
+  }
+}
+
 var oversized = frame
 oversized.append(Data(repeating: 32, count: DeviceMessage.frameLimit))
 require((try? DeviceMessage(data: oversized)) == nil, "oversized frame")

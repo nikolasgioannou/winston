@@ -358,6 +358,13 @@
       "when": 1790000000050,
       "tag": "0050_device_file_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790000000051,
+      "tag": "0051_device_inspection_capabilities",
+      "breakpoints": true
     }
   ]
 }

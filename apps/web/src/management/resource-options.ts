@@ -14,6 +14,8 @@ const deviceOperations = {
   command: "device.command",
   "file.read": "device.file.read",
   "file.write": "device.file.write",
+  "file.metadata": "device.file.metadata",
+  "file.list": "device.file.list",
   observe: "device.observe",
   input: "device.input",
   application: "device.application",

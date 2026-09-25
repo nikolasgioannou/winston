@@ -10,6 +10,8 @@ const deviceCapabilities = {
   "device.command": "command",
   "device.file.read": "file.read",
   "device.file.write": "file.write",
+  "device.file.metadata": "file.metadata",
+  "device.file.list": "file.list",
   "device.observe": "observe",
   "device.input": "input",
   "device.application": "application",

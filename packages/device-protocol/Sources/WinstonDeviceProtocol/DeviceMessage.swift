@@ -38,7 +38,7 @@ public enum DevicePayload: Sendable {
 
     switch kind {
     case "capabilities":
-      let capabilities = try reader.array("capabilities", maximum: 6).map { value in
+      let capabilities = try reader.array("capabilities", maximum: 8).map { value in
         guard let name = value as? String, let capability = DeviceCapability(rawValue: name) else {
           throw DeviceProtocolError.invalidMessage
         }

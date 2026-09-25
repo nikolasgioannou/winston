@@ -18,6 +18,10 @@ extension DeviceOperation {
         "kind": "file.write", "path": path, "transferId": transferId, "overwrite": overwrite,
         "source": source.wireValue,
       ]
+    case .fileMetadata(let path):
+      ["kind": "file.metadata", "path": path]
+    case .fileList(let path, let limit):
+      ["kind": "file.list", "path": path, "limit": limit]
     case .observe(let application, let format):
       ["kind": "observe", "application": application, "format": format]
     case .input(let observationId, let elementId, let action, let text):

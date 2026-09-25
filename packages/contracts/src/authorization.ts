@@ -12,6 +12,8 @@ export const authorizationOperationSchema = z.enum([
   "device.command",
   "device.file.read",
   "device.file.write",
+  "device.file.metadata",
+  "device.file.list",
   "device.observe",
   "device.input",
   "device.application",

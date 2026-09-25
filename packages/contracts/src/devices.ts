@@ -35,6 +35,8 @@ export const deviceCapabilitySchema = z.enum([
   "observe",
   "input",
   "application",
+  "file.metadata",
+  "file.list",
 ]);
 
 export const deviceOperationSchema = z.discriminatedUnion("kind", [
@@ -70,6 +72,8 @@ export const deviceOperationSchema = z.discriminatedUnion("kind", [
     action: z.enum(["activate", "raise", "close"]),
     observationId: identifier,
   }),
+  z.strictObject({ kind: z.literal("file.metadata"), path }),
+  z.strictObject({ kind: z.literal("file.list"), path, limit: z.number().int().min(1).max(200) }),
 ]);
 
 const execution = {
@@ -83,7 +87,7 @@ export const devicePayloadSchema = z.discriminatedUnion("kind", [
     kind: z.literal("capabilities"),
     capabilities: z
       .array(deviceCapabilitySchema)
-      .max(6)
+      .max(8)
       .refine((items) => new Set(items).size === items.length),
   }),
   z.strictObject({
