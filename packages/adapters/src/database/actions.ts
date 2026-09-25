@@ -14,6 +14,9 @@ import {
 } from "@winston/contracts/actions";
 import { taskSchema } from "@winston/contracts/tasks";
 import { readCalendarMutationArguments } from "../google/calendar-mutation-plan";
+import { readGmailMutationPlan } from "../google/gmail-mutation-plan";
+import { gmailActionReferencesCurrent } from "./gmail-action-references";
+import { assertGmailMutationResolved } from "./gmail-mutation-blocking";
 import { connectionTargetRepository } from "./connection-targets";
 import { assertCalendarMutationResolved } from "./calendar-mutation-blocking";
 import { deviceMessageSchema, type DeviceMessage } from "@winston/contracts/devices";
@@ -197,6 +200,25 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     const current = await task(worker.id);
     if (!running(current, worker) || !sameIntent(current, action)) return false;
     const evaluation = await policy(action);
+    if (["gmail.draft", "gmail.send"].includes(expected.authorization.operation)) {
+      let plan;
+      try {
+        plan = readGmailMutationPlan(action.request.arguments);
+      } catch {
+        return false;
+      }
+      const planned = plan.prepared.target;
+      if (
+        plan.prepared.operationId !== action.operationId ||
+        planned.operation !== expected.authorization.operation ||
+        planned.connectionId !== target.id ||
+        target.resource !== null ||
+        planned.task?.id !== action.request.task.id ||
+        planned.task.revision !== action.request.task.revision ||
+        !(await gmailActionReferencesCurrent(transaction, ownerId, plan))
+      )
+        return false;
+    }
     if (expected.authorization.operation === "calendar.write") {
       let payload;
       try {
@@ -370,6 +392,9 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     },
     authorizeCalendarMutation(input: ConnectionProof) {
       return authorizeConnection(input, ["calendar.write"]);
+    },
+    authorizeGmailMutation(input: ConnectionProof) {
+      return authorizeConnection(input, ["gmail.draft", "gmail.send"]);
     },
     async unresolvedPriorEffect(input: ActionTask) {
       const worker = actionTaskSchema.parse(input);
@@ -663,6 +688,12 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         return { claimed: false as const, action };
       if (action.request.authorization.operation === "calendar.write")
         await assertCalendarMutationResolved(transaction, ownerId, worker.id, action.id);
+      if (
+        ["gmail.draft", "gmail.send", "gmail.modify"].includes(
+          action.request.authorization.operation,
+        )
+      )
+        await assertGmailMutationResolved(transaction, ownerId, worker.id, action.id);
       // Callers MUST commit before contacting any external executor/provider.
       const token = `wda_${randomBytes(32).toString("base64url")}`;
       await transaction.execute(
