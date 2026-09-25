@@ -14,7 +14,19 @@ mise exec -- bun run build
 mise exec -- bun run dev
 ```
 
-`dev` starts the web app on `127.0.0.1:5173`. Visit `/__dev/design` to review shared components and page states without external services; review modules are excluded from production builds. The root page supports Google sign-in and sign-out. Product management pages follow separately. `dev:server` starts the API on `127.0.0.1:3001` and reads the root `.env.local`. The workspace runs in its Linux container; the CLI entrypoint is still an empty module. Automated checks use synthetic credentials and disposable databases.
+`dev` starts the web app on `127.0.0.1:5173`. Visit `/__dev/design` to review shared components and page states without external services; review modules are excluded from production builds. The management app uses Google sign-in. `dev:server` starts the API on `127.0.0.1:3001` and reads the root `.env.local`. The workspace runs in its Linux container. Automated checks use synthetic credentials and disposable databases.
+
+To run the API and web app together, start your existing local PostgreSQL 17 service, configure `.env.local` from `.env.example`, and run:
+
+```sh
+mise exec -- bun run db:migrate
+mise exec -- bun run dev:check
+mise exec -- bun run dev:stack
+# Include incoming messages from your dedicated development Telegram bot:
+mise exec -- bun run dev:stack --telegram
+```
+
+`dev:check` validates configuration and database schema without starting services. `dev:stack` checks ports 3001 and 5173, then uses Bun's parallel runner; a service failure stops the stack. Ctrl-C stops its owned process group, with forced cleanup after ten seconds if needed. Occupied ports produce an error instead of terminating another process or moving Vite to a different port. Keep local Google callbacks and origins aligned with the fixed addresses above. Restart the stack after changing environment configuration. Database and cloud-workspace provisioning are managed separately; the launcher uses the configured local database and does not install tools.
 
 The API exposes `/health/live` for process liveness and `/health/ready` for startup and dependency readiness. Startup requires a compatible migrated database and complete authentication configuration. Callback, owner, device, and task route groups have separate authenticators and reject access by default. Owner routes validate database sessions and the verified email allowlist on every request; mutations also require the configured web origin. Other authority implementations arrive separately. Request errors use stable codes and server-generated correlation IDs. Request logs contain only correlation ID, status, and duration, excluding request content and raw exceptions. SIGINT/SIGTERM stop new connections and drain active requests, forcing closure after the configured timeout.
 
