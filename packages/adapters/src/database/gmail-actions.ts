@@ -59,6 +59,9 @@ export function gmailActionRepository(transaction: DatabaseTransaction, ownerId:
     return { worker, intent, requestKey, action };
   }
   return {
+    referencesCurrent(inputPlan: unknown) {
+      return gmailActionReferencesCurrent(transaction, ownerId, readGmailMutationPlan(inputPlan));
+    },
     // Preserve the original reviewed bytes and draft version across approval waits.
     async find(inputTask: ActionTask, key: string, inputIntent: unknown) {
       return (await context(inputTask, key, inputIntent)).action;

@@ -6,6 +6,8 @@ import {
   cliResponsibilityRequestSchema,
   cliCalendarMutationRequestSchema,
   calendarMutationInputFromCli,
+  cliGmailMutationRequestSchema,
+  gmailMutationInputFromCli,
   type CliReadRequest,
   type CliResult,
   type CliDeviceRequest,
@@ -19,6 +21,7 @@ import { parseJson, RequestError } from "./errors";
 import { publishFileResponse, type FilePublisher } from "./file-publication";
 import type { FileRequest } from "../files/cli";
 import type { CalendarMutationInput } from "@winston/contracts/calendar-mutations";
+import type { GmailMutationInput } from "@winston/contracts/gmail-mutations";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -42,6 +45,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  gmailMutations?: (
+    credential: ServiceRequest,
+    request: GmailMutationInput,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   calendarReconciliation?: (
     credential: ServiceRequest,
     request: CliCalendarReconciliationRequest,
@@ -69,7 +77,15 @@ type Handlers = {
 
 export function createCliTaskGroup(
   database: Database,
-  { read, publish, files, devices, calendarMutations, calendarReconciliation }: Handlers = {},
+  {
+    read,
+    publish,
+    files,
+    devices,
+    calendarMutations,
+    calendarReconciliation,
+    gmailMutations,
+  }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/publish", async (context) => {
@@ -83,6 +99,17 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    const gmail = cliGmailMutationRequestSchema.safeParse(request);
+    if (gmail.success)
+      return context.json(
+        gmailMutations
+          ? await gmailMutations(
+              authority,
+              gmailMutationInputFromCli(gmail.data),
+              context.req.raw.signal,
+            )
+          : { version: 1, status: "unavailable", message: "Gmail mutations are not configured." },
+      );
     if (request.command === "calendar.reconcile")
       return context.json(
         calendarReconciliation
@@ -161,6 +188,7 @@ export function createCliTaskGroup(
     const request = await parseJson(context, cliRequestSchema);
     if (
       cliCalendarMutationRequestSchema.safeParse(request).success ||
+      cliGmailMutationRequestSchema.safeParse(request).success ||
       request.command === "calendar.reconcile"
     )
       throw new RequestError("invalid_request");

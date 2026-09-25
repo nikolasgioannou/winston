@@ -4,6 +4,12 @@ import { cliReadRequestSchema } from "./cli-reads";
 import { cliScheduleRequestSchema } from "./cli-schedules";
 import { cliResponsibilityRequestSchema } from "./cli-responsibilities";
 import { cliDeviceRequestSchema } from "./cli-devices";
+import { cliGmailMutationRequestSchema } from "./cli-gmail-mutations";
+export {
+  cliGmailMutationRequestSchema,
+  gmailMutationInputFromCli,
+  type CliGmailMutationRequest,
+} from "./cli-gmail-mutations";
 import {
   cliCalendarMutationRequestSchema,
   cliCalendarReconciliationRequestSchema,
@@ -33,6 +39,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliGmailMutationRequestSchema.options,
   cliCalendarReconciliationRequestSchema,
   ...cliCalendarMutationRequestSchema.options,
   ...cliDeviceRequestSchema.options,

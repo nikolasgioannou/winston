@@ -1,5 +1,8 @@
 import type { CliRequest } from "@winston/contracts/cli";
 
+const gmailMessageHelp =
+  " Message JSON requires from {email,name?}, to/cc/bcc arrays of mailboxes, subject, text, html (string or null), reply (null or {sourceMessageId,threadId,inReplyTo,references}), and attachments [{artifactId,revision,name,mediaType,size,sha256}]. Sender must match the selected account. Attachments must be owned, ready artifacts; paths and URLs are not accepted. Reuse the exact key and arguments after approval. Never resend an unknown outcome.";
+
 export const commands = [
   {
     command: "calendar.reconcile",
@@ -144,6 +147,42 @@ export const commands = [
     flags: ["account", "query", "limit", "cursor", "key"],
     usage:
       "--account <uuid> [--query <search>] [--limit <1-100>] [--cursor <json>] [--key <request-key>]",
+  },
+  {
+    command: "gmail.draft-create",
+    description:
+      "Prepare an exact Gmail draft under the account's draft permission." + gmailMessageHelp,
+    id: false,
+    flags: ["account", "key", "message"],
+    usage: "--account <uuid> --key <request-key> --message <json>",
+  },
+  {
+    command: "gmail.draft-update",
+    description:
+      "Replace a reviewed draft version with exact message content. A version check cannot prevent a simultaneous provider edit." +
+      gmailMessageHelp,
+    id: true,
+    flags: ["account", "key", "message", "id", "message-id"],
+    usage:
+      "--account <uuid> --key <request-key> --id <draft-id> --message-id <current-message-id> --message <json>",
+  },
+  {
+    command: "gmail.send",
+    description:
+      "Send an exact message under the selected account's send permission." + gmailMessageHelp,
+    id: false,
+    flags: ["account", "key", "message"],
+    usage: "--account <uuid> --key <request-key> --message <json>",
+  },
+  {
+    command: "gmail.draft-send",
+    description:
+      "Send exact reviewed replacement content from a versioned draft. Gmail removes the draft after sending. A version check cannot prevent a simultaneous provider edit." +
+      gmailMessageHelp,
+    id: true,
+    flags: ["account", "key", "message", "id", "message-id"],
+    usage:
+      "--account <uuid> --key <request-key> --id <draft-id> --message-id <current-message-id> --message <json>",
   },
   {
     command: "gmail.message",

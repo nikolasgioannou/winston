@@ -35,3 +35,8 @@ export type GmailMutationIntent = z.infer<typeof gmailMutationIntentSchema>;
 export type GmailMutationPlan = z.infer<typeof gmailMutationPlanSchema>;
 export type GmailDraftVersion = z.infer<typeof gmailDraftVersionSchema>;
 export type GmailReplySource = z.infer<typeof gmailReplySourceSchema>;
+export const gmailMutationInputSchema = z.strictObject({
+  key: z.string().min(1).max(100),
+  intent: gmailMutationIntentSchema,
+});
+export type GmailMutationInput = z.infer<typeof gmailMutationInputSchema>;

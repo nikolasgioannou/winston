@@ -4,6 +4,7 @@ import {
   cliResultSchema,
   cliReadRequestSchema,
   cliCalendarMutationRequestSchema,
+  cliGmailMutationRequestSchema,
   isScheduleMutation,
   type CliAuthority,
   type CliRequest,
@@ -48,6 +49,7 @@ export async function callGateway(
       signal: AbortSignal.timeout(
         Math.min(
           cliCalendarMutationRequestSchema.safeParse(request).success ||
+            cliGmailMutationRequestSchema.safeParse(request).success ||
             request.command === "calendar.reconcile"
             ? 55_000
             : cliReadRequestSchema.safeParse(request).success

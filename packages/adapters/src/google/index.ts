@@ -17,6 +17,9 @@ export { GoogleAccessError } from "./errors";
 export { createConnectionTargets, labelSearchResults } from "./targets";
 export { createGmailReader, GmailReadError } from "./gmail";
 export { createGmailMutationExecutor } from "./gmail-mutation-executor";
+export { createGmailMutationGateway } from "./gmail-mutation-gateway";
+export { formatGmailMutationApproval } from "./gmail-mutation-review";
+export { readGmailReplySource } from "./gmail-reply-source";
 export {
   prepareGmailMutation,
   rebuildGmailMutation,

@@ -44,6 +44,7 @@ import {
   createGoogleOAuth,
   createConnectedReadGateway,
   createCalendarMutationGateway,
+  createGmailMutationGateway,
 } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
@@ -99,6 +100,7 @@ callbacks.route("/", createDevicePairingRouter(database));
 const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
 let calendarMutations: ReturnType<typeof createCalendarMutationGateway> | undefined;
+let gmailMutations: ReturnType<typeof createGmailMutationGateway> | undefined;
 let calendarReconciliation: ReturnType<typeof createCalendarReconciliationGateway> | undefined;
 if (connectionConfig) {
   const connections = createGoogleConnections({
@@ -108,6 +110,11 @@ if (connectionConfig) {
   });
   connectedReads = createConnectedReadGateway({ database, google: connections });
   calendarMutations = createCalendarMutationGateway({ database, google: connections });
+  gmailMutations = createGmailMutationGateway({
+    database,
+    google: connections,
+    artifacts: storage ? createArtifactReader(database, storage) : () => Promise.resolve(null),
+  });
   calendarReconciliation = createCalendarReconciliationGateway({ database, google: connections });
   owner.route("/connections", createConnectionOwnerRouter(connections));
   owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
@@ -208,6 +215,7 @@ const deviceTransport = createDeviceSocketTransport(database, {
 const cliTasks = createCliTaskGroup(database, {
   ...(connectedReads ? { read: connectedReads } : {}),
   ...(calendarMutations ? { calendarMutations } : {}),
+  ...(gmailMutations ? { gmailMutations } : {}),
   ...(calendarReconciliation ? { calendarReconciliation } : {}),
   ...(storage
     ? {

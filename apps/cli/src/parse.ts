@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { cliRequestSchema, type CliRequest } from "@winston/contracts/cli";
 import { commands, help } from "./commands";
 import { parseCalendarMutation } from "./calendar-mutation";
+import { parseGmailMutation } from "./gmail-mutation";
 
 export type ParsedCommand =
   | { kind: "help"; json: boolean; content: ReturnType<typeof help> }
@@ -23,6 +24,8 @@ export function parseCommand(args: string[]): ParsedCommand {
       account: { type: "string" },
       calendar: { type: "string" },
       event: { type: "string" },
+      message: { type: "string" },
+      "message-id": { type: "string" },
       changes: { type: "string" },
       etag: { type: "string" },
       notify: { type: "string" },
@@ -60,6 +63,21 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (
+    command.command === "gmail.draft-create" ||
+    command.command === "gmail.draft-update" ||
+    command.command === "gmail.send" ||
+    command.command === "gmail.draft-send"
+  ) {
+    const allowed: readonly string[] = command.flags;
+    if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))
+      throw new Error("Unexpected Gmail mutation options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: parseGmailMutation(command.command, values),
+    };
+  }
   if (
     command.command === "calendar.create" ||
     command.command === "calendar.update" ||
