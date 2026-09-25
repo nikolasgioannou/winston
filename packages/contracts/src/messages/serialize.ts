@@ -5,6 +5,7 @@ import {
   type UserMessage,
 } from "./schema";
 import { element, escapeXml } from "./xml";
+import { timestampSnapshot } from "../timezone";
 
 function localTimestamp(snapshot: UserMessage["sentAt"]) {
   const [hours, minutes, seconds = 0] = snapshot.offset.slice(1).split(":").map(Number);
@@ -76,10 +77,17 @@ export function serializeUserMessage(input: unknown) {
     sent_at: message.provider.sentAt,
     ...(message.provider.editedAt ? { edited_at: message.provider.editedAt } : {}),
   });
+  const reference = element(
+    "time_reference",
+    { timezone: message.sentAt.timezone, source: "provider_sent_at" },
+    localTimestamp(timestampSnapshot(new Date(message.provider.sentAt), message.sentAt.timezone)),
+  );
   const event = element(
     "system_event",
     { version: 1, id: message.eventId, message_id: message.messageId, revision: message.revision },
-    [timestamp, provider, serializeMetadata(message.metadata)].filter(Boolean).join("\n"),
+    [timestamp, provider, reference, serializeMetadata(message.metadata)]
+      .filter(Boolean)
+      .join("\n"),
   );
 
   return element(

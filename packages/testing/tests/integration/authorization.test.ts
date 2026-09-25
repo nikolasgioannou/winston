@@ -191,6 +191,41 @@ test("authorization versions fence queued actions and isolate account, calendar 
       assert.deepEqual(await put({ ...read, decision: "allow", revision: 7 }), { revision: 8 });
       assert.equal((await evaluate(read)).decision, "allow");
       assert.equal((await evaluate({ ...read, operation: "gmail.send" })).decision, "ask");
+      const due = await database.transaction(owner, async ({ schedules }) => {
+        await schedules.create({
+          key: "scheduled-email",
+          objective: "Send the requested email",
+          sourceMessageIds: [],
+          timing: { kind: "once", startAt: "2026-01-01T00:00:00.000Z", timezone: "UTC" },
+        });
+        return schedules.claimDue();
+      });
+      assert.ok(due);
+      const scheduledTask = await database.transaction(owner, ({ tasks }) =>
+        tasks.claim(due.task.id, due.task.revision),
+      );
+      const worker = {
+        id: scheduledTask.id,
+        revision: scheduledTask.revision,
+        generation: scheduledTask.generation,
+      };
+      const send = await database.transaction(owner, ({ actions }) =>
+        actions.prepare({
+          key: "send-email",
+          task: worker,
+          authorization: { ...read, operation: "gmail.send" },
+          arguments: { to: "fixture@example.com", subject: "Synthetic scheduled email" },
+        }),
+      );
+      assert.equal(send.state, "pending");
+      assert.equal(
+        (
+          await database.transaction(owner, ({ actions }) =>
+            actions.claim(send.id, send.hash, worker),
+          )
+        )?.claimed,
+        false,
+      );
       await vault.revoke(owner, gmailId, 0);
       assert.equal((await evaluate(read)).decision, "deny");
       assert.deepEqual(await put({ ...read, decision: "deny", revision: 8 }), { revision: 9 });

@@ -58,9 +58,31 @@ test("all incoming message types include one original receipt timestamp with the
       xml.includes('<sent_at timezone="America/New_York">2026-03-08T03:00:00.000-04:00</sent_at>'),
     );
     assert.ok(xml.includes('sent_at="2026-03-08T06:59:00Z"'));
+    assert.ok(
+      xml.includes(
+        '<time_reference timezone="America/New_York" source="provider_sent_at">2026-03-08T01:59:00.000-05:00</time_reference>',
+      ),
+    );
     assert.equal(original.input.text, kind === "text" || kind === "caption" ? "hello" : "");
     assert.equal(serializeUserMessage(JSON.parse(JSON.stringify(original))), xml);
   }
+});
+
+test("delayed messages anchor relative dates before receipt midnight and preserve edits separately", () => {
+  const original = message();
+  original.provider.sentAt = "2026-03-08T04:59:00Z";
+  original.provider.editedAt = "2026-03-08T07:01:00Z";
+  original.input.text = "Remind me tomorrow at 9 am";
+
+  const xml = serializeUserMessage(original);
+  assert.ok(
+    xml.includes(
+      '<time_reference timezone="America/New_York" source="provider_sent_at">2026-03-07T23:59:00.000-05:00</time_reference>',
+    ),
+  );
+  assert.ok(xml.includes('edited_at="2026-03-08T07:01:00Z"'));
+  assert.equal(xml.match(/<time_reference /g)?.length, 1);
+  assert.equal(original.input.text, "Remind me tomorrow at 9 am");
 });
 
 test("untrusted text and attachment names cannot insert XML structure", () => {

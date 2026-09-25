@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
+import { createTelegramStore } from "@winston/adapters/telegram";
 import { scheduleSchema } from "@winston/contracts/schedules";
 import type { CliScheduleRequest } from "@winston/contracts/cli";
 import { withTestPostgres } from "../../src/postgres";
 
 test("schedule CLI fences authority, preserves retry identity and requires current edit revisions", async () => {
-  await withTestPostgres(async (_sql, connectionString) => {
+  await withTestPostgres(async (sql, connectionString) => {
     await migrateDatabase(connectionString);
     const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    const telegram = createTelegramStore(connectionString, 1234);
     const ownerId = randomUUID();
     const other = randomUUID();
     const workspaceId = randomUUID();
@@ -118,6 +120,47 @@ test("schedule CLI fences authority, preserves retry identity and requires curre
         execute({ version: 1, command: "schedules.cancel", id: schedule.id, revision: 0 }),
         /stale/,
       );
+
+      // A later Telegram request gets its own worker and authority, rather than
+      // canceling the completed setup task and leaving the saved schedule active.
+      const challenge = await telegram.challenge(ownerId, "fixture");
+      const receive = (id: number, text: string) =>
+        telegram.receive({
+          update_id: id,
+          message: {
+            message_id: id,
+            date: 1_790_000_000 + id,
+            from: { id: 123, is_bot: false, first_name: "Owner" },
+            chat: { id: 123, type: "private" },
+            text,
+          },
+        });
+      await receive(1, `/start ${challenge.secret}`);
+      await telegram.confirm(ownerId, "fixture", challenge.id);
+      await receive(2, "Cancel my daily plant reminder");
+      const events = await sql<
+        { id: string }[]
+      >`SELECT id FROM winston.events WHERE owner_id = ${ownerId}::uuid AND type = 'telegram.message-received'`;
+      for (const event of events) {
+        await database.transaction(ownerId, ({ conversations }) =>
+          conversations.consumeTelegram(event.id),
+        );
+      }
+      const snapshot = await database.transaction(ownerId, ({ conversations }) =>
+        conversations.snapshot(10),
+      );
+      const message = snapshot.messages[0]?.envelope;
+      assert.equal(message?.input.text, "Cancel my daily plant reminder");
+      assert.ok(message);
+      task = await database.transaction(ownerId, async ({ tasks }) => {
+        const queued = await tasks.create({
+          key: "cancel-plants",
+          objective: "Cancel the saved daily plant reminder",
+          sourceMessageIds: [message.messageId],
+        });
+        return tasks.claim(queued.id, queued.revision);
+      });
+      control = await issue("gateway:control");
       const canceled = await execute({
         version: 1,
         command: "schedules.cancel",
@@ -126,7 +169,14 @@ test("schedule CLI fences authority, preserves retry identity and requires curre
       });
       assert.equal(canceled.status, "ok");
       assert.equal(scheduleSchema.parse(canceled.data).state, "canceled");
+      await sql`UPDATE winston.schedules SET next_run_at = clock_timestamp() - interval '1 second'
+        WHERE owner_id = ${ownerId}::uuid AND id = ${schedule.id}::uuid`;
+      assert.equal(
+        await database.transaction(ownerId, ({ schedules }) => schedules.claimDue()),
+        undefined,
+      );
     } finally {
+      await telegram.close();
       await database.close();
     }
   });
