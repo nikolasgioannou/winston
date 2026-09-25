@@ -10,6 +10,11 @@ private actor ConnectionState {
   func set(_ value: DeviceConnectionState) { self.value = value }
 }
 
+private struct FixtureIdentity: Decodable {
+  let deviceId: String
+  let credential: String
+}
+
 @main
 struct CommandSessionFixture {
   static let id = "11111111-1111-4111-8111-111111111111"
@@ -18,6 +23,16 @@ struct CommandSessionFixture {
     let endpoint = URL(string: CommandLine.arguments[1])!
     let directory = URL(fileURLWithPath: CommandLine.arguments[2])
     let mode = CommandLine.arguments[3]
+    let identity: FixtureIdentity
+    if mode == "integrated" {
+      identity = try JSONDecoder().decode(
+        FixtureIdentity.self,
+        from: Data(contentsOf: directory.appendingPathComponent("identity.json")))
+    } else {
+      identity = FixtureIdentity(
+        deviceId: id, credential: "wdi_" + String(repeating: "a", count: 43))
+    }
+    let id = identity.deviceId
     let journalDirectory = directory.appendingPathComponent("journal")
     if mode == "uncertain" || mode == "repaired" {
       try FileManager.default.createDirectory(
@@ -34,7 +49,7 @@ struct CommandSessionFixture {
       directory: journalDirectory, environment: ["PATH": "/usr/bin:/bin"])
     let transport = try DeviceTransport(
       endpoint: endpoint, deviceId: id,
-      credential: "wdi_" + String(repeating: "a", count: 43),
+      credential: identity.credential,
       allowInsecureLoopback: true)
     let state = ConnectionState()
     let connection = Task {
@@ -61,6 +76,7 @@ struct CommandSessionFixture {
     case "cancel", "disconnect": precondition(record?.state == .canceled)
     case "paused", "repaired": precondition(record == nil)
     case "uncertain": precondition(record?.state == .uncertain)
+    case "integrated": break
     default: fatalError("Unknown fixture mode")
     }
     await journal.close()
