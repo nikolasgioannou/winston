@@ -8,6 +8,7 @@ import { createResponsibilityOwnerRouter } from "./http/responsibilities";
 import { createHandoffOwnerRouter } from "./http/handoffs";
 import { readAuthConfig } from "./auth-config";
 import { readConfig } from "./config";
+import { validateRuntimeEnvironment } from "./environment";
 import { startServer } from "./host";
 import { createDeviceSocketTransport } from "./devices/socket";
 import { createDevicePresenceRouter } from "./http/device-presence";
@@ -55,6 +56,7 @@ import {
   createDevicePairingRouter,
 } from "./http/devices";
 
+validateRuntimeEnvironment(process.env);
 const config = readAuthConfig(process.env);
 const database = createDatabase({
   connectionString: config.connectionString,

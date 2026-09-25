@@ -1,8 +1,10 @@
 import { createTelegramClient, createTelegramStore } from "@winston/adapters/telegram";
 import { readAuthConfig } from "./auth-config";
+import { validateRuntimeEnvironment } from "./environment";
 
 if (process.env.NODE_ENV === "production")
   throw new Error("Telegram polling is for local development only.");
+validateRuntimeEnvironment(process.env);
 const config = readAuthConfig(process.env);
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error("A development Telegram bot token is required.");

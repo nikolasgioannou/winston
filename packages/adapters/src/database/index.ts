@@ -9,3 +9,4 @@ export { migrateDatabase } from "./migrations";
 export type { Owner, OwnerRepository } from "./owners";
 export { dispatchNext } from "./dispatch";
 export type { EventLease, EventRepository, StoredEvent } from "./events";
+export { isProductionEnvironment, validateDatabaseEnvironment } from "./environment";
