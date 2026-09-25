@@ -45,6 +45,7 @@ import {
   createConnectedReadGateway,
   createCalendarMutationGateway,
   createGmailMutationGateway,
+  createGmailReconciliationGateway,
 } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
 import { createConnectionOwnerRouter, createConnectionCallbackRouter } from "./http/connections";
@@ -101,6 +102,7 @@ const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
 let calendarMutations: ReturnType<typeof createCalendarMutationGateway> | undefined;
 let gmailMutations: ReturnType<typeof createGmailMutationGateway> | undefined;
+let gmailReconciliation: ReturnType<typeof createGmailReconciliationGateway> | undefined;
 let calendarReconciliation: ReturnType<typeof createCalendarReconciliationGateway> | undefined;
 if (connectionConfig) {
   const connections = createGoogleConnections({
@@ -116,6 +118,11 @@ if (connectionConfig) {
     artifacts: storage ? createArtifactReader(database, storage) : () => Promise.resolve(null),
   });
   calendarReconciliation = createCalendarReconciliationGateway({ database, google: connections });
+  gmailReconciliation = createGmailReconciliationGateway({
+    database,
+    google: connections,
+    artifacts: storage ? createArtifactReader(database, storage) : () => Promise.resolve(null),
+  });
   owner.route("/connections", createConnectionOwnerRouter(connections));
   owner.route("/handoffs", createHandoffOwnerRouter(database, connections));
   callbacks.route("/", createConnectionCallbackRouter(connections, config.auth.webOrigin));
@@ -216,6 +223,7 @@ const cliTasks = createCliTaskGroup(database, {
   ...(connectedReads ? { read: connectedReads } : {}),
   ...(calendarMutations ? { calendarMutations } : {}),
   ...(gmailMutations ? { gmailMutations } : {}),
+  ...(gmailReconciliation ? { gmailReconciliation } : {}),
   ...(calendarReconciliation ? { calendarReconciliation } : {}),
   ...(storage
     ? {

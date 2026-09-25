@@ -1,4 +1,5 @@
 import type { CliReadRequest, CliResult } from "@winston/contracts/cli";
+import type { GmailReconciliationRead } from "@winston/contracts/gmail-reconciliation";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import type { createDatabase } from "../database";
 
@@ -6,7 +7,7 @@ export async function prepareReadApproval(
   database: ReturnType<typeof createDatabase>,
   ownerId: string,
   credential: ServiceRequest,
-  request: CliReadRequest & { key: string },
+  request: (CliReadRequest & { key: string }) | GmailReconciliationRead,
 ) {
   return database.transaction(ownerId, async (scope) => {
     const authority = await scope.capabilities.authenticate(credential);

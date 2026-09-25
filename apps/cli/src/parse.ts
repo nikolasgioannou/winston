@@ -191,7 +191,11 @@ export function parseCommand(args: string[]): ParsedCommand {
       }),
     };
   }
-  if (command.command === "files.send" || command.command === "calendar.reconcile") {
+  if (
+    command.command === "files.send" ||
+    command.command === "calendar.reconcile" ||
+    command.command === "gmail.reconcile"
+  ) {
     if (flags.some((flag) => !["json", "id", "key"].includes(flag)))
       throw new Error("Unexpected command options.");
     return {

@@ -2,6 +2,12 @@ import { z } from "zod";
 import { gmailMutationIntentSchema } from "./gmail-mutations";
 
 const common = { version: z.literal(1), key: z.string().min(1).max(100) };
+export const cliGmailReconciliationRequestSchema = z.strictObject({
+  ...common,
+  command: z.literal("gmail.reconcile"),
+  id: z.uuid(),
+});
+export type CliGmailReconciliationRequest = z.infer<typeof cliGmailReconciliationRequestSchema>;
 export const cliGmailMutationRequestSchema = z.discriminatedUnion("command", [
   gmailMutationIntentSchema.options[0]
     .omit({ kind: true })

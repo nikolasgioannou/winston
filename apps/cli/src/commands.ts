@@ -5,6 +5,14 @@ const gmailMessageHelp =
 
 export const commands = [
   {
+    command: "gmail.reconcile",
+    id: true,
+    flags: ["id", "key"],
+    description:
+      "Read evidence for an uncertain Gmail operation under current read permission. Never resends. Reuse the observation key after approval; use a fresh key only for a deliberate later observation. A matching result confirms observed content, not recipient delivery or draft removal.",
+    usage: "--id <action-uuid> --key <observation-key>",
+  },
+  {
     command: "calendar.reconcile",
     id: true,
     flags: ["id", "key"],

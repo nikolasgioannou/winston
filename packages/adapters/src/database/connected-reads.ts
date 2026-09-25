@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  connectedReadRequestSchema,
+  type GmailReconciliationRead,
+} from "@winston/contracts/gmail-reconciliation";
 import { sql } from "drizzle-orm";
 import {
   actionRecordSchema,
@@ -6,12 +10,7 @@ import {
   actionTaskSchema,
   type ActionTask,
 } from "@winston/contracts/actions";
-import {
-  cliReadRequestSchema,
-  cliResultSchema,
-  type CliReadRequest,
-  type CliResult,
-} from "@winston/contracts/cli";
+import { cliResultSchema, type CliReadRequest, type CliResult } from "@winston/contracts/cli";
 import { canonicalJson } from "@winston/contracts/json";
 import { taskSchema } from "@winston/contracts/tasks";
 import type { DatabaseTransaction } from "./owners";
@@ -21,9 +20,13 @@ import { connectionTargetKey } from "./connection-target-key";
 export function connectedReadRepository(transaction: DatabaseTransaction, ownerId: string) {
   const actions = actionRepository(transaction, ownerId);
   return {
-    async prepare(inputTask: ActionTask, key: string, input: CliReadRequest) {
+    async prepare(
+      inputTask: ActionTask,
+      key: string,
+      input: CliReadRequest | GmailReconciliationRead,
+    ) {
       const worker = actionTaskSchema.parse(inputTask);
-      const request = cliReadRequestSchema.parse(input);
+      const request = connectedReadRequestSchema.parse(input);
       if (!key.length || key.length > 100 || request.command === "calendars.list")
         throw new Error("Invalid approval read request.");
       await transaction.execute(

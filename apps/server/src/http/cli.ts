@@ -12,6 +12,7 @@ import {
   type CliResult,
   type CliDeviceRequest,
   type CliCalendarReconciliationRequest,
+  type CliGmailReconciliationRequest,
 } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { serviceRequestSchema } from "@winston/contracts/capabilities";
@@ -45,6 +46,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  gmailReconciliation?: (
+    credential: ServiceRequest,
+    request: CliGmailReconciliationRequest,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   gmailMutations?: (
     credential: ServiceRequest,
     request: GmailMutationInput,
@@ -85,6 +91,7 @@ export function createCliTaskGroup(
     calendarMutations,
     calendarReconciliation,
     gmailMutations,
+    gmailReconciliation,
   }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
@@ -99,6 +106,16 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "gmail.reconcile")
+      return context.json(
+        gmailReconciliation
+          ? await gmailReconciliation(authority, request, context.req.raw.signal)
+          : {
+              version: 1,
+              status: "unavailable",
+              message: "Gmail reconciliation is not configured.",
+            },
+      );
     const gmail = cliGmailMutationRequestSchema.safeParse(request);
     if (gmail.success)
       return context.json(
@@ -189,7 +206,8 @@ export function createCliTaskGroup(
     if (
       cliCalendarMutationRequestSchema.safeParse(request).success ||
       cliGmailMutationRequestSchema.safeParse(request).success ||
-      request.command === "calendar.reconcile"
+      request.command === "calendar.reconcile" ||
+      request.command === "gmail.reconcile"
     )
       throw new RequestError("invalid_request");
     if (request.command === "devices.result")

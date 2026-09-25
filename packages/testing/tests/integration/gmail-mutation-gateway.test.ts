@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
+import { z } from "zod";
 import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import { createCredentialCipher, createCredentialVault } from "@winston/adapters/credentials";
-import { createGmailMutationGateway } from "@winston/adapters/google";
+import {
+  createGmailMutationGateway,
+  createGmailReconciliationGateway,
+} from "@winston/adapters/google";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
 import type { GmailMutationInput } from "@winston/contracts/gmail-mutations";
 import type { CliResult } from "@winston/contracts/cli";
@@ -58,6 +62,9 @@ test("Gmail CLI approvals preserve exact content across source reads, Telegram r
     let reads = 0;
     let writes = 0;
     let loseReply = false;
+    let savedRaw = "";
+    let hold: Promise<undefined> | undefined;
+    const started = Promise.withResolvers<undefined>();
     const mutation = createGmailMutationGateway({
       database,
       google,
@@ -102,6 +109,17 @@ test("Gmail CLI approvals preserve exact content across source reads, Telegram r
         writes++;
         assert.ok(typeof init.body === "string");
         assert.match(init.body, /raw/);
+        const body = z
+          .union([
+            z.object({ raw: z.string() }),
+            z.object({ message: z.object({ raw: z.string() }) }),
+          ])
+          .parse(JSON.parse(init.body));
+        savedRaw = "raw" in body ? body.raw : body.message.raw;
+        if (hold) {
+          started.resolve(undefined);
+          return hold.then(() => Promise.reject(new Error("Lost response after hold")));
+        }
         if (loseReply) return Promise.reject(new Error("Lost provider reply"));
         return Promise.resolve(
           Response.json(
@@ -112,8 +130,59 @@ test("Gmail CLI approvals preserve exact content across source reads, Telegram r
         );
       },
     });
+    let observations = 0;
+    let evidenceMode = "missing";
+    const reconcileGateway = createGmailReconciliationGateway({
+      database,
+      google,
+      artifacts: () => Promise.resolve(null),
+      fetch: (url, init) => {
+        observations++;
+        assert.equal(init.method, "GET");
+        if (url.pathname.endsWith("/messages") || url.pathname.endsWith("/drafts")) {
+          assert.match(url.searchParams.get("q") ?? "", /^rfc822msgid:</);
+          assert.equal(url.searchParams.get("maxResults"), "2");
+          const item = url.pathname.endsWith("/drafts")
+            ? { id: "draft1", message: { id: "sent1", threadId: "thread1" } }
+            : { id: "sent1", threadId: "thread1" };
+          return Promise.resolve(
+            Response.json({
+              [url.pathname.endsWith("/drafts") ? "drafts" : "messages"]:
+                evidenceMode === "missing"
+                  ? []
+                  : evidenceMode === "duplicate"
+                    ? [item, item]
+                    : [item],
+            }),
+          );
+        }
+        assert.equal(url.searchParams.get("format"), "raw");
+        const raw =
+          evidenceMode === "bcc"
+            ? Buffer.from(savedRaw, "base64url")
+                .toString("utf8")
+                .replace("private@example.com", "other@example.com")
+            : Buffer.from(savedRaw, "base64url").toString("utf8");
+        const found = {
+          id: "sent1",
+          threadId: "thread1",
+          raw: evidenceMode === "malformed" ? "!" : Buffer.from(raw).toString("base64url"),
+          labelIds: ["SENT"],
+        };
+        return Promise.resolve(
+          Response.json(
+            url.pathname.includes("/drafts/") ? { id: "draft1", message: found } : found,
+          ),
+        );
+      },
+    });
     const { app } = createApi({
-      groups: { task: createCliTaskGroup(database, { gmailMutations: mutation }) },
+      groups: {
+        task: createCliTaskGroup(database, {
+          gmailMutations: mutation,
+          gmailReconciliation: reconcileGateway,
+        }),
+      },
     });
     async function task() {
       return database.transaction(ownerId, async ({ tasks }) => {
@@ -147,6 +216,17 @@ test("Gmail CLI approvals preserve exact content across source reads, Telegram r
         controlToken: issued.token,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       };
+    }
+    async function reconcile(
+      access: Awaited<ReturnType<typeof credential>>,
+      id: string,
+      key: string,
+    ) {
+      const parsed = parseCommand(["gmail", "reconcile", "--id", id, "--key", key]);
+      assert.equal(parsed.kind, "request");
+      return callGateway(access, parsed.request, (url, init) =>
+        Promise.resolve(app.request(new URL(url).pathname, init)),
+      );
     }
     async function gateway(
       access: Awaited<ReturnType<typeof credential>>,
@@ -360,6 +440,152 @@ test("Gmail CLI approvals preserve exact content across source reads, Telegram r
       assert.equal((await gateway(access, { ...send, key: "replacement" })).status, "unknown");
       assert.equal((await gateway(access, send)).status, "unknown");
       assert.equal(writes, 4);
+      assert.ok(uncertain.referenceId);
+      const unknownId = uncertain.referenceId;
+      const readWait = await reconcile(access, unknownId, "observe");
+      assert.equal(observations, 0);
+      current = await approve(readWait, current);
+      access = await credential(current);
+      assert.equal((await reconcile(access, unknownId, "observe")).status, "unknown");
+      assert.equal(observations, 1);
+      evidenceMode = "matching";
+      assert.equal((await reconcile(access, unknownId, "observe")).status, "unknown");
+      assert.equal(observations, 1, "Same observation key preserves its original absence result");
+      for (const mode of ["duplicate", "bcc", "malformed", "matching"]) {
+        evidenceMode = mode;
+        current = await approve(await reconcile(access, unknownId, mode), current);
+        access = await credential(current);
+        const result = await reconcile(access, unknownId, mode);
+        assert.equal(result.status, mode === "matching" ? "ok" : "unknown");
+        if (mode === "matching") assert.match(JSON.stringify(result), /does not establish who/);
+        assert.equal(writes, 4, "Reconciliation never sends again");
+      }
+      const beforeCached = observations;
+      assert.equal((await reconcile(access, unknownId, "matching")).status, "ok");
+      assert.equal(observations, beforeCached);
+      assert.equal((await reconcile(access, randomUUID(), "missing-action")).status, "denied");
+      assert.equal(
+        (await gateway(access, { ...send, key: "after-resolution" })).status,
+        "waiting",
+        "Verified evidence clears this task's uncertain-write fence",
+      );
+
+      // Draft create and update use the draft collection, never a message-send endpoint.
+      for (const kind of ["draft.create", "draft.update", "draft.send"] as const) {
+        current = await task();
+        access = await credential(current);
+        const input: GmailMutationInput = {
+          key: kind,
+          intent:
+            kind === "draft.create"
+              ? { kind, accountId, message }
+              : { kind, accountId, message, draftId: "draft1", expectedMessageId: "message1" },
+        };
+        let result = await gateway(access, input);
+        while (result.status === "waiting") {
+          current = await approve(result, current);
+          access = await credential(current);
+          result = await gateway(access, input);
+        }
+        assert.equal(result.status, "unknown");
+        assert.ok(result.referenceId);
+        const priorWrites: number = writes;
+        current = await approve(
+          await reconcile(access, result.referenceId, "draft-observation"),
+          current,
+        );
+        access = await credential(current);
+        assert.equal(
+          (await reconcile(access, result.referenceId, "draft-observation")).status,
+          "ok",
+        );
+        assert.equal(writes, priorWrites);
+      }
+
+      current = await task();
+      access = await credential(current);
+      current = await approve(await gateway(access, send), current);
+      access = await credential(current);
+      const revoked = await gateway(access, send);
+      assert.equal(revoked.status, "unknown");
+      assert.ok(revoked.referenceId);
+      await database.transaction(ownerId, ({ authorization }) =>
+        authorization.put({
+          revision: 0,
+          target: { kind: "connection", id: accountId, resource: null },
+          operation: "gmail.read",
+          decision: "deny",
+        }),
+      );
+      const beforeDenied = observations;
+      assert.equal((await reconcile(access, revoked.referenceId, "revoked")).status, "unknown");
+      assert.equal(observations, beforeDenied);
+      assert.equal(
+        (
+          await database.transaction(ownerId, ({ actions }) =>
+            actions.find(revoked.referenceId ?? ""),
+          )
+        )?.state,
+        "unknown",
+      );
+      current = await task();
+      access = await credential(current);
+      current = await approve(await gateway(access, send), current);
+      access = await credential(current);
+      const release = Promise.withResolvers<undefined>();
+      hold = release.promise;
+      const dispatching = gateway(access, send);
+      await started.promise;
+      try {
+        const rows = await sql<
+          { id: string }[]
+        >`SELECT id::text AS id FROM winston.actions WHERE owner_id = ${ownerId}::uuid AND task_id = ${current.id}::uuid AND document->>'state' = 'dispatching'`;
+        assert.ok(rows[0]);
+        assert.equal((await reconcile(access, rows[0].id, "in-flight")).status, "unknown");
+        assert.equal(observations, beforeDenied);
+      } finally {
+        release.resolve(undefined);
+      }
+      assert.equal((await dispatching).status, "unknown");
+
+      const stranger = randomUUID();
+      const otherWorkspace = randomUUID();
+      const other = await database.transaction(
+        stranger,
+        async ({ owners, workspaces, tasks, capabilities }) => {
+          await owners.ensure();
+          await workspaces.register(otherWorkspace, "Other owner");
+          await workspaces.setState(otherWorkspace, 0, "active");
+          const queued = await tasks.create({
+            key: "other",
+            objective: "Other owner fixture",
+            sourceMessageIds: [],
+          });
+          const running = await tasks.claim(queued.id, queued.revision);
+          return capabilities.issue({
+            kind: "workspace",
+            subjectId: otherWorkspace,
+            resourceId: otherWorkspace,
+            resourceRevision: 1,
+            taskId: running.id,
+            revision: running.revision,
+            generation: running.generation,
+            operation: "gateway:control",
+            credential: null,
+          });
+        },
+      );
+      assert.equal(
+        (
+          await reconcile(
+            { ...access, workspaceId: otherWorkspace, controlToken: other.token },
+            revoked.referenceId,
+            "other-owner",
+          )
+        ).status,
+        "denied",
+      );
+      assert.equal(observations, beforeDenied);
     } finally {
       await database.close();
     }

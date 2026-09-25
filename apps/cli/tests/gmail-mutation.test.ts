@@ -19,6 +19,25 @@ const message = {
 };
 const base = ["--account", accountId, "--key", "message", "--message", JSON.stringify(message)];
 
+test("Gmail reconciliation takes only an operation identity and explicit observation key", () => {
+  const args = ["gmail", "reconcile", "--id", accountId, "--key", "check"];
+  const parsed = parseCommand(args);
+  assert.equal(parsed.kind, "request");
+  assert.deepEqual(parsed.request, {
+    version: 1,
+    command: "gmail.reconcile",
+    id: accountId,
+    key: "check",
+  });
+  for (const invalid of [
+    args.slice(0, -2),
+    [...args, "--account", accountId],
+    [...args, "--key", "second"],
+  ]) {
+    assert.throws(() => parseCommand(invalid));
+  }
+});
+
 test("Gmail CLI preserves exact content and separate draft and message identities", () => {
   for (const [command, kind] of [
     ["draft-create", "draft.create"],
