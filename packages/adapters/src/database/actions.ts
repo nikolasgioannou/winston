@@ -30,6 +30,7 @@ import {
 } from "@winston/contracts/device-executions";
 import { reservedDeviceFile } from "./reserved-device-file";
 import { deviceArtifactEvidence } from "./device-artifact-evidence";
+import { deviceWriteAuthority } from "./device-write-authority";
 import { deviceSessionRepository } from "./device-sessions";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
 import {
@@ -185,6 +186,11 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       return false;
     const current = await task(worker.id);
     if (!running(current, worker) || !sameIntent(current, action)) return false;
+    if (
+      operation.operation.kind === "file.write" &&
+      !(await deviceWriteAuthority(transaction, ownerId, action, worker))
+    )
+      return false;
     const evaluation = await policy(action);
     if (
       evaluation.decision !== "allow" &&
@@ -395,6 +401,11 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
         return false;
       const current = await task(execution.task.id);
       if (!running(current, execution.task) || !sameIntent(current, action)) return false;
+      if (
+        original.operation.kind === "file.write" &&
+        !(await deviceWriteAuthority(transaction, ownerId, action, execution.task))
+      )
+        return false;
       const evaluation = await policy(action);
       return (
         evaluation.decision === "allow" ||

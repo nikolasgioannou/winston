@@ -33,6 +33,8 @@ test("native file authority requires a reserved exact operation and rechecks all
           "action-canceled",
           "session-lease",
         ] as const) {
+          // Writes additionally require the source binding exercised by device-file-writes.
+          if (operationKind === "file.write" && reason !== "allowed") continue;
           const ownerId = randomUUID();
           const prepared = await database.transaction(ownerId, async (scope) => {
             await scope.owners.ensure();
@@ -130,6 +132,11 @@ test("native file authority requires a reserved exact operation and rechecks all
           const reservation = await database.transaction(ownerId, ({ deviceExecutions }) =>
             deviceExecutions.reserve({ id: action.id, token, task, message }),
           );
+          if (operationKind === "file.write") {
+            assert.equal(reservation.status, "denied");
+            assert.equal(await authorize(), null);
+            continue;
+          }
           assert.equal(reservation.status, "reserved");
           assert.equal((await authorize())?.actionId, action.id);
           assert.equal(await authorize({ ...proof, transferId: randomUUID() }), null);
@@ -137,7 +144,7 @@ test("native file authority requires a reserved exact operation and rechecks all
           assert.equal(
             await authorize({
               ...proof,
-              operation: operationKind === "file.read" ? "file.write" : "file.read",
+              operation: "file.write",
             }),
             null,
           );

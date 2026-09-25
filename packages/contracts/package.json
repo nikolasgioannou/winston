@@ -19,6 +19,7 @@
     "./credentials": "./src/credentials.ts",
     "./devices": "./src/devices.ts",
     "./device-executions": "./src/device-executions.ts",
+    "./device-file-writes": "./src/device-file-writes.ts",
     "./device-registry": "./src/device-registry.ts",
     "./events": "./src/events.ts",
     "./gmail": "./src/gmail.ts",

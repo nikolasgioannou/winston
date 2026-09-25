@@ -351,6 +351,13 @@
       "when": 1790000000049,
       "tag": "0049_file_delivery_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790000000050,
+      "tag": "0050_device_file_writes",
+      "breakpoints": true
     }
   ]
 }
