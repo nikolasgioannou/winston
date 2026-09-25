@@ -17,16 +17,19 @@ public actor ExecutionSession {
   private let coordinator: ExecutionCoordinator
   private let executor: CommandExecutor
   private let fileReads: FileReadExecutor?
+  private let fileWrites: FileWriteExecutor?
   private var workers: [JournalKey: Worker] = [:]
   private var running = false
 
   public init(
-    journal: ExecutionJournal, environment: [String: String], fileReads: FileReadExecutor? = nil
+    journal: ExecutionJournal, environment: [String: String], fileReads: FileReadExecutor? = nil,
+    fileWrites: FileWriteExecutor? = nil
   ) {
     self.journal = journal
     coordinator = ExecutionCoordinator(journal: journal)
     executor = CommandExecutor(environment: environment)
     self.fileReads = fileReads
+    self.fileWrites = fileWrites
   }
 
   public func run(
@@ -39,7 +42,9 @@ public actor ExecutionSession {
     do {
       let uncertain = try await journal.hasUncertainExecution()
       let blocked = await coordinator.requiresReconciliation
-      let supported: Set<DeviceCapability> = fileReads == nil ? [.command] : [.command, .fileRead]
+      var supported: Set<DeviceCapability> = [.command]
+      if fileReads != nil { supported.insert(.fileRead) }
+      if fileWrites != nil { supported.insert(.fileWrite) }
       let capabilities: Set<DeviceCapability> = uncertain || blocked ? [] : supported
       await coordinator.setSession(session, capabilities: capabilities)
       if !capabilities.isEmpty, await ready() {
@@ -67,11 +72,14 @@ public actor ExecutionSession {
             let replies = ExecutionReplies(
               transport: transport, session: session,
               request: request, binding: binding)
-            let execution = Task { [coordinator, executor, fileReads] in
+            let execution = Task { [coordinator, executor, fileReads, fileWrites] in
               try await coordinator.execute(request) { command in
                 try await replies.running()
                 if command.capability == .fileRead, let fileReads {
                   return try await fileReads.execute(request, session: session)
+                }
+                if command.capability == .fileWrite, let fileWrites {
+                  return try await fileWrites.execute(request, session: session)
                 }
                 return try await executor.execute(command, deadline: deadline) { stream, text in
                   try await replies.output(stream, text)

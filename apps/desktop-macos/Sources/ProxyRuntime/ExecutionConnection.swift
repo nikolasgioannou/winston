@@ -8,13 +8,16 @@ public struct ExecutionConnection: Sendable {
   private let directory: URL
   private let environment: [String: String]
   private let fileReads: FileReadConfiguration?
+  private let fileWrites: FileWriteConfiguration?
 
   public init(
-    directory: URL, environment: [String: String], fileReads: FileReadConfiguration? = nil
+    directory: URL, environment: [String: String], fileReads: FileReadConfiguration? = nil,
+    fileWrites: FileWriteConfiguration? = nil
   ) {
     self.directory = directory
     self.environment = environment
     self.fileReads = fileReads
+    self.fileWrites = fileWrites
   }
 
   public func run(
@@ -32,7 +35,8 @@ public struct ExecutionConnection: Sendable {
     do {
       let runtime = ExecutionSession(
         journal: journal, environment: environment,
-        fileReads: try fileReads?.executor(directory: directory))
+        fileReads: try fileReads?.executor(directory: directory),
+        fileWrites: fileWrites?.executor())
       try await DeviceConnectionLoop(transport: transport).run(
         onState: onState, status: status,
         handleSession: { session in

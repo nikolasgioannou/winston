@@ -78,7 +78,13 @@ package struct SessionDependencies {
               origin: identity.origin, deviceId: identity.deviceId,
               credential: identity.credential),
             // Server approval binds each read to its exact path; macOS permissions still apply.
-            root: try FileRoot(path: "/")))
+            root: try FileRoot(path: "/")),
+          fileWrites: FileWriteConfiguration(
+            downloader: try DeviceFileDownloader(
+              origin: identity.origin, deviceId: identity.deviceId,
+              credential: identity.credential),
+            // Each write separately binds the destination, collision policy and source bytes.
+            root: try FileWriteRoot(path: "/")))
         try await runtime.run(transport: transport, onState: onState, status: status)
       })
   }

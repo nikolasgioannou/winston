@@ -52,6 +52,7 @@ let package = Package(
     .executableTarget(name: "FileUploadFixture", dependencies: ["ProxyFileTransfer"]),
     .executableTarget(name: "FileDownloadFixture", dependencies: ["ProxyFileTransfer"]),
     .executableTarget(name: "FileSessionFixture", dependencies: ["ProxyRuntime"]),
+    .executableTarget(name: "FileWriteSessionFixture", dependencies: ["ProxyRuntime"]),
     .executableTarget(
       name: "CommandHandlerFixture", dependencies: ["ProxyExecution", "ProxyCommands"]),
     .executableTarget(name: "CommandSessionFixture", dependencies: ["ProxyRuntime"]),
