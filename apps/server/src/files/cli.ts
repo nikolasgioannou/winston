@@ -17,20 +17,37 @@ export function createFileCommands(database: ReturnType<typeof createDatabase>, 
             (request.command === "files.send" && current.operation !== "gateway:control")
           )
             return { version: 1, status: "denied", message: "Task authority unavailable." };
-          const delivery =
-            request.command === "files.send"
-              ? await telegramFiles.enqueue({
-                  key: request.key,
-                  artifactId: request.id,
-                  botId,
-                  workspaceId: current.resourceId,
-                  task: {
-                    id: current.taskId,
-                    revision: current.revision,
-                    generation: current.generation,
-                  },
-                })
-              : await telegramFiles.find(request.id);
+          let delivery;
+          if (request.command === "files.send") {
+            const prepared = await telegramFiles.prepare({
+              key: request.key,
+              artifactId: request.id,
+              botId,
+              workspaceId: current.resourceId,
+              task: {
+                id: current.taskId,
+                revision: current.revision,
+                generation: current.generation,
+              },
+            });
+            if (prepared.kind === "denied")
+              return {
+                version: 1,
+                status: "denied",
+                message: "This exact file delivery is not permitted or is no longer available.",
+              };
+            if (prepared.kind === "waiting" || prepared.kind === "unknown")
+              return {
+                version: 1,
+                status: prepared.kind,
+                referenceId: prepared.actionId,
+                message:
+                  prepared.kind === "waiting"
+                    ? "Waiting for exact file-read approval. Resume files send with the same artifact and key."
+                    : "File-read approval could not be confirmed. Reuse the same artifact and key.",
+              };
+            delivery = prepared.delivery;
+          } else delivery = await telegramFiles.find(request.id);
           if (!delivery || delivery.taskId !== current.taskId)
             return {
               version: 1,

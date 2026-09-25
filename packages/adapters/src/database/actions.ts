@@ -34,6 +34,8 @@ import {
   artifactStageReceiptSchema,
   type ArtifactStagePlan,
   type ArtifactStageReceipt,
+  fileDeliveryPlanSchema,
+  type FileDeliveryPlan,
 } from "@winston/contracts/artifacts";
 import type { DatabaseTransaction } from "./owners";
 import { authorizationRepository } from "./authorization";
@@ -527,6 +529,62 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     },
     async authorizeArtifactStaging(input: Parameters<typeof stagingProof>[0]) {
       return Boolean(await stagingProof(input));
+    },
+    // Exact queue authorization, separate from the eventual Telegram transport receipt.
+    async authorizeFileDelivery(input: {
+      id: string;
+      plan: FileDeliveryPlan;
+      proof:
+        | { kind: "dispatch"; task: ActionTask; token: string }
+        | { kind: "receipt"; taskId: string; intentRevision: number; deliveryId: string };
+    }) {
+      const plan = fileDeliveryPlanSchema.parse(input.plan);
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      const { operation, target } = action.request.authorization;
+      if (
+        !action.snapshot ||
+        !action.dispatchTask ||
+        operation !== "workspace.file.read" ||
+        target.kind !== "workspace" ||
+        target.id !== plan.workspaceId ||
+        target.resource !== null ||
+        canonical(action.request.arguments) !== canonical(plan)
+      )
+        return false;
+      if (input.proof.kind === "dispatch") {
+        const worker = actionTaskSchema.parse(input.proof.task);
+        const current = await task(worker.id);
+        if (
+          action.request.task.id !== worker.id ||
+          action.state !== "dispatching" ||
+          stored.tokenHash !== hash(input.proof.token) ||
+          canonical(action.dispatchTask) !== canonical(worker) ||
+          !running(current, worker) ||
+          !sameIntent(current, action)
+        )
+          return false;
+      } else {
+        const current = await task(input.proof.taskId);
+        if (
+          action.state !== "succeeded" ||
+          action.request.task.id !== input.proof.taskId ||
+          action.intentRevision !== input.proof.intentRevision ||
+          action.outcome?.state !== "succeeded" ||
+          action.outcome.providerReference !== input.proof.deliveryId ||
+          !current ||
+          current.intentRevision !== input.proof.intentRevision ||
+          ["failed", "canceled"].includes(current.task.state)
+        )
+          return false;
+      }
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
     },
     // Delivery consumes completed provenance after a worker finishes; it cannot dispatch new work.
     async authorizeCompletedArtifactReceipt(input: {

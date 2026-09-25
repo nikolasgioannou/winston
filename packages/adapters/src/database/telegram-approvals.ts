@@ -9,6 +9,7 @@ import { formatCalendarMutationApproval } from "../google/calendar-mutation-revi
 import { formatGmailMutationApproval } from "../google/gmail-mutation-review";
 import { formatGmailLabelMutationApproval } from "../google/gmail-label-mutation-review";
 import { formatGmailTrashApproval } from "../google/gmail-trash-review";
+import { formatFileDeliveryApproval } from "../artifacts/delivery-review";
 import { actionRepository } from "./actions";
 import { telegramOutboundRepository } from "./telegram-outbound";
 import type { DatabaseTransaction } from "./owners";
@@ -64,14 +65,15 @@ export function telegramApprovalRepository(transaction: DatabaseTransaction, own
               ? formatGmailLabelMutationApproval(action)
               : ["gmail.draft", "gmail.send"].includes(action.request.authorization.operation)
                 ? formatGmailMutationApproval(action)
-                : [
+                : (formatFileDeliveryApproval(action) ??
+                  [
                     "Approval needed",
                     `Action: ${action.request.authorization.operation}`,
                     `Target: ${target.kind} ${target.id}${target.resource ? ` / ${target.resource}` : ""}`,
                     "Details:",
                     JSON.stringify(action.request.arguments, null, 2),
                     `Expires: ${action.expiresAt}`,
-                  ].join("\n");
+                  ].join("\n"));
       const outboundId = await telegramOutboundRepository(transaction, ownerId).enqueue(
         `approval:${String(botId)}:${id}:${String(action.revision)}`,
         botId,

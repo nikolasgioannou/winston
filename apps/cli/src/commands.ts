@@ -173,7 +173,7 @@ export const commands = [
   {
     command: "files.send",
     description:
-      "Queue a published artifact for delivery to the owner in Telegram. Reuse the same key on retry.",
+      "Queue a published or verified staged artifact for delivery to the owner in Telegram. Exact file-read approval may be required. Reuse the same artifact and key after approval or interruption.",
     id: true,
     usage: "--id <artifact-uuid> --key <request-key>",
   },

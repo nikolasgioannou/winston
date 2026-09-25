@@ -104,6 +104,24 @@ export const filePublicationSchema = artifactMetadataSchema.omit({ source: true 
 });
 export type FilePublication = z.infer<typeof filePublicationSchema>;
 
+export const fileDeliveryPlanSchema = z.strictObject({
+  version: z.literal(1),
+  artifactId: z.uuid(),
+  artifactRevision: z.number().int().nonnegative(),
+  workspaceId: z.uuid(),
+  stagingTransferId: z.uuid().nullable(),
+  botId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  chatId: z
+    .string()
+    .regex(/^-?[1-9][0-9]*$/)
+    .max(20),
+  name: artifactMetadataSchema.shape.name,
+  mediaType: artifactMetadataSchema.shape.mediaType,
+  size: artifactMetadataSchema.shape.size,
+  sha256: artifactMetadataSchema.shape.sha256,
+});
+export type FileDeliveryPlan = z.infer<typeof fileDeliveryPlanSchema>;
+
 export const deliveryDownloadSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("unavailable") }),
   z.strictObject({ kind: z.literal("expired") }),
