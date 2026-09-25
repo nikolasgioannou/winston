@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/ownership.ts --target=bun --env=disable --outdir=dist",
+    "build": "bun build ./src/ownership.ts ./src/journal.ts --target=bun --env=disable --outdir=dist",
     "test:unit": "bun test tests",
     "typecheck": "tsc --project tsconfig.json"
   },

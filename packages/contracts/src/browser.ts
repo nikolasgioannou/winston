@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const browserIdentitySchema = z.strictObject({
+  ownerId: z.uuid(),
+  browserId: z.uuid(),
+});
+export type BrowserIdentity = z.infer<typeof browserIdentitySchema>;
+
 const epoch = z
   .number()
   .int()
