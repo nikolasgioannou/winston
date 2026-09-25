@@ -162,6 +162,44 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
   }
 
   return {
+    // Trusted runtime only. This may stop an existing reservation, never authorize a send.
+    async continueDevice(inputId: string) {
+      const id = actionRecordSchema.shape.operationId.parse(inputId);
+      await lock();
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT document FROM winston.device_executions
+        WHERE owner_id = ${ownerId}::uuid AND execution_id = ${id}::uuid
+      `);
+      if (!rows.rows[0]) return false;
+      const execution = deviceExecutionSchema.parse(rows.rows[0].document);
+      const original = execution.message.payload;
+      if (original.kind !== "execute" || original.executionId !== id) return false;
+      const stored = await row(execution.actionId);
+      if (!stored || stored.cancellationRequested) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      const target = action.request.authorization.target;
+      if (
+        !["dispatching", "unknown"].includes(action.state) ||
+        !["dispatching", "accepted", "running", "unknown"].includes(execution.state) ||
+        action.operationId !== id ||
+        target.kind !== "device" ||
+        target.id !== execution.message.deviceId ||
+        target.resource !== null ||
+        action.request.authorization.operation !== `device.${original.operation.kind}` ||
+        canonical(action.request.arguments) !== canonical(original.operation) ||
+        canonical(action.dispatchTask) !== canonical(execution.task) ||
+        original.taskId !== execution.task.id ||
+        original.taskRevision !== execution.task.revision
+      )
+        return false;
+      const current = await task(execution.task.id);
+      if (!running(current, execution.task) || !sameIntent(current, action)) return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
     // Trusted adapter only. Read persisted evidence rather than accepting a caller's
     // claimed outcome. This never grants dispatch authority or repeats an effect.
     async reconcileDevice(inputId: string) {

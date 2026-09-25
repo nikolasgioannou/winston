@@ -23,6 +23,7 @@ export const deviceExecutionSchema = z.strictObject({
   receipt: deviceMessageSchema.nullable(),
   reconciliation: z
     .strictObject({
+      requestedAt: z.iso.datetime().nullable().default(null),
       request: deviceMessageSchema.refine((message) => message.payload.kind === "reconcile"),
       response: deviceMessageSchema
         .refine((message) => message.payload.kind === "reconciled")

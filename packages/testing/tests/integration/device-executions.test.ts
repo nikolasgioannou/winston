@@ -114,6 +114,156 @@ function receipt(
   };
 }
 
+test("device control plans stop lost authority without releasing reservations", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      for (const reason of [
+        "cancel",
+        "steer",
+        "lease",
+        "generation",
+        "policy",
+        "deadline",
+      ] as const) {
+        const f = await fixture(database);
+        const proof = await f.prepare();
+        assert.equal(proof.message.payload.kind, "execute");
+        const executionId = proof.message.payload.executionId;
+        await f.reserve(proof);
+        const plan = () =>
+          database.transaction(f.ownerId, ({ deviceExecutions }) =>
+            deviceExecutions.planControls(f.device.session),
+          );
+        assert.deepEqual(await plan(), []);
+        switch (reason) {
+          case "cancel":
+            await sql`UPDATE winston.actions SET cancellation_requested = true WHERE owner_id = ${f.ownerId}::uuid`;
+            break;
+          case "steer":
+            await database.transaction(f.ownerId, ({ tasks }) =>
+              tasks.steer(proof.task.id, proof.task.revision, "Changed direction"),
+            );
+            break;
+          case "lease":
+            await sql`UPDATE winston.tasks SET leased_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${f.ownerId}::uuid`;
+            break;
+          case "generation":
+            await sql`UPDATE winston.tasks SET document = jsonb_set(document, '{generation}', to_jsonb((document->>'generation')::integer + 1)) WHERE owner_id = ${f.ownerId}::uuid`;
+            break;
+          case "policy":
+            await database.transaction(f.ownerId, ({ authorization }) =>
+              authorization.put({
+                target: { kind: "device", id: f.device.device.id, resource: null },
+                operation: "device.command",
+                decision: "deny",
+                revision: 0,
+              }),
+            );
+            break;
+          case "deadline":
+            await sql`UPDATE winston.device_executions SET deadline = clock_timestamp() - interval '1 second' WHERE owner_id = ${f.ownerId}::uuid`;
+            break;
+        }
+        const controls = await plan();
+        assert.equal(controls[0]?.payload.kind, "cancel", reason);
+        assert.deepEqual(controls[0].payload, {
+          kind: "cancel",
+          executionId,
+          taskId: proof.task.id,
+          taskRevision: proof.task.revision,
+        });
+        assert.equal(controls[0].correlationId, proof.message.messageId);
+        assert.equal(controls[0].sessionId, proof.message.sessionId);
+        assert.ok(controls.every((message) => message.payload.kind !== "execute"));
+        const record = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.find(executionId),
+        );
+        assert.equal(record?.state, reason === "deadline" ? "unknown" : "dispatching");
+        const occupied = await sql<
+          { slot: number }[]
+        >`SELECT slot FROM winston.device_executions WHERE owner_id = ${f.ownerId}::uuid AND state IN ('dispatching', 'accepted', 'running', 'unknown')`;
+        assert.equal(occupied.length, 1);
+        await f.receive(receipt(proof.message, "canceled", 0));
+        assert.deepEqual(await plan(), []);
+      }
+    } finally {
+      await database.close();
+    }
+  });
+});
+
+test("device control plans fence sessions and throttle journal queries durably", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      const f = await fixture(database);
+      const proof = await f.prepare();
+      assert.equal(proof.message.payload.kind, "execute");
+      const executionId = proof.message.payload.executionId;
+      await f.reserve(proof);
+      const other = randomUUID();
+      await database.transaction(other, ({ owners }) => owners.ensure());
+      const plan = (session = f.device.session, owner = f.ownerId) =>
+        database.transaction(owner, ({ deviceExecutions }) =>
+          deviceExecutions.planControls(session),
+        );
+      assert.deepEqual(await plan(f.device.session, other), []);
+      assert.deepEqual(await plan({ ...f.device.session, sessionId: randomUUID() }), []);
+      const replacement = await database.transaction(f.ownerId, ({ deviceSessions }) =>
+        deviceSessions.open(f.device.device.id, f.device.credential),
+      );
+      assert.ok(replacement);
+      const session = {
+        deviceId: replacement.deviceId,
+        sessionId: replacement.sessionId,
+        generation: replacement.generation,
+      };
+      assert.deepEqual(await plan(), []);
+      const first = await plan(session);
+      assert.equal(first.length, 1);
+      assert.equal(first[0]?.payload.kind, "reconcile");
+      assert.equal(first[0].sessionId, session.sessionId);
+      assert.deepEqual(await plan(session), []);
+      const saved = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+        deviceExecutions.find(executionId),
+      );
+      assert.equal(saved?.state, "unknown");
+      assert.ok(saved.reconciliation?.requestedAt);
+      const query = first[0];
+      assert.equal(query.payload.kind, "reconcile");
+      const evidence = await database.transaction(f.ownerId, ({ deviceExecutions }) =>
+        deviceExecutions.reconcile({
+          ...query,
+          messageId: randomUUID(),
+          correlationId: query.messageId,
+          payload: {
+            kind: "reconciled",
+            executionId,
+            taskId: proof.task.id,
+            taskRevision: proof.task.revision,
+            state: "running",
+            exitCode: null,
+          },
+        }),
+      );
+      assert.equal(evidence?.reconciliation?.requestedAt, saved.reconciliation.requestedAt);
+      assert.deepEqual(await plan(session), []);
+      await sql`UPDATE winston.device_executions SET document = jsonb_set(document, '{reconciliation,requestedAt}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE owner_id = ${f.ownerId}::uuid`;
+      const next = await plan(session);
+      assert.equal(next.length, 1);
+      assert.notEqual(next[0]?.messageId, first[0].messageId);
+      assert.deepEqual(await plan(session), []);
+      await sql`UPDATE winston.device_sessions SET lease_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${f.ownerId}::uuid`;
+      assert.deepEqual(await plan(session), []);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
 test("command output enforces original authority, shared ordering, quotas and bounded reads", async () => {
   await withTestPostgres(async (sql, connectionString) => {
     await migrateDatabase(connectionString);

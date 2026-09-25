@@ -76,8 +76,101 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
     return next;
   }
 
+  async function requestReconciliation(inputId: string, inputSession: DeviceSessionIdentity) {
+    const session = deviceSessionIdentitySchema.parse(inputSession);
+    await lock();
+    const current = await find(inputId);
+    if (!current || terminal(current.state) || current.message.payload.kind !== "execute")
+      return null;
+    if (current.message.deviceId !== session.deviceId || !(await live(session))) return null;
+    const original = current.message.payload;
+    const request = deviceMessageSchema.parse({
+      version: 1,
+      messageId: randomUUID(),
+      correlationId: current.message.messageId,
+      ...session,
+      payload: {
+        kind: "reconcile",
+        executionId: original.executionId,
+        taskId: original.taskId,
+        taskRevision: original.taskRevision,
+        operation: original.operation,
+      },
+    });
+    const clock = await transaction.execute<{ now: string }>(sql`SELECT clock_timestamp() AS now`);
+    const now = clock.rows[0]?.now;
+    if (!now) throw new Error("Database clock unavailable.");
+    const requestedAt = new Date(now).toISOString();
+    // Commit this query before sending. A newer query fences all older replies.
+    await save(
+      { ...current, state: "unknown", reconciliation: { request, response: null, requestedAt } },
+      current.state !== "unknown",
+    );
+    return request;
+  }
+
   return {
     find,
+    requestReconciliation,
+    // Send this bounded control plan only after commit, on the exact authenticated session.
+    async planControls(inputSession: DeviceSessionIdentity) {
+      const session = deviceSessionIdentitySchema.parse(inputSession);
+      await lock();
+      if (!(await live(session))) return [];
+      const rows = await transaction.execute<{
+        document: unknown;
+        expired: boolean;
+        queryDue: boolean;
+      }>(sql`
+        SELECT document, deadline <= clock_timestamp() AS expired,
+          COALESCE((document->'reconciliation'->>'requestedAt')::timestamptz
+            <= clock_timestamp() - interval '30 seconds', true) AS "queryDue"
+        FROM winston.device_executions
+        WHERE owner_id = ${ownerId}::uuid AND device_id = ${session.deviceId}::uuid
+          AND state IN ('dispatching', 'accepted', 'running', 'unknown')
+        ORDER BY execution_id LIMIT 3
+      `);
+      const controls: DeviceMessage[] = [];
+      for (const row of rows.rows) {
+        const execution = deviceExecutionSchema.parse(row.document);
+        const original = execution.message;
+        const payload = original.payload;
+        if (payload.kind !== "execute") throw new Error("Invalid execution record.");
+        const sameSession =
+          original.sessionId === session.sessionId && original.generation === session.generation;
+        if (
+          sameSession &&
+          (row.expired ||
+            !(await actionRepository(transaction, ownerId).continueDevice(payload.executionId)))
+        )
+          controls.push(
+            deviceMessageSchema.parse({
+              version: 1,
+              messageId: randomUUID(),
+              correlationId: original.messageId,
+              ...session,
+              payload: {
+                kind: "cancel",
+                executionId: payload.executionId,
+                taskId: payload.taskId,
+                taskRevision: payload.taskRevision,
+              },
+            }),
+          );
+        const querySession = execution.reconciliation?.request;
+        const queryMatchesSession =
+          querySession?.sessionId === session.sessionId &&
+          querySession.generation === session.generation;
+        if (
+          (execution.state === "unknown" || !sameSession || row.expired) &&
+          (row.queryDue || !queryMatchesSession)
+        ) {
+          const query = await requestReconciliation(payload.executionId, session);
+          if (query) controls.push(query);
+        }
+      }
+      return controls;
+    },
     appendOutput: (message: DeviceMessage) => output.append(message),
     listOutput: (id: string, after?: number) => output.list(id, after),
     async reserve(input: Proof): Promise<Reservation> {
@@ -166,35 +259,6 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       return save({ ...current, state, receipt: message });
     },
 
-    async requestReconciliation(inputId: string, inputSession: DeviceSessionIdentity) {
-      const session = deviceSessionIdentitySchema.parse(inputSession);
-      await lock();
-      const current = await find(inputId);
-      if (!current || terminal(current.state) || current.message.payload.kind !== "execute")
-        return null;
-      if (current.message.deviceId !== session.deviceId || !(await live(session))) return null;
-      const original = current.message.payload;
-      const request = deviceMessageSchema.parse({
-        version: 1,
-        messageId: randomUUID(),
-        correlationId: current.message.messageId,
-        ...session,
-        payload: {
-          kind: "reconcile",
-          executionId: original.executionId,
-          taskId: original.taskId,
-          taskRevision: original.taskRevision,
-          operation: original.operation,
-        },
-      });
-      // Commit this query before sending. A newer query fences all older replies.
-      await save(
-        { ...current, state: "unknown", reconciliation: { request, response: null } },
-        current.state !== "unknown",
-      );
-      return request;
-    },
-
     async reconcile(input: DeviceMessage) {
       const message = deviceMessageSchema.parse(input);
       const result = message.payload;
@@ -223,7 +287,15 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
         result.state === "succeeded" || result.state === "failed" || result.state === "canceled"
           ? result.state
           : "unknown";
-      return save({ ...current, state, reconciliation: { request: query, response: message } });
+      return save({
+        ...current,
+        state,
+        reconciliation: {
+          request: query,
+          response: message,
+          requestedAt: current.reconciliation?.requestedAt ?? null,
+        },
+      });
     },
 
     async expire() {
