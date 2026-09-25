@@ -3,7 +3,7 @@ import { cliRequestSchema, type CliRequest, type CliResult } from "@winston/cont
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import type { DatabaseTransaction } from "./owners";
 import { capabilityRepository } from "./capabilities";
-import { connectionRepository } from "./connections";
+import { discoverAccounts } from "./cli-accounts";
 import { deviceRepository } from "./devices";
 import { actionRepository } from "./actions";
 import { handoffRepository } from "./handoffs";
@@ -108,20 +108,12 @@ export function cliRepository(transaction: DatabaseTransaction, ownerId: string)
           status: "denied",
           message: "Task authority is unavailable or expired.",
         };
-      if (request.command === "accounts.list") {
-        const accounts = await connectionRepository(transaction, ownerId).list();
-        return {
-          version: 1,
-          status: "ok",
-          data: accounts.slice(0, 100).map(({ id, service, email, status, revision }) => ({
-            id,
-            service,
-            email,
-            status,
-            revision,
-          })),
-        };
-      }
+      if (
+        request.command === "accounts.list" ||
+        request.command === "accounts.inspect" ||
+        request.command === "accounts.resolve"
+      )
+        return discoverAccounts(transaction, ownerId, request);
       if (request.command === "devices.list") {
         const devices = await deviceRepository(transaction, ownerId).list();
         return {

@@ -77,6 +77,13 @@ export const cliRequestSchema = z.discriminatedUnion("command", [
   }),
   ...cliReadRequestSchema.options,
   z.strictObject({ version: z.literal(1), command: z.literal("accounts.list") }),
+  z.strictObject({ version: z.literal(1), command: z.literal("accounts.inspect"), id: z.uuid() }),
+  z.strictObject({
+    version: z.literal(1),
+    command: z.literal("accounts.resolve"),
+    service: googleServiceSchema,
+    alias: z.string().trim().min(1).max(1024),
+  }),
   z.strictObject({
     version: z.literal(1),
     command: z.literal("accounts.connect"),

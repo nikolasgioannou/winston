@@ -47,6 +47,7 @@ export function parseCommand(args: string[]): ParsedCommand {
       purpose: { type: "string" },
       scope: { type: "string" },
       response: { type: "string" },
+      alias: { type: "string" },
       responsibility: { type: "string" },
       "agreement-revision": { type: "string" },
       argv: { type: "string" },
@@ -299,6 +300,20 @@ export function parseCommand(args: string[]): ParsedCommand {
     });
     if (!result.success) throw new Error("Invalid read arguments. Run winston --help.");
     return { kind: "request", json: values.json === true, request: result.data };
+  }
+  if (command.command === "accounts.resolve") {
+    if (flags.some((flag) => !["json", "service", "alias"].includes(flag)))
+      throw new Error("Unexpected account resolution options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        service: values.service,
+        alias: values.alias,
+      }),
+    };
   }
   if (flags.some((flag) => !["json", "id", "service", "key", "detail"].includes(flag)))
     throw new Error("Unexpected command options.");

@@ -294,8 +294,22 @@ export const commands = [
   },
   {
     command: "accounts.list",
-    description: "List connected accounts available to this task.",
+    description:
+      "List account identities, labels and connection status. Discovery does not grant provider access.",
     id: false,
+  },
+  {
+    command: "accounts.inspect",
+    description:
+      "Inspect one immutable account identity and its configured calendars, including reconnect status. Does not grant access.",
+    id: true,
+  },
+  {
+    command: "accounts.resolve",
+    description:
+      "Resolve an exact account label or email for one service. Ambiguous aliases require an explicit ID; disconnected accounts are never silently replaced.",
+    id: false,
+    usage: "--service <gmail|calendar> --alias <label-or-email>",
   },
   {
     command: "devices.list",
