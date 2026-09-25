@@ -2,6 +2,8 @@ import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import type { createDatabase, OwnerTransaction } from "@winston/adapters/database";
 import {
   deviceSessionWelcomeSchema,
+  deviceServerIdentitySchema,
+  type DeviceServerIdentity,
   type DeviceSessionIdentity,
 } from "@winston/contracts/device-registry";
 import {
@@ -36,7 +38,11 @@ export type DeviceSocketData = {
   timeout?: ReturnType<typeof setTimeout>;
 };
 
-export function createDeviceSocketTransport(database: Database) {
+export function createDeviceSocketTransport(
+  database: Database,
+  inputServer: DeviceServerIdentity = { serverId: crypto.randomUUID(), machineId: null },
+) {
+  const routing = Object.freeze(deviceServerIdentitySchema.parse(inputServer));
   const sockets = new Set<ServerWebSocket<DeviceSocketData>>();
   const cleanups = new Set<Promise<void>>();
   const lifetime = new AbortController();
@@ -173,6 +179,7 @@ export function createDeviceSocketTransport(database: Database) {
   };
 
   return {
+    routing,
     websocket,
     async upgrade(request: Request, server: Server<DeviceSocketData>) {
       const error = (code: "unauthorized" | "invalid_request" | "unavailable") =>
@@ -189,7 +196,7 @@ export function createDeviceSocketTransport(database: Database) {
       const identity = await database.authenticateDevice(credential);
       if (!identity) return error("unauthorized");
       const session = await database.transaction(identity.ownerId, ({ deviceSessions }) =>
-        deviceSessions.open(identity.deviceId, credential),
+        deviceSessions.open(identity.deviceId, credential, routing),
       );
       if (!session) return error("unauthorized");
       const data: DeviceSocketData = {

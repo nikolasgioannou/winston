@@ -7,6 +7,9 @@ import {
   deviceSessionSchema,
   devicePresenceSchema,
   deviceRegistrationSchema,
+  deviceServerIdentitySchema,
+  deviceSessionRouteSchema,
+  type DeviceServerIdentity,
   type DeviceSessionIdentity,
 } from "@winston/contracts/device-registry";
 import type { DatabaseTransaction } from "./owners";
@@ -39,9 +42,10 @@ export function deviceSessionRepository(transaction: DatabaseTransaction, ownerI
     return true;
   }
   return {
-    async open(inputId: string, inputCredential: string) {
+    async open(inputId: string, inputCredential: string, inputServer?: DeviceServerIdentity) {
       const deviceId = deviceSessionIdentitySchema.shape.deviceId.parse(inputId);
       const credentialHash = deviceTokenHash(deviceCredentialSchema.parse(inputCredential));
+      const server = inputServer ? deviceServerIdentitySchema.parse(inputServer) : null;
       await lock();
       const rows = await transaction.execute<{
         deviceId: string;
@@ -49,15 +53,17 @@ export function deviceSessionRepository(transaction: DatabaseTransaction, ownerI
         generation: number;
         expiresAt: string;
       }>(sql`
-        INSERT INTO winston.device_sessions (owner_id, device_id, session_id, generation, credential_hash, lease_until)
-        SELECT owner_id, id, ${randomUUID()}::uuid, 1, token_hash, clock_timestamp() + interval '45 seconds'
+        INSERT INTO winston.device_sessions (owner_id, device_id, session_id, generation, credential_hash, lease_until, server_id, machine_id)
+        SELECT owner_id, id, ${randomUUID()}::uuid, 1, token_hash, clock_timestamp() + interval '45 seconds',
+          ${server?.serverId ?? null}::uuid, ${server?.machineId ?? null}
         FROM winston.devices WHERE owner_id = ${ownerId}::uuid AND id = ${deviceId}::uuid
           AND revoked_at IS NULL AND token_hash = ${credentialHash}
         ON CONFLICT (owner_id, device_id) DO UPDATE SET
           session_id = EXCLUDED.session_id, generation = winston.device_sessions.generation + 1,
           credential_hash = EXCLUDED.credential_hash, lease_until = EXCLUDED.lease_until,
           reported_status = NULL, last_seen_at = NULL, disconnected_at = NULL, presence_revision = 0,
-          capabilities = '[]'::jsonb, capability_revision = 0
+          capabilities = '[]'::jsonb, capability_revision = 0,
+          server_id = EXCLUDED.server_id, machine_id = EXCLUDED.machine_id
         RETURNING device_id AS "deviceId", session_id AS "sessionId", generation::float8 AS generation,
           to_char(lease_until AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "expiresAt"
       `);
@@ -71,6 +77,35 @@ export function deviceSessionRepository(transaction: DatabaseTransaction, ownerI
         destinations: ["device-runtime"],
       });
       return session;
+    },
+    // Routing evidence only. Execution still requires a fresh authorization and reservation.
+    async route(inputId: string) {
+      const deviceId = deviceSessionIdentitySchema.shape.deviceId.parse(inputId);
+      const rows = await transaction.execute<{
+        deviceId: string;
+        sessionId: string;
+        generation: number;
+        serverId: string;
+        machineId: string | null;
+      }>(sql`
+        SELECT s.device_id AS "deviceId", s.session_id AS "sessionId",
+          s.generation::float8 AS generation, s.server_id AS "serverId", s.machine_id AS "machineId"
+        FROM winston.device_sessions s
+        JOIN winston.devices d ON d.owner_id = s.owner_id AND d.id = s.device_id
+        WHERE s.owner_id = ${ownerId}::uuid AND s.device_id = ${deviceId}::uuid
+          AND s.server_id IS NOT NULL AND s.disconnected_at IS NULL
+          AND s.lease_until > clock_timestamp() AND d.revoked_at IS NULL
+          AND d.token_hash = s.credential_hash
+      `);
+      const row = rows.rows[0];
+      return row
+        ? deviceSessionRouteSchema.parse({
+            deviceId: row.deviceId,
+            sessionId: row.sessionId,
+            generation: row.generation,
+            server: { serverId: row.serverId, machineId: row.machineId },
+          })
+        : null;
     },
     async advertise(input: DeviceSessionIdentity, inputCapabilities: string[]) {
       const session = deviceSessionIdentitySchema.parse(input);

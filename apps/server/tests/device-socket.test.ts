@@ -70,10 +70,17 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
     const entered = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();
     const calls: string[] = [];
+    const serverIdentity = { serverId: crypto.randomUUID(), machineId: "12345678abcdef" };
     const scope: DeviceSocketScope = {
       deviceSessions: {
-        open: () =>
-          Promise.resolve({ ...session, expiresAt: new Date(Date.now() + 45_000).toISOString() }),
+        open: (_device, _credential, server) => {
+          assert.deepEqual(server, serverIdentity);
+          return Promise.resolve({
+            ...session,
+            expiresAt: new Date(Date.now() + 45_000).toISOString(),
+          });
+        },
+        route: () => Promise.resolve(null),
         advertise: () => Promise.resolve(true),
         supports: () => Promise.resolve(false),
         heartbeat: () => {
@@ -111,13 +118,16 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
         },
       },
     };
-    const transport = createDeviceSocketTransport({
-      authenticateDevice: () => Promise.resolve({ ownerId, deviceId: session.deviceId }),
-      transaction: <Result>(id: string, work: (scope: DeviceSocketScope) => Promise<Result>) => {
-        assert.equal(id, ownerId);
-        return work(scope);
+    const transport = createDeviceSocketTransport(
+      {
+        authenticateDevice: () => Promise.resolve({ ownerId, deviceId: session.deviceId }),
+        transaction: <Result>(id: string, work: (scope: DeviceSocketScope) => Promise<Result>) => {
+          assert.equal(id, ownerId);
+          return work(scope);
+        },
       },
-    });
+      serverIdentity,
+    );
     const host = startServer(
       { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 1000 },
       { deviceTransport: transport },
@@ -231,6 +241,7 @@ test("proxy sockets serialize advertisements and heartbeats and discard overflow
     const blocked = Promise.withResolvers<undefined>();
     const calls: string[] = [];
     const sessions: OwnerTransaction["deviceSessions"] = {
+      route: () => Promise.resolve(null),
       open: () =>
         Promise.resolve({ ...session, expiresAt: new Date(Date.now() + 45_000).toISOString() }),
       advertise: async (_session, capabilities) => {
@@ -325,6 +336,7 @@ test("proxy sockets authenticate, acknowledge fenced heartbeats and close invali
   let closed = 0;
   let current: DeviceSessionIdentity | undefined;
   const sessions: OwnerTransaction["deviceSessions"] = {
+    route: () => Promise.resolve(null),
     advertise: () => Promise.resolve(true),
     supports: () => Promise.resolve(false),
     open: () => {

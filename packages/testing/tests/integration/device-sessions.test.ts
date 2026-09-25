@@ -5,6 +5,84 @@ import { createDatabase, migrateDatabase } from "@winston/adapters/database";
 import type { DeviceSessionIdentity } from "@winston/contracts/device-registry";
 import { withTestPostgres } from "../../src/postgres";
 
+test("device routing follows the live authenticated session and remains owner scoped", async () => {
+  await withTestPostgres(async (sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    const ownerId = randomUUID();
+    const other = randomUUID();
+    const firstServer = { serverId: randomUUID(), machineId: "12345678abcdef" };
+    const secondServer = { serverId: randomUUID(), machineId: null };
+    try {
+      for (const id of [ownerId, other])
+        await database.transaction(id, ({ owners }) => owners.ensure());
+      const paired = await database.transaction(ownerId, async ({ devices }) => {
+        const challenge = await devices.start("Routing fixture");
+        const result = await devices.pair(challenge.secret, {
+          platform: "macos",
+          appVersion: "0.1.0",
+          protocolVersion: 1,
+          capabilities: [],
+        });
+        assert.ok(result);
+        return result;
+      });
+      const route = (owner = ownerId) =>
+        database.transaction(owner, ({ deviceSessions }) => deviceSessions.route(paired.device.id));
+      const open = (server?: { serverId: string; machineId: string | null }) =>
+        database.transaction(ownerId, ({ deviceSessions }) =>
+          deviceSessions.open(paired.device.id, paired.credential, server),
+        );
+      await open();
+      assert.equal(await route(), null);
+      const first = await open(firstServer);
+      assert.ok(first);
+      const expected = {
+        deviceId: first.deviceId,
+        sessionId: first.sessionId,
+        generation: first.generation,
+        server: firstServer,
+      };
+      assert.deepEqual(await route(), expected);
+      assert.equal(await route(other), null);
+      const firstIdentity = {
+        deviceId: first.deviceId,
+        sessionId: first.sessionId,
+        generation: first.generation,
+      };
+      const second = await open(secondServer);
+      assert.ok(second);
+      await database.transaction(ownerId, async ({ deviceSessions }) => {
+        assert.equal(await deviceSessions.close(firstIdentity), false);
+        assert.equal(await deviceSessions.heartbeat(firstIdentity, "ready"), false);
+      });
+      const replacement = await route();
+      assert.ok(replacement);
+      assert.deepEqual(replacement.server, secondServer);
+      assert.equal(replacement.sessionId, second.sessionId);
+      assert.equal(replacement.generation, first.generation + 1);
+      const presence = await database.transaction(ownerId, ({ deviceSessions }) =>
+        deviceSessions.presence(),
+      );
+      assert.deepEqual(Object.keys(presence[0] ?? {}).sort(), ["deviceId", "lastSeenAt", "status"]);
+      await assert.rejects(() => open({ ...firstServer, machineId: "bad;app=another" }));
+      assert.deepEqual(await route(), replacement);
+      await sql`UPDATE winston.device_sessions SET lease_until = clock_timestamp() - interval '1 second' WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await route(), null);
+      await open(firstServer);
+      await sql`UPDATE winston.device_sessions SET credential_hash = 'stale' WHERE owner_id = ${ownerId}::uuid`;
+      assert.equal(await route(), null);
+      await open(secondServer);
+      await database.transaction(ownerId, ({ devices }) =>
+        devices.revoke(paired.device.id, paired.device.revision),
+      );
+      assert.equal(await route(), null);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
 test("session capabilities require a fresh live advertisement and explicit readiness", async () => {
   await withTestPostgres(async (sql, connectionString) => {
     await migrateDatabase(connectionString);

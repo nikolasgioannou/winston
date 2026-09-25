@@ -207,7 +207,10 @@ taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);
 
 const host = startServer(readConfig(process.env), {
-  deviceTransport: createDeviceSocketTransport(database),
+  deviceTransport: createDeviceSocketTransport(database, {
+    serverId: crypto.randomUUID(),
+    machineId: process.env.FLY_MACHINE_ID ?? null,
+  }),
   ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),
   readiness: async () => {
     await database.assertCompatible();

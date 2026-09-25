@@ -57,6 +57,18 @@ export const deviceSessionIdentitySchema = z.strictObject({
   generation: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
 });
 export type DeviceSessionIdentity = z.infer<typeof deviceSessionIdentitySchema>;
+// Server-owned routing metadata; never supplied by the device or included in its welcome.
+export const deviceServerIdentitySchema = z.strictObject({
+  serverId: z.uuid(),
+  machineId: z
+    .string()
+    .regex(/^[a-f0-9]{8,32}$/)
+    .nullable(),
+});
+export type DeviceServerIdentity = z.infer<typeof deviceServerIdentitySchema>;
+export const deviceSessionRouteSchema = deviceSessionIdentitySchema.extend({
+  server: deviceServerIdentitySchema,
+});
 export const deviceSessionSchema = deviceSessionIdentitySchema.extend({
   expiresAt: z.iso.datetime(),
 });
