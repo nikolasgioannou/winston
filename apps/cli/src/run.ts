@@ -1,6 +1,7 @@
 import {
   cliExitCodes,
   cliResultSchema,
+  cliDeviceResultSchema,
   type CliRequest,
   type CliResult,
 } from "@winston/contracts/cli";
@@ -49,7 +50,23 @@ export async function runCli(
     };
   }
   try {
-    return output(cliResultSchema.parse(await execute(parsed.request)), parsed.json);
+    const result = cliResultSchema.parse(await execute(parsed.request));
+    const printed = output(result, parsed.json);
+    if (parsed.request.command === "devices.command" && result.status === "ok") {
+      const receipt = cliDeviceResultSchema.parse(result.data);
+      return {
+        ...printed,
+        exitCode:
+          receipt.state === "succeeded"
+            ? 0
+            : receipt.state === "failed" || receipt.state === "canceled"
+              ? 1
+              : receipt.state === "unknown"
+                ? 7
+                : 5,
+      };
+    }
+    return printed;
   } catch {
     return output(
       {

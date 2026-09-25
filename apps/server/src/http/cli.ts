@@ -6,6 +6,7 @@ import {
   cliResponsibilityRequestSchema,
   type CliReadRequest,
   type CliResult,
+  type CliDeviceRequest,
 } from "@winston/contracts/cli";
 import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { serviceRequestSchema } from "@winston/contracts/capabilities";
@@ -45,6 +46,12 @@ export function createCliTaskGroup(
   ) => Promise<CliResult>,
   publish?: FilePublisher,
   files?: (credential: ServiceRequest, request: FileRequest) => Promise<CliResult>,
+  devices?: (
+    credential: ServiceRequest,
+    request: CliDeviceRequest,
+    headers: Headers,
+    signal: AbortSignal,
+  ) => Promise<Response>,
 ) {
   const router = new Hono<HttpEnvironment>();
   router.post("/files/publish", async (context) => {
@@ -58,6 +65,14 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "devices.command")
+      return devices
+        ? devices(authority, request, context.req.raw.headers, context.req.raw.signal)
+        : context.json({
+            version: 1,
+            status: "unavailable",
+            message: "Device commands are not configured.",
+          });
     const responsibility = cliResponsibilityRequestSchema.safeParse(request);
     if (responsibility.success)
       return context.json(
@@ -101,6 +116,14 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "devices.result")
+      return devices
+        ? devices(authority, request, context.req.raw.headers, context.req.raw.signal)
+        : context.json({
+            version: 1,
+            status: "unavailable",
+            message: "Device results are not configured.",
+          });
     const responsibility = cliResponsibilityRequestSchema.safeParse(request);
     if (responsibility.success)
       return context.json(

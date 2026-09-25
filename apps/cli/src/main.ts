@@ -3,6 +3,7 @@ import { readAuthority } from "./authority";
 import { callGateway } from "./gateway";
 import { snapshotPublishFile } from "./files";
 import { publishFile } from "./file-gateway";
+import { callDeviceCommand } from "./device-command";
 
 const result = await runCli(process.argv.slice(2), async (request) => {
   if (request.command === "files.inspect") {
@@ -42,7 +43,9 @@ const result = await runCli(process.argv.slice(2), async (request) => {
       file.bytes,
     );
   }
-  return callGateway(authority, request);
+  return request.command === "devices.command"
+    ? callDeviceCommand(authority, request)
+    : callGateway(authority, request);
 });
 process.stdout.write(result.stdout);
 process.stderr.write(result.stderr);

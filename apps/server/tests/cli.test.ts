@@ -17,6 +17,7 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   let fileCalls = 0;
   let scheduleCalls = 0;
   let responsibilityCalls = 0;
+  let deviceCalls = 0;
   const cli: OwnerTransaction["cli"] = {
     responsibility: (credential, input) => {
       assert.equal(
@@ -84,6 +85,21 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
           fileCalls++;
           return Promise.resolve({ version: 1, status: "ok", data: { state: "pending" } });
         },
+        (credential, input, headers, signal) => {
+          assert.equal(
+            credential.token,
+            input.command === "devices.command" ? controlToken : token,
+          );
+          assert.equal(headers.get("X-Winston-Workspace"), workspaceId);
+          assert.equal(signal.aborted, false);
+          deviceCalls++;
+          return Promise.resolve(
+            Response.json(
+              { version: 1, status: "unavailable", message: "Route to socket owner." },
+              { headers: { "fly-replay": "instance=abcdef123456;timeout=2s;fallback=force_self" } },
+            ),
+          );
+        },
       ),
     },
   });
@@ -116,6 +132,25 @@ test("CLI endpoint rejects invalid authority and input before calling the scoped
   assert.equal((await request(read, "bad")).status, 401);
   assert.equal(reads, 1);
   const controlPath = "/api/tasks/cli/control";
+  const deviceCommand = {
+    version: 1,
+    command: "devices.command",
+    id: randomUUID(),
+    key: "native",
+    operation: { kind: "command", executable: "/bin/echo", arguments: ["test"], directory: "/tmp" },
+  };
+  assert.equal((await request(deviceCommand, token, workspaceId, controlPath)).status, 401);
+  const routed = await request(deviceCommand, controlToken, workspaceId, controlPath);
+  assert.equal(routed.status, 200);
+  assert.equal(
+    routed.headers.get("fly-replay"),
+    "instance=abcdef123456;timeout=2s;fallback=force_self",
+  );
+  assert.equal(
+    (await request({ version: 1, command: "devices.result", id: randomUUID() })).status,
+    200,
+  );
+  assert.equal(deviceCalls, 2);
   assert.equal((await request({ version: 1, command: "responsibilities.list" })).status, 200);
   const proposal = {
     version: 1,

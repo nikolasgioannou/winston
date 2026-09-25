@@ -165,6 +165,22 @@ export const commands = [
   },
   { command: "devices.inspect", description: "Inspect one proxy computer.", id: true },
   {
+    command: "devices.command",
+    id: true,
+    flags: ["id", "key", "cwd", "argv"],
+    description:
+      "Run a literal command on one proxy computer for up to 60 seconds. Waits for its result. Reuse the same key and arguments after approval; never repeat an uncertain effect.",
+    usage: "--id <computer-uuid> --key <stable-key> --cwd <absolute-directory> --argv <JSON-array>",
+  },
+  {
+    command: "devices.result",
+    id: true,
+    flags: ["id", "after"],
+    description:
+      "Read a device command's saved state and bounded output. Use afterSequence to retrieve remaining output when hasMore is true.",
+    usage: "--id <action-uuid> [--after <sequence>]",
+  },
+  {
     command: "operations.inspect",
     description: "Read a recorded operation's current outcome.",
     id: true,

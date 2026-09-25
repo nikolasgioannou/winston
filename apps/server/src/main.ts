@@ -34,6 +34,7 @@ import {
 import { createTelegramCallbackRouter, createTelegramOwnerRouter } from "./http/telegram";
 import { startConversationRuntime } from "./conversation/runtime";
 import { startDeviceSessionRuntime } from "./devices/session-runtime";
+import { createDeviceCli } from "./devices/cli";
 import { Hono } from "hono";
 import type { HttpEnvironment, Identity } from "./http/app";
 import {
@@ -191,6 +192,10 @@ const workspaceTasks = createWorkspaceTaskGroup(
   database,
   process.env.NODE_ENV === "production" ? "production" : "local",
 );
+const deviceTransport = createDeviceSocketTransport(database, {
+  serverId: crypto.randomUUID(),
+  machineId: process.env.FLY_MACHINE_ID ?? null,
+});
 const cliTasks = createCliTaskGroup(
   database,
   connectedReads,
@@ -201,15 +206,16 @@ const cliTasks = createCliTaskGroup(
       })
     : undefined,
   fileCommands,
+  createDeviceCli({
+    database,
+    dispatch: deviceTransport.dispatch,
+    server: deviceTransport.routing,
+  }),
 );
 const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);
 
-const deviceTransport = createDeviceSocketTransport(database, {
-  serverId: crypto.randomUUID(),
-  machineId: process.env.FLY_MACHINE_ID ?? null,
-});
 const host = startServer(readConfig(process.env), {
   deviceTransport,
   ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),

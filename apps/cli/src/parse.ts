@@ -38,6 +38,8 @@ export function parseCommand(args: string[]): ParsedCommand {
       scope: { type: "string" },
       responsibility: { type: "string" },
       "agreement-revision": { type: "string" },
+      argv: { type: "string" },
+      cwd: { type: "string" },
     },
   });
   const flags = tokens.filter((token) => token.kind === "option").map((token) => token.name);
@@ -53,6 +55,50 @@ export function parseCommand(args: string[]): ParsedCommand {
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");
+  if (command.command === "devices.command") {
+    if (flags.some((flag) => !["json", "id", "key", "argv", "cwd"].includes(flag)))
+      throw new Error("Unexpected device command options.");
+    const argv: unknown = JSON.parse(values.argv ?? "null");
+    if (
+      !Array.isArray(argv) ||
+      !argv.length ||
+      !argv.every((item: unknown) => typeof item === "string")
+    )
+      throw new Error("Provide a literal JSON argv array.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        id: values.id,
+        key: values.key,
+        operation: {
+          kind: "command",
+          executable: argv[0],
+          arguments: argv.slice(1),
+          directory: values.cwd,
+        },
+      }),
+    };
+  }
+  if (command.command === "devices.result") {
+    if (
+      flags.some((flag) => !["json", "id", "after"].includes(flag)) ||
+      (values.after !== undefined && !/^(?:-1|\d+)$/.test(values.after))
+    )
+      throw new Error("Invalid device result options.");
+    return {
+      kind: "request",
+      json: values.json === true,
+      request: cliRequestSchema.parse({
+        version: 1,
+        command: command.command,
+        id: values.id,
+        after: values.after === undefined ? -1 : Number(values.after),
+      }),
+    };
+  }
   if (command.command.startsWith("responsibilities.") && "flags" in command) {
     const allowed: readonly string[] = command.flags;
     if (flags.some((flag) => flag !== "json" && !allowed.includes(flag)))

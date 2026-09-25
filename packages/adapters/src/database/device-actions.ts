@@ -8,6 +8,16 @@ import type { DatabaseTransaction } from "./owners";
 import { actionRepository } from "./actions";
 import { deviceRepository } from "./devices";
 
+export class DeviceActionPreparationError extends Error {
+  constructor(readonly reason: "conflict" | "unavailable") {
+    super(
+      reason === "conflict"
+        ? "Device action key conflicts with its original target or operation."
+        : "Device unavailable.",
+    );
+  }
+}
+
 export function deviceActionRepository(transaction: DatabaseTransaction, ownerId: string) {
   return {
     async prepare(
@@ -55,11 +65,11 @@ export function deviceActionRepository(transaction: DatabaseTransaction, ownerId
           action.request.authorization.operation !== `device.${operation.kind}` ||
           canonicalJson(action.request.arguments) !== canonicalJson(operation)
         )
-          throw new Error("Device action key conflicts with its original target or operation.");
+          throw new DeviceActionPreparationError("conflict");
         return action;
       }
       const device = await deviceRepository(transaction, ownerId).find(deviceId);
-      if (!device || device.revoked) throw new Error("Device unavailable.");
+      if (!device || device.revoked) throw new DeviceActionPreparationError("unavailable");
       return actionRepository(transaction, ownerId).prepare({
         key: requestKey,
         task: worker,

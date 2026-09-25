@@ -3,6 +3,13 @@ import { googleServiceSchema } from "./connections";
 import { cliReadRequestSchema } from "./cli-reads";
 import { cliScheduleRequestSchema } from "./cli-schedules";
 import { cliResponsibilityRequestSchema } from "./cli-responsibilities";
+import { cliDeviceRequestSchema } from "./cli-devices";
+export {
+  cliDeviceRequestSchema,
+  cliDeviceResultSchema,
+  deviceCommandTimeoutMs,
+  type CliDeviceRequest,
+} from "./cli-devices";
 export {
   cliResponsibilityRequestSchema,
   type CliResponsibilityRequest,
@@ -15,6 +22,7 @@ export {
 export { cliReadRequestSchema, type CliReadRequest } from "./cli-reads";
 
 export const cliRequestSchema = z.discriminatedUnion("command", [
+  ...cliDeviceRequestSchema.options,
   ...cliResponsibilityRequestSchema.options,
   ...cliScheduleRequestSchema.options,
   z.strictObject({

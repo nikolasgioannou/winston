@@ -420,11 +420,15 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       const stored = await row(id);
       if (!stored) return null;
       const action = actionRecordSchema.parse(stored.document);
+      const target = action.request.authorization.target;
+      const supported =
+        target.kind === "workspace"
+          ? target.id === workspaceId &&
+            action.request.authorization.operation === "workspace.command"
+          : target.kind === "device" && action.request.authorization.operation === "device.command";
       if (
         action.request.task.id !== worker.id ||
-        action.request.authorization.target.kind !== "workspace" ||
-        action.request.authorization.target.id !== workspaceId ||
-        action.request.authorization.operation !== "workspace.command" ||
+        !supported ||
         !running(await task(worker.id), worker)
       )
         return null;
