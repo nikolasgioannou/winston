@@ -1,4 +1,4 @@
-import type { CliRequest } from "@winston/contracts/cli";
+import { cliCommandInputSchema, type CliRequest } from "@winston/contracts/cli";
 
 const gmailMessageHelp =
   " Message JSON requires from {email,name?}, to/cc/bcc arrays of mailboxes, subject, text, html (string or null), reply (null or {sourceMessageId,threadId,inReplyTo,references}), and attachments [{artifactId,revision,name,mediaType,size,sha256}]. Sender must match the selected account. Attachments must be owned, ready artifacts; paths and URLs are not accepted. Reuse the exact key and arguments after approval. Never resend an unknown outcome.";
@@ -347,7 +347,7 @@ export const commands = [
   usage?: string;
 }[];
 
-export function help(topic?: string) {
+export function help(topic?: string, structured = false) {
   const selected = commands.filter(
     (item) => !topic || item.command === topic || item.command.startsWith(`${topic}.`),
   );
@@ -357,6 +357,9 @@ export function help(topic?: string) {
     commands: selected.map((item) => ({
       usage: `winston ${item.command.replace(".", " ")}${"usage" in item ? ` ${item.usage}` : item.command === "accounts.connect" ? " --service <gmail|calendar> --key <request-key> --detail <reason> [--id <account-uuid>]" : item.id ? " --id <uuid>" : ""} [--json]`,
       description: item.description,
+      ...(structured && topic === item.command
+        ? { requestSchema: cliCommandInputSchema(item.command) }
+        : {}),
     })),
   };
 }

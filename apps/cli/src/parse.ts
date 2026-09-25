@@ -63,7 +63,11 @@ export function parseCommand(args: string[]): ParsedCommand {
   if (isHelp) {
     if (flags.some((flag) => flag !== "help" && flag !== "json"))
       throw new Error("Help does not accept command arguments.");
-    return { kind: "help", json: values.json === true, content: help(topic || undefined) };
+    return {
+      kind: "help",
+      json: values.json === true,
+      content: help(topic || undefined, values.json === true),
+    };
   }
   const command = commands.find((item) => item.command === topic);
   if (!command) throw new Error("Unknown command. Run winston --help.");

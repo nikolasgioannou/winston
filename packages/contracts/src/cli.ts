@@ -116,6 +116,15 @@ export const cliResultSchema = z.discriminatedUnion("status", [
 ]);
 
 export type CliRequest = z.infer<typeof cliRequestSchema>;
+export function cliCommandInputSchema(command: string) {
+  const schema = cliRequestSchema.options.find((option) => option.shape.command.value === command);
+  if (!schema) throw new Error("Unknown CLI command.");
+  return z.record(z.string(), z.json()).parse({
+    ...z.toJSONSchema(schema, { io: "input" }),
+    description:
+      "Structural input schema. Runtime validation also enforces semantic constraints and current authority.",
+  });
+}
 export const cliAuthoritySchema = z.strictObject({
   version: z.literal(1),
   environment: z.enum(["production", "local"]),
