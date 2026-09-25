@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "bun:test";
-import { createDatabase, migrateDatabase } from "@winston/adapters/database";
+import {
+  createDatabase,
+  migrateDatabase,
+  DeviceReservationError,
+} from "@winston/adapters/database";
 import { deviceCapabilitySchema, type DeviceMessage } from "@winston/contracts/devices";
 import {
   deviceOutputByteLimit,
@@ -42,7 +46,7 @@ async function fixture(database: ReturnType<typeof createDatabase>) {
       return { ...paired, session };
     });
   const device = await pair();
-  const prepare = (target = device, operation = command) =>
+  const prepare = (target = device, operation = command, claimNow = true) =>
     database.transaction(ownerId, async ({ tasks, actions }) => {
       const queued = await tasks.create({
         key: randomUUID(),
@@ -66,8 +70,8 @@ async function fixture(database: ReturnType<typeof createDatabase>) {
         hash: action.hash,
         approve: true,
       });
-      const claim = await actions.claim(action.id, action.hash, task);
-      assert.ok(claim?.claimed);
+      const claim = claimNow ? await actions.claim(action.id, action.hash, task) : null;
+      if (claimNow) assert.ok(claim?.claimed);
       const message: DeviceMessage = {
         version: 1,
         messageId: randomUUID(),
@@ -82,7 +86,13 @@ async function fixture(database: ReturnType<typeof createDatabase>) {
           operation,
         },
       };
-      return { id: action.id, token: claim.token, task, message };
+      return {
+        id: action.id,
+        hash: action.hash,
+        token: claim?.claimed ? claim.token : "unclaimed",
+        task,
+        message,
+      };
     });
   const reserve = (proof: Awaited<ReturnType<typeof prepare>>, owner = ownerId) =>
     database.transaction(owner, ({ deviceExecutions }) => deviceExecutions.reserve(proof));
@@ -113,6 +123,68 @@ function receipt(
     },
   };
 }
+
+test("prepared device reservations roll back busy claims and serialize concurrent callers", async () => {
+  await withTestPostgres(async (_sql, connectionString) => {
+    await migrateDatabase(connectionString);
+    const database = createDatabase({ connectionString, onConnectionError: () => {} });
+    try {
+      const f = await fixture(database);
+      const occupied = await f.prepare();
+      await f.reserve(occupied);
+      const approved = await f.prepare(f.device, command, false);
+      const { id, hash, task, message } = approved;
+      const input = { id, hash, task, message };
+      const reserve = (value = input) =>
+        database.transaction(f.ownerId, ({ deviceExecutions }) =>
+          deviceExecutions.reserveApproved(value),
+        );
+      await assert.rejects(
+        () => reserve(),
+        (error: unknown) => error instanceof DeviceReservationError && error.status === "busy",
+      );
+      const unchanged = await database.transaction(f.ownerId, ({ actions }) => actions.find(id));
+      assert.equal(unchanged?.state, "approved");
+      assert.equal(unchanged.dispatchTask, null);
+      await f.receive(receipt(occupied.message, "succeeded", 0));
+      assert.equal((await reserve({ ...input, hash: "0".repeat(64) })).status, "denied");
+      assert.equal(
+        (await reserve({ ...input, message: { ...message, deviceId: randomUUID() } })).status,
+        "denied",
+      );
+      const [first, second] = await Promise.all([
+        reserve(),
+        reserve({ ...input, message: { ...message, messageId: randomUUID() } }),
+      ]);
+      assert.deepEqual([first.status, second.status].sort(), ["existing", "reserved"]);
+      assert.ok("execution" in first && "execution" in second);
+      assert.deepEqual(first.execution, second.execution);
+      const claimed = await database.transaction(f.ownerId, ({ actions }) => actions.find(id));
+      assert.equal(claimed?.state, "dispatching");
+      assert.deepEqual(claimed.dispatchTask, task);
+      const { execution } = first;
+      await f.receive(receipt(execution.message, "succeeded", 0));
+      assert.equal((await reserve()).status, "existing");
+      const other = await f.prepare(f.device, command, false);
+      assert.equal(other.message.payload.kind, "execute");
+      const expired = {
+        ...other,
+        message: { ...other.message, payload: { ...other.message.payload, deadline: 1 } },
+      };
+      await assert.rejects(
+        () => reserve(expired),
+        (error: unknown) => error instanceof DeviceReservationError && error.status === "denied",
+      );
+      const stillApproved = await database.transaction(f.ownerId, ({ actions }) =>
+        actions.find(other.id),
+      );
+      assert.equal(stillApproved?.state, "approved");
+      assert.equal(stillApproved.dispatchTask, null);
+    } finally {
+      await database.close();
+    }
+  });
+});
 
 test("device control plans stop lost authority without releasing reservations", async () => {
   await withTestPostgres(async (sql, connectionString) => {

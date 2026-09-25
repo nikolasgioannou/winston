@@ -19,7 +19,13 @@ import { createDeviceControlDelivery } from "./control";
 export type DeviceSocketScope = Pick<OwnerTransaction, "deviceSessions"> & {
   deviceExecutions: Pick<
     OwnerTransaction["deviceExecutions"],
-    "receipt" | "reconcile" | "expire" | "appendOutput" | "reserve" | "planControls"
+    | "receipt"
+    | "reconcile"
+    | "expire"
+    | "appendOutput"
+    | "reserve"
+    | "reserveApproved"
+    | "planControls"
   >;
 };
 

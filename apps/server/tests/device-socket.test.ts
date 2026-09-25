@@ -15,6 +15,7 @@ import { startServer } from "../src/host";
 import type { DeviceExecution } from "@winston/contracts/device-executions";
 
 const rejectedEvidence: DeviceSocketScope["deviceExecutions"] = {
+  reserveApproved: () => Promise.resolve({ status: "denied" }),
   planControls: () => Promise.resolve([]),
   reserve: () => Promise.resolve({ status: "denied" }),
   appendOutput: () => Promise.resolve(false),
@@ -99,6 +100,7 @@ test("execution dispatch and evidence remain owner scoped and bound to the exact
         presence: () => Promise.resolve([]),
       },
       deviceExecutions: {
+        reserveApproved: () => Promise.resolve({ status: "denied" }),
         planControls: () => Promise.resolve(controls),
         reserve: () => {
           reservations += 1;

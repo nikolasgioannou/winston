@@ -1,5 +1,6 @@
 export { createDatabase, type OwnerTransaction } from "./database";
 export { ScheduleWriteError } from "./schedules";
+export { DeviceReservationError } from "./device-executions";
 export { TaskWriteError } from "./tasks";
 export { ResponsibilityWriteError } from "./responsibilities";
 export { startTaskSignals } from "./task-signals";

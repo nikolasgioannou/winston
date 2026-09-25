@@ -14,11 +14,19 @@ import { eventRepository } from "./events";
 import { deviceOutputRepository } from "./device-output";
 
 type Proof = Parameters<ReturnType<typeof actionRepository>["authorizeDevice"]>[0];
+type PreparedProof = Omit<Proof, "token"> & { hash: string };
 type Reservation =
   { status: "reserved" | "existing"; execution: DeviceExecution } | { status: "denied" | "busy" };
 
 const terminal = (state: DeviceExecution["state"]) =>
   ["succeeded", "failed", "canceled"].includes(state);
+
+// Catch only outside the transaction: an unsuccessful reservation must undo its fresh claim.
+export class DeviceReservationError extends Error {
+  constructor(readonly status: "denied" | "busy") {
+    super("Prepared device action could not be reserved.");
+  }
+}
 
 export function deviceExecutionRepository(transaction: DatabaseTransaction, ownerId: string) {
   async function lock() {
@@ -109,9 +117,54 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
     return request;
   }
 
-  return {
+  const repository = {
     find,
     requestReconciliation,
+    async reserveApproved(input: PreparedProof): Promise<Reservation> {
+      const message = deviceMessageSchema.parse(input.message);
+      const payload = message.payload;
+      if (payload.kind !== "execute") return { status: "denied" };
+      await lock();
+      const actions = actionRepository(transaction, ownerId);
+      const action = await actions.find(input.id);
+      const target = action?.request.authorization.target;
+      if (
+        !action ||
+        action.hash !== input.hash ||
+        action.request.task.id !== input.task.id ||
+        target?.kind !== "device" ||
+        target.id !== message.deviceId ||
+        target.resource !== null ||
+        action.request.authorization.operation !== `device.${payload.operation.kind}` ||
+        canonicalJson(action.request.arguments) !== canonicalJson(payload.operation) ||
+        action.operationId !== payload.executionId ||
+        payload.taskId !== input.task.id ||
+        payload.taskRevision !== input.task.revision
+      )
+        return { status: "denied" };
+      const existing = await find(payload.executionId);
+      if (existing) {
+        if (
+          existing.actionId !== action.id ||
+          existing.message.deviceId !== message.deviceId ||
+          existing.message.payload.kind !== "execute" ||
+          canonicalJson(existing.message.payload.operation) !== canonicalJson(payload.operation)
+        )
+          return { status: "denied" };
+        return { status: "existing", execution: existing };
+      }
+      const claim = await actions.claim(action.id, input.hash, input.task);
+      if (!claim?.claimed) return { status: "denied" };
+      const reservation = await repository.reserve({
+        id: action.id,
+        token: claim.token,
+        task: input.task,
+        message,
+      });
+      if (reservation.status === "busy" || reservation.status === "denied")
+        throw new DeviceReservationError(reservation.status);
+      return reservation;
+    },
     // Send this bounded control plan only after commit, on the exact authenticated session.
     async planControls(inputSession: DeviceSessionIdentity) {
       const session = deviceSessionIdentitySchema.parse(inputSession);
@@ -317,4 +370,5 @@ export function deviceExecutionRepository(transaction: DatabaseTransaction, owne
       return rows.rows.length;
     },
   };
+  return repository;
 }
