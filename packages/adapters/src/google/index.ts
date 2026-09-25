@@ -19,6 +19,8 @@ export { createGmailReader, GmailReadError } from "./gmail";
 export { createGmailMutationExecutor } from "./gmail-mutation-executor";
 export { createGmailMutationGateway } from "./gmail-mutation-gateway";
 export { formatGmailMutationApproval } from "./gmail-mutation-review";
+export { createGmailLabelMutationGateway } from "./gmail-label-mutation-gateway";
+export { formatGmailLabelMutationApproval } from "./gmail-label-mutation-review";
 export { readGmailReplySource } from "./gmail-reply-source";
 export {
   prepareGmailMutation,

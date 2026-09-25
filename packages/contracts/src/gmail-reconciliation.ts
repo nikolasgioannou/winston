@@ -31,7 +31,17 @@ export const gmailProviderEvidenceSchema = z.strictObject({
   source: gmailReadTargetSchema,
   operationId: z.uuid(),
   matched: z.boolean(),
-  receipt: gmailMutationReceiptSchema.nullable(),
+  receipt: z
+    .union([
+      gmailMutationReceiptSchema,
+      z.strictObject({
+        version: z.literal(1),
+        kind: z.literal("labels.modify"),
+        messageId: gmailIdSchema,
+        threadId: gmailIdSchema,
+      }),
+    ])
+    .nullable(),
 });
 export const gmailReconciliationEvidenceSchema = gmailProviderEvidenceSchema.extend({
   readActionId: z.uuid(),

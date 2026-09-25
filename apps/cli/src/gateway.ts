@@ -51,7 +51,8 @@ export async function callGateway(
           cliCalendarMutationRequestSchema.safeParse(request).success ||
             cliGmailMutationRequestSchema.safeParse(request).success ||
             request.command === "calendar.reconcile" ||
-            request.command === "gmail.reconcile"
+            request.command === "gmail.reconcile" ||
+            request.command === "gmail.modify"
             ? 55_000
             : cliReadRequestSchema.safeParse(request).success
               ? 45_000

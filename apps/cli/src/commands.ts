@@ -5,6 +5,15 @@ const gmailMessageHelp =
 
 export const commands = [
   {
+    command: "gmail.modify",
+    id: true,
+    flags: ["account", "id", "key", "add-labels", "remove-labels"],
+    description:
+      "Change labels on one exact message. Label arrays contain IDs from gmail labels. Remove INBOX to archive, remove UNREAD to mark read, add UNREAD to mark unread, and add/remove STARRED to star/unstar. Does not expand to a thread. TRASH, SENT, DRAFT and draft/trashed messages are excluded. Source reads and changes may need separate approvals; reuse the exact key and arguments. Reconcile unknown results instead of retrying.",
+    usage:
+      "--account <uuid> --id <message-id> --key <stable-key> [--add-labels <JSON-array>] [--remove-labels <JSON-array>]",
+  },
+  {
     command: "gmail.labels",
     id: false,
     flags: ["account", "key"],

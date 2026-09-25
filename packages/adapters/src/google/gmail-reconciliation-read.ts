@@ -5,6 +5,8 @@ import {
   type GmailReconciliationRead,
 } from "@winston/contracts/gmail-reconciliation";
 import { readGmailMutationPlan } from "./gmail-mutation-plan";
+import { readGmailLabelMutationPlan } from "./gmail-label-mutation-plan";
+import { observeGmailLabelMutation } from "./gmail-label-reconciliation-observe";
 import { createConnectionTargets } from "./targets";
 import { sameResolvedTarget } from "./target-resolution";
 import { prepareReadApproval, completeRead, type ReadDispatch } from "./read-approval";
@@ -36,11 +38,17 @@ export async function readGmailMutationEvidence(
     if (
       !action ||
       action.state !== "unknown" ||
-      !["gmail.draft", "gmail.send"].includes(action.request.authorization.operation)
+      !["gmail.draft", "gmail.send", "gmail.modify"].includes(
+        action.request.authorization.operation,
+      )
     )
       return { version: 1, status: "denied", message: "Uncertain Gmail operation is unavailable." };
-    const plan = readGmailMutationPlan(action.request.arguments);
-    if (plan.prepared.target.connectionId !== request.accountId) throw new Error("Wrong account.");
+    const plan =
+      action.request.authorization.operation === "gmail.modify"
+        ? readGmailLabelMutationPlan(action.request.arguments)
+        : readGmailMutationPlan(action.request.arguments);
+    const plannedTarget = plan.kind === "labels.modify" ? plan.target : plan.prepared.target;
+    if (plannedTarget.connectionId !== request.accountId) throw new Error("Wrong account.");
     const selected = await createConnectionTargets(database, options.google).resolve(
       ownerId,
       {
@@ -53,7 +61,7 @@ export async function readGmailMutationEvidence(
     if (
       selected.status !== "resolved" ||
       !sameResolvedTarget(selected.target, {
-        ...plan.prepared.target,
+        ...plannedTarget,
         operation: "gmail.read",
         task: selected.target.task,
       })
@@ -72,20 +80,18 @@ export async function readGmailMutationEvidence(
         current.generation === authority.generation
       );
     };
-    const evidence = await observeGmailMutation(
-      {
-        ...options,
-        authorize,
-        approved: (authorization) =>
-          database.transaction(ownerId, ({ actions }) =>
-            actions.authorizeConnectionRead({ ...proof, authorization }),
-          ),
-      },
-      ownerId,
-      plan,
-      selected.target,
-      signal,
-    );
+    const bound = {
+      ...options,
+      authorize,
+      approved: (authorization: Parameters<NonNullable<GoogleReadOptions["approved"]>>[0]) =>
+        database.transaction(ownerId, ({ actions }) =>
+          actions.authorizeConnectionRead({ ...proof, authorization }),
+        ),
+    };
+    const evidence =
+      plan.kind === "labels.modify"
+        ? await observeGmailLabelMutation(bound, ownerId, plan, selected.target, signal)
+        : await observeGmailMutation(bound, ownerId, plan, selected.target, signal);
     if (!(await authorize())) throw new Error("Task authority expired.");
     signal.throwIfAborted();
     return await completeRead(

@@ -7,6 +7,7 @@ import {
 } from "@winston/contracts/cli";
 import { gmailReconciliationEvidenceSchema } from "@winston/contracts/gmail-reconciliation";
 import { readGmailMutationPlan } from "./gmail-mutation-plan";
+import { readGmailLabelMutationPlan } from "./gmail-label-mutation-plan";
 import {
   readGmailMutationEvidence,
   type GmailReconciliationOptions,
@@ -44,7 +45,9 @@ export function createGmailReconciliationGateway(options: GmailReconciliationOpt
         const found = await actions.find(request.id);
         if (
           !found ||
-          !["gmail.draft", "gmail.send"].includes(found.request.authorization.operation)
+          !["gmail.draft", "gmail.send", "gmail.modify"].includes(
+            found.request.authorization.operation,
+          )
         )
           return null;
         return actions.recover(found.id);
@@ -64,8 +67,11 @@ export function createGmailReconciliationGateway(options: GmailReconciliationOpt
           message: action.outcome?.detail ?? "This Gmail operation did not succeed.",
         };
       if (action.state !== "unknown") return uncertain(action.id);
-      const plan = readGmailMutationPlan(action.request.arguments);
-      const target = plan.prepared.target;
+      const plan =
+        action.request.authorization.operation === "gmail.modify"
+          ? readGmailLabelMutationPlan(action.request.arguments)
+          : readGmailMutationPlan(action.request.arguments);
+      const target = plan.kind === "labels.modify" ? plan.target : plan.prepared.target;
       const observation = await readGmailMutationEvidence(
         options,
         credential,
@@ -132,7 +138,9 @@ export function createGmailReconciliationGateway(options: GmailReconciliationOpt
           state: "succeeded",
           providerReference: JSON.stringify(receipt),
           detail:
-            "An authorized provider read found the exact approved MIME content in the expected mailbox state. This does not establish who performed the action or confirm recipient delivery or draft removal. No write was resent.",
+            plan.kind === "labels.modify"
+              ? "An authorized provider read found the requested message label state. This does not establish who performed the change or when it happened. No write was resent."
+              : "An authorized provider read found the exact approved MIME content in the expected mailbox state. This does not establish who performed the action or confirm recipient delivery or draft removal. No write was resent.",
         });
       });
       return reconciled

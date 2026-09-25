@@ -45,6 +45,7 @@ import {
   createConnectedReadGateway,
   createCalendarMutationGateway,
   createGmailMutationGateway,
+  createGmailLabelMutationGateway,
   createGmailReconciliationGateway,
 } from "@winston/adapters/google";
 import { readConnectionConfig } from "./connection-config";
@@ -102,6 +103,7 @@ const connectionConfig = readConnectionConfig(process.env, config.auth.baseURL);
 let connectedReads: ReturnType<typeof createConnectedReadGateway> | undefined;
 let calendarMutations: ReturnType<typeof createCalendarMutationGateway> | undefined;
 let gmailMutations: ReturnType<typeof createGmailMutationGateway> | undefined;
+let gmailLabelMutations: ReturnType<typeof createGmailLabelMutationGateway> | undefined;
 let gmailReconciliation: ReturnType<typeof createGmailReconciliationGateway> | undefined;
 let calendarReconciliation: ReturnType<typeof createCalendarReconciliationGateway> | undefined;
 if (connectionConfig) {
@@ -111,6 +113,7 @@ if (connectionConfig) {
     oauth: createGoogleOAuth(connectionConfig.oauth),
   });
   connectedReads = createConnectedReadGateway({ database, google: connections });
+  gmailLabelMutations = createGmailLabelMutationGateway({ database, google: connections });
   calendarMutations = createCalendarMutationGateway({ database, google: connections });
   gmailMutations = createGmailMutationGateway({
     database,
@@ -223,6 +226,7 @@ const cliTasks = createCliTaskGroup(database, {
   ...(connectedReads ? { read: connectedReads } : {}),
   ...(calendarMutations ? { calendarMutations } : {}),
   ...(gmailMutations ? { gmailMutations } : {}),
+  ...(gmailLabelMutations ? { gmailLabelMutations } : {}),
   ...(gmailReconciliation ? { gmailReconciliation } : {}),
   ...(calendarReconciliation ? { calendarReconciliation } : {}),
   ...(storage

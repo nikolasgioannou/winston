@@ -23,6 +23,7 @@ import { publishFileResponse, type FilePublisher } from "./file-publication";
 import type { FileRequest } from "../files/cli";
 import type { CalendarMutationInput } from "@winston/contracts/calendar-mutations";
 import type { GmailMutationInput } from "@winston/contracts/gmail-mutations";
+import type { GmailLabelMutationInput } from "@winston/contracts/gmail-label-mutations";
 
 function credential(request: Request) {
   const path = new URL(request.url).pathname;
@@ -46,6 +47,11 @@ type Database = Pick<ReturnType<typeof createDatabase>, "authenticateService"> &
 };
 
 type Handlers = {
+  gmailLabelMutations?: (
+    credential: ServiceRequest,
+    request: GmailLabelMutationInput,
+    signal: AbortSignal,
+  ) => Promise<CliResult>;
   gmailReconciliation?: (
     credential: ServiceRequest,
     request: CliGmailReconciliationRequest,
@@ -92,6 +98,7 @@ export function createCliTaskGroup(
     calendarReconciliation,
     gmailMutations,
     gmailReconciliation,
+    gmailLabelMutations,
   }: Handlers = {},
 ) {
   const router = new Hono<HttpEnvironment>();
@@ -106,6 +113,22 @@ export function createCliTaskGroup(
     const authority = credential(context.req.raw);
     if (identity.kind !== "task" || !authority) throw new RequestError("unauthorized");
     const request = await parseJson(context, cliRequestSchema);
+    if (request.command === "gmail.modify") {
+      const { key, accountId, messageId, addLabelIds, removeLabelIds } = request;
+      return context.json(
+        gmailLabelMutations
+          ? await gmailLabelMutations(
+              authority,
+              { key, intent: { accountId, messageId, addLabelIds, removeLabelIds } },
+              context.req.raw.signal,
+            )
+          : {
+              version: 1,
+              status: "unavailable",
+              message: "Gmail label changes are not configured.",
+            },
+      );
+    }
     if (request.command === "gmail.reconcile")
       return context.json(
         gmailReconciliation
@@ -207,7 +230,8 @@ export function createCliTaskGroup(
       cliCalendarMutationRequestSchema.safeParse(request).success ||
       cliGmailMutationRequestSchema.safeParse(request).success ||
       request.command === "calendar.reconcile" ||
-      request.command === "gmail.reconcile"
+      request.command === "gmail.reconcile" ||
+      request.command === "gmail.modify"
     )
       throw new RequestError("invalid_request");
     if (request.command === "devices.result")

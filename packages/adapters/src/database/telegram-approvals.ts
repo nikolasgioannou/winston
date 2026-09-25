@@ -7,6 +7,7 @@ import {
 import { actionRecordSchema } from "@winston/contracts/actions";
 import { formatCalendarMutationApproval } from "../google/calendar-mutation-review";
 import { formatGmailMutationApproval } from "../google/gmail-mutation-review";
+import { formatGmailLabelMutationApproval } from "../google/gmail-label-mutation-review";
 import { actionRepository } from "./actions";
 import { telegramOutboundRepository } from "./telegram-outbound";
 import type { DatabaseTransaction } from "./owners";
@@ -56,16 +57,18 @@ export function telegramApprovalRepository(transaction: DatabaseTransaction, own
       const text =
         action.request.authorization.operation === "calendar.write"
           ? formatCalendarMutationApproval(action)
-          : ["gmail.draft", "gmail.send"].includes(action.request.authorization.operation)
-            ? formatGmailMutationApproval(action)
-            : [
-                "Approval needed",
-                `Action: ${action.request.authorization.operation}`,
-                `Target: ${target.kind} ${target.id}${target.resource ? ` / ${target.resource}` : ""}`,
-                "Details:",
-                JSON.stringify(action.request.arguments, null, 2),
-                `Expires: ${action.expiresAt}`,
-              ].join("\n");
+          : action.request.authorization.operation === "gmail.modify"
+            ? formatGmailLabelMutationApproval(action)
+            : ["gmail.draft", "gmail.send"].includes(action.request.authorization.operation)
+              ? formatGmailMutationApproval(action)
+              : [
+                  "Approval needed",
+                  `Action: ${action.request.authorization.operation}`,
+                  `Target: ${target.kind} ${target.id}${target.resource ? ` / ${target.resource}` : ""}`,
+                  "Details:",
+                  JSON.stringify(action.request.arguments, null, 2),
+                  `Expires: ${action.expiresAt}`,
+                ].join("\n");
       const outboundId = await telegramOutboundRepository(transaction, ownerId).enqueue(
         `approval:${String(botId)}:${id}:${String(action.revision)}`,
         botId,
