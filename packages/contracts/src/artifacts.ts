@@ -2,6 +2,20 @@ import { z } from "zod";
 import { storedObjectSchema } from "./storage";
 import { gmailIdSchema } from "./gmail";
 import { actionTaskSchema } from "./actions";
+import { deviceOperationSchema } from "./devices";
+import { deviceFileAuthoritySchema } from "./device-executions";
+
+export const deviceFileSourceSchema = z.strictObject({
+  kind: z.literal("device"),
+  reference: z.string().min(1).max(2048),
+  origin: z.strictObject({
+    deviceId: z.uuid(),
+    path: deviceOperationSchema.options[1].shape.path,
+    executionId: z.uuid(),
+    transferId: z.uuid(),
+    readActionId: z.uuid(),
+  }),
+});
 
 export const gmailAttachmentSourceSchema = z.strictObject({
   kind: z.literal("connection"),
@@ -30,6 +44,7 @@ export const artifactMetadataSchema = z.strictObject({
       reference: z.string().min(1).max(2048),
     }),
     gmailAttachmentSourceSchema,
+    deviceFileSourceSchema,
   ]),
   size: storedObjectSchema.shape.size,
   sha256: storedObjectSchema.shape.sha256,
@@ -46,6 +61,9 @@ export type Artifact = z.infer<typeof artifactSchema>;
 export const gmailAttachmentArtifactSchema = artifactSchema.extend({
   metadata: artifactMetadataSchema.extend({ source: gmailAttachmentSourceSchema }),
 });
+export const deviceFileArtifactSchema = artifactSchema.extend({
+  metadata: artifactMetadataSchema.extend({ source: deviceFileSourceSchema }),
+});
 
 export const inboxTransferTokenSchema = z.string().regex(/^wit_[A-Za-z0-9_-]{43}$/);
 export const inboxTransferSchema = z.strictObject({
@@ -60,6 +78,30 @@ export const inboxTransferSchema = z.strictObject({
 export type InboxTransfer = z.infer<typeof inboxTransferSchema>;
 
 export const maximumPublicationSize = 50 * 1024 * 1024;
+export const deviceFileUploadSchema = z.strictObject({
+  version: z.literal(1),
+  authority: deviceFileAuthoritySchema.extend({ operation: z.literal("file.read") }),
+  size: z.number().int().min(0).max(maximumPublicationSize),
+  sha256: storedObjectSchema.shape.sha256,
+});
+export type DeviceFileUpload = z.infer<typeof deviceFileUploadSchema>;
+export const deviceFileUploadResultSchema = z.union([
+  z.strictObject({
+    version: z.literal(1),
+    status: z.literal("ready"),
+    transferId: z.uuid(),
+    artifactId: z.uuid(),
+    revision: artifactSchema.shape.revision,
+    size: deviceFileUploadSchema.shape.size,
+    sha256: storedObjectSchema.shape.sha256,
+  }),
+  z.strictObject({
+    version: z.literal(1),
+    status: z.enum(["unknown", "denied", "conflict", "invalid_file"]),
+    transferId: z.uuid(),
+  }),
+]);
+export type DeviceFileUploadResult = z.infer<typeof deviceFileUploadResultSchema>;
 export const artifactTransferTokenSchema = z.string().regex(/^wat_[A-Za-z0-9_-]{43}$/);
 export const artifactTransferSchema = z.strictObject({
   ownerId: z.uuid(),

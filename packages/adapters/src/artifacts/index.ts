@@ -4,6 +4,7 @@ import { MissingStoredObject, UncertainObjectUpload, type createObjectStorage } 
 export { createWorkspaceFilePublisher } from "./workspace-files";
 export { createArtifactReader } from "./read";
 export { createArtifactStager } from "./stage-artifact";
+export { createDeviceFileReceiver } from "./device-file-upload";
 export { stageInboxFile } from "./stage-inbox";
 export { createDeliveryDownloadService } from "./delivery-downloads";
 

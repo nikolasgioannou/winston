@@ -19,6 +19,7 @@ import {
   createArtifactReader,
   createArtifactStager,
   createDeliveryDownloadService,
+  createDeviceFileReceiver,
 } from "@winston/adapters/artifacts";
 import { startFileDeliveryRuntime } from "./files/runtime";
 import { startFileIntakeRuntime, startInboxStagingRuntime } from "./files/intake-runtime";
@@ -275,7 +276,15 @@ const host = startServer(readConfig(process.env), {
       authenticate: async (request) =>
         (await workspaceTasks.authenticate(request)) ?? cliTasks.authenticate(request),
     },
-    device: createDeviceGroup(database),
+    device: createDeviceGroup(
+      database,
+      storage
+        ? createDeviceFileReceiver({
+            database,
+            artifacts: createArtifactService(database, storage),
+          })
+        : undefined,
+    ),
     callback: {
       router: callbacks,
       async authenticate(request): Promise<Identity | null> {

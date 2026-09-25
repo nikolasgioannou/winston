@@ -68,8 +68,11 @@ export function createApi(options: ApiOptions = {}) {
       errorResponse("body_too_large", context.get("requestId")),
   });
   app.use("*", (context: Context<HttpEnvironment, string>, next) => {
-    // The authenticated publication handler bounds its binary stream before private storage.
-    if (context.req.method === "POST" && context.req.path === "/api/tasks/files/publish")
+    // Authenticated file handlers bound their binary streams before private storage.
+    if (
+      context.req.method === "POST" &&
+      ["/api/tasks/files/publish", "/api/devices/files/upload"].includes(context.req.path)
+    )
       return next();
     return jsonLimit(context, next);
   });

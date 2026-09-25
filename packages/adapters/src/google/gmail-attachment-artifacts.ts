@@ -6,25 +6,13 @@ import type { createArtifactService } from "../artifacts";
 import { createGmailReader } from "./gmail";
 import type { GoogleReadOptions } from "./read-request";
 import { gmailAttachmentResult } from "./gmail-attachment-result";
+import { artifactDisplayName } from "../artifacts/display-name";
 
 export type GmailAttachmentRead = Extract<CliReadRequest, { command: "gmail.attachment" }>;
 export type AttachmentStore = Pick<
   ReturnType<typeof createArtifactService>,
   "upload" | "reconcile"
 >;
-
-function displayName(original: string) {
-  const safe = original
-    .replace(/[\p{Cc}/\\]/gu, "_")
-    .replace(/^\.+/, "")
-    .trim();
-  let name = "";
-  for (const character of safe) {
-    if (name.length + character.length > 255) break;
-    name += character;
-  }
-  return name || "attachment";
-}
 
 export async function captureGmailAttachment(options: {
   read: GoogleReadOptions;
@@ -82,7 +70,7 @@ export async function captureGmailAttachment(options: {
   if (size !== source.metadata.size) throw new Error("Attachment size changed.");
   const bytes = Buffer.concat(chunks);
   const metadata = artifactMetadataSchema.parse({
-    name: displayName(source.metadata.filename),
+    name: artifactDisplayName(source.metadata.filename),
     mediaType: /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/.test(source.metadata.mimeType)
       ? source.metadata.mimeType
       : "application/octet-stream",
