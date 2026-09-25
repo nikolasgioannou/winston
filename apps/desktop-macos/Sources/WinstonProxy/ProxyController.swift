@@ -89,8 +89,11 @@ final class ProxyController {
   }
 
   func quit() {
-    state.setPaused(true)
-    session.setEnabled(false)
     NSApplication.shared.terminate(nil)
+  }
+
+  func shutdown() async {
+    state.setPaused(true)
+    await session.shutdown()
   }
 }

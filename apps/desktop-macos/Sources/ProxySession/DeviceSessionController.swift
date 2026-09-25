@@ -12,6 +12,7 @@ public final class DeviceSessionController {
   public private(set) var changingIdentity = false
   public private(set) var pairingRequired = false
   public private(set) var enabled = true
+  public private(set) var isShuttingDown = false
   private var loaded = false
   private var sleeping = false
   private var paused = false
@@ -31,7 +32,7 @@ public final class DeviceSessionController {
   }
 
   public func restore() async {
-    guard !changingIdentity, identity == nil else { return }
+    guard !isShuttingDown, !changingIdentity, identity == nil else { return }
     guard dependencies.allowed else {
       error = "Pairing requires the signed Winston app."
       return
@@ -52,9 +53,9 @@ public final class DeviceSessionController {
   }
 
   public func pair(origin address: String, token: String) async {
-    guard !changingIdentity, identity == nil else { return }
+    guard !isShuttingDown, !changingIdentity, identity == nil else { return }
     if !loaded { await restore() }
-    guard loaded, !changingIdentity, identity == nil else { return }
+    guard !isShuttingDown, loaded, !changingIdentity, identity == nil else { return }
     guard dependencies.allowed else {
       error = "Pairing requires the signed Winston app."
       return
@@ -82,7 +83,7 @@ public final class DeviceSessionController {
       name = stored.name
       self.origin = stored.origin
       pairingRequired = false
-      enabled = true
+      if !isShuttingDown { enabled = true }
       restart()
     } catch {
       self.error =
@@ -91,23 +92,25 @@ public final class DeviceSessionController {
   }
 
   public func setPaused(_ paused: Bool) {
+    guard !isShuttingDown else { return }
     self.paused = paused
     restart()
   }
 
   public func setSleeping(_ sleeping: Bool) {
+    guard !isShuttingDown else { return }
     self.sleeping = sleeping
     restart()
   }
 
   public func setEnabled(_ enabled: Bool) {
-    guard !changingIdentity else { return }
+    guard !isShuttingDown, !changingIdentity else { return }
     self.enabled = enabled
     restart()
   }
 
   public func forget() async {
-    guard !changingIdentity else { return }
+    guard !isShuttingDown, !changingIdentity else { return }
     changingIdentity = true
     defer { changingIdentity = false }
     enabled = false
@@ -126,7 +129,21 @@ public final class DeviceSessionController {
     }
   }
 
+  /// Stop admission permanently and join connection-owned cleanup before exiting.
+  public func shutdown() async {
+    if !isShuttingDown {
+      isShuttingDown = true
+      enabled = false
+      paused = true
+      revision += 1
+      connection = .stopped
+      operation?.cancel()
+    }
+    await operation?.value
+  }
+
   private func restart() {
+    guard !isShuttingDown else { return }
     revision += 1
     let current = revision
     let previous = operation

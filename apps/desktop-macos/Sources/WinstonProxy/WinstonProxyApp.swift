@@ -2,14 +2,14 @@ import SwiftUI
 
 @main
 struct WinstonProxyApp: App {
-  @State private var controller = ProxyController()
+  @NSApplicationDelegateAdaptor(ProxyApplicationDelegate.self) private var delegate
 
   var body: some Scene {
     MenuBarExtra("Winston", systemImage: "desktopcomputer") {
-      ProxyMenu(controller: controller)
+      ProxyMenu(controller: delegate.controller)
     }
     Window("Winston connection", id: "connection") {
-      ConnectionView(session: controller.session)
+      ConnectionView(session: delegate.controller.session)
     }
     .windowResizability(.contentSize)
   }

@@ -18,11 +18,20 @@ private final class SessionHarness {
   var loadFails = false
   var removeFails = false
   var pairCalls = 0
+  var delayCleanup = false
+  var cleanup: CheckedContinuation<Void, Never>?
+  var delayLoad = false
+  var loading: CheckedContinuation<Void, Never>?
+  var delayPair = false
+  var pairing: CheckedContinuation<Void, Never>?
 
   func dependencies(allowed: Bool = true) -> SessionDependencies {
     SessionDependencies(
       allowed: allowed,
       load: {
+        if self.delayLoad {
+          await withCheckedContinuation { self.loading = $0 }
+        }
         if self.loadFails { throw DeviceIdentityError.keychainStatus(-1) }
         return self.saved
       },
@@ -36,6 +45,9 @@ private final class SessionHarness {
       },
       pair: { _, _ in
         self.pairCalls += 1
+        if self.delayPair {
+          await withCheckedContinuation { self.pairing = $0 }
+        }
         return self.identity
       },
       run: { _, onState, status in
@@ -51,6 +63,9 @@ private final class SessionHarness {
         self.statuses.append(await status())
         await onState(.connected)
         do { try await Task.sleep(for: .seconds(60)) } catch {}
+        if self.delayCleanup {
+          await withCheckedContinuation { self.cleanup = $0 }
+        }
         // Simulate a late notification from a canceled connection.
         await onState(.connected)
       })
@@ -69,6 +84,9 @@ struct DeviceSessionTests {
     try await tests.testFailedForgetRetainsIdentityButStopsConnection()
     await tests.testDevelopmentBundleCannotAccessIdentityOrPair()
     await tests.testUnreadableIdentityCannotBeOverwritten()
+    try await tests.testShutdownWaitsForCleanupAndCannotRestart()
+    try await tests.testShutdownDuringRestoreDoesNotConnect()
+    try await tests.testShutdownDuringPairingPreservesIdentityWithoutConnecting()
     print("Native session integration checks passed")
   }
 
@@ -185,5 +203,62 @@ struct DeviceSessionTests {
     await session.restore()
     precondition(session.isPaired)
     await session.forget()
+  }
+
+  func testShutdownWaitsForCleanupAndCannotRestart() async throws {
+    let harness = SessionHarness()
+    harness.saved = harness.identity
+    harness.delayCleanup = true
+    let session = DeviceSessionController(dependencies: harness.dependencies())
+    await session.restore()
+    try await waitFor { session.connection == .connected }
+    var finished = false
+    let shutdown = Task {
+      await session.shutdown()
+      finished = true
+    }
+    try await waitFor { harness.cleanup != nil }
+    precondition(session.isShuttingDown && !session.enabled && !finished)
+    session.setEnabled(true)
+    session.setPaused(false)
+    session.setSleeping(true)
+    session.setSleeping(false)
+    await session.forget()
+    precondition(harness.active == 1 && harness.saved != nil)
+    harness.cleanup?.resume()
+    await shutdown.value
+    await session.shutdown()
+    precondition(finished && harness.active == 0 && harness.starts == 1)
+    precondition(session.connection == .stopped && !session.enabled)
+  }
+
+  func testShutdownDuringRestoreDoesNotConnect() async throws {
+    let harness = SessionHarness()
+    harness.saved = harness.identity
+    harness.delayLoad = true
+    let session = DeviceSessionController(dependencies: harness.dependencies())
+    let restoring = Task { await session.restore() }
+    try await waitFor { harness.loading != nil }
+    await session.shutdown()
+    harness.loading?.resume()
+    await restoring.value
+    precondition(harness.starts == 0 && !session.enabled)
+    precondition(session.connection == .stopped)
+  }
+
+  func testShutdownDuringPairingPreservesIdentityWithoutConnecting() async throws {
+    let harness = SessionHarness()
+    harness.delayPair = true
+    let session = DeviceSessionController(dependencies: harness.dependencies())
+    let pairing = Task {
+      await session.pair(origin: "https://example.com", token: "test")
+    }
+    try await waitFor { harness.pairing != nil }
+    await session.shutdown()
+    harness.pairing?.resume()
+    await pairing.value
+    precondition(harness.saved != nil && session.isPaired)
+    precondition(harness.starts == 0 && !session.enabled)
+    precondition(session.connection == .stopped)
   }
 }
