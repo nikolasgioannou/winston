@@ -56,6 +56,16 @@ export const calendarEventTimeSchema = z.union([
 export const calendarProviderEventSchema = z
   .object({
     id: calendarEventIdSchema,
+    etag: z.string().min(1).max(1024).optional(),
+    eventType: z.string().max(100).optional(),
+    locked: z.boolean().optional(),
+    recurrence: z.array(z.string().max(2000)).max(20).optional(),
+    organizer: z
+      .object({
+        email: z.string().max(1024).optional(),
+        self: z.boolean().optional(),
+      })
+      .optional(),
     status: z.enum(["confirmed", "tentative", "cancelled"]).default("confirmed"),
     summary: z.string().max(16384).optional(),
     description: z.string().max(100_000).optional(),
@@ -72,6 +82,10 @@ export const calendarProviderEventSchema = z
           email: z.string().max(1024).optional(),
           displayName: z.string().max(1024).optional(),
           self: z.boolean().optional(),
+          optional: z.boolean().optional(),
+          resource: z.boolean().optional(),
+          comment: z.string().max(16384).optional(),
+          additionalGuests: z.number().int().nonnegative().optional(),
           responseStatus: z.enum(["needsAction", "declined", "tentative", "accepted"]).optional(),
         }),
       )

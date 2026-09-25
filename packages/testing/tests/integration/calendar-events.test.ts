@@ -47,6 +47,10 @@ test("Calendar windows retain date boundaries, recurrence and account-scoped pag
     let malformed = false;
     const timed = {
       id: "event1",
+      etag: '"calendar-version-1"',
+      eventType: "default",
+      organizer: { email: "owner@example.com", self: true },
+      attendees: [{ email: "guest@example.com", responseStatus: "accepted", optional: true }],
       summary: "DST meeting",
       start: { dateTime: "2026-11-01T01:30:00-04:00", timeZone: "America/New_York" },
       end: { dateTime: "2026-11-01T01:30:00-05:00", timeZone: "America/New_York" },
@@ -156,10 +160,12 @@ test("Calendar windows retain date boundaries, recurrence and account-scoped pag
       assert.equal(next.events[1].transparency, "transparent");
       assert.equal(next.events[2]?.status, "cancelled");
       assert.equal(next.events[2].start, undefined);
-      assert.equal(
-        (await reader.event(ownerId, { target: first, id: "event1" }, signal)).event.id,
-        "event1",
-      );
+      const selectedEvent = await reader.event(ownerId, { target: first, id: "event1" }, signal);
+      assert.equal(selectedEvent.event.id, "event1");
+      assert.equal(selectedEvent.event.etag, timed.etag);
+      assert.equal(selectedEvent.event.eventType, "default");
+      assert.deepEqual(selectedEvent.event.organizer, timed.organizer);
+      assert.deepEqual(selectedEvent.event.attendees, timed.attendees);
       const before = requests;
       let availabilityRequests = 0;
       let availabilityData: unknown = {};
