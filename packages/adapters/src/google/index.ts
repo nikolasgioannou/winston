@@ -184,3 +184,9 @@ export type GoogleConnections = ReturnType<typeof createGoogleConnections>;
 export { createGmailDraftReader } from "./gmail-drafts";
 export { createGmailLabelReader } from "./gmail-labels";
 export { createGmailReconciliationGateway } from "./gmail-reconciliation-gateway";
+export {
+  prepareGmailLabelMutation,
+  readGmailLabelMutationPlan,
+  gmailLabelsMatch,
+} from "./gmail-label-mutation-plan";
+export { createGmailLabelMutationExecutor } from "./gmail-label-mutation-executor";

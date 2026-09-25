@@ -16,6 +16,8 @@ import { taskSchema } from "@winston/contracts/tasks";
 import { readCalendarMutationArguments } from "../google/calendar-mutation-plan";
 import { readGmailMutationPlan } from "../google/gmail-mutation-plan";
 import { gmailActionReferencesCurrent } from "./gmail-action-references";
+import { gmailLabelActionReferencesCurrent } from "./gmail-label-action-references";
+import { readGmailLabelMutationPlan } from "../google/gmail-label-mutation-plan";
 import { assertGmailMutationResolved } from "./gmail-mutation-blocking";
 import { connectionTargetRepository } from "./connection-targets";
 import { assertCalendarMutationResolved } from "./calendar-mutation-blocking";
@@ -219,6 +221,23 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
       )
         return false;
     }
+    if (expected.authorization.operation === "gmail.modify") {
+      let plan;
+      try {
+        plan = readGmailLabelMutationPlan(action.request.arguments);
+      } catch {
+        return false;
+      }
+      if (
+        plan.operationId !== action.operationId ||
+        plan.target.connectionId !== target.id ||
+        target.resource !== null ||
+        plan.target.task?.id !== action.request.task.id ||
+        plan.target.task.revision !== action.request.task.revision ||
+        !(await gmailLabelActionReferencesCurrent(transaction, ownerId, plan))
+      )
+        return false;
+    }
     if (expected.authorization.operation === "calendar.write") {
       let payload;
       try {
@@ -395,6 +414,9 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     },
     authorizeGmailMutation(input: ConnectionProof) {
       return authorizeConnection(input, ["gmail.draft", "gmail.send"]);
+    },
+    authorizeGmailLabelMutation(input: ConnectionProof) {
+      return authorizeConnection(input, ["gmail.modify"]);
     },
     async unresolvedPriorEffect(input: ActionTask) {
       const worker = actionTaskSchema.parse(input);
