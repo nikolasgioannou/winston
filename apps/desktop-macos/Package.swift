@@ -24,7 +24,10 @@ let package = Package(
       ]),
     .target(
       name: "ProxySession",
-      dependencies: [.product(name: "WinstonDeviceTransport", package: "device-transport")]),
+      dependencies: [
+        "ProxyRuntime",
+        .product(name: "WinstonDeviceTransport", package: "device-transport"),
+      ]),
     .executableTarget(
       name: "WinstonProxy",
       dependencies: [

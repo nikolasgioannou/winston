@@ -1,4 +1,5 @@
 import Foundation
+import ProxyRuntime
 import WinstonDeviceTransport
 
 @MainActor
@@ -59,7 +60,18 @@ package struct SessionDependencies {
         endpoint.path = "/api/devices/socket"
         let transport = try DeviceTransport(
           endpoint: endpoint.url!, deviceId: identity.deviceId, credential: identity.credential)
-        try await DeviceConnectionLoop(transport: transport).run(onState: onState, status: status)
+        let files = FileManager.default
+        let support = try files.url(
+          for: .applicationSupportDirectory, in: .userDomainMask,
+          appropriateFor: nil, create: true)
+        let runtime = CommandConnection(
+          directory: support.appendingPathComponent("app.runwinston.proxy", isDirectory: true),
+          environment: [
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "HOME": files.homeDirectoryForCurrentUser.path,
+            "TMPDIR": files.temporaryDirectory.path,
+          ])
+        try await runtime.run(transport: transport, onState: onState, status: status)
       })
   }
 }

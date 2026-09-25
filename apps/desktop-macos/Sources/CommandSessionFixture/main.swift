@@ -4,6 +4,12 @@ import ProxyRuntime
 import WinstonDeviceProtocol
 import WinstonDeviceTransport
 
+private actor ConnectionState {
+  private(set) var value: DeviceConnectionState = .stopped
+
+  func set(_ value: DeviceConnectionState) { self.value = value }
+}
+
 @main
 struct CommandSessionFixture {
   static let id = "11111111-1111-4111-8111-111111111111"
@@ -13,39 +19,41 @@ struct CommandSessionFixture {
     let directory = URL(fileURLWithPath: CommandLine.arguments[2])
     let mode = CommandLine.arguments[3]
     let journalDirectory = directory.appendingPathComponent("journal")
-    try FileManager.default.createDirectory(
-      at: journalDirectory, withIntermediateDirectories: false,
-      attributes: [.posixPermissions: 0o700])
-    let journal = try ExecutionJournal(directory: journalDirectory)
     if mode == "uncertain" || mode == "repaired" {
+      try FileManager.default.createDirectory(
+        at: journalDirectory, withIntermediateDirectories: false,
+        attributes: [.posixPermissions: 0o700])
+      let journal = try ExecutionJournal(directory: journalDirectory)
       let request = try DeviceMessage(
         data: Data(contentsOf: directory.appendingPathComponent("request.json")))
       _ = try await journal.admit(request)
       _ = try await journal.markUncertain(JournalKey(deviceId: request.deviceId, executionId: id))
+      await journal.close()
     }
-    let runtime = CommandSession(journal: journal, environment: ["PATH": "/usr/bin:/bin"])
+    let runtime = CommandConnection(
+      directory: journalDirectory, environment: ["PATH": "/usr/bin:/bin"])
     let transport = try DeviceTransport(
       endpoint: endpoint, deviceId: id,
       credential: "wdi_" + String(repeating: "a", count: 43),
       allowInsecureLoopback: true)
-    let loop = DeviceConnectionLoop(transport: transport)
+    let state = ConnectionState()
     let connection = Task {
-      try await loop.run(
-        status: { mode == "paused" ? .paused : .ready },
-        handleSession: { session in
-          try await runtime.run(
-            transport: transport, session: session, ready: { mode != "paused" })
-        })
+      try await runtime.run(
+        transport: transport, onState: { await state.set($0) },
+        status: { mode == "paused" ? .paused : .ready })
     }
     // Each scenario closes its server session. Stop during reconnect backoff,
     // after the loop has joined the command handler and its owned workers.
-    while await loop.state != .disconnected {
+    while await state.value != .disconnected {
       try await Task.sleep(for: .milliseconds(5))
     }
     connection.cancel()
     try await connection.value
-    let stopped = await loop.state
+    let stopped = await state.value
     precondition(stopped == .stopped)
+    // Reopen only after the wrapper returns: its lock must be released and its
+    // worker's terminal outcome must already be durable.
+    let journal = try ExecutionJournal(directory: journalDirectory)
     let key = try JournalKey(deviceId: id, executionId: id)
     let record = try await journal.record(key)
     switch mode {
