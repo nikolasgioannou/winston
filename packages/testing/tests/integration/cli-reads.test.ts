@@ -53,6 +53,8 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
         requests += 1;
         assert.equal(new Headers(init.headers).get("Authorization"), "Bearer provider-secret");
         await duringFetch?.();
+        if (url.pathname.endsWith("/labels"))
+          return Response.json({ labels: [{ id: "Label_1", name: "Work", type: "user" }] });
         if (url.pathname.endsWith("/freeBusy"))
           return Response.json({
             timeMin: "2026-11-01T00:00:00Z",
@@ -211,16 +213,25 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
       );
       assert.equal(availability.status, "ok");
       const before = requestCount();
+      const labelResult = await execute(
+        credential(),
+        { version: 1, command: "gmail.labels", accountId },
+        signal,
+      );
+      assert.equal(labelResult.status, "ok");
+      assert.match(JSON.stringify(labelResult), /Label_1/);
+      assert.equal(requestCount(), before + 1);
+      const afterLabels = requestCount();
       duringAccess = () =>
         database.transaction(ownerId, ({ capabilities }) => capabilities.revoke(capability.id));
       assert.equal((await execute(credential(), request, signal)).status, "denied");
-      assert.equal(requestCount(), before);
+      assert.equal(requestCount(), afterLabels);
       duringAccess = undefined;
       capability = await issue();
       duringFetch = () =>
         database.transaction(ownerId, ({ capabilities }) => capabilities.revoke(capability.id));
       assert.equal((await execute(credential(), request, signal)).status, "denied");
-      assert.equal(requestCount(), before + 1);
+      assert.equal(requestCount(), afterLabels + 1);
       assert.equal((await execute(credential(), request, signal)).status, "denied");
       capability = await issue();
       duringFetch = async () => {
@@ -236,10 +247,10 @@ test("connected CLI reads keep tokens server-side and revalidate capabilities ar
       const revoked = await execute(credential(), request, signal);
       assert.equal(revoked.status, "unavailable");
       assert.ok(!("data" in revoked));
-      assert.equal(requestCount(), before + 2);
+      assert.equal(requestCount(), afterLabels + 2);
       duringFetch = undefined;
       assert.equal((await execute(credential(), request, signal)).status, "unavailable");
-      assert.equal(requestCount(), before + 2);
+      assert.equal(requestCount(), afterLabels + 2);
     } finally {
       await database.close();
     }

@@ -182,4 +182,5 @@ export function createGoogleConnections(options: {
 
 export type GoogleConnections = ReturnType<typeof createGoogleConnections>;
 export { createGmailDraftReader } from "./gmail-drafts";
+export { createGmailLabelReader } from "./gmail-labels";
 export { createGmailReconciliationGateway } from "./gmail-reconciliation-gateway";

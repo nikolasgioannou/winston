@@ -9,6 +9,7 @@ import { gmailReadTargetSchema } from "@winston/contracts/gmail";
 import { calendarReadTargetSchema } from "@winston/contracts/calendar";
 import { createGmailReader } from "./gmail";
 import { createGmailDraftReader } from "./gmail-drafts";
+import { createGmailLabelReader } from "./gmail-labels";
 import { createCalendarReader } from "./calendar-events";
 import { createCalendarAvailabilityReader } from "./calendar-availability";
 import { createConnectionTargets } from "./targets";
@@ -92,6 +93,13 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
           dispatch = approval;
         }
         switch (request.command) {
+          case "gmail.labels":
+            data = await createGmailLabelReader(bound)(
+              authority.ownerId,
+              gmailReadTargetSchema.parse(selected.target),
+              signal,
+            );
+            break;
           case "gmail.drafts":
             data = await createGmailDraftReader(bound).drafts(
               authority.ownerId,

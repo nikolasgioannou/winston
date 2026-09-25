@@ -87,6 +87,7 @@ export function readGmailMessage(input: unknown, source: ResolvedTarget) {
     source,
     trust: "untrusted_external_content" as const,
     id: message.id,
+    labelIds: message.labelIds ?? null,
     threadId: message.threadId,
     snippet: message.snippet,
     internalDate: message.internalDate ?? null,

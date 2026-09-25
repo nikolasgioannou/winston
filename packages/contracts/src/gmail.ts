@@ -10,6 +10,24 @@ export const gmailReadTargetSchema = resolvedTargetSchema.extend({
   operation: z.literal("gmail.read"),
   calendarId: z.null(),
 });
+export const gmailLabelIdsSchema = z
+  .array(gmailIdSchema)
+  .max(10_000)
+  .refine((ids) => new Set(ids).size === ids.length, "Duplicate label identities.");
+export const gmailLabelSchema = z.object({
+  id: gmailIdSchema,
+  name: z.string().min(1).max(1024),
+  type: z.enum(["system", "user"]),
+});
+export const gmailLabelListSchema = z.object({
+  labels: z
+    .array(gmailLabelSchema)
+    .max(10_000)
+    .refine(
+      (labels) => new Set(labels.map((label) => label.id)).size === labels.length,
+      "Duplicate label identities.",
+    ),
+});
 export const gmailSearchSchema = z.strictObject({
   target: gmailReadTargetSchema,
   query: z.string().max(2000),
@@ -79,6 +97,7 @@ export const gmailPartSchema = z.object({
 });
 export const gmailMessageSchema = z.object({
   id: gmailIdSchema,
+  labelIds: gmailLabelIdsSchema.optional(),
   threadId: gmailIdSchema,
   snippet: z.string().max(16384).default(""),
   internalDate: z

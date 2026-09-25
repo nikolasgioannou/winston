@@ -5,6 +5,14 @@ const gmailMessageHelp =
 
 export const commands = [
   {
+    command: "gmail.labels",
+    id: false,
+    flags: ["account", "key"],
+    description:
+      "List label IDs, names and user/system types in the selected Gmail account under its read permission. Use a stable key when approval is required.",
+    usage: "--account <uuid> [--key <read-key>]",
+  },
+  {
     command: "gmail.reconcile",
     id: true,
     flags: ["id", "key"],

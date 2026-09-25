@@ -9,6 +9,7 @@ import {
 const account = { version: z.literal(1), accountId: z.uuid() };
 const read = { ...account, key: z.string().min(1).max(100).optional() };
 export const cliReadRequestSchema = z.discriminatedUnion("command", [
+  z.strictObject({ ...read, command: z.literal("gmail.labels") }),
   calendarAvailabilityQuerySchema.omit({ target: true }).extend({
     ...read,
     command: z.literal("calendar.availability"),
