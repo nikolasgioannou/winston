@@ -8,6 +8,8 @@ import { createCommandService } from "./commands";
 import { createCommandHandler } from "./command-http";
 import { openWorkspaceInbox } from "./inbox";
 import { createInboxHandler } from "./inbox-http";
+import { createArtifactTransferHandler } from "./artifact-transfer-http";
+import { maximumPublicationSize } from "@winston/contracts/artifacts";
 
 if (
   process.platform !== "linux" ||
@@ -45,10 +47,18 @@ if (initialize) {
 }
 journal.recoverInterrupted();
 const inbox = openWorkspaceInbox("/data");
+const transferSlots = { active: 0 };
 const inboxHandler = createInboxHandler({
   identity,
   inbox,
+  slots: transferSlots,
   authorize: (token, transfer) => authority.inbox(token, transfer),
+});
+const artifactHandler = createArtifactTransferHandler({
+  identity,
+  inbox,
+  slots: transferSlots,
+  authorize: (token, transfer) => authority.artifact(token, transfer),
 });
 const runner = createCommandRunner({
   home: journal.home,
@@ -66,12 +76,16 @@ const inspectionHandler = createWorkspaceHandler({
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: 8080,
-  maxRequestBodySize: 20_000_000,
+  maxRequestBodySize: maximumPublicationSize,
   idleTimeout: 10,
   async fetch(request, server) {
     if (new URL(request.url).pathname === "/v1/inbox") {
       server.timeout(request, 65);
       return (await inboxHandler(request)) ?? new Response(null, { status: 404 });
+    }
+    if (new URL(request.url).pathname === "/v1/artifacts") {
+      server.timeout(request, 65);
+      return (await artifactHandler(request)) ?? new Response(null, { status: 404 });
     }
     return (await commandHandler(request)) ?? inspectionHandler(request);
   },

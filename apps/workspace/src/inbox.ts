@@ -12,7 +12,11 @@ import {
 } from "node:fs";
 import { open } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { artifactMetadataSchema, artifactSchema } from "@winston/contracts/artifacts";
+import {
+  artifactMetadataSchema,
+  artifactSchema,
+  maximumPublicationSize,
+} from "@winston/contracts/artifacts";
 
 function protectedDirectory(path: string, mode: number) {
   const stat = lstatSync(path);
@@ -96,7 +100,7 @@ export function openWorkspaceInbox(root: string) {
       artifactMetadataSchema.shape.size.parse(input.size);
       artifactMetadataSchema.shape.sha256.parse(input.sha256);
       if (
-        input.size > 20_000_000 ||
+        input.size > maximumPublicationSize ||
         input.bytes.byteLength !== input.size ||
         createHash("sha256").update(input.bytes).digest("hex") !== input.sha256
       )

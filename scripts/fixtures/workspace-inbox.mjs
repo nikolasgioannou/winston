@@ -12,16 +12,36 @@ const transfer = {
   sha256: createHash("sha256").update(bytes).digest("hex"),
 };
 const token = `wit_${"i".repeat(43)}`;
+const artifact = {
+  ownerId: transfer.ownerId,
+  workspaceId: transfer.workspaceId,
+  workspaceRevision: 1,
+  transferId: randomUUID(),
+  artifactId: randomUUID(),
+  artifactRevision: 1,
+  task: { id: randomUUID(), revision: 2, generation: 3 },
+  size: bytes.length,
+  sha256: transfer.sha256,
+};
+const artifactToken = `wat_${"a".repeat(43)}`;
 let checks = 0;
 const authority = serve({
   hostname: "127.0.0.1",
   port: 9090,
   async fetch(request) {
-    assert.equal(new URL(request.url).pathname, "/api/transfers/inbox/authorize");
-    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.deepEqual(await request.json(), transfer);
+    const pathname = new URL(request.url).pathname;
+    assert.ok(
+      ["/api/transfers/inbox/authorize", "/api/transfers/artifacts/authorize"].includes(pathname),
+    );
+    const incoming = pathname === "/api/transfers/inbox/authorize";
+    const expected = incoming ? transfer : artifact;
+    assert.equal(
+      request.headers.get("Authorization"),
+      `Bearer ${incoming ? token : artifactToken}`,
+    );
+    assert.deepEqual(await request.json(), expected);
     checks += 1;
-    return Response.json(transfer);
+    return Response.json(expected);
   },
 });
 const path = `/data/inbox/${transfer.artifactId}`;
@@ -37,8 +57,22 @@ try {
     });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { path, size: transfer.size, sha256: transfer.sha256 });
+    const staged = await fetch("http://127.0.0.1:8080/v1/artifacts", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${artifactToken}`,
+        "X-Winston-Transfer": Buffer.from(JSON.stringify(artifact)).toString("base64url"),
+      },
+      body: bytes,
+    });
+    assert.equal(staged.status, 200);
+    assert.deepEqual(await staged.json(), {
+      path: `/data/inbox/${artifact.artifactId}`,
+      size: artifact.size,
+      sha256: artifact.sha256,
+    });
   }
-  assert.ok(checks >= 4);
+  assert.ok(checks >= 8);
 } finally {
   await authority.stop(true);
 }
@@ -49,6 +83,10 @@ const source = `
   assert.equal(readFileSync(path, "utf8"), "Original attachment");
   assert.throws(() => writeFileSync(path, "changed"));
   assert.throws(() => unlinkSync(path));
+  const artifactPath = ${JSON.stringify(`/data/inbox/${artifact.artifactId}`)};
+  assert.equal(readFileSync(artifactPath, "utf8"), "Original attachment");
+  assert.throws(() => writeFileSync(artifactPath, "changed"));
+  assert.throws(() => unlinkSync(artifactPath));
   assert.throws(() => renameSync("/data/inbox", "/data/home/replaced"));
   assert.throws(() => symlinkSync("/data/home", "/data/inbox/redirect"));
 `;

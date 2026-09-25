@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { storedObjectSchema } from "./storage";
 import { gmailIdSchema } from "./gmail";
+import { actionTaskSchema } from "./actions";
 
 export const gmailAttachmentSourceSchema = z.strictObject({
   kind: z.literal("connection"),
@@ -59,6 +60,20 @@ export const inboxTransferSchema = z.strictObject({
 export type InboxTransfer = z.infer<typeof inboxTransferSchema>;
 
 export const maximumPublicationSize = 50 * 1024 * 1024;
+export const artifactTransferTokenSchema = z.string().regex(/^wat_[A-Za-z0-9_-]{43}$/);
+export const artifactTransferSchema = z.strictObject({
+  ownerId: z.uuid(),
+  workspaceId: z.uuid(),
+  workspaceRevision: z.number().int().nonnegative(),
+  transferId: z.uuid(),
+  artifactId: z.uuid(),
+  artifactRevision: z.number().int().nonnegative(),
+  task: actionTaskSchema,
+  size: z.number().int().min(0).max(maximumPublicationSize),
+  sha256: storedObjectSchema.shape.sha256,
+});
+export type ArtifactTransfer = z.infer<typeof artifactTransferSchema>;
+
 export const filePublicationSchema = artifactMetadataSchema.omit({ source: true }).extend({
   version: z.literal(1),
   key: z.string().min(1).max(100),
