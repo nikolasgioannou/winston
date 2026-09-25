@@ -6,6 +6,65 @@ import { runCli } from "../src/run";
 
 const id = "5f445ff8-9955-455a-8632-bff6fe58c745";
 
+test("draft reads keep explicit account, draft identity and distinct pagination cursors", () => {
+  const cursor = { kind: "drafts", connectionId: id, query: "subject:Plan", pageToken: "next" };
+  assert.deepEqual(
+    parseCommand([
+      "gmail",
+      "drafts",
+      "--account",
+      id,
+      "--query",
+      "subject:Plan",
+      "--cursor",
+      JSON.stringify(cursor),
+      "--key",
+      "draft-list",
+    ]),
+    {
+      kind: "request",
+      json: false,
+      request: {
+        version: 1,
+        command: "gmail.drafts",
+        accountId: id,
+        query: "subject:Plan",
+        limit: 25,
+        cursor,
+        key: "draft-list",
+      },
+    },
+  );
+  assert.deepEqual(
+    parseCommand(["gmail", "draft", "--account", id, "--id", "draft1", "--key", "draft-read"]),
+    {
+      kind: "request",
+      json: false,
+      request: {
+        version: 1,
+        command: "gmail.draft",
+        accountId: id,
+        id: "draft1",
+        key: "draft-read",
+      },
+    },
+  );
+  for (const args of [
+    ["gmail", "draft", "--id", "draft1"],
+    ["gmail", "draft", "--account", id, "--id", "draft1", "--query", "ignored"],
+    ["gmail", "search", "--account", id, "--cursor", JSON.stringify(cursor)],
+    [
+      "gmail",
+      "drafts",
+      "--account",
+      id,
+      "--cursor",
+      JSON.stringify({ connectionId: id, query: "", pageToken: "next" }),
+    ],
+  ])
+    assert.throws(() => parseCommand(args));
+});
+
 test("responsibility commands accept explicit scope and paired agreement references only", () => {
   const scope = [
     { target: { kind: "workspace", id, resource: null }, operation: "workspace.command" },

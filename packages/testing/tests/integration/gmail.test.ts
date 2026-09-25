@@ -6,6 +6,7 @@ import { createCredentialCipher, createCredentialVault } from "@winston/adapters
 import {
   createConnectionTargets,
   createGmailReader,
+  createGmailDraftReader,
   GmailReadError,
 } from "@winston/adapters/google";
 import { googleScopes, type Connection } from "@winston/contracts/connections";
@@ -52,7 +53,13 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
         partId: "",
         mimeType: "multipart/mixed",
         body: { size: 0 },
-        headers: [{ name: "Subject", value: "Fixture" }],
+        headers: [
+          { name: "Subject", value: "Fixture" },
+          { name: "Bcc", value: "private@example.com" },
+          { name: "Reply-To", value: "reply@example.com" },
+          { name: "In-Reply-To", value: "<parent@example.com>" },
+          { name: "References", value: "<parent@example.com>" },
+        ],
         parts: [
           {
             partId: "0",
@@ -80,7 +87,8 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
         ],
       },
     });
-    const reader = createGmailReader({
+    let draftMessageId = "m1";
+    const options: Parameters<typeof createGmailReader>[0] = {
       database,
       google,
       fetch: (url, init) => {
@@ -91,6 +99,19 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
         assert.equal(new Headers(init.headers).get("Authorization"), "Bearer synthetic");
         if (overrideResponse) return Promise.resolve(overrideResponse());
         if (unauthorized) return Promise.resolve(new Response(null, { status: 401 }));
+        if (url.pathname.endsWith("/drafts")) {
+          assert.equal(url.searchParams.get("maxResults"), "1");
+          return Promise.resolve(
+            Response.json({
+              drafts: [{ id: "draft1", message: { id: draftMessageId, threadId: "t1" } }],
+              ...(url.searchParams.has("pageToken") ? {} : { nextPageToken: "draft-next" }),
+            }),
+          );
+        }
+        if (url.pathname.endsWith("/drafts/draft1")) {
+          assert.equal(url.searchParams.get("format"), "full");
+          return Promise.resolve(Response.json({ id: "draft1", message: message(draftMessageId) }));
+        }
         if (url.pathname.endsWith("/attachments/attachment1"))
           return Promise.resolve(
             Response.json({
@@ -115,7 +136,9 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
           );
         return Promise.resolve(Response.json(message("m1")));
       },
-    });
+    };
+    const reader = createGmailReader(options);
+    const draftReader = createGmailDraftReader(options);
     async function connect() {
       const id = randomUUID();
       const connection: Connection = {
@@ -149,6 +172,11 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
         /approval_required/,
       );
       assert.equal(requests, 0);
+      await assert.rejects(
+        draftReader.draft(owner, { target: first, id: "draft1" }, signal),
+        /approval_required/,
+      );
+      assert.equal(requests, 0);
       for (const [revision, target] of [first, second].entries()) {
         await database.transaction(owner, (scope) =>
           scope.authorization.put({
@@ -166,6 +194,58 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
       );
       assert.equal(page.messages[0]?.id, "m1");
       assert.ok(page.cursor);
+      const drafts = await draftReader.drafts(
+        owner,
+        { target: first, query: "subject:Fixture", limit: 1 },
+        signal,
+      );
+      assert.equal(drafts.drafts[0]?.id, "draft1");
+      assert.ok(drafts.cursor);
+      assert.equal(drafts.cursor.kind, "drafts");
+      assert.equal(
+        (
+          await draftReader.drafts(
+            owner,
+            { target: first, query: "subject:Fixture", limit: 1, cursor: drafts.cursor },
+            signal,
+          )
+        ).cursor,
+        null,
+      );
+      const beforeInvalidCursors = requests;
+      await assert.rejects(
+        draftReader.drafts(
+          owner,
+          { target: second, query: "subject:Fixture", cursor: drafts.cursor },
+          signal,
+        ),
+      );
+      await assert.rejects(
+        draftReader.drafts(
+          owner,
+          { target: first, query: "different", cursor: drafts.cursor },
+          signal,
+        ),
+      );
+      await assert.rejects(
+        reader.search(
+          owner,
+          { target: first, query: "subject:Fixture", cursor: drafts.cursor },
+          signal,
+        ),
+      );
+      assert.equal(requests, beforeInvalidCursors);
+      const draft = await draftReader.draft(owner, { target: first, id: "draft1" }, signal);
+      assert.equal(draft.id, "draft1");
+      assert.equal(draft.message.id, "m1");
+      assert.equal(draft.trust, "untrusted_external_content");
+      assert.deepEqual(draft.message.headers, message("m1").payload.headers);
+      assert.equal(draft.message.attachments[0]?.messageId, "m1");
+      draftMessageId = "m2";
+      assert.equal(
+        (await draftReader.draft(owner, { target: first, id: "draft1" }, signal)).message.id,
+        "m2",
+      );
       assert.equal(
         (
           await reader.search(
@@ -199,6 +279,7 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
       assert.deepEqual(Buffer.from(await new Response(b.stream).arrayBuffer()), attachmentBytes);
       const before = requests;
       await assert.rejects(reader.message(stranger, { target: first, id: "m1" }, signal));
+      await assert.rejects(draftReader.draft(stranger, { target: first, id: "draft1" }, signal));
       await database.transaction(owner, (scope) =>
         scope.authorization.put({
           target: { kind: "connection", id: first.connectionId, resource: null },
@@ -208,7 +289,10 @@ test("Gmail reads enforce policy, bound pagination and preserve multipart attach
         }),
       );
       await assert.rejects(reader.message(owner, { target: first, id: "m1" }, signal));
+      await assert.rejects(draftReader.draft(owner, { target: first, id: "draft1" }, signal));
       assert.equal(requests, before);
+      overrideResponse = () => Response.json({ id: "wrong-draft", message: message("m1") });
+      await assert.rejects(draftReader.draft(owner, { target: second, id: "draft1" }, signal));
       overrideResponse = () => Response.json(message("wrong-message"));
       await assert.rejects(reader.message(owner, { target: second, id: "m1" }, signal));
       let canceled = false;

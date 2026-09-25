@@ -26,6 +26,24 @@ export const gmailMessageRequestSchema = z.strictObject({
   target: gmailReadTargetSchema,
   id: gmailIdSchema,
 });
+export const gmailDraftSearchSchema = gmailSearchSchema.extend({
+  cursor: gmailSearchSchema.shape.cursor
+    .unwrap()
+    .extend({ kind: z.literal("drafts") })
+    .optional(),
+});
+export const gmailDraftPageSchema = z.object({
+  drafts: z
+    .array(
+      z.object({
+        id: gmailIdSchema,
+        message: z.object({ id: gmailIdSchema, threadId: gmailIdSchema }),
+      }),
+    )
+    .max(100)
+    .default([]),
+  nextPageToken: z.string().max(4096).optional(),
+});
 export const gmailAttachmentRequestSchema = gmailMessageRequestSchema.extend({
   partId: z.string().max(256),
 });
@@ -73,6 +91,11 @@ export const gmailThreadSchema = z.object({
   id: gmailIdSchema,
   messages: z.array(gmailMessageSchema).max(1000).default([]),
 });
+export const gmailDraftSchema = z.object({
+  id: gmailIdSchema,
+  message: gmailMessageSchema,
+});
+export type GmailDraftSearch = z.input<typeof gmailDraftSearchSchema>;
 export type GmailMessageRequest = z.input<typeof gmailMessageRequestSchema>;
 export type GmailSearch = z.input<typeof gmailSearchSchema>;
 export type GmailAttachmentRequest = z.input<typeof gmailAttachmentRequestSchema>;

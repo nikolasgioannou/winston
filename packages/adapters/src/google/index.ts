@@ -171,3 +171,4 @@ export function createGoogleConnections(options: {
 }
 
 export type GoogleConnections = ReturnType<typeof createGoogleConnections>;
+export { createGmailDraftReader } from "./gmail-drafts";

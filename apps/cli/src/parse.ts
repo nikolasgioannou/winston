@@ -233,7 +233,7 @@ export function parseCommand(args: string[]): ParsedCommand {
               ...(command.command === "calendar.events" ? { query: values.query ?? "" } : {}),
             },
           }
-        : command.command === "gmail.search"
+        : command.command === "gmail.search" || command.command === "gmail.drafts"
           ? { query: values.query ?? "" }
           : {}),
     });

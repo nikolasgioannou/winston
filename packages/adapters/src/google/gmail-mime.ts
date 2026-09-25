@@ -92,7 +92,18 @@ export function readGmailMessage(input: unknown, source: ResolvedTarget) {
     internalDate: message.internalDate ?? null,
     headers:
       parts[0]?.headers.filter((header) =>
-        ["from", "to", "cc", "subject", "date", "message-id"].includes(header.name.toLowerCase()),
+        [
+          "from",
+          "to",
+          "cc",
+          "bcc",
+          "subject",
+          "date",
+          "message-id",
+          "reply-to",
+          "in-reply-to",
+          "references",
+        ].includes(header.name.toLowerCase()),
       ) ?? [],
     text,
     attachments,

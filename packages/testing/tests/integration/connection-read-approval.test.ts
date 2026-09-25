@@ -200,10 +200,25 @@ test("connected read proofs bind exact arguments, current workers and live polic
         },
         fetch: () => {
           fetches += 1;
-          return Promise.resolve(Response.json({ messages: [{ id: "m1", threadId: "t1" }] }));
+          return Promise.resolve(
+            Response.json({
+              id: "draft1",
+              message: {
+                id: "m1",
+                threadId: "t1",
+                payload: { partId: "", mimeType: "text/plain", body: { size: 0, data: "" } },
+              },
+            }),
+          );
         },
       });
-      const keyed = { ...request.arguments, key: "read-fixture" };
+      const keyed = {
+        version: 1 as const,
+        command: "gmail.draft" as const,
+        accountId,
+        id: "draft1",
+        key: "read-fixture",
+      };
       const signal = new AbortController().signal;
       const waiting = await gateway(await issue(), keyed, signal);
       assert.equal(waiting.status, "waiting");
@@ -238,7 +253,7 @@ test("connected read proofs bind exact arguments, current workers and live polic
       assert.deepEqual(await gateway(resumed, keyed, signal), first);
       assert.equal(fetchCount(), 1);
       assert.equal(
-        (await gateway(resumed, { ...keyed, query: "changed" }, signal)).status,
+        (await gateway(resumed, { ...keyed, id: "changed" }, signal)).status,
         "unavailable",
       );
       assert.equal(fetchCount(), 1);

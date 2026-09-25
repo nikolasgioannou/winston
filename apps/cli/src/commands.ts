@@ -153,6 +153,21 @@ export const commands = [
     usage: "--account <uuid> --id <message-id> [--key <request-key>]",
   },
   {
+    command: "gmail.drafts",
+    description: "List drafts and their current message IDs in one Gmail account.",
+    id: false,
+    flags: ["account", "query", "limit", "cursor", "key"],
+    usage:
+      "--account <uuid> [--query <search>] [--limit <1-100>] [--cursor <json>] [--key <request-key>]",
+  },
+  {
+    command: "gmail.draft",
+    description: "Read a draft's current message, recipients and reply headers.",
+    id: true,
+    flags: ["account", "id", "key"],
+    usage: "--account <uuid> --id <draft-id> [--key <request-key>]",
+  },
+  {
     command: "calendars.list",
     description: "List permitted calendars for one connected account.",
     id: false,

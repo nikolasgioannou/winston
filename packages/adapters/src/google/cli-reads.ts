@@ -8,6 +8,7 @@ import type { ServiceRequest } from "@winston/contracts/capabilities";
 import { gmailReadTargetSchema } from "@winston/contracts/gmail";
 import { calendarReadTargetSchema } from "@winston/contracts/calendar";
 import { createGmailReader } from "./gmail";
+import { createGmailDraftReader } from "./gmail-drafts";
 import { createCalendarReader } from "./calendar-events";
 import { createCalendarAvailabilityReader } from "./calendar-availability";
 import { createConnectionTargets } from "./targets";
@@ -91,6 +92,25 @@ export function createConnectedReadGateway(options: GoogleReadOptions) {
           dispatch = approval;
         }
         switch (request.command) {
+          case "gmail.drafts":
+            data = await createGmailDraftReader(bound).drafts(
+              authority.ownerId,
+              {
+                target: gmailReadTargetSchema.parse(selected.target),
+                query: request.query,
+                limit: request.limit,
+                ...(request.cursor ? { cursor: request.cursor } : {}),
+              },
+              signal,
+            );
+            break;
+          case "gmail.draft":
+            data = await createGmailDraftReader(bound).draft(
+              authority.ownerId,
+              { target: gmailReadTargetSchema.parse(selected.target), id: request.id },
+              signal,
+            );
+            break;
           case "calendar.availability":
             data = await createCalendarAvailabilityReader(bound)(
               authority.ownerId,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gmailSearchSchema, gmailIdSchema } from "./gmail";
+import { gmailSearchSchema, gmailDraftSearchSchema, gmailIdSchema } from "./gmail";
 import {
   calendarEventQuerySchema,
   calendarEventIdSchema,
@@ -16,6 +16,10 @@ export const cliReadRequestSchema = z.discriminatedUnion("command", [
   }),
   gmailSearchSchema.omit({ target: true }).extend({ ...read, command: z.literal("gmail.search") }),
   z.strictObject({ ...read, command: z.literal("gmail.message"), id: gmailIdSchema }),
+  gmailDraftSearchSchema
+    .omit({ target: true })
+    .extend({ ...read, command: z.literal("gmail.drafts") }),
+  z.strictObject({ ...read, command: z.literal("gmail.draft"), id: gmailIdSchema }),
   z.strictObject({ ...account, command: z.literal("calendars.list") }),
   calendarEventQuerySchema.omit({ target: true }).extend({
     ...read,
