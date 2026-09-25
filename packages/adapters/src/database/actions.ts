@@ -528,6 +528,66 @@ export function actionRepository(transaction: DatabaseTransaction, ownerId: stri
     async authorizeArtifactStaging(input: Parameters<typeof stagingProof>[0]) {
       return Boolean(await stagingProof(input));
     },
+    // Delivery consumes completed provenance after a worker finishes; it cannot dispatch new work.
+    async authorizeCompletedArtifactReceipt(input: {
+      id: string;
+      taskId: string;
+      intentRevision: number;
+      proof:
+        | { kind: "source"; request: Extract<CliReadRequest, { command: "gmail.attachment" }> }
+        | { kind: "staging"; transferId: string; plan: ArtifactStagePlan };
+    }) {
+      await lock();
+      const stored = await row(input.id);
+      if (!stored || stored.cancellationRequested) return false;
+      const action = actionRecordSchema.parse(stored.document);
+      if (
+        action.state !== "succeeded" ||
+        !action.dispatchTask ||
+        !action.snapshot ||
+        action.request.task.id !== input.taskId ||
+        action.intentRevision !== input.intentRevision
+      )
+        return false;
+      const { target, operation } = action.request.authorization;
+      if (input.proof.kind === "source") {
+        const request = cliReadRequestSchema.parse(input.proof.request);
+        if (
+          request.command !== "gmail.attachment" ||
+          target.kind !== "connection" ||
+          target.id !== request.accountId ||
+          target.resource !== null ||
+          operation !== "gmail.read" ||
+          canonical(action.request.arguments) !== canonical(request)
+        )
+          return false;
+      } else {
+        const plan = artifactStagePlanSchema.parse(input.proof.plan);
+        if (
+          target.kind !== "workspace" ||
+          target.id !== plan.workspaceId ||
+          target.resource !== null ||
+          operation !== "workspace.file.write" ||
+          action.operationId !== input.proof.transferId ||
+          canonical(action.request.arguments) !== canonical(plan) ||
+          action.outcome?.state !== "succeeded" ||
+          action.outcome.providerReference !== plan.request.id
+        )
+          return false;
+      }
+      const current = await task(input.taskId);
+      if (
+        !current ||
+        current.intentRevision !== input.intentRevision ||
+        ["failed", "canceled"].includes(current.task.state)
+      )
+        return false;
+      const evaluation = await policy(action);
+      return (
+        evaluation.decision === "allow" ||
+        (evaluation.decision === "ask" && action.decisionSource === "owner")
+      );
+    },
     // Trusted transfer adapter only, after independently verifying the immutable runtime receipt.
     async confirmArtifactStaging(
       input: Parameters<typeof stagingProof>[0],

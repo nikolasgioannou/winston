@@ -337,6 +337,13 @@
       "when": 1790000000047,
       "tag": "0047_artifact_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790000000048,
+      "tag": "0048_staged_file_deliveries",
+      "breakpoints": true
     }
   ]
 }

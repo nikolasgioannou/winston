@@ -347,6 +347,31 @@ test("artifact staging fences exact source approval, worker credentials and immu
       assert.equal(storageReads, 4);
       assert.equal(transfers, 2);
       assert.equal(reads, 1);
+      await sql`INSERT INTO winston.telegram_bindings(owner_id,bot_id,user_id,chat_id)
+        VALUES (${ownerId}::uuid,123,456,456)`;
+      const delivery = await database.transaction(ownerId, ({ telegramFiles }) =>
+        telegramFiles.enqueue({
+          key: "send-staged",
+          botId: 123,
+          artifactId: artifact.id,
+          workspaceId,
+          task: { id: task.id, revision: task.revision, generation: task.generation },
+        }),
+      );
+      assert.ok(delivery.transferId);
+      const deliveryClaim = await database.transaction(ownerId, ({ telegramFiles }) =>
+        telegramFiles.claim(123),
+      );
+      assert.ok(deliveryClaim);
+      assert.equal(
+        await database.transaction(ownerId, ({ telegramFiles }) =>
+          telegramFiles.dispatch(deliveryClaim),
+        ),
+        true,
+      );
+      await database.transaction(ownerId, ({ telegramFiles }) =>
+        telegramFiles.settle(deliveryClaim, { state: "uncertain" }),
+      );
 
       await database.transaction(ownerId, async ({ authorization, actions }) => {
         const current = await authorization.list();

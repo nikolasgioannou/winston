@@ -9,12 +9,14 @@ import type { DatabaseTransaction } from "./owners";
 import { artifactRepository } from "./artifacts";
 import { authorizationRepository } from "./authorization";
 import { responsibilityTaskAllowed } from "./responsibility-bindings";
+import { stagedArtifactDeliveryProof } from "./artifact-delivery-proof";
 
 type FileRow = {
   id: string;
   taskId: string;
   intentRevision: number;
   artifactId: string;
+  transferId: string | null;
   botId: string;
   chatId: string;
   authorization: unknown;
@@ -34,7 +36,7 @@ export type TelegramFileDelivery = {
 
 export function telegramFileRepository(transaction: DatabaseTransaction, ownerId: string) {
   const fields = sql`id, task_id AS "taskId", intent_revision AS "intentRevision", artifact_id AS "artifactId",
-    bot_id::text AS "botId", chat_id::text AS "chatId", permission_snapshot AS authorization, state, lease_token AS token,
+    staging_transfer_id AS "transferId", bot_id::text AS "botId", chat_id::text AS "chatId", permission_snapshot AS authorization, state, lease_token AS token,
     message_id::text AS "messageId", COALESCE(leased_until <= clock_timestamp(), true) AS expired`;
   async function lock() {
     await transaction.execute(
@@ -64,6 +66,27 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
     `);
     if (!rows.rowCount) return false;
     const snapshot = authorizationSnapshotSchema.parse(row.authorization);
+    if (snapshot.target.kind !== "workspace" || snapshot.operation !== "workspace.file.read")
+      return false;
+    const artifact = await artifactRepository(transaction, ownerId).find(row.artifactId, true);
+    if (artifact?.state !== "ready") return false;
+    if (row.transferId) {
+      if (
+        !(await stagedArtifactDeliveryProof(transaction, ownerId, {
+          artifact,
+          workspaceId: snapshot.target.id,
+          taskId: row.taskId,
+          intentRevision: row.intentRevision,
+          transferId: row.transferId,
+        }))
+      )
+        return false;
+    } else if (
+      artifact.metadata.source.kind !== "workspace" ||
+      artifact.metadata.source.reference !==
+        `workspace:${snapshot.target.id}/task:${row.taskId}/intent:${String(row.intentRevision)}`
+    )
+      return false;
     if (
       !(await responsibilityTaskAllowed(transaction, ownerId, row.taskId, {
         operation: snapshot.operation,
@@ -136,14 +159,24 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
           throw new Error("File delivery key conflicts with its original request.");
         return previous;
       }
-      const artifact = await artifactRepository(transaction, ownerId).find(input.artifactId);
-      if (
-        artifact?.state !== "ready" ||
-        artifact.metadata.source.kind !== "workspace" ||
-        artifact.metadata.source.reference !==
+      const artifact = await artifactRepository(transaction, ownerId).find(input.artifactId, true);
+      if (artifact?.state !== "ready") throw new Error("Artifact is unavailable to this task.");
+      let transferId: string | null = null;
+      if (artifact.metadata.source.kind === "workspace") {
+        if (
+          artifact.metadata.source.reference !==
           `workspace:${input.workspaceId}/task:${task.id}/intent:${String(current.intentRevision)}`
-      )
-        throw new Error("Artifact is unavailable to this task.");
+        )
+          throw new Error("Artifact is unavailable to this task.");
+      } else {
+        transferId = await stagedArtifactDeliveryProof(transaction, ownerId, {
+          artifact,
+          workspaceId: input.workspaceId,
+          taskId: task.id,
+          intentRevision: current.intentRevision,
+        });
+        if (!transferId) throw new Error("Artifact is unavailable to this task.");
+      }
       const policy = await authorizationRepository(transaction, ownerId).evaluate({
         operation: "workspace.file.read",
         target: { kind: "workspace", id: input.workspaceId, resource: null },
@@ -165,9 +198,9 @@ export function telegramFileRepository(transaction: DatabaseTransaction, ownerId
       if (!chatId) throw new Error("Telegram is not paired.");
       const id = randomUUID();
       await transaction.execute(sql`
-        INSERT INTO winston.telegram_files (owner_id, id, request_key, task_id, intent_revision, artifact_id, bot_id, chat_id, permission_snapshot)
+        INSERT INTO winston.telegram_files (owner_id, id, request_key, task_id, intent_revision, artifact_id, bot_id, chat_id, permission_snapshot, staging_transfer_id)
         VALUES (${ownerId}::uuid, ${id}::uuid, ${key}, ${task.id}::uuid, ${current.intentRevision}, ${artifact.id}::uuid,
-          ${input.botId}, ${chatId}::bigint, ${JSON.stringify(policy.snapshot)}::jsonb)
+          ${input.botId}, ${chatId}::bigint, ${JSON.stringify(policy.snapshot)}::jsonb, ${transferId}::uuid)
       `);
       const created = await find(id);
       if (!created) throw new Error("File delivery could not be recorded.");
