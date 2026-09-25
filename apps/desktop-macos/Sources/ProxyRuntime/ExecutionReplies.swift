@@ -4,7 +4,7 @@ import ProxyJournal
 import WinstonDeviceProtocol
 import WinstonDeviceTransport
 
-actor CommandReplies {
+actor ExecutionReplies {
   private let transport: DeviceTransport
   private let session: DeviceSession
   private let binding: ExecutionBinding

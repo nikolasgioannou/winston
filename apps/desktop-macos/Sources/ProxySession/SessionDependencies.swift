@@ -1,4 +1,6 @@
 import Foundation
+import ProxyFileTransfer
+import ProxyFiles
 import ProxyRuntime
 import WinstonDeviceTransport
 
@@ -64,13 +66,19 @@ package struct SessionDependencies {
         let support = try files.url(
           for: .applicationSupportDirectory, in: .userDomainMask,
           appropriateFor: nil, create: true)
-        let runtime = CommandConnection(
+        let runtime = ExecutionConnection(
           directory: support.appendingPathComponent("app.runwinston.proxy", isDirectory: true),
           environment: [
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
             "HOME": files.homeDirectoryForCurrentUser.path,
             "TMPDIR": files.temporaryDirectory.path,
-          ])
+          ],
+          fileReads: FileReadConfiguration(
+            uploader: try DeviceFileUploader(
+              origin: identity.origin, deviceId: identity.deviceId,
+              credential: identity.credential),
+            // Server approval binds each read to its exact path; macOS permissions still apply.
+            root: try FileRoot(path: "/")))
         try await runtime.run(transport: transport, onState: onState, status: status)
       })
   }

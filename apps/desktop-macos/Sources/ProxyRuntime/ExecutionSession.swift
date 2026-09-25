@@ -4,24 +4,29 @@ import ProxyJournal
 import WinstonDeviceProtocol
 import WinstonDeviceTransport
 
-/// Handles control traffic independently of owned command execution and heartbeats.
-public actor CommandSession {
+/// Handles control traffic independently of owned execution and heartbeats.
+public actor ExecutionSession {
   private struct Worker {
     let binding: ExecutionBinding
     let execution: Task<JournalRecord, Error>
     let task: Task<Void, Never>
+    let desktop: Bool
   }
 
   private let journal: ExecutionJournal
   private let coordinator: ExecutionCoordinator
   private let executor: CommandExecutor
+  private let fileReads: FileReadExecutor?
   private var workers: [JournalKey: Worker] = [:]
   private var running = false
 
-  public init(journal: ExecutionJournal, environment: [String: String]) {
+  public init(
+    journal: ExecutionJournal, environment: [String: String], fileReads: FileReadExecutor? = nil
+  ) {
     self.journal = journal
     coordinator = ExecutionCoordinator(journal: journal)
     executor = CommandExecutor(environment: environment)
+    self.fileReads = fileReads
   }
 
   public func run(
@@ -34,7 +39,8 @@ public actor CommandSession {
     do {
       let uncertain = try await journal.hasUncertainExecution()
       let blocked = await coordinator.requiresReconciliation
-      let capabilities: Set<DeviceCapability> = uncertain || blocked ? [] : [.command]
+      let supported: Set<DeviceCapability> = fileReads == nil ? [.command] : [.command, .fileRead]
+      let capabilities: Set<DeviceCapability> = uncertain || blocked ? [] : supported
       await coordinator.setSession(session, capabilities: capabilities)
       if !capabilities.isEmpty, await ready() {
         await coordinator.resume()
@@ -44,23 +50,29 @@ public actor CommandSession {
       try await withTaskCancellationHandler {
         try Task.checkCancellation()
         try await transport.send(
-          .capabilities(Array(capabilities)),
+          .capabilities(capabilities.sorted { $0.rawValue < $1.rawValue }),
           correlationId: UUID().uuidString.lowercased(), session: session)
         while !Task.isCancelled {
           let request = try await transport.receiveOperation(session: session)
           switch request.payload {
           case .execute(let binding, let deadline, let operation):
-            guard operation.capability == .command, await ready() else {
+            guard supported.contains(operation.capability), await ready() else {
               throw ExecutionRejection.stopped
             }
             let key = try JournalKey(deviceId: request.deviceId, executionId: binding.executionId)
-            guard workers.isEmpty else { throw ExecutionRejection.busy }
-            let replies = CommandReplies(
+            let desktop = operation.capability == .command
+            guard workers[key] == nil,
+              workers.values.filter({ $0.desktop == desktop }).count < (desktop ? 1 : 2)
+            else { throw ExecutionRejection.busy }
+            let replies = ExecutionReplies(
               transport: transport, session: session,
               request: request, binding: binding)
-            let execution = Task { [coordinator, executor] in
+            let execution = Task { [coordinator, executor, fileReads] in
               try await coordinator.execute(request) { command in
                 try await replies.running()
+                if command.capability == .fileRead, let fileReads {
+                  return try await fileReads.execute(request, session: session)
+                }
                 return try await executor.execute(command, deadline: deadline) { stream, text in
                   try await replies.output(stream, text)
                 }
@@ -79,7 +91,8 @@ public actor CommandSession {
               }
               self.workers.removeValue(forKey: key)
             }
-            workers[key] = Worker(binding: binding, execution: execution, task: worker)
+            workers[key] = Worker(
+              binding: binding, execution: execution, task: worker, desktop: desktop)
           case .cancel(let binding):
             let key = try JournalKey(deviceId: request.deviceId, executionId: binding.executionId)
             if let worker = workers[key], worker.binding.taskId == binding.taskId,

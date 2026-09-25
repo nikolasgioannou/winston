@@ -14,7 +14,9 @@ let package = Package(
     .target(
       name: "ProxyJournal",
       dependencies: [.product(name: "WinstonDeviceProtocol", package: "device-protocol")]),
-    .target(name: "ProxyExecution", dependencies: ["ProxyJournal", "ProxyCommands"]),
+    .target(
+      name: "ProxyExecution",
+      dependencies: ["ProxyJournal", "ProxyCommands", "ProxyFiles", "ProxyFileTransfer"]),
     .target(name: "ProxyCommands"),
     .target(name: "ProxyFiles"),
     .target(
@@ -25,13 +27,13 @@ let package = Package(
     .target(
       name: "ProxyRuntime",
       dependencies: [
-        "ProxyExecution", "ProxyJournal", "ProxyCommands",
+        "ProxyExecution", "ProxyJournal", "ProxyCommands", "ProxyFiles", "ProxyFileTransfer",
         .product(name: "WinstonDeviceTransport", package: "device-transport"),
       ]),
     .target(
       name: "ProxySession",
       dependencies: [
-        "ProxyRuntime",
+        "ProxyRuntime", "ProxyFiles", "ProxyFileTransfer",
         .product(name: "WinstonDeviceTransport", package: "device-transport"),
       ]),
     .executableTarget(
@@ -48,6 +50,7 @@ let package = Package(
     .executableTarget(name: "FileWritesFixture", dependencies: ["ProxyFiles"]),
     .executableTarget(name: "FileSnapshotsFixture", dependencies: ["ProxyFiles"]),
     .executableTarget(name: "FileUploadFixture", dependencies: ["ProxyFileTransfer"]),
+    .executableTarget(name: "FileSessionFixture", dependencies: ["ProxyRuntime"]),
     .executableTarget(
       name: "CommandHandlerFixture", dependencies: ["ProxyExecution", "ProxyCommands"]),
     .executableTarget(name: "CommandSessionFixture", dependencies: ["ProxyRuntime"]),

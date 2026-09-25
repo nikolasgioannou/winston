@@ -45,7 +45,7 @@ struct CommandSessionFixture {
       _ = try await journal.markUncertain(JournalKey(deviceId: request.deviceId, executionId: id))
       await journal.close()
     }
-    let runtime = CommandConnection(
+    let runtime = ExecutionConnection(
       directory: journalDirectory, environment: ["PATH": "/usr/bin:/bin"])
     let transport = try DeviceTransport(
       endpoint: endpoint, deviceId: id,
