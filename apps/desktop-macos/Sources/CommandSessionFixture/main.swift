@@ -28,18 +28,24 @@ struct CommandSessionFixture {
       endpoint: endpoint, deviceId: id,
       credential: "wdi_" + String(repeating: "a", count: 43),
       allowInsecureLoopback: true)
-    let session = try await transport.connect()
-    let heartbeat = Task {
-      while !Task.isCancelled {
-        try await transport.heartbeat(status: mode == "paused" ? "paused" : "ready")
-        try await Task.sleep(for: .milliseconds(50))
-      }
+    let loop = DeviceConnectionLoop(transport: transport)
+    let connection = Task {
+      try await loop.run(
+        status: { mode == "paused" ? .paused : .ready },
+        handleSession: { session in
+          try await runtime.run(
+            transport: transport, session: session, ready: { mode != "paused" })
+        })
     }
-    do {
-      try await runtime.run(transport: transport, session: session, ready: { mode != "paused" })
-    } catch {}
-    heartbeat.cancel()
-    _ = try? await heartbeat.value
+    // Each scenario closes its server session. Stop during reconnect backoff,
+    // after the loop has joined the command handler and its owned workers.
+    while await loop.state != .disconnected {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    connection.cancel()
+    try await connection.value
+    let stopped = await loop.state
+    precondition(stopped == .stopped)
     let key = try JournalKey(deviceId: id, executionId: id)
     let record = try await journal.record(key)
     switch mode {

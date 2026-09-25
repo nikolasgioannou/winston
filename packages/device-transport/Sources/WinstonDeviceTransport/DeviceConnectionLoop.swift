@@ -1,4 +1,5 @@
 import Foundation
+import WinstonDeviceProtocol
 
 public enum DeviceAvailability: String, Sendable {
   case ready, locked, sleeping, paused
@@ -20,7 +21,8 @@ public actor DeviceConnectionLoop {
 
   public func run(
     onState: @escaping @Sendable (DeviceConnectionState) async -> Void = { _ in },
-    status: @escaping @Sendable () async -> DeviceAvailability
+    status: @escaping @Sendable () async -> DeviceAvailability,
+    handleSession: (@Sendable (DeviceSession) async throws -> Void)? = nil
   ) async throws {
     guard !running else { throw DeviceTransportError.busy }
     running = true
@@ -38,6 +40,14 @@ public actor DeviceConnectionLoop {
             try await self.transport.waitForDisconnect(session: session)
             throw DeviceTransportError.unavailable
           }
+          if let handleSession {
+            group.addTask {
+              try await handleSession(session)
+              // A completed handler cannot leave a connected but unserviced session.
+              throw DeviceTransportError.unavailable
+            }
+          }
+          // Structured concurrency joins handler cleanup before reconnecting.
           defer { group.cancelAll() }
           _ = try await group.next()
         }
