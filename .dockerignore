@@ -9,6 +9,14 @@ apps/*/**
 !apps/*/package.json
 !apps/cli/src/
 !apps/cli/src/**
+!apps/browser/Dockerfile
+!apps/browser/entrypoint.sh
+!apps/browser/chromium.sh
+!apps/browser/src/
+!apps/browser/src/**
+!apps/browser/tests/
+!apps/browser/tests/runtime/
+!apps/browser/tests/runtime/**
 !apps/server/src/
 !apps/server/src/**
 !apps/workspace/Dockerfile

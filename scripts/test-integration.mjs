@@ -36,3 +36,12 @@ if (process.exitCode === 0) {
   if (workspace.error) throw workspace.error;
   process.exitCode = workspace.status ?? 1;
 }
+
+if (process.exitCode === 0) {
+  const browser = spawnSync(process.execPath, ["scripts/test-browser-runtime.mjs"], {
+    stdio: "inherit",
+    env: { ...process.env, DOCKER_HOST: endpoint },
+  });
+  if (browser.error) throw browser.error;
+  process.exitCode = browser.status ?? 1;
+}

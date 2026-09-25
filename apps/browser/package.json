@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/ownership.ts ./src/journal.ts --target=bun --env=disable --outdir=dist",
+    "build": "bun build ./src/main.ts ./src/ownership.ts ./src/journal.ts --target=bun --env=disable --external playwright-core --outdir=dist",
     "test:unit": "bun test tests",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@winston/contracts": "workspace:*"
+    "@winston/contracts": "workspace:*",
+    "playwright-core": "1.63.0"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

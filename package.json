@@ -29,6 +29,7 @@
     "test": "bun run test:tooling && bun run test:unit && bun run test:browser && bun run test:integration",
     "test:browser": "node scripts/test-browser.mjs",
     "test:browser:install": "node scripts/test-browser.mjs --install",
+    "test:browser-runtime": "node scripts/test-browser-runtime.mjs",
     "test:device-protocol": "node scripts/test-device-protocol.mjs",
     "test:integration": "node scripts/test-integration.mjs",
     "test:models": "bun packages/testing/tests/models/live.ts",
