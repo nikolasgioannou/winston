@@ -22,6 +22,14 @@ export const connectionSchema = z.strictObject({
   calendars: z.array(z.string().min(1).max(1024)).max(100),
 });
 export const connectionListSchema = z.array(connectionSchema);
+export const connectionSummarySchema = connectionSchema.pick({
+  id: true,
+  service: true,
+  email: true,
+  status: true,
+  revision: true,
+});
+export type ConnectionSummary = z.infer<typeof connectionSummarySchema>;
 export const connectionUrlSchema = z.strictObject({ url: z.url() });
 export const calendarSchema = z.object({
   id: z.string().min(1).max(1024),

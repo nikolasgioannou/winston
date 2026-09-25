@@ -183,6 +183,7 @@ if (telegramToken || telegramSecret) {
       botId: bot.id,
       webOrigin: config.auth.webOrigin,
       telegramToken,
+      googleConnectionsEnabled: connectionConfig !== undefined,
       notice: (code) => {
         console.error(code);
       },

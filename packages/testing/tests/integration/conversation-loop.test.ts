@@ -61,7 +61,7 @@ test("conversation answers beside running work, replays tool receipts, and drops
       );
     const run = async (generate: Parameters<typeof createConversationLoop>[0]["generate"]) => {
       const state = await consume();
-      await createConversationLoop({ database, botId, generate })(
+      await createConversationLoop({ database, botId, generate, googleConnectionsEnabled: true })(
         ownerId,
         state.revision,
         new AbortController().signal,
@@ -85,10 +85,15 @@ test("conversation answers beside running work, replays tool receipts, and drops
         });
         return tasks.claim(queued.id, queued.revision);
       });
-      await receive("Quick question while that runs");
+      await receive("what connections do you have");
       await run((request) => {
         assert.match(JSON.stringify(request.messages), /<sent_at/);
         assert.match(JSON.stringify(request.messages), /running/);
+        const content = JSON.stringify(request.messages);
+        assert.match(content, /integrations/);
+        assert.match(content, /Gmail/);
+        assert.match(content, /Google Calendar/);
+        assert.match(content, /accounts\\":\[\]/);
         return Promise.resolve(answer("Quick answer."));
       });
       assert.equal(await deliver(), "sent");
@@ -98,7 +103,13 @@ test("conversation answers beside running work, replays tool receipts, and drops
         "running",
       );
 
+      assert.equal(
+        (await database.transaction(ownerId, ({ tasks }) => tasks.listActive())).length,
+        1,
+        "Capability questions need no background task",
+      );
       await receive("Queue another task");
+
       let calls = 0;
       const state = await consume();
       const loop = createConversationLoop({

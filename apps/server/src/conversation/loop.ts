@@ -12,6 +12,7 @@ import { serializeMessageBurst } from "@winston/contracts/bursts";
 import { conversationTools, executeConversationTool, toolContext } from "./tools";
 import type { TaskUpdate } from "@winston/contracts/task-updates";
 import { startTypingIndicator } from "./typing";
+import { integrationContext } from "./integrations";
 
 type Database = ReturnType<typeof createDatabase>;
 class Superseded extends Error {}
@@ -24,6 +25,7 @@ export function createConversationLoop(options: {
   database: Database;
   botId: number;
   webOrigin?: string;
+  googleConnectionsEnabled?: boolean;
   generate: (request: ModelRequest) => Promise<ModelResult>;
   indicate?: (chatId: string, signal: AbortSignal) => Promise<boolean>;
 }) {
@@ -177,7 +179,12 @@ export function createConversationLoop(options: {
         : "";
       const context = `<system_event kind="task_state">${xml(JSON.stringify(taskContext))}</system_event>\n<system_event kind="task_resources">${xml(JSON.stringify(snapshot.taskResources))}</system_event>\n${serializeMemoryContext(snapshot.memories)}\n${burst}\n${completions}`;
       const user = last.messages[0];
-      if (user && typeof user.content === "string") user.content += `\n${context}`;
+      const integrations = await integrationContext({
+        googleEnabled: options.googleConnectionsEnabled === true,
+        read: () =>
+          database.transaction(ownerId, ({ connections }) => connections.conversationSummary()),
+      });
+      if (user && typeof user.content === "string") user.content += `\n${context}\n${integrations}`;
       const sourceMessageIds = snapshot.messages
         .slice(-100)
         .map((message) => message.envelope.messageId);

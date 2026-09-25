@@ -15,6 +15,7 @@ export async function startConversationRuntime(options: {
   apiKey: string;
   botId: number;
   webOrigin: string;
+  googleConnectionsEnabled: boolean;
   telegramToken: string;
   notice: (code: string) => void;
 }) {
@@ -29,6 +30,7 @@ export async function startConversationRuntime(options: {
     database,
     botId,
     webOrigin: options.webOrigin,
+    googleConnectionsEnabled: options.googleConnectionsEnabled,
     generate: (request) => model.generate(request),
     indicate: createTelegramTypingSender(options.telegramToken),
   });

@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   connectionSchema,
   connectionStartSchema,
+  connectionSummarySchema,
   type ConnectionStart,
   type Connection,
 } from "@winston/contracts/connections";
@@ -91,6 +92,20 @@ export function connectionRepository(transaction: DatabaseTransaction, ownerId: 
         SELECT document FROM winston.google_connections WHERE owner_id = ${ownerId}::uuid AND subject = ${subject} AND service = ${service}
       `);
       return rows.rows[0] ? connectionSchema.parse(rows.rows[0].document) : undefined;
+    },
+    async conversationSummary() {
+      const rows = await transaction.execute<{ document: unknown }>(sql`
+        SELECT jsonb_build_object(
+          'id', id, 'service', service, 'email', document->>'email',
+          'status', document->>'status', 'revision', document->'revision'
+        ) AS document
+        FROM winston.google_connections WHERE owner_id = ${ownerId}::uuid
+        ORDER BY service, subject LIMIT 51
+      `);
+      return {
+        accounts: rows.rows.slice(0, 50).map((row) => connectionSummarySchema.parse(row.document)),
+        truncated: rows.rows.length > 50,
+      };
     },
     async start(sessionId: string, input: ConnectionStart) {
       const intent = connectionStartSchema.parse(input);
