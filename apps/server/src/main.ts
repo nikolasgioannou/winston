@@ -206,11 +206,12 @@ const taskRouter = new Hono<HttpEnvironment>();
 taskRouter.route("/", workspaceTasks.router);
 taskRouter.route("/", cliTasks.router);
 
+const deviceTransport = createDeviceSocketTransport(database, {
+  serverId: crypto.randomUUID(),
+  machineId: process.env.FLY_MACHINE_ID ?? null,
+});
 const host = startServer(readConfig(process.env), {
-  deviceTransport: createDeviceSocketTransport(database, {
-    serverId: crypto.randomUUID(),
-    machineId: process.env.FLY_MACHINE_ID ?? null,
-  }),
+  deviceTransport,
   ...(process.env.WEB_ASSET_DIRECTORY ? { webRoot: process.env.WEB_ASSET_DIRECTORY } : {}),
   readiness: async () => {
     await database.assertCompatible();
@@ -276,11 +277,13 @@ const host = startServer(readConfig(process.env), {
 
 const deviceSessionRuntime = startDeviceSessionRuntime({
   owners: (afterId) => database.deviceSessionOwners(afterId),
-  expire: (ownerId) =>
-    database.transaction(ownerId, async ({ deviceSessions, deviceExecutions }) => {
+  expire: async (ownerId) => {
+    await database.transaction(ownerId, async ({ deviceSessions, deviceExecutions }) => {
       await deviceSessions.expire();
       await deviceExecutions.expire();
-    }),
+    });
+    await deviceTransport.maintain(ownerId);
+  },
   notice: (code) => {
     console.error(code);
   },

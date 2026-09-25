@@ -14,11 +14,12 @@ import {
 } from "@winston/contracts/devices";
 import { errorResponse } from "../http/errors";
 import { createDeviceDispatcher } from "./dispatch";
+import { createDeviceControlDelivery } from "./control";
 
 export type DeviceSocketScope = Pick<OwnerTransaction, "deviceSessions"> & {
   deviceExecutions: Pick<
     OwnerTransaction["deviceExecutions"],
-    "receipt" | "reconcile" | "expire" | "appendOutput" | "reserve"
+    "receipt" | "reconcile" | "expire" | "appendOutput" | "reserve" | "planControls"
   >;
 };
 
@@ -46,6 +47,8 @@ export function createDeviceSocketTransport(
   const routing = Object.freeze(deviceServerIdentitySchema.parse(inputServer));
   const sockets = new Set<ServerWebSocket<DeviceSocketData>>();
   const cleanups = new Set<Promise<void>>();
+  const maintenance = new Map<string, Promise<void>>();
+  const deliverControls = createDeviceControlDelivery(database, routing.serverId);
   const lifetime = new AbortController();
   const isStopped = () => lifetime.signal.aborted;
   const isClosed = (socket: ServerWebSocket<DeviceSocketData>) => socket.data.closed;
@@ -181,6 +184,35 @@ export function createDeviceSocketTransport(
 
   return {
     routing,
+    maintain(ownerId: string) {
+      if (isStopped()) return Promise.resolve();
+      const active = maintenance.get(ownerId);
+      if (active) return active;
+      const pending = (async () => {
+        let failed = false;
+        for (const socket of [...sockets]) {
+          if (isStopped()) break;
+          if (socket.data.ownerId !== ownerId || isClosed(socket)) continue;
+          try {
+            await deliverControls(ownerId, socket.data.session, {
+              isOpen: () => !isClosed(socket) && !isStopped(),
+              send: (frame) => socket.send(frame),
+              close: () => {
+                close(socket, 1013);
+              },
+            });
+          } catch {
+            close(socket, 1013);
+            failed = true;
+          }
+        }
+        if (failed) throw new Error("Device control delivery failed.");
+      })().finally(() => {
+        maintenance.delete(ownerId);
+      });
+      maintenance.set(ownerId, pending);
+      return pending;
+    },
     dispatch: createDeviceDispatcher(database, {
       serverId: routing.serverId,
       channel(ownerId, session) {
@@ -243,6 +275,7 @@ export function createDeviceSocketTransport(
     async stop() {
       lifetime.abort();
       for (const socket of sockets) close(socket, 1012);
+      await Promise.allSettled(maintenance.values());
       await Promise.all(cleanups);
     },
   };

@@ -77,6 +77,7 @@ test.skipIf(process.platform !== "darwin")(
         work({
           deviceSessions,
           deviceExecutions: {
+            planControls: () => Promise.resolve([]),
             reserve: () => Promise.resolve({ status: "denied" }),
             appendOutput: () => Promise.resolve(false),
             receipt: () => Promise.resolve(null),

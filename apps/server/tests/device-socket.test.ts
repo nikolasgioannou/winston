@@ -15,6 +15,7 @@ import { startServer } from "../src/host";
 import type { DeviceExecution } from "@winston/contracts/device-executions";
 
 const rejectedEvidence: DeviceSocketScope["deviceExecutions"] = {
+  planControls: () => Promise.resolve([]),
   reserve: () => Promise.resolve({ status: "denied" }),
   appendOutput: () => Promise.resolve(false),
   receipt: () => Promise.resolve(null),
@@ -73,6 +74,7 @@ test("execution dispatch and evidence remain owner scoped and bound to the exact
     const calls: string[] = [];
     const serverIdentity = { serverId: crypto.randomUUID(), machineId: "12345678abcdef" };
     let reservations = 0;
+    let controls: DeviceMessage[] = [];
     const scope: DeviceSocketScope = {
       deviceSessions: {
         open: (_device, _credential, server) => {
@@ -97,6 +99,7 @@ test("execution dispatch and evidence remain owner scoped and bound to the exact
         presence: () => Promise.resolve([]),
       },
       deviceExecutions: {
+        planControls: () => Promise.resolve(controls),
         reserve: () => {
           reservations += 1;
           return Promise.resolve({
@@ -162,6 +165,28 @@ test("execution dispatch and evidence remain owner scoped and bound to the exact
       assert.deepEqual(decodeDeviceMessage(await outbound), message);
       assert.equal((await transport.dispatch(ownerId, proof)).status, "existing");
       assert.equal(reservations, 2);
+      for (const kind of ["cancel", "reconcile"] as const) {
+        const binding = {
+          executionId: message.payload.executionId,
+          taskId: task.id,
+          taskRevision: task.revision,
+        };
+        const control: DeviceMessage = {
+          ...message,
+          messageId: crypto.randomUUID(),
+          correlationId: message.messageId,
+          payload:
+            kind === "reconcile"
+              ? { kind, ...binding, operation: message.payload.operation }
+              : { kind, ...binding },
+        };
+        controls = [control];
+        const delivered = received(socket);
+        await transport.maintain(crypto.randomUUID());
+        await transport.maintain(ownerId);
+        assert.deepEqual(decodeDeviceMessage(await delivered), control);
+      }
+      controls = [];
       const closed = disconnected(socket);
       socket.send(
         encodeDeviceMessage(
@@ -253,6 +278,93 @@ function disconnected(socket: WebSocket) {
     );
   });
 }
+
+test("device maintenance coalesces callers and shutdown joins blocked control planning", async () => {
+  const ownerId = crypto.randomUUID();
+  const session = { deviceId: crypto.randomUUID(), sessionId: crypto.randomUUID(), generation: 1 };
+  const routing = { serverId: crypto.randomUUID(), machineId: null };
+  const entered = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  let plans = 0;
+  const scope: DeviceSocketScope = {
+    deviceSessions: {
+      open: () =>
+        Promise.resolve({ ...session, expiresAt: new Date(Date.now() + 45_000).toISOString() }),
+      route: () => Promise.resolve({ ...session, server: routing }),
+      advertise: () => Promise.resolve(true),
+      supports: () => Promise.resolve(false),
+      heartbeat: () => Promise.resolve(true),
+      close: () => Promise.resolve(true),
+      expire: () => Promise.resolve(0),
+      presence: () => Promise.resolve([]),
+    },
+    deviceExecutions: {
+      ...rejectedEvidence,
+      planControls: async () => {
+        plans += 1;
+        entered.resolve(undefined);
+        await release.promise;
+        return [
+          {
+            version: 1,
+            ...session,
+            messageId: crypto.randomUUID(),
+            correlationId: crypto.randomUUID(),
+            payload: {
+              kind: "cancel",
+              executionId: crypto.randomUUID(),
+              taskId: crypto.randomUUID(),
+              taskRevision: 1,
+            },
+          },
+        ];
+      },
+    },
+  };
+  const transport = createDeviceSocketTransport(
+    {
+      authenticateDevice: () => Promise.resolve({ ownerId, deviceId: session.deviceId }),
+      transaction: <Result>(_owner: string, work: (scope: DeviceSocketScope) => Promise<Result>) =>
+        work(scope),
+    },
+    routing,
+  );
+  const host = startServer(
+    { hostname: "127.0.0.1", port: 0, shutdownTimeoutMs: 1000 },
+    { deviceTransport: transport },
+  );
+  const socket = new WebSocket(`ws://127.0.0.1:${String(host.server.port)}/api/devices/socket`, {
+    headers: { Authorization: `Bearer wdi_${"a".repeat(43)}` },
+  });
+  try {
+    await received(socket);
+    let frames = 0;
+    socket.addEventListener("message", () => {
+      frames += 1;
+    });
+    const pending = transport.maintain(ownerId);
+    await entered.promise;
+    assert.equal(transport.maintain(ownerId), pending);
+    assert.equal(plans, 1);
+    const closed = disconnected(socket);
+    let stopped = false;
+    const stopping = host.stop().then(() => {
+      stopped = true;
+    });
+    await closed;
+    assert.equal(stopped, false);
+    release.resolve(undefined);
+    await Promise.all([pending, stopping]);
+    assert.equal(stopped, true);
+    assert.equal(frames, 0);
+    await transport.maintain(ownerId);
+    assert.equal(plans, 1);
+  } finally {
+    release.resolve(undefined);
+    socket.close();
+    await host.stop();
+  }
+});
 
 test("proxy sockets serialize advertisements and heartbeats and discard overflow on close", async () => {
   for (const overflow of [false, true]) {
