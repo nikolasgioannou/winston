@@ -1,5 +1,6 @@
 import { Button } from "@winston/ui";
 import type { Handoff } from "@winston/contracts/handoffs";
+import { ServiceIcon } from "../components/service-icon";
 
 export type HandoffState =
   { kind: "loading" | "error" | "unavailable" } | { kind: "ready"; handoff: Handoff };
@@ -52,6 +53,7 @@ export function HandoffView({
                     onAction("connect");
                   }}
                 >
+                  <ServiceIcon service={handoff.target.service} />
                   Connect {handoff.target.service === "gmail" ? "Gmail" : "Google Calendar"}
                 </Button>
               ) : null}

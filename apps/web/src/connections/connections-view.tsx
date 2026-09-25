@@ -1,5 +1,6 @@
 import { Button, Badge } from "@winston/ui";
 import type { Connection, GoogleService } from "@winston/contracts/connections";
+import { ServiceIcon } from "../components/service-icon";
 
 export type ConnectionsState =
   { kind: "loading" } | { kind: "error" } | { kind: "ready"; connections: Connection[] };
@@ -56,7 +57,8 @@ export function ConnectionsView({
           {state.connections.map((connection) => (
             <div key={connection.id} className="space-y-2 py-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm">
+                <span className="inline-flex items-center gap-2 text-sm">
+                  <ServiceIcon service={connection.service} />
                   {connection.service === "gmail" ? "Gmail" : "Google Calendar"}
                 </span>
                 <Badge>
@@ -116,6 +118,7 @@ export function ConnectionsView({
                 onConnect("gmail");
               }}
             >
+              <ServiceIcon service="gmail" />
               Connect Gmail
             </Button>
             <Button
@@ -124,6 +127,7 @@ export function ConnectionsView({
                 onConnect("calendar");
               }}
             >
+              <ServiceIcon service="calendar" />
               Connect Calendar
             </Button>
           </div>
