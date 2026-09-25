@@ -13,11 +13,12 @@ import {
   type DeviceMessage,
 } from "@winston/contracts/devices";
 import { errorResponse } from "../http/errors";
+import { createDeviceDispatcher } from "./dispatch";
 
 export type DeviceSocketScope = Pick<OwnerTransaction, "deviceSessions"> & {
   deviceExecutions: Pick<
     OwnerTransaction["deviceExecutions"],
-    "receipt" | "reconcile" | "expire" | "appendOutput"
+    "receipt" | "reconcile" | "expire" | "appendOutput" | "reserve"
   >;
 };
 
@@ -180,6 +181,28 @@ export function createDeviceSocketTransport(
 
   return {
     routing,
+    dispatch: createDeviceDispatcher(database, {
+      serverId: routing.serverId,
+      channel(ownerId, session) {
+        const socket = [...sockets].find(
+          ({ data }) =>
+            data.ownerId === ownerId &&
+            data.session.deviceId === session.deviceId &&
+            data.session.sessionId === session.sessionId &&
+            data.session.generation === session.generation &&
+            !data.closed,
+        );
+        return socket
+          ? {
+              isOpen: () => !isClosed(socket) && !isStopped(),
+              send: (frame) => socket.send(frame),
+              close: () => {
+                close(socket, 1013);
+              },
+            }
+          : null;
+      },
+    }),
     websocket,
     async upgrade(request: Request, server: Server<DeviceSocketData>) {
       const error = (code: "unauthorized" | "invalid_request" | "unavailable") =>

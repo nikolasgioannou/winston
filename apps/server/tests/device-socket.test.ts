@@ -15,13 +15,14 @@ import { startServer } from "../src/host";
 import type { DeviceExecution } from "@winston/contracts/device-executions";
 
 const rejectedEvidence: DeviceSocketScope["deviceExecutions"] = {
+  reserve: () => Promise.resolve({ status: "denied" }),
   appendOutput: () => Promise.resolve(false),
   receipt: () => Promise.resolve(null),
   reconcile: () => Promise.resolve(null),
   expire: () => Promise.resolve(0),
 };
 
-test("execution evidence is serialized, owner scoped and rejected before it can cross sessions", async () => {
+test("execution dispatch and evidence remain owner scoped and bound to the exact session", async () => {
   for (const mode of ["accepted", "rejected", "spoofed"] as const) {
     const ownerId = crypto.randomUUID();
     const session = {
@@ -71,6 +72,7 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
     const release = Promise.withResolvers<undefined>();
     const calls: string[] = [];
     const serverIdentity = { serverId: crypto.randomUUID(), machineId: "12345678abcdef" };
+    let reservations = 0;
     const scope: DeviceSocketScope = {
       deviceSessions: {
         open: (_device, _credential, server) => {
@@ -80,7 +82,7 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
             expiresAt: new Date(Date.now() + 45_000).toISOString(),
           });
         },
-        route: () => Promise.resolve(null),
+        route: () => Promise.resolve({ ...session, server: serverIdentity }),
         advertise: () => Promise.resolve(true),
         supports: () => Promise.resolve(false),
         heartbeat: () => {
@@ -95,6 +97,13 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
         presence: () => Promise.resolve([]),
       },
       deviceExecutions: {
+        reserve: () => {
+          reservations += 1;
+          return Promise.resolve({
+            status: reservations === 1 ? "reserved" : "existing",
+            execution: record,
+          });
+        },
         appendOutput: (received) => {
           assert.equal(received.payload.kind, "output");
           calls.push("output");
@@ -137,6 +146,22 @@ test("execution evidence is serialized, owner scoped and rejected before it can 
     });
     try {
       await received(socket);
+      const proof = { id: record.actionId, token: "test-proof", task, message };
+      assert.equal((await transport.dispatch(crypto.randomUUID(), proof)).status, "unavailable");
+      assert.equal(
+        (
+          await transport.dispatch(ownerId, {
+            ...proof,
+            message: { ...message, sessionId: crypto.randomUUID() },
+          })
+        ).status,
+        "unavailable",
+      );
+      const outbound = received(socket);
+      assert.equal((await transport.dispatch(ownerId, proof)).status, "sent");
+      assert.deepEqual(decodeDeviceMessage(await outbound), message);
+      assert.equal((await transport.dispatch(ownerId, proof)).status, "existing");
+      assert.equal(reservations, 2);
       const closed = disconnected(socket);
       socket.send(
         encodeDeviceMessage(
