@@ -4,6 +4,7 @@ import { inboundItems, jobs, telegramLinks } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { eq } from "drizzle-orm";
 import type { UserMessagePayload } from "@winston/domain/inbound";
+import { frontTurnJob } from "@winston/domain/jobs";
 import type { Update } from "grammy/types";
 import { createApp } from "../app.ts";
 import { unlinkedChatReply } from "../telegram/handle-update.ts";
@@ -87,9 +88,9 @@ describe("POST /webhooks/telegram", () => {
       });
       const [job] = await jobsFor(tx, userId);
       expect(job).toMatchObject({
-        type: "front_turn",
+        type: frontTurnJob.type,
         status: "queued",
-        dedupeKey: `front_turn:${userId}`,
+        dedupeKey: frontTurnJob.dedupeKey(userId),
       });
       // Measured by the database's clock, so allow for slight skew from ours.
       const delay = (job?.runAt.getTime() ?? 0) - Date.now();

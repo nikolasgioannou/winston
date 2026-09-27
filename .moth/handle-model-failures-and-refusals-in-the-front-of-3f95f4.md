@@ -24,3 +24,5 @@ Front-of-house policy:
 Make sure every attempt, including failed ones, is recorded in `model_calls`. Avoid spamming the fixed message: during an outage lasting several turns, send it at most once until a turn succeeds.
 
 Tests with a fake transport: retry counts, fallback switching, the fixed message and its suppression, refusal handling, and items remaining unconsumed after total failure.
+
+Also fix a queue gap found while serializing turns: `fail()` requeues a job with its dedupe key, which violates the partial unique index `jobs_queued_dedupe_key` if a newer job with the same key is already queued (for example a failed `front_turn` while the user's next message is queued). Today the failure isn't recorded and the job is only retried when its lease expires. Decide, for example, to drop the dedupe key on requeue or to complete the failed job when a queued sibling exists, and test it.

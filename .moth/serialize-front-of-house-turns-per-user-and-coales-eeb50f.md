@@ -1,13 +1,13 @@
 ---
 id: "eeb50f"
 title: Serialize front-of-house turns per user and coalesce bursts
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m1
 created_at: 2026-09-27T05:30:54.948Z
-updated_at: 2026-09-27T05:30:54.978Z
+updated_at: 2026-09-27T22:14:01.860Z
 blocked_by:
   - "cb9674"
 ---
@@ -24,3 +24,13 @@ Tests, with the fake model and real Postgres:
 - Two workers racing produce 1 turn at a time.
 - A message arriving just after a turn completes produces a new turn.
 - No unconsumed items are left behind in any of these cases.
+
+## Outcome
+
+Built as described in docs/design.md §1 ("One front-of-house turn at a time per user").
+- **Lock:** a session-level advisory lock on a reserved postgres.js connection, released automatically if the worker dies. I rejected a transaction-level lock, which would hold a transaction open across model calls.
+- **Busy lock:** a job that finds the lock busy exits without work.
+- **Follow-up sweep:** the lock holder queues a follow-up after release if input is unconsumed.
+- **Tests:** they run real workers against real Postgres. A mutation check confirmed that disabling the lock, or dropping the sweep, fails the racing test.
+- **Shared definition:** `frontTurnJob` (type, dedupe key, debounce) moved to `@winston/domain/jobs`, shared by `api` and `agents`.
+- **Gap for the failures ticket:** `fail()` requeues a job with its dedupe key, which violates the unique index if a newer job with the same key is already queued. The job is still retried when its lease expires, so nothing is lost, but the failure isn't recorded cleanly.

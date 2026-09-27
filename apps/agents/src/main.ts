@@ -3,6 +3,7 @@
  * from the job queue (docs/design.md §9).
  */
 import { createDb } from "@winston/db/client";
+import { frontTurnJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { Api } from "grammy";
 import { loadAgentsConfig } from "./config.ts";
@@ -28,7 +29,7 @@ const worker = createWorker({
   db,
   logger,
   handlers: {
-    front_turn: frontTurnHandler({ gateway, telegram }),
+    [frontTurnJob.type]: frontTurnHandler({ gateway, telegram }),
   },
   concurrency: config.WORKER_CONCURRENCY,
 });

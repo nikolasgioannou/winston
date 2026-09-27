@@ -39,7 +39,12 @@ describe("identity constraints", () => {
         .insert(telegramLinks)
         .values({ userId: user.id, chatId: 7, telegramUserId: 7 });
       await tx.delete(users).where(eq(users.id, user.id));
-      expect(await tx.select().from(telegramLinks)).toEqual([]);
+      expect(
+        await tx
+          .select()
+          .from(telegramLinks)
+          .where(eq(telegramLinks.userId, user.id)),
+      ).toEqual([]);
     });
   });
 });

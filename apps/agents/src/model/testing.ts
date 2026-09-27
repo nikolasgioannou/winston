@@ -36,15 +36,22 @@ export function fakeGateway(
   options: {
     replies?: Record<string, unknown>[];
     sink?: (call: ModelCall) => Promise<void>;
+    /** How long each fake response takes. */
+    delayMs?: number;
   } = {},
 ) {
   const replies = options.replies ?? [{}];
   const requests: Record<string, unknown>[] = [];
   const calls: ModelCall[] = [];
+  /** The most model requests that were ever in flight at once. */
+  const concurrency = { current: 0, max: 0 };
   const fetch = (async (_url: unknown, init?: RequestInit) => {
     // The provider always sends a JSON string body.
     requests.push(JSON.parse(init?.body as string) as Record<string, unknown>);
-    await Promise.resolve();
+    concurrency.current += 1;
+    concurrency.max = Math.max(concurrency.max, concurrency.current);
+    await new Promise((resolve) => setTimeout(resolve, options.delayMs ?? 0));
+    concurrency.current -= 1;
     const reply = replies[Math.min(requests.length, replies.length) - 1];
     return Response.json({ ...fakeCompletion, ...reply });
   }) as typeof globalThis.fetch;
@@ -58,7 +65,7 @@ export function fakeGateway(
         return Promise.resolve();
       }),
   });
-  return { gateway, requests, calls };
+  return { gateway, requests, calls, concurrency };
 }
 
 /**

@@ -5,15 +5,13 @@ import type {
   ForwardOrigin,
   UserMessagePayload,
 } from "@winston/domain/inbound";
+import { frontTurnJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { eq } from "drizzle-orm";
 import type { Message, MessageOrigin, Update } from "grammy/types";
 
 /** Update types the webhook subscribes to (`setWebhook`'s `allowed_updates`). */
 export const allowedUpdates = ["message"] as const;
-
-/** How long a turn waits for more messages, so a burst becomes one turn. */
-export const frontTurnDebounceMs = 1_500;
 
 export const unlinkedChatReply =
   "Sorry, I only work with the people I've been set up for.";
@@ -96,10 +94,10 @@ export async function handleUpdate(
       .returning({ id: inboundItems.id });
     if (!item) return "duplicate";
 
-    await enqueue(tx, "front_turn", {
+    await enqueue(tx, frontTurnJob.type, {
       userId,
-      dedupeKey: `front_turn:${userId}`,
-      delayMs: frontTurnDebounceMs,
+      dedupeKey: frontTurnJob.dedupeKey(userId),
+      delayMs: frontTurnJob.debounceMs,
       onDuplicate: "reschedule",
     });
     return "stored";

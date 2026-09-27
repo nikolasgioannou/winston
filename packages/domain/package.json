@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     "./envelope": "./src/envelope.ts",
-    "./inbound": "./src/inbound.ts"
+    "./inbound": "./src/inbound.ts",
+    "./jobs": "./src/jobs.ts"
   },
   "scripts": {
     "typecheck": "tsc"
