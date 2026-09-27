@@ -30,6 +30,11 @@ import type { ModelGateway } from "../model/gateway.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "./envelopes.ts";
 import {
+  defaultWindowBudget,
+  trimWindow,
+  type WindowBudget,
+} from "./window.ts";
+import {
   deliverReply,
   noReplyDefinition,
   noReplyTool,
@@ -62,6 +67,8 @@ export interface FrontTurnDeps {
   telegram: TelegramSender;
   /** For tests: the typing indicator's timers. */
   timers?: Timers;
+  /** The rolling window's size; the defaults suit production. */
+  window?: WindowBudget;
 }
 
 /** Runs a turn over the user's unconsumed input. Returns the run id, or nothing if there was no input. */
@@ -98,12 +105,18 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     deps.timers,
   );
 
+  await trimWindow(
+    db,
+    userId,
+    systemPrompts["front-of-house"],
+    deps.window ?? defaultWindowBudget,
+    logger,
+  );
   const window = await loadWindow(db, userId, input.id);
-  const previous = window.map((row) => row.content);
-  const last = previous.at(-1);
-  // The rolling cache breakpoint: the end of the previous turn.
-  if (last) previous[previous.length - 1] = cacheBreakpoint(last);
-  const messages: ModelMessage[] = [...previous, input.message];
+  const messages: ModelMessage[] = [
+    ...window.map((row) => row.content),
+    input.message,
+  ];
 
   /** Claims input that arrived mid-turn and appends it, led by `note` if given. */
   const steerIn = async (note?: string) => {
@@ -135,7 +148,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
           }),
         },
         instructions,
-        messages,
+        messages: withRollingBreakpoint(messages),
         tools: { no_reply: noReplyTool },
         stopWhen: isStepCount(1),
         onStepEnd: async (step) => {
@@ -200,6 +213,17 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   } finally {
     typing.stop();
   }
+}
+
+/**
+ * Marks the request's last message (new input, or a tool result) as the
+ * rolling cache breakpoint, so each request caches everything up to itself
+ * and the next one reads it back (§16). Only the request copy is marked.
+ */
+function withRollingBreakpoint(messages: readonly ModelMessage[]) {
+  const last = messages.at(-1);
+  if (!last || last.role === "assistant") return [...messages];
+  return [...messages.slice(0, -1), cacheBreakpoint(last)];
 }
 
 /** A run's append-only message log: positions and the last stored id. */

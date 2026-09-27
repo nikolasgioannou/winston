@@ -9,6 +9,7 @@ import type { JobHandler } from "../worker.ts";
 import { withFrontTurnLock } from "./lock.ts";
 import type { TelegramSender } from "./reply.ts";
 import { runFrontTurn } from "./turn.ts";
+import type { WindowBudget } from "./window.ts";
 
 /**
  * The `front_turn` job: queued by the Telegram webhook, one per burst of
@@ -25,6 +26,7 @@ export function frontTurnHandler(deps: {
   gateway: ModelGateway;
   telegram: TelegramSender;
   timers?: Timers;
+  window?: WindowBudget;
 }): JobHandler {
   return async ({ job, db, logger }) => {
     const { userId } = job;

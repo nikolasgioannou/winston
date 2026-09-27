@@ -59,6 +59,10 @@
 - Cut only at turn boundaries, never between a tool call and its result.
 - **Budget: ~150k tokens**, trimmed to ~100k when exceeded (see §16). **Drop in chunks, not one message at a time.** Sliding by one message per turn would shift the prompt prefix on every turn and defeat prompt caching. Chunked drops keep the prefix stable (and cached) between drops.
 - Background-agent transcripts do not enter the front of house's window. Only the brief and the result do.
+- **Implementation** (`apps/agents/src/front/window.ts`, at the start of each turn):
+  - **Measure:** the real input and output tokens of the user's latest model call, which is exact and free. Anthropic's `count_tokens` isn't available through OpenRouter.
+  - **Trim:** past `FRONT_WINDOW_MAX_TOKENS` (150k), whole turns (runs) drop from the front until the estimate is under `FRONT_WINDOW_TARGET_TOKENS` (100k). Each turn's share is estimated from its text length, scaled to the real total. Cuts land only on a run's first message, so a tool call and its result are never separated. The turn in progress always stays. Only `front_state.window_start_message_id` moves, and nothing is deleted.
+  - **Verified with real calls (2026-09-27):** each turn read all but its newest ~400 tokens from the cache, and a trim cost exactly one miss (only the system prompt was read).
 
 ### Background-run compaction (summarization)
 
@@ -927,7 +931,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 - **Order:** static system prompt → static tool definitions → window messages (from `front_state.window_start_message_id`) → newly coalesced inbound envelopes.
 - **Window budget: ~150k tokens.** When exceeded, `window_start_message_id` advances at turn boundaries until the window is ~100k. Chunked, so the prefix stays cached between trims.
-- **Cache breakpoints:** end of tools/system, and end of the previous turn.
+- **Cache breakpoints:** end of tools/system (on the system message), and a rolling one on the **last message of each request**: the new input, or a tool result mid-turn. Each request caches everything up to itself, and the next reads it back. The end of the previous turn doesn't work as a breakpoint: that's usually Winston's reply, and the OpenRouter provider can't mark an assistant message (the marker is dropped or ignored, as seen in `model_calls`: only the system prompt was ever read back). `cacheBreakpoint()` puts the marker where the provider forwards it: message-level for system and tool messages, on the last text part for user messages.
 - **Background results** arrive as `task.completed` / `task.failed` / `task.needs_user` envelopes.
 - **Images:** screenshots older than the current turn are replaced by text stubs.
 - **Implementation** (`apps/agents/src/front/turn.ts`, the `front_turn` job):

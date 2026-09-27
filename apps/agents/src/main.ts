@@ -29,7 +29,14 @@ const worker = createWorker({
   db,
   logger,
   handlers: {
-    [frontTurnJob.type]: frontTurnHandler({ gateway, telegram }),
+    [frontTurnJob.type]: frontTurnHandler({
+      gateway,
+      telegram,
+      window: {
+        maxTokens: config.FRONT_WINDOW_MAX_TOKENS,
+        targetTokens: config.FRONT_WINDOW_TARGET_TOKENS,
+      },
+    }),
   },
   concurrency: config.WORKER_CONCURRENCY,
 });

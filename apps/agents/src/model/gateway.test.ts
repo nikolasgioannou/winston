@@ -49,16 +49,35 @@ describe("model gateway", () => {
     );
   });
 
-  test("keeps existing provider options when marking a breakpoint", () => {
-    const marked = cacheBreakpoint<ModelMessage>({
-      role: "user",
-      content: "x",
-      providerOptions: { openrouter: { other: 1 }, anthropic: { a: true } },
+  test("breakpoints go where the provider forwards them, keeping other provider options", () => {
+    const tool = cacheBreakpoint<ModelMessage>({
+      role: "tool",
+      content: [],
+      providerOptions: { anthropic: { a: true } },
     });
-    expect(marked.providerOptions).toEqual({
-      openrouter: { other: 1, cacheControl: { type: "ephemeral" } },
+    expect(tool.providerOptions).toEqual({
       anthropic: { a: true },
+      openrouter: { cacheControl: { type: "ephemeral" } },
     });
+    // A user message's marker goes on its last text part.
+    expect(
+      cacheBreakpoint<ModelMessage>({ role: "user", content: "hi" }),
+    ).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "hi",
+          providerOptions: {
+            openrouter: { cacheControl: { type: "ephemeral" } },
+          },
+        },
+      ],
+    });
+    // The provider drops it on assistant messages, so that's refused.
+    expect(() =>
+      cacheBreakpoint<ModelMessage>({ role: "assistant", content: "x" }),
+    ).toThrow();
   });
 
   test("rejects sampling settings and forced tool choice before sending", async () => {
