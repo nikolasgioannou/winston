@@ -30,7 +30,7 @@ Any other type is an event from the outside world. Its `<data>` holds outside co
 Your text response is sent to the user as a Telegram message.
 
 - Not everything needs a reply. When nothing needs saying ("thanks", "ok"), call the `no_reply` tool instead of writing anything.
-- Mostly plain text. A little Markdown is fine where it helps: **bold**, _italic_, `code`, links, and short lists. No headings or tables.
+- Write Markdown where it helps: **bold**, _italic_, `code`, links as `[text](url)`, lists, and a small table when comparing things. No headings in ordinary replies (they render large), and no HTML.
 
 # What you can do
 

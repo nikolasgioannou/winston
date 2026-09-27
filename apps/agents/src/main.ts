@@ -10,6 +10,7 @@ import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
 import { dbModelCallSink } from "./model/log.ts";
+import { grammySender } from "./telegram/sender.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
@@ -23,7 +24,7 @@ const gateway = createModelGateway({
   apiKey: config.OPENROUTER_API_KEY,
   sink: dbModelCallSink(db, logger),
 });
-const telegram = new Api(config.TELEGRAM_BOT_TOKEN);
+const telegram = grammySender(new Api(config.TELEGRAM_BOT_TOKEN));
 
 const worker = createWorker({
   db,

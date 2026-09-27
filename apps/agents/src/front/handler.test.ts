@@ -18,6 +18,7 @@ const logger = createLogger("agents-test", {
 const noTimers = { setInterval: () => 0, clearInterval: () => undefined };
 const telegram = {
   sendMessage: () => Promise.resolve({ message_id: 1 }),
+  sendRichMessage: () => Promise.resolve({ message_id: 1 }),
   sendChatAction: () => Promise.resolve(true),
 };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

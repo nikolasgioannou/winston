@@ -34,10 +34,10 @@ Three rich messages from the dev bot to the maintainer's chat, via `sendRichMess
 2. **Headings, a table, a code block, a quote, numbered and task lists, a divider, strikethrough and a spoiler** all rendered. Headings render large (serif), too heavy for an ordinary chat reply.
 3. **Deliberately malformed Markdown** was **accepted** (HTTP 200) and degraded to literal text. A stray `<b>` was rendered as HTML and bolded the rest of the line.
 
-Checked on desktop. Phone apps still to be checked.
+Checked on desktop. A second test (same day) confirmed the same rendering on the phone apps, and showed that **images render**: both a Markdown image and an HTML `<img>` displayed as real pictures. So a URL in model output can get fetched with no click, which is a data-exfiltration channel for prompt injection. Winston therefore neutralizes images and HTML before sending (docs/design.md §4).
 
 ## Implications for Winston
 
 - Rich Messages can replace the Markdown-to-HTML converter: send the model's Markdown as-is, with a plain-text fallback on errors, splitting only past 32,768 characters. Tables and real lists become available.
-- The prompt should still avoid headings in ordinary replies, and model output may need `<` escaped, since inline HTML renders.
+- The prompt should still avoid headings in ordinary replies. Images and inline HTML both render, so model output must have them neutralized before sending.
 - Drafts make streaming possible, which the design currently rules out (§4, decision #14). That needs its own decision.

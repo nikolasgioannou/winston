@@ -1,13 +1,13 @@
 ---
 id: "d3a1a9"
 title: Deliver replies as Telegram rich messages
-status: todo
+status: done
 priority: none
 labels:
   - m1
   - telegram
 created_at: 2026-09-27T23:08:56.593Z
-updated_at: 2026-09-27T23:09:11.193Z
+updated_at: 2026-09-27T23:20:00.841Z
 blocked_by:
   - "ed1e47"
 ---
@@ -28,3 +28,12 @@ Switch reply delivery to Rich Messages:
 Update docs/design.md §4 ("Telegram formatting") and the decision log (supersedes the HTML-parse-mode part of #51).
 
 Tests: the sender is called with the Markdown untouched, the plain-text fallback on an API error, splitting past the limit, and that message ids are recorded.
+
+## Outcome
+
+Built as described in docs/design.md §4 ("Telegram formatting") and decision #69.
+- **Sending:** replies go out via `sendRichMessage` with the model's Markdown, falling back to plain text on any error.
+- **Converter removed:** the Markdown-to-HTML converter and the `marked` dependency are deleted. Only plain splitting past 32,768 characters remains (`telegram/split.ts`).
+- **The HTML question:** a live test showed Rich Markdown renders **images** (Markdown and `<img>`) as well as HTML. That means a zero-click exfiltration channel, so `sanitizeRichMarkdown` turns images into links and escapes anything that could start a tag, everywhere and without a parser (so it can't disagree with Telegram's). The cosmetic cost: tags inside code snippets show escaped.
+- **Rendering check:** confirmed by the user on phone and desktop.
+- **Prompt:** Markdown is welcome, including lists and small tables. No headings in ordinary replies, and no HTML.

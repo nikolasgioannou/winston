@@ -4,17 +4,11 @@ import type { ToolDefinition } from "@winston/prompts";
 import { tool } from "ai";
 import type { Logger } from "@winston/shared/logger";
 import { z } from "zod";
-import { formatForTelegram, visibleText } from "../telegram/format.ts";
+import type { TelegramSender } from "../telegram/sender.ts";
+import { sanitizeRichMarkdown } from "../telegram/sanitize.ts";
+import { richMessageLimit, splitText } from "../telegram/split.ts";
 
-/** The Telegram calls the agents make. grammY's `Api` satisfies it. */
-export interface TelegramSender {
-  sendMessage(
-    chatId: number,
-    text: string,
-    options?: { parse_mode?: "HTML" },
-  ): Promise<{ message_id: number }>;
-  sendChatAction(chatId: number, action: "typing"): Promise<unknown>;
-}
+export type { TelegramSender };
 
 const description =
   "End your turn without messaging the user. Use it when nothing needs saying; any text you wrote is discarded.";
@@ -39,11 +33,12 @@ export const noReplyTool = tool({
 });
 
 /**
- * Sends the turn's reply through Telegram as HTML converted from the agent's
- * Markdown (docs/design.md §4, "Telegram formatting"), as many messages as
- * its length needs, and records it. A part Telegram rejects as bad markup is
- * re-sent as plain text. If a part fails outright, what was already sent is
- * still recorded.
+ * Sends the turn's reply as a Telegram Rich Message: the model's Markdown,
+ * with images and HTML neutralized (docs/design.md §4, "Telegram
+ * formatting"; `sanitizeRichMarkdown`), split only past Rich
+ * Messages' 32,768-character limit. A part Telegram won't take as a Rich
+ * Message is re-sent as plain text, so a reply is never lost. If a part fails
+ * outright, what was already sent is still recorded.
  */
 export async function deliverReply(context: {
   db: DbOrTx;
@@ -57,16 +52,15 @@ export async function deliverReply(context: {
   const { telegram, chatId } = context;
   const sentIds: number[] = [];
   try {
-    for (const html of formatForTelegram(context.text)) {
+    for (const part of splitText(context.text, richMessageLimit)) {
       const sent = await telegram
-        .sendMessage(chatId, html, { parse_mode: "HTML" })
+        .sendRichMessage(chatId, sanitizeRichMarkdown(part))
         .catch((error: unknown) => {
-          if (!isBadMarkup(error)) throw error;
           context.logger.warn(
-            { err: error, html },
-            "Telegram rejected the markup; sending as plain text",
+            { err: error },
+            "Telegram rejected the rich message; sending as plain text",
           );
-          return telegram.sendMessage(chatId, visibleText(html));
+          return telegram.sendMessage(chatId, part);
         });
       sentIds.push(sent.message_id);
     }
@@ -79,13 +73,4 @@ export async function deliverReply(context: {
         telegramMessageIds: sentIds,
       });
   }
-}
-
-/** Telegram's 400 for markup it can't parse ("Bad Request: can't parse entities: …"). */
-function isBadMarkup(error: unknown) {
-  const description =
-    typeof error === "object" && error !== null && "description" in error
-      ? String(error.description)
-      : "";
-  return /can't parse entities/i.test(description);
 }

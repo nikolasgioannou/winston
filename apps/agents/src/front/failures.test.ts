@@ -55,6 +55,11 @@ async function withUser(
         messageIds += 1;
         return Promise.resolve({ message_id: messageIds });
       },
+      sendRichMessage: (_chatId: number, text: string) => {
+        sent.push(text);
+        messageIds += 1;
+        return Promise.resolve({ message_id: messageIds });
+      },
       sendChatAction: () => Promise.resolve(true),
     };
     const say = async (text: string) => {

