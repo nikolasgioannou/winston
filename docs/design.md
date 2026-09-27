@@ -292,6 +292,11 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 ## 7. Language & repo
 - **TypeScript everywhere, on Bun** (Bun and Node pinned exactly in `mise.toml`: Bun 1.4.2, Node 24 LTS; `bun.lock`).
+- **TypeScript setup:**
+  - **TypeScript 6.0.x**, the newest release `typescript-eslint` supports (its peer range is `<6.1.0`). TypeScript 7 (the native compiler) has no programmatic API until 7.1, so typed linting can't use it yet. Move to 7.x once `typescript-eslint` supports it.
+  - **Per-package configs, no project references.** `tsconfig.base.json` at the root holds Bun's recommended options (`module: Preserve`, `moduleResolution: bundler`, `allowImportingTsExtensions`, `verbatimModuleSyntax`, `noEmit`, `types: ["bun"]`) plus extra strictness (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`). Each package has a `tsconfig.json` extending it, and a `typecheck` script (`tsc`). The root `typecheck` runs them all with `bun run --filter '*' --if-present typecheck`.
+  - **Why not project references:** they require `composite` and `.d.ts` output, which Bun doesn't need (packages export `.ts` source and nothing is built), and `references` arrays have to be kept in sync with dependencies by hand. Turborepo recommends against them for this kind of repo. Their benefit, incremental `.d.ts` boundaries, only matters in large codebases.
+  - **No `incremental` for now.** Measured no gain at this size, and it would write `.tsbuildinfo` files into every package. Add it if type-checking gets slow.
 - **Isolated installs** (`bunfig.toml`: `linker = "isolated"`), pnpm-style, so a package can only import dependencies it declares. If a tool breaks under isolated linking, switch back to hoisted and note why here.
 - **End-to-end type safety, from database to every client:**
   - **Database → server:** Drizzle schema types in `packages/db` (row types inferred, with `drizzle-zod` for validators).
@@ -337,7 +342,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - `enforce-shorthand-classes` (e.g. `mx-2 my-2` → `m-2`), `enforce-canonical-classes`, `no-duplicate-classes`, `no-deprecated-classes`, `no-unnecessary-whitespace`.
     - `no-conflicting-classes`, `no-unknown-classes`, `no-concatenated-classes` (keeps classes statically analyzable).
     - Its `enforce-consistent-class-order` rule is **off**, because ordering belongs to Prettier and two tools shouldn't fight over it. Line wrapping is left to Prettier as well. Chosen over Biome for its plugin ecosystem. Lefthook runs ESLint and Prettier on **staged files only** to keep commits fast.
-  - **`tsc --noEmit`** with project references (only rechecks what changed).
+  - **`tsc`** per package (see §7, TypeScript setup). The root `typecheck` script runs every package's `typecheck`.
   - **Conventional Commits**, enforced by **commitlint** in lefthook's `commit-msg` hook. Commit messages are a subject line only (no body or footer).
   - **`bun test`** for tests. All tests run in pre-commit, including the Postgres-backed ones, which need the local Docker Postgres running.
 - **What's tested: the deterministic code.**
@@ -899,6 +904,7 @@ Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`
 | 59 | Part 3 specifications: data model, VM protocol, context assembly, state machines, Packer image (AMI + local Docker from one template), CDK stacks, website pages, repo bootstrap. | Concrete enough to cut executable tickets. |
 | 60 | Part 3 is a starting sketch with an explicit invariants list. Details change freely (doc updated in the same commit). Invariants change only with the founder. Tickets reference sections and are re-checked before starting. | Avoids over-prescribing while protecting what's load-bearing. |
 | 61 | Users store first and last name. The web app uses a sidebar shell (Home, Connections: Accounts + Telegram, You: Profile + Delete) instead of a settings page, and `/home` doubles as first-run setup. End-to-end type safety (Drizzle → server functions / Hono RPC → clients, shared Zod contracts, explicit DTOs) is an invariant. | Clearer navigation, and one source of truth for types. |
+| 62 | TypeScript 6.0.x (newest `typescript-eslint`-compatible), per-package tsconfigs extending a shared base, no project references, no `incremental`. | Fits Bun's no-build model. Follows Turborepo's guidance for source-exporting internal packages. Avoids hand-synced references. |
 
 ## Risks & flags
 - **Datacenter IPs.** AWS IPs are known datacenter ranges. Some sites (ticketing, aggressive Cloudflare setups) may block or challenge Winston despite a real logged-in Chrome. Mitigation: route those domains through a residential proxy, using the browser-backend interface.

@@ -44,7 +44,7 @@ The repo, the toolchain, the pre-commit gate, Postgres, config, logging, ids and
 |---|---|---|---|
 | 1 | `0fa82e` | Bootstrap the Bun workspace monorepo | — |
 | 2 | `b1f904` | Write AGENTS.md with the repo's working principles | `0fa82e` |
-| 3 | `746193` | Configure strict TypeScript with project references | `0fa82e` |
+| 3 | `746193` | Configure strict TypeScript for the workspace | `0fa82e` |
 | 4 | `154525` | Set up Prettier for the whole repo | `0fa82e` |
 | 5 | `991c7d` | Set up ESLint with type-aware typescript-eslint rules | `746193`, `154525` |
 | 6 | `ac22b7` | Set up bun test and testing conventions | `746193` |

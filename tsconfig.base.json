@@ -1,0 +1,28 @@
+{
+  // Shared compiler options. Every package's tsconfig.json extends this file.
+  // Starts from Bun's recommended settings (Bun runs TypeScript directly, so
+  // nothing is emitted), plus stricter checks. See docs/design.md §7.
+  "compilerOptions": {
+    // Environment: modern runtime, Bun's type definitions only.
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "types": ["bun"],
+
+    // Bundler-style resolution: packages export .ts source directly.
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    // Strictness.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true
+  }
+}
