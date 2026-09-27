@@ -5,13 +5,14 @@ status: todo
 priority: none
 labels:
   - db
-  - m0
+  - m1
 created_at: 2026-09-27T05:28:45.480Z
-updated_at: 2026-09-27T05:28:45.525Z
+updated_at: 2026-09-27T17:33:02.614Z
 blocked_by:
-  - "29521a"
   - "676648"
 ---
+
+**Now also includes the typed config loader** (from canceled `29521a`): Zod-validated settings from the environment, starting with the database URL, plus `.env.local` / `.env.example`, since this is the first code that reads config. See `29521a` for the loader's requirements. Moved to the start of M1, right before the first tables.
 
 `packages/db` owns the schema, the database client and migrations. It's the root of the end-to-end type chain (docs/design.md §7 and §12).
 

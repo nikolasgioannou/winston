@@ -1,18 +1,20 @@
 ---
 id: "29521a"
 title: Add a typed, validated config loader
-status: todo
+status: canceled
 priority: none
 labels:
   - backend
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.376Z
-updated_at: 2026-09-27T16:41:15.518Z
+updated_at: 2026-09-27T17:32:16.339Z
 blocked_by:
   - "5b4554"
   - "746193"
 ---
+
+**Canceled: folded into `2c5ac8` (packages/db with Drizzle).** Nothing reads config until the database client needs its connection string, so the config loader arrives with that first real use.
 
 Every service reads its settings from environment variables, validated at startup with Zod. A service with missing or invalid config must refuse to start and say exactly what's wrong (docs/design.md §12a).
 

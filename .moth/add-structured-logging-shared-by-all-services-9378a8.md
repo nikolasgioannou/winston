@@ -5,12 +5,12 @@ status: todo
 priority: none
 labels:
   - backend
-  - m0
+  - m1
   - tooling
 created_at: 2026-09-27T05:28:45.436Z
-updated_at: 2026-09-27T05:28:45.465Z
+updated_at: 2026-09-27T17:32:16.565Z
 blocked_by:
-  - "29521a"
+  - "2c5ac8"
 ---
 
 Four long-running services (`api`, `agents`, `gateway`, `web`) plus `winstond` all need logs that are readable locally and parseable in CloudWatch in production. There's no observability tooling beyond logs and the database (docs/design.md §12), so good structured logs matter.

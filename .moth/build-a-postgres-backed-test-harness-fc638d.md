@@ -5,14 +5,17 @@ status: todo
 priority: none
 labels:
   - db
-  - m0
+  - m1
   - tooling
 created_at: 2026-09-27T05:28:45.540Z
-updated_at: 2026-09-27T16:41:15.557Z
+updated_at: 2026-09-27T17:33:02.666Z
 blocked_by:
   - "2c5ac8"
   - "5b4554"
+  - "762cf0"
 ---
+
+**Order note:** this now comes after the identity tables (`762cf0`). It writes that ticket's seed-idempotency and constraint tests as its first real tests, creates the `winston_test` database (deferred from the Postgres ticket), and adds the Postgres-backed tests to CI (a Postgres service container in the workflow) as well as to the lefthook hook.
 
 A lot of the logic that matters most runs inside Postgres: the job queue's `SKIP LOCKED` leasing, trigger matching, full-text search, the append-only logs. Those tests must hit a real Postgres, not mocks (docs/design.md §8b).
 

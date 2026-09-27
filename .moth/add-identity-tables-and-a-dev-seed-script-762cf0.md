@@ -7,12 +7,13 @@ labels:
   - db
   - m1
 created_at: 2026-09-27T05:30:53.971Z
-updated_at: 2026-09-27T05:30:54.032Z
+updated_at: 2026-09-27T17:33:02.639Z
 blocked_by:
   - "2c5ac8"
   - "5b4554"
-  - "fc638d"
 ---
+
+**Order note:** this comes right after Drizzle and before the Postgres test harness, so the harness has real tables to prove itself on. The seed-idempotency and constraint tests described below are written in the harness ticket (`fc638d`).
 
 M1 is about talking to Winston before sign-up exists. So the founder's user record, allowlist entry and Telegram link are created by a seed script rather than by the web app (docs/design.md §8d).
 

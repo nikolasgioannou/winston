@@ -8,11 +8,12 @@ labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.644Z
-updated_at: 2026-09-27T05:28:45.689Z
+updated_at: 2026-09-27T17:33:39.579Z
 blocked_by:
   - "51d785"
-  - "fc638d"
 ---
+
+**Scope note:** CI now comes before any database code. It runs the checks that exist (format, lint, typecheck, tests). The Postgres service container is added by the test-harness ticket (`fc638d`) together with the first database tests.
 
 Hooks can be bypassed (`--no-verify`, or a machine without hooks installed), and once M4 lands every push to `main` deploys to production. CI re-runs the same checks as the backstop (docs/design.md §8b). Deploy steps get added to this workflow in M4.
 
