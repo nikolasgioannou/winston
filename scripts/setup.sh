@@ -13,6 +13,7 @@
 #   8. Start the local Postgres and wait until it's healthy.
 #   9. Apply database migrations (already-applied ones are skipped).
 #  10. Seed the local database with your user, once SEED_* values are set in .env.local.
+#  11. Check that the Cloudflare Tunnel in .env.local exists (setup: docs/local-dev.md).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -114,6 +115,13 @@ if grep -qE '^SEED_EMAIL=.+' .env.local; then
   done_ "database seeded"
 else
   done_ "seed skipped (set the SEED_* values in .env.local to create your user)"
+fi
+
+tunnel_name=$(grep -E '^TUNNEL_NAME=' .env.local | cut -d= -f2-)
+if [ -n "$tunnel_name" ] && mise exec -- cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1; then
+  done_ "Cloudflare Tunnel '$tunnel_name' exists"
+else
+  done_ "tunnel not set up yet (needed for webhooks; see docs/local-dev.md)"
 fi
 
 echo "Done."

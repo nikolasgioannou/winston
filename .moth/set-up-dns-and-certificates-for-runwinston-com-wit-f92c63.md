@@ -8,11 +8,13 @@ labels:
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.443Z
-updated_at: 2026-09-27T05:36:32.494Z
+updated_at: 2026-09-27T18:37:16.803Z
 blocked_by:
   - "16c290"
   - "60490f"
 ---
+
+**Decided by the tunnel ticket (`16c290`):** `runwinston.com` is registered with Cloudflare Registrar, and its **DNS is on Cloudflare**, not Route 53. This ticket validates ACM certificates through Cloudflare DNS records and points records at CloudFront and the ALB. It creates no Route 53 zone.
 
 Production uses `runwinston.com` (the site and apex), `api.runwinston.com` and `gateway.runwinston.com` (docs/design.md §8, §19). Where DNS lives depends on the local-tunnel decision: the tunnel ticket may have moved the zone to Cloudflare. Read what was decided there and in §8a before starting.
 

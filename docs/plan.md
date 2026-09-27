@@ -58,32 +58,32 @@ The repo, the toolchain, typed ids with tests, the pre-commit gate, the setup sc
 
 It starts with the database foundation (Drizzle with config, the first tables, the Postgres test harness, logging), each one used by the next ticket. Then: message @RunWinstonDevBot and the front of house replies, with steering, typing, a rolling window and failure handling. The user comes from a seed script.
 
-| #   | Ticket   | Title                                                            | Blocked by                                       |
-| --- | -------- | ---------------------------------------------------------------- | ------------------------------------------------ |
-| 11  | `2c5ac8` | Set up packages/db with Drizzle, migrations and typed config     | `676648`                                         |
-| 12  | `762cf0` | Add identity tables and a dev seed script                        | `2c5ac8`, `5b4554`                               |
-| 13  | `fc638d` | Build a Postgres-backed test harness                             | `2c5ac8`, `5b4554`, `762cf0`                     |
-| 14  | `16c290` | Decide and set up the local webhook tunnel (with the founder) 🤝 | `0fa82e`                                         |
-| 15  | `c5850d` | Add conversation and run tables                                  | `762cf0`                                         |
-| 16  | `87ce11` | Add model-call, prompt-version and cost tables                   | `c5850d`                                         |
-| 17  | `9378a8` | Add structured logging shared by all services                    | `2c5ac8`                                         |
-| 18  | `9869b7` | Build the Postgres job queue                                     | `2c5ac8`, `5b4554`, `9378a8`, `fc638d`           |
-| 19  | `5cbe5b` | Create the agents service worker loop                            | `2c5ac8`, `9869b7`                               |
-| 20  | `76c143` | Create the api service with Hono                                 | `2c5ac8`, `9378a8`                               |
-| 21  | `6bac51` | Add a single `bun dev` command for local development             | `16c290`, `5cbe5b`, `676648`, `76c143`           |
-| 22  | `e47a50` | Receive Telegram messages via webhook                            | `76c143`, `9869b7`, `c5850d`                     |
-| 23  | `db2a16` | Render inbound items into XML envelopes                          | `5b4554`, `c5850d`                               |
-| 24  | `9f3814` | Create the prompts package with a first front-of-house prompt    | `87ce11`                                         |
-| 25  | `0bfb79` | Build the model gateway on the Vercel AI SDK and OpenRouter      | `2c5ac8`, `9378a8`                               |
-| 26  | `36a9c9` | Record every model call and its cost                             | `0bfb79`, `87ce11`                               |
-| 27  | `cb9674` | Run a minimal front-of-house turn that can reply                 | `36a9c9`, `5cbe5b`, `9f3814`, `db2a16`, `e47a50` |
-| 28  | `ed1e47` | Format and deliver outbound Telegram messages                    | `cb9674`                                         |
-| 29  | `f661c5` | Show a typing indicator while Winston works                      | `cb9674`                                         |
-| 30  | `eeb50f` | Serialize front-of-house turns per user and coalesce bursts      | `cb9674`                                         |
-| 31  | `d4bb0d` | Steer running turns with new input and drop stale replies        | `ed1e47`, `eeb50f`                               |
-| 32  | `ebd998` | Trim the front-of-house window and place cache breakpoints       | `cb9674`                                         |
-| 33  | `8d94b2` | Deliver Telegram reactions to Winston                            | `db2a16`, `e47a50`                               |
-| 34  | `3f95f4` | Handle model failures and refusals in the front of house         | `36a9c9`, `cb9674`                               |
+| #   | Ticket   | Title                                                                       | Blocked by                                       |
+| --- | -------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
+| 11  | `2c5ac8` | Set up packages/db with Drizzle, migrations and typed config                | `676648`                                         |
+| 12  | `762cf0` | Add identity tables and a dev seed script                                   | `2c5ac8`, `5b4554`                               |
+| 13  | `fc638d` | Build a Postgres-backed test harness                                        | `2c5ac8`, `5b4554`, `762cf0`                     |
+| 14  | `16c290` | Set up the local webhook tunnel on dev.runwinston.com (with the founder) 🤝 | `0fa82e`                                         |
+| 15  | `c5850d` | Add conversation and run tables                                             | `762cf0`                                         |
+| 16  | `87ce11` | Add model-call, prompt-version and cost tables                              | `c5850d`                                         |
+| 17  | `9378a8` | Add structured logging shared by all services                               | `2c5ac8`                                         |
+| 18  | `9869b7` | Build the Postgres job queue                                                | `2c5ac8`, `5b4554`, `9378a8`, `fc638d`           |
+| 19  | `5cbe5b` | Create the agents service worker loop                                       | `2c5ac8`, `9869b7`                               |
+| 20  | `76c143` | Create the api service with Hono                                            | `2c5ac8`, `9378a8`                               |
+| 21  | `6bac51` | Add a single `bun dev` command for local development                        | `16c290`, `5cbe5b`, `676648`, `76c143`           |
+| 22  | `e47a50` | Receive Telegram messages via webhook                                       | `76c143`, `9869b7`, `c5850d`                     |
+| 23  | `db2a16` | Render inbound items into XML envelopes                                     | `5b4554`, `c5850d`                               |
+| 24  | `9f3814` | Create the prompts package with a first front-of-house prompt               | `87ce11`                                         |
+| 25  | `0bfb79` | Build the model gateway on the Vercel AI SDK and OpenRouter                 | `2c5ac8`, `9378a8`                               |
+| 26  | `36a9c9` | Record every model call and its cost                                        | `0bfb79`, `87ce11`                               |
+| 27  | `cb9674` | Run a minimal front-of-house turn that can reply                            | `36a9c9`, `5cbe5b`, `9f3814`, `db2a16`, `e47a50` |
+| 28  | `ed1e47` | Format and deliver outbound Telegram messages                               | `cb9674`                                         |
+| 29  | `f661c5` | Show a typing indicator while Winston works                                 | `cb9674`                                         |
+| 30  | `eeb50f` | Serialize front-of-house turns per user and coalesce bursts                 | `cb9674`                                         |
+| 31  | `d4bb0d` | Steer running turns with new input and drop stale replies                   | `ed1e47`, `eeb50f`                               |
+| 32  | `ebd998` | Trim the front-of-house window and place cache breakpoints                  | `cb9674`                                         |
+| 33  | `8d94b2` | Deliver Telegram reactions to Winston                                       | `db2a16`, `e47a50`                               |
+| 34  | `3f95f4` | Handle model failures and refusals in the front of house                    | `36a9c9`, `cb9674`                               |
 
 ### M2 — His computer (local)
 

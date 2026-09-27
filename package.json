@@ -19,14 +19,17 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "prepare": "lefthook install",
     "test": "bun test --env-file=.env.local",
+    "tunnel": "bun scripts/tunnel.ts",
     "typecheck": "tsc && bun run --filter '*' --if-present typecheck"
   },
+  "dependencies": {},
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@commitlint/types": "21.2.3",
     "@eslint/js": "10.0.1",
     "@types/bun": "1.4.2",
+    "@winston/shared": "workspace:*",
     "eslint": "10.11.0",
     "eslint-config-prettier": "10.1.8",
     "jiti": "2.7.0",
@@ -34,6 +37,7 @@
     "prettier": "3.9.9",
     "prettier-plugin-packagejson": "3.0.2",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.1"
+    "typescript-eslint": "8.70.1",
+    "zod": "4.6.5"
   }
 }
