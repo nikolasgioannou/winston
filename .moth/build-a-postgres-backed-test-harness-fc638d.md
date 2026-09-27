@@ -8,10 +8,10 @@ labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.540Z
-updated_at: 2026-09-27T05:28:45.585Z
+updated_at: 2026-09-27T16:41:15.557Z
 blocked_by:
   - "2c5ac8"
-  - "ac22b7"
+  - "5b4554"
 ---
 
 A lot of the logic that matters most runs inside Postgres: the job queue's `SKIP LOCKED` leasing, trigger matching, full-text search, the append-only logs. Those tests must hit a real Postgres, not mocks (docs/design.md §8b).

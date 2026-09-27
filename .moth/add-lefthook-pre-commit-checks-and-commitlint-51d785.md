@@ -7,10 +7,10 @@ labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.270Z
-updated_at: 2026-09-27T05:28:45.316Z
+updated_at: 2026-09-27T16:41:15.537Z
 blocked_by:
+  - "5b4554"
   - "991c7d"
-  - "ac22b7"
 ---
 
 After this ticket nothing can be committed unless formatting, linting, type checks and tests pass, and every commit message is a Conventional Commit with a subject line only (docs/design.md §8b). Every later ticket assumes this gate exists.

@@ -8,10 +8,10 @@ labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.376Z
-updated_at: 2026-09-27T05:28:45.421Z
+updated_at: 2026-09-27T16:41:15.518Z
 blocked_by:
+  - "5b4554"
   - "746193"
-  - "ac22b7"
 ---
 
 Every service reads its settings from environment variables, validated at startup with Zod. A service with missing or invalid config must refuse to start and say exactly what's wrong (docs/design.md §12a).

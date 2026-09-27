@@ -339,13 +339,14 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - **Database → server:** Drizzle schema types in `packages/db` (row types inferred, with `drizzle-zod` for validators).
   - **Server → web client:** TanStack Start server functions with Zod-validated inputs and inferred return types, consumed by TanStack Router loaders and Query on the client. No hand-written API types.
   - **Server → CLI:** Hono RPC types for the VM-facing API.
-  - **Shared contracts:** event payloads, envelope items, config and tool inputs as Zod schemas in `packages/shared`, used on both ends.
+  - **Shared contracts:** event payloads, envelope items and tool inputs as Zod schemas in `packages/domain`, used on both ends.
   - **Explicit DTOs at every boundary.** Server functions and API routes select and return deliberate shapes, never raw rows, so fields like `token_ciphertext` can't leak through type inference.
   - No `any`, enforced by `typescript-eslint`.
 - **Monorepo with Bun workspaces:**
   - `packages/db`: Drizzle schema and migrations.
   - `packages/prompts`: system prompts and the compaction prompt, as Markdown.
-  - `packages/shared`: event envelope, event catalog, tool schemas, API types. One definition of `mail.message.received`, used everywhere.
+  - `packages/shared`: **business-agnostic helpers only** (ids, config loading, logging). Nothing in it knows what Winston is.
+  - `packages/domain`: Winston's domain contracts (event envelope, event catalog, tool schemas, API types). One definition of `mail.message.received`, used everywhere. It's created by the first ticket that needs a domain contract (envelope rendering, M1).
   - `apps/backend`: agents, Telegram, webhooks, connected-apps API.
   - `apps/web`: TanStack Start site: the sidebar app (home, connections, profile) and the handoff live-view page.
   - `apps/cli`: the Winston CLI (compiled binary).
@@ -392,7 +393,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - Its `enforce-consistent-class-order` rule is **off**, because ordering belongs to Prettier and two tools shouldn't fight over it. Line wrapping is left to Prettier as well. Chosen over Biome for its plugin ecosystem. Lefthook runs ESLint and Prettier on **staged files only** to keep commits fast.
   - **`tsc`** per package (see §7, TypeScript setup). The root `typecheck` script checks the root config files, then runs every package's `typecheck`.
   - **Conventional Commits**, enforced by **commitlint** in lefthook's `commit-msg` hook. Commit messages are a subject line only (no body or footer).
-  - **`bun test`** for tests. All tests run in pre-commit, including the Postgres-backed ones, which need the local Docker Postgres running.
+  - **`bun test`** for tests, run from the root (`bun run test`). Tests sit next to the code as `*.test.ts`. Conventions are in `docs/testing.md`. Once lefthook lands, all tests run in pre-commit, including the Postgres-backed ones, which need the local Docker Postgres running.
 - **What's tested: the deterministic code.**
   - Envelope rendering and escaping (a security boundary).
   - Trigger lifecycle and filter matching.
@@ -519,6 +520,7 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 
 ### Identifiers
 
+- **Format: [TypeID](https://github.com/jetify-com/typeid)**, a lowercase prefix plus a UUIDv7 in base32 (for example `usr_01h2xcejqtf2nbrexx3vqjhp41`). Ids are shell-safe, sort by creation time (good for "newest first" and for index locality), and the prefix is part of the TypeScript type (`Id<"usr">` can't be passed as an `Id<"run">`). Helpers: `createId` and `parseId` in `packages/shared`, via `typeid-js`. They're generic, with no list of prefixes. **Each entity declares its prefix in its schema file in `packages/db`, which assembles them into one registry** (so a test can assert prefixes are unique, and `winston get` can resolve any id). The registry is created by the first ticket that adds a table.
 - Every object has a **typed, prefixed id**: `msg_…` (message), `thr_…` (thread), `drf_…` (draft), `att_…` (attachment), `evt_…` (calendar event), `trg_…` (trigger), `task_…`, `hist_…` (history item), `acct_…`, `win_…` (browser window). Browser element refs are short (`e12`) and scoped to the latest snapshot.
 - Ids from any output can be pasted straight into a follow-up command, and the prefix tells the CLI (and the agent) what they are.
 - `winston get <any-id>` resolves any prefixed id across resources.
@@ -768,7 +770,7 @@ These are load-bearing. Changing one means revisiting the design **with the foun
 
 ## 14. Data model (Postgres, Drizzle)
 
-Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`. `user_id` is on every user-owned row, and every query is scoped by it.
+Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as text. All timestamps are `timestamptz`. `user_id` is on every user-owned row, and every query is scoped by it.
 
 **Identity & access**
 
@@ -854,7 +856,7 @@ Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`
 
 **Reconnect:** exponential backoff (1 s → 30 s). In-flight `exec` results are **buffered by id for 5 minutes** on the VM, so after a reconnect the gateway fetches them instead of re-running a possibly non-idempotent command.
 
-**CLI ↔ backend API shape:** Hono routes under `/v1/…` (`mail`, `calendar`, `accounts`, `triggers`, `events`, `history`, `tasks`, `me`, `jev`), typed end to end with Hono's RPC types in `packages/shared`. Errors are `{ error: { code, message, hint } }`, and the CLI maps `code` to exit codes (§11). Cursors are opaque strings.
+**CLI ↔ backend API shape:** Hono routes under `/v1/…` (`mail`, `calendar`, `accounts`, `triggers`, `events`, `history`, `tasks`, `me`, `jev`), typed end to end with Hono's RPC types in `packages/domain`. Errors are `{ error: { code, message, hint } }`, and the CLI maps `code` to exit codes (§11). Cursors are opaque strings.
 
 ## 16. Front-of-house context assembly
 
@@ -946,7 +948,7 @@ Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`
 
 ## 21. Repo bootstrap
 
-- **Workspace:** Bun workspaces (`apps/*`, `packages/*`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
+- **Workspace:** Bun workspaces (`apps/*`, `packages/*`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,domain,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
 - **Pins via `mise.toml`** (project-local): Bun and Node now. Packer, Terraform and the AWS CLI get added by the tickets that introduce them.
 - **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`.
 - **Local services:** `docker-compose.yml` (Postgres, and the VM container via the `VmProvider`).
@@ -1019,6 +1021,7 @@ Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`
 | 60  | Part 3 is a starting sketch with an explicit invariants list. Details change freely (doc updated in the same commit). Invariants change only with the founder. Tickets reference sections and are re-checked before starting.                                                                                                                                 | Avoids over-prescribing while protecting what's load-bearing.                                                                                                                                   |
 | 61  | Users store first and last name. The web app uses a sidebar shell (Home, Connections: Accounts + Telegram, You: Profile + Delete) instead of a settings page, and `/home` doubles as first-run setup. End-to-end type safety (Drizzle → server functions / Hono RPC → clients, shared Zod contracts, explicit DTOs) is an invariant.                          | Clearer navigation, and one source of truth for types.                                                                                                                                          |
 | 62  | TypeScript 6.0.x (newest `typescript-eslint`-compatible), per-package tsconfigs extending a shared base, no project references, no `incremental`.                                                                                                                                                                                                             | Fits Bun's no-build model. Follows Turborepo's guidance for source-exporting internal packages. Avoids hand-synced references.                                                                  |
+| 63  | `packages/shared` holds business-agnostic helpers only. Winston's domain contracts live in `packages/domain`. Id prefixes are declared per entity in `packages/db`, which assembles the registry.                                                                                                                                                             | Clear ownership: plumbing vs domain. `shared` never becomes a junk drawer. Uniqueness and resolution need one list, owned where entities live.                                                  |
 
 ## Risks & flags
 

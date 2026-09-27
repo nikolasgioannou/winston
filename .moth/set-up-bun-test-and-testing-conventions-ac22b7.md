@@ -1,16 +1,18 @@
 ---
 id: "ac22b7"
 title: Set up bun test and testing conventions
-status: todo
+status: canceled
 priority: none
 labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.224Z
-updated_at: 2026-09-27T05:28:45.255Z
+updated_at: 2026-09-27T16:41:15.402Z
 blocked_by:
   - "746193"
 ---
+
+**Canceled: folded into `5b4554` (Generate typed, prefixed ids).** Setting up test tooling with nothing to test would be speculative, and the id generator is the first real, pure logic, so the test setup and conventions arrive with it.
 
 `bun test` is the test runner (docs/design.md §8b). Tests focus on deterministic code: envelope rendering, trigger lifecycle, the agent loop with a scripted fake model, CLI output and exit codes, permission checks, provider adapters and the queue.
 

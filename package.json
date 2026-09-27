@@ -11,6 +11,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "test": "bun test",
     "typecheck": "tsc && bun run --filter '*' --if-present typecheck"
   },
   "devDependencies": {
