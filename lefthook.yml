@@ -1,15 +1,11 @@
 pre-commit:
   jobs:
+    # Auto-format what's being committed, then run exactly the checks CI runs.
     - name: format
       run: bunx prettier --write --ignore-unknown {staged_files}
       stage_fixed: true
-    - name: lint
-      run: bunx eslint --max-warnings 0 {staged_files}
-      glob: "*.ts"
-    - name: typecheck
-      run: bun run typecheck
-    - name: test
-      run: bun run test
+    - name: check
+      run: bun run check
 
 commit-msg:
   jobs:

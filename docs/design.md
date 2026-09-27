@@ -378,10 +378,9 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 ## 8b. Checks, CI/CD & deploys
 
-- **Pre-commit gate with lefthook** (a dev dependency, with hooks installed by the root `prepare` script on `bun install`, so lefthook's own install script doesn't need to be trusted). Nothing gets committed unless it passes **formatting, linting, type checking and tests**. `lefthook.yml` jobs, run in order:
+- **Pre-commit gate with lefthook** (a dev dependency, with hooks installed by the root `prepare` script on `bun install`, so lefthook's own install script doesn't need to be trusted). Nothing gets committed unless it passes **formatting, linting, type checking and tests**. `lefthook.yml` jobs:
   1. **format:** `prettier --write --ignore-unknown` on staged files, re-staged automatically (`stage_fixed`). `--ignore-unknown` skips files Prettier can't parse instead of failing.
-  2. **lint:** ESLint on staged `.ts` files with `--max-warnings 0`. It reports only, since auto-fixing lint in a hook can change behavior unnoticed.
-  3. **typecheck** and **test** on the whole repo.
+  2. **check:** `bun run check`, the **exact same command CI runs**: `format:check`, `lint` (ESLint with `--max-warnings 0`, report-only), `typecheck` and `test`, all on the whole repo. A commit that passes the hook passes CI by construction, so CI failures shouldn't reach the history.
   - lefthook hides unstaged changes while the hook runs, so partially staged files are safe with `stage_fixed`.
   - **commit-msg:** commitlint with `@commitlint/config-conventional`, plus `body-empty` and `footer-empty`, so messages are a single subject line (`commitlint.config.ts`).
 - **Tooling:**
@@ -410,7 +409,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - The Postgres queue (leasing, lease timeouts, `SKIP LOCKED`).
 - **Not tested automatically:** LLM judgment. It's evaluated through real use and the database log.
 - **Trunk-based: every push to `main` on GitHub deploys to production** through GitHub Actions:
-  1. Re-run the same checks (hooks can be skipped with `--no-verify`, so CI is the backstop). A failure stops the deploy.
+  1. `bun run check`, the same checks the pre-commit hook runs (hooks can be skipped with `--no-verify`, so CI is the backstop). A failure stops the deploy. Today the workflow (`.github/workflows/ci.yml`) is only this step: checkout, `jdx/mise-action` (installs the versions pinned in `mise.toml`), `bun install --frozen-lockfile`, `bun run check`, on pushes to `main`, with read-only permissions.
   2. Build container images for `api`, `agents`, `gateway`, `web` and push them to ECR.
   3. Run migrations as a one-off ECS task. A failure stops the deploy.
   4. Rolling ECS deploys with health checks and automatic rollback.
@@ -1032,6 +1031,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 ## Risks & flags
 
+- **Bun under Rosetta.** Running Bun in a `linux/amd64` container on Apple Silicon (Colima with Rosetta) segfaulted during `bun install` (seen 2026-09-27, Bun 1.4.2). The local "VM" image (M2) runs Bun-compiled binaries (`winstond`, the CLI), so building it as amd64 to match the x86 production servers may not work locally. The systemd spike (M2) should decide between a native `linux/arm64` local image, Bun's baseline x86 build, or another approach.
 - **Datacenter IPs.** AWS IPs are known datacenter ranges. Some sites (ticketing, aggressive Cloudflare setups) may block or challenge Winston despite a real logged-in Chrome. Mitigation: route those domains through a residential proxy, using the browser-backend interface.
 - **Jev access.** TypeSafe's API is waitlisted and Jev is about a week old, with no independent benchmarks. Join the waitlist early. The browser loop must work without it.
 - **Google OAuth verification.** Gmail read scopes are "restricted." An unverified app in _testing_ mode allows up to 100 test users, which covers friends. However, refresh tokens in testing mode expire after **7 days**, so every user would have to re-authorize weekly. The alternative is production verification, which requires a third-party security assessment (CASA) for restricted scopes. **Decided: testing mode**, with Winston-prompted weekly reconnects (see §5, Access control).

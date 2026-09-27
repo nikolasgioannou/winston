@@ -12,10 +12,10 @@ You need [mise](https://mise.jdx.dev/getting-started.html). Then run:
 
 It's safe to re-run at any time, and a re-run doubles as a health check.
 
-The git hooks (lefthook) run formatting, linting, type checks and tests on every commit, and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
+Every commit runs the same checks as CI (formatting, linting, type checks and tests), and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
 
 ```bash
-bunx lefthook run pre-commit --all-files
+bun run check
 ```
 
 ## Docs

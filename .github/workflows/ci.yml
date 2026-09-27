@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the exact Bun and Node versions pinned in mise.toml.
+      - uses: jdx/mise-action@v4
+      - run: bun install --frozen-lockfile
+      # The same checks the pre-commit hook runs.
+      - run: bun run check
