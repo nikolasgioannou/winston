@@ -29,3 +29,5 @@ Build:
 Add `gateway` to `bun dev`.
 
 Tests: registration succeeds exactly once per token, a bad or reused token is rejected, a replaced connection closes the old socket, frame validation rejects malformed frames. Use a test websocket client.
+
+`provision_vm` (the VmProvider ticket) points local VMs at `ws://host.docker.internal:3001` (`VM_GATEWAY_URL`), so the gateway should listen on port 3001 by default. It also leaves VMs in `registering`, and nothing yet moves a VM that never registers to `failed` (`timed_out`). Decide where that check lives, for example here, when registration is handled.

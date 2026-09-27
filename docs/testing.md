@@ -28,3 +28,7 @@ test("…", async () => {
 - **Factories** like `insertUser` fill in unique defaults. Add one when a new table needs test rows.
 - **Don't assume a table is empty** unless the test just called `truncateAll`. Other tests may leave committed rows behind. Filter by something the test owns (a unique type, email or id) instead.
 - `bun test` doesn't load `.env.local` by itself (test mode skips it), so the `test` script passes `--env-file=.env.local`. CI sets `TEST_DATABASE_URL` directly and runs Postgres as a service container.
+
+## Tests that need Docker
+
+A test that needs a real Docker engine or a locally built image is named `*.integration.test.ts` and skips itself (`describe.skipIf`) when Docker or the image isn't available, as in CI. Clean up what it creates (containers and volumes) in a `finally`.

@@ -8,7 +8,8 @@ import {
   type VmEvent,
   type VmState,
 } from "./vm-state.ts";
-import { createVm } from "./vms.ts";
+import { tokenMatches } from "@winston/shared/tokens";
+import { createVm, issueRegistrationToken } from "./vms.ts";
 
 const db = await testDb();
 
@@ -79,22 +80,32 @@ describe("transition", () => {
 });
 
 describe("VMs in the database", () => {
-  test("createVm stores only the registration token's hash", async () => {
+  test("registration tokens are stored only hashed, and a new one replaces the old", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
-      const { vm, registrationToken } = await createVm(tx, user.id, "docker");
+      const vm = await createVm(tx, user.id, "docker");
       expect(vm.state).toBe("requested");
       expect(vm.id.startsWith("vm_")).toBe(true);
+      const token = await issueRegistrationToken(tx, vm.id);
       const [row] = await tx.select().from(vms).where(eq(vms.id, vm.id));
-      expect(JSON.stringify(row)).not.toContain(registrationToken);
-      expect(row?.registrationTokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(JSON.stringify(row)).not.toContain(token);
+      expect(tokenMatches(token, row?.registrationTokenHash ?? "")).toBe(true);
+
+      const replacement = await issueRegistrationToken(tx, vm.id);
+      const [after] = await tx.select().from(vms).where(eq(vms.id, vm.id));
+      expect(tokenMatches(token, after?.registrationTokenHash ?? "")).toBe(
+        false,
+      );
+      expect(
+        tokenMatches(replacement, after?.registrationTokenHash ?? ""),
+      ).toBe(true);
     });
   });
 
   test("applyVmEvent moves the stored state and refuses illegal moves", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
-      const { vm } = await createVm(tx, user.id, "docker");
+      const vm = await createVm(tx, user.id, "docker");
       expect(await applyVmEvent(tx, vm.id, "provision")).toBe("provisioning");
       const error = await applyVmEvent(tx, vm.id, "registered").catch(
         (e: unknown) => e,

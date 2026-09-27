@@ -22,6 +22,10 @@ const agentsConfigSchema = dbConfigSchema
       .int()
       .positive()
       .default(100_000),
+    /** The image local VMs run (`bun run image:build:local`). */
+    VM_IMAGE: z.string().min(1).default("winston-vm:local"),
+    /** Where `winstond` dials the gateway from inside a local VM container. */
+    VM_GATEWAY_URL: z.url().default("ws://host.docker.internal:3001"),
     /** How many jobs this process runs at once. */
     WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
     /** How long in-flight jobs get to finish on shutdown before the process exits anyway. */

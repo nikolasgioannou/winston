@@ -3,7 +3,7 @@
  * from the job queue (docs/design.md §9).
  */
 import { createDb } from "@winston/db/client";
-import { frontTurnJob } from "@winston/domain/jobs";
+import { frontTurnJob, provisionVmJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { Api } from "grammy";
 import { loadAgentsConfig } from "./config.ts";
@@ -11,6 +11,9 @@ import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
 import { dbModelCallSink } from "./model/log.ts";
 import { grammySender } from "./telegram/sender.ts";
+import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
+import { dockerVmProvider } from "./vm/docker-provider.ts";
+import { provisionVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
@@ -26,10 +29,17 @@ const gateway = createModelGateway({
 });
 const telegram = grammySender(new Api(config.TELEGRAM_BOT_TOKEN));
 
+const vmProvider = dockerVmProvider({
+  engine: dockerEngine(await dockerSocketPath()),
+  image: config.VM_IMAGE,
+  gatewayUrl: config.VM_GATEWAY_URL,
+});
+
 const worker = createWorker({
   db,
   logger,
   handlers: {
+    [provisionVmJob.type]: provisionVmHandler(vmProvider),
     [frontTurnJob.type]: frontTurnHandler({
       gateway,
       telegram,

@@ -27,3 +27,5 @@ The token must never be readable by the `winston` user. Verify that inside the c
 Tests: the backoff schedule, token persistence logic, and handling a replaced connection, with a fake gateway. Integration check: boot the local image with `winstond` baked in, and watch it register and turn `ready`.
 
 The image has no `winstond` systemd unit yet. Add it in this ticket, together with the binary: a placeholder unit without a binary would leave systemd `degraded`. Put the unit in the provisioning scripts (`image/scripts/`), as the other units will be.
+
+The provider passes the registration token and gateway URL as the container environment variables `WINSTON_REGISTRATION_TOKEN` and `WINSTON_GATEWAY_URL` (docs/design.md §8a). They land in PID 1's (systemd's) environment, and `winstond` runs as a non-root user, so its unit needs `PassEnvironment=WINSTON_REGISTRATION_TOKEN WINSTON_GATEWAY_URL`. The EC2 path will use user data instead, so read both through one small config step.

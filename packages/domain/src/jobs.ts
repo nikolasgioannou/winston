@@ -11,3 +11,10 @@ export const frontTurnJob = {
   /** How long a turn waits after the latest message for more to arrive. */
   debounceMs: 1_500,
 } as const;
+
+/** Provisioning a user's VM (§10, §15). Queued by account creation (M3); a script for now. */
+export const provisionVmJob = {
+  type: "provision_vm",
+  /** One provisioning job queued per user at a time. */
+  dedupeKey: (userId: string) => `provision_vm:${userId}`,
+} as const;
