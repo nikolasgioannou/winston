@@ -2,6 +2,7 @@ export * from "./allowed-emails.ts";
 export * from "./cost-ledger.ts";
 export * from "./front-state.ts";
 export * from "./inbound-items.ts";
+export * from "./jobs.ts";
 export * from "./model-calls.ts";
 export * from "./outbound-messages.ts";
 export * from "./prompt-versions.ts";

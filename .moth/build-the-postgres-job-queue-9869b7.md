@@ -1,14 +1,14 @@
 ---
 id: "9869b7"
 title: Build the Postgres job queue
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - db
   - m1
 created_at: 2026-09-27T05:30:54.140Z
-updated_at: 2026-09-27T05:30:54.219Z
+updated_at: 2026-09-27T18:54:12.771Z
 blocked_by:
   - "2c5ac8"
   - "5b4554"
@@ -16,21 +16,26 @@ blocked_by:
   - "fc638d"
 ---
 
-All asynchronous work in Winston runs through one job table in Postgres (docs/design.md §9 and the job state machine in §17): front-of-house turns, agent steps, syncs, trigger firings and provisioning. Getting this right matters, because deploys and crashes must never lose work.
+All asynchronous work in Winston runs through one job table in Postgres (docs/design.md §9, and the job state machine in §17): front-of-house turns, agent steps, syncs, trigger firings and provisioning. Deploys and crashes must never lose work.
 
-Implement in `packages/db` (or a small `packages/queue`, if that reads better):
-- The `jobs` table (§14): `type`, `payload`, `run_at`, `locked_until`, `attempts`, `max_attempts`, `status`, a nullable unique `dedupe_key`, and `last_error`.
-- `enqueue(type, payload, { runAt, dedupeKey, maxAttempts })`, usable **inside a caller's transaction**, so "save the message and enqueue the turn" is atomic.
-- `lease(types, workerId, leaseMs)` using `SELECT … FOR UPDATE SKIP LOCKED`, picking due jobs (`run_at <= now()`) and setting `locked_until`.
-- `complete`, `fail` (retry with exponential backoff plus jitter until `max_attempts`, then `failed`), and `extendLease` for long steps.
-- An expired lease makes the job leasable again. That's how a crashed worker's job gets picked up.
-- Dedupe semantics: enqueueing with an existing *queued* `dedupe_key` should be able to either no-op or push `run_at` later. The front-of-house debounce needs the latter, so design the API for both.
+Research: pitfalls of `SKIP LOCKED` queues. Findings applied:
+- Lease in one short statement, and do the work outside any transaction.
+- Use the database's clock for all timing.
+- Partial indexes for due queued jobs and for running leases.
+- **Guard completion with a per-lease token**, so a stale worker can't overwrite a job another worker re-leased.
+- Dead-tuple bloat only matters at hundreds of jobs per second. Noted in the design doc, not built for.
 
-Research the edge cases people hit with SKIP LOCKED queues (index design on `(status, run_at)`, lease clock skew by relying on the database's `now()`, vacuum churn on hot tables) and handle the important ones.
+`@winston/db/queue`, with the `jobs` table:
+- `enqueue(db, type, { payload, userId, runAt, maxAttempts, dedupeKey, onDuplicate })` works inside a caller's transaction. A dedupe key allows at most one *queued* job per key. `onDuplicate: "ignore"` leaves the existing job alone, and `"reschedule"` moves its run time (the debounce). The key frees up once the job starts running.
+- `lease(db, { types, leaseMs, limit })` returns `{ job, token }` leases. Expired leases are leasable again.
+- `complete`, `fail` (exponential backoff with jitter until `maxAttempts`, then `failed`) and `extendLease` all require the current lease token, and return false if the lease was lost.
+- `retryDelayMs(attempts)` is pure and tested.
 
 Tests, against real Postgres:
-- Two concurrent workers never lease the same job.
-- An expired lease is re-leased.
-- Retries back off and stop at `max_attempts`.
-- Dedupe behaves as designed.
-- Enqueue inside a rolled-back transaction leaves no job.
+- Enqueue in a rolled-back transaction leaves no job.
+- Dedupe `ignore` and `reschedule` behave as designed, and a running job frees its key.
+- Only due jobs of the requested types are leased.
+- Four concurrent workers never lease the same job (20 jobs, all distinct).
+- An expired lease is re-leased, and the stale worker can't complete or extend it.
+- `extendLease` prevents a re-lease.
+- Failures retry with backoff, then stop at `maxAttempts`.
