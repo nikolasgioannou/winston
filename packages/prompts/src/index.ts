@@ -1,3 +1,6 @@
+// Travels with this file, so packages importing it typecheck the `.md` imports.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- ambient module declarations can't be imported
+/// <reference path="./markdown.d.ts" />
 /**
  * System prompts, as Markdown in this package (docs/design.md §1). Each is
  * fully static, with no dates, names or user data, so it stays cached.

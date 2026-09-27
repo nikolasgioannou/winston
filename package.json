@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "model:smoke": "bun run --filter @winston/agents model:smoke",
     "prepare": "lefthook install",
     "telegram:webhook": "bun run --filter @winston/api telegram:webhook",
     "test": "bun test --env-file=.env.local",
