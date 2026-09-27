@@ -63,10 +63,10 @@ It starts with the database foundation (Drizzle with config, the first tables, t
 | 11  | `2c5ac8` | Set up packages/db with Drizzle, migrations and typed config     | `676648`                                         |
 | 12  | `762cf0` | Add identity tables and a dev seed script                        | `2c5ac8`, `5b4554`                               |
 | 13  | `fc638d` | Build a Postgres-backed test harness                             | `2c5ac8`, `5b4554`, `762cf0`                     |
-| 14  | `9378a8` | Add structured logging shared by all services                    | `2c5ac8`                                         |
-| 15  | `16c290` | Decide and set up the local webhook tunnel (with the founder) 🤝 | `0fa82e`                                         |
-| 16  | `c5850d` | Add conversation and run tables                                  | `762cf0`                                         |
-| 17  | `87ce11` | Add model-call, prompt-version and cost tables                   | `c5850d`                                         |
+| 14  | `16c290` | Decide and set up the local webhook tunnel (with the founder) 🤝 | `0fa82e`                                         |
+| 15  | `c5850d` | Add conversation and run tables                                  | `762cf0`                                         |
+| 16  | `87ce11` | Add model-call, prompt-version and cost tables                   | `c5850d`                                         |
+| 17  | `9378a8` | Add structured logging shared by all services                    | `2c5ac8`                                         |
 | 18  | `9869b7` | Build the Postgres job queue                                     | `2c5ac8`, `5b4554`, `9378a8`, `fc638d`           |
 | 19  | `5cbe5b` | Create the agents service worker loop                            | `2c5ac8`, `9869b7`                               |
 | 20  | `76c143` | Create the api service with Hono                                 | `2c5ac8`, `9378a8`                               |
