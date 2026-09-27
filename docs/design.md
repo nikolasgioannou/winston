@@ -238,6 +238,8 @@ Everything that reaches an agent arrives as a user-role message. Real user text 
 - **Busy agent:** new inbound items are **injected at the next step boundary**, after the current tool call returns, so the agent adjusts course mid-task.
 - **New message during the final reply:** replies are sent to Telegram only once complete. If new input arrives before the reply is sent, the unsent draft is **discarded and the turn re-run** with the new input. Once a reply is sent, it stays sent. Tool actions already taken are not undone. The re-run sees them and corrects course.
 - **No streaming or live-editing** of replies in Telegram. Instead, a **typing indicator** (`sendChatAction: typing`, re-sent every ~4 s because it expires after 5 s) runs while the front of house is working on a turn.
+  - **Silent turns get a brief flash, by choice.** The indicator starts the moment a turn starts: most replies come from the first model call, so waiting for a first step would show "typing…" only once the answer is ready, and a delay can't tell silent turns from replies (both take about 2 s). A short "typing…" that ends in nothing reads as natural in a messaging app.
+  - **Telegram can't cancel the indicator.** A sent message clears it at once. After a silent turn, it fades within about 5 s of the last re-send. The turn stops re-sending in a `finally`, so success, silence and errors all stop it. A failed `sendChatAction` is logged and never fails the turn (`apps/agents/src/telegram/typing.ts`).
 - The same steering applies to background agents. For example, a parked browser task receives the "done" signal as an injected item.
 
 ### Telegram inbound

@@ -44,6 +44,7 @@ async function scenario(
     turn: (index?: number) => Promise<string | undefined>;
     sent: Sent[];
     requests: Record<string, unknown>[][];
+    typing: { sends: number; running: boolean };
   }) => Promise<void>,
   options: { rejectMarkup?: boolean } = {},
 ) {
@@ -77,6 +78,21 @@ async function scenario(
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
       },
+      sendChatAction: () => {
+        typing.sends += 1;
+        return Promise.resolve(true);
+      },
+    };
+    // The indicator's timer, held rather than run.
+    const typing = { sends: 0, running: false };
+    const timers = {
+      setInterval: () => {
+        typing.running = true;
+        return 1;
+      },
+      clearInterval: () => {
+        typing.running = false;
+      },
     };
     const requests: Record<string, unknown>[][] = [];
     const say = async (
@@ -99,11 +115,11 @@ async function scenario(
       });
       requests[index] = fake.requests;
       return runFrontTurn(
-        { db: tx, logger, gateway: fake.gateway, telegram },
+        { db: tx, logger, gateway: fake.gateway, telegram, timers },
         user.id,
       );
     };
-    await fn({ tx, userId: user.id, say, turn, sent, requests });
+    await fn({ tx, userId: user.id, say, turn, sent, requests, typing });
   });
 }
 
@@ -191,6 +207,29 @@ describe("runFrontTurn", () => {
         expect(outbound?.telegramMessageIds).toHaveLength(sent.length);
       },
     );
+  });
+
+  test("shows typing while working and stops when the turn ends, however it ends", async () => {
+    for (const [replies, throws] of [
+      [[textReply("Hi.")], false],
+      [[toolCallReply("no_reply", {})], false],
+      [[{ error: { message: "upstream exploded", code: 500 } }], true],
+    ] as const) {
+      await scenario([[...replies]], async ({ say, turn, typing }) => {
+        await say("hi");
+        const error = await turn().catch((e: unknown) => e);
+        expect(error instanceof Error).toBe(throws);
+        expect(typing.sends).toBe(1);
+        expect(typing.running).toBe(false);
+      });
+    }
+  });
+
+  test("no typing when there's nothing to answer", async () => {
+    await scenario([], async ({ turn, typing }) => {
+      expect(await turn()).toBeUndefined();
+      expect(typing.sends).toBe(0);
+    });
   });
 
   test("no_reply ends the turn silently after one call, discarding any text beside it", async () => {

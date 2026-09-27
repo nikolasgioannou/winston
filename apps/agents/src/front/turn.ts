@@ -21,6 +21,7 @@ import { hasToolCall, isStepCount, type ModelMessage } from "ai";
 import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { cacheBreakpoint } from "../model/cache.ts";
 import type { ModelGateway } from "../model/gateway.ts";
+import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "./envelopes.ts";
 import {
   deliverReply,
@@ -49,6 +50,8 @@ export interface FrontTurnDeps {
   logger: Logger;
   gateway: ModelGateway;
   telegram: TelegramSender;
+  /** For tests: the typing indicator's timers. */
+  timers?: Timers;
 }
 
 /** Runs a turn over the user's unconsumed input. Returns the run id, or nothing if there was no input. */
@@ -68,6 +71,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   if (!started) return undefined;
   const { runId, input } = started;
   const logger = deps.logger.child({ runId });
+  // Replies aren't streamed, so "typing…" is the only sign of work (§4).
+  const typing = startTyping(
+    () => telegram.sendChatAction(user.chatId, "typing"),
+    logger,
+    deps.timers,
+  );
 
   const window = await loadWindow(db, userId, input.id);
   const previous = window.map((row) => row.content);
@@ -143,6 +152,8 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   } catch (error) {
     await finishRun(db, runId, "failed", steps);
     throw error;
+  } finally {
+    typing.stop();
   }
 }
 

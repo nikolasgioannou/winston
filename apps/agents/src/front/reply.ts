@@ -13,6 +13,7 @@ export interface TelegramSender {
     text: string,
     options?: { parse_mode?: "HTML" },
   ): Promise<{ message_id: number }>;
+  sendChatAction(chatId: number, action: "typing"): Promise<unknown>;
 }
 
 const description =
