@@ -1,0 +1,24 @@
+name: winston
+
+services:
+  postgres:
+    # Matches the major version on RDS in production.
+    image: postgres:18.6
+    environment:
+      # Local-only credentials; this database is never reachable from outside the machine.
+      POSTGRES_USER: winston
+      POSTGRES_PASSWORD: winston
+      POSTGRES_DB: winston
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker.
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U winston -d winston"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  postgres:

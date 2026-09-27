@@ -7,6 +7,8 @@
     "packages/*"
   ],
   "scripts": {
+    "db:down": "docker compose down",
+    "db:up": "docker compose up --detach --wait postgres",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",

@@ -7,6 +7,9 @@
 #   3. Install the runtimes pinned in mise.toml.
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
+#   6. Check that a Docker engine is reachable (starting Colima if it's installed but
+#      stopped). Docker is a machine-level prerequisite, so this script never installs it.
+#   7. Start the local Postgres and wait until it's healthy.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -67,6 +70,24 @@ else
   doing "installing git hooks"
   mise exec -- bunx lefthook install >/dev/null
   done_ "git hooks installed"
+fi
+
+if docker info >/dev/null 2>&1; then
+  done_ "Docker engine reachable"
+elif command -v colima >/dev/null 2>&1; then
+  doing "starting Colima"
+  colima start >/dev/null 2>&1 || fail "Colima failed to start. Run 'colima start' to see why"
+  done_ "Docker engine reachable"
+else
+  fail "No Docker engine found. Install a Docker-compatible runtime (for example Colima), then re-run ./scripts/setup.sh"
+fi
+
+if [ "$(docker inspect --format '{{.State.Health.Status}}' winston-postgres-1 2>/dev/null)" = "healthy" ]; then
+  done_ "Postgres running"
+else
+  doing "starting Postgres"
+  docker compose up --detach --wait postgres >/dev/null 2>&1 || fail "Postgres failed to start. Run 'docker compose up postgres' to see why"
+  done_ "Postgres running"
 fi
 
 echo "Done."

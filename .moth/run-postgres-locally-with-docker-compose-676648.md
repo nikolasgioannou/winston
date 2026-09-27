@@ -1,28 +1,37 @@
 ---
 id: "676648"
 title: Run Postgres locally with Docker Compose
-status: todo
+status: done
 priority: none
 labels:
   - db
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.331Z
-updated_at: 2026-09-27T05:28:45.362Z
+updated_at: 2026-09-27T17:24:36.409Z
 blocked_by:
   - "0fa82e"
 ---
 
-Local development runs Postgres in Docker (docs/design.md §8a). Production will use RDS, so match its major version.
+Local development runs Postgres in Docker (docs/design.md §8a). Production uses RDS, so match its major version: PostgreSQL 18 (RDS's latest minor is 18.6, as of August 2026).
+
+A Docker-compatible runtime is a **machine-level prerequisite**, not a repo dependency. The founder's machine runs Colima, installed through the global mise config in dotfiles. `scripts/setup.sh` checks that a Docker engine is reachable, starts Colima if it's installed but stopped, and otherwise stops with a helpful message. It never installs a runtime.
 
 Add a `docker-compose.yml` at the repo root with a `postgres` service:
-- The same major version we'll run on RDS.
-- A named volume for data.
-- A healthcheck.
+- `postgres:18.6`.
+- A named volume at `/var/lib/postgresql`. PostgreSQL 18 images moved their data directory, and mounting the old `/var/lib/postgresql/data` path is a known gotcha.
+- A `pg_isready` healthcheck.
 - A port binding to localhost only.
+- Local-only credentials.
 
-Create two databases on first start: `winston` for development and `winston_test` for the test harness, so tests never touch dev data. An init script in `docker/postgres/` is fine.
+Add root scripts `db:up` (start and wait until healthy) and `db:down`, and extend `setup.sh` with the Docker check and starting Postgres.
 
-Add root scripts `db:up` / `db:down` (and something to wipe the volume when needed), and document them in the README. Put the connection strings in `.env.example`, which is committed and lists every variable with a comment. The real `.env.local` is gitignored.
+Deliberately left to the tickets that first need them:
+- The `winston_test` database (the test-harness ticket).
+- `.env.example` and connection-string config (the config and Drizzle tickets).
+- Postgres extensions.
 
-Quick research note: check which Postgres extensions we'll want later (full-text search is built in; `pgcrypto` may be handy) and that the chosen image supports them. Verify `psql` can connect to both databases after `bun run db:up`.
+Verify:
+- `psql` connects and reports 18.6.
+- Data survives `db:down` and `db:up`.
+- `setup.sh` handles each case correctly: everything running, Postgres stopped, Colima stopped, and no Docker at all.
