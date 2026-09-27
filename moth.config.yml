@@ -1,0 +1,21 @@
+# moth configuration.
+#
+# tickets   Directory the tickets live in, relative to this file.
+# statuses  Each status belongs to one of six fixed categories:
+#           backlog, unstarted, started, completed, canceled, duplicate.
+#           Add your own statuses here; the categories cannot change.
+
+tickets: .moth
+statuses:
+  - name: backlog
+    category: backlog
+  - name: todo
+    category: unstarted
+  - name: in-progress
+    category: started
+  - name: done
+    category: completed
+  - name: canceled
+    category: canceled
+  - name: duplicate
+    category: duplicate

@@ -366,6 +366,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - Tickets are tracked in the repo with **Moth** (`.moth/`, schema-checked Markdown, statuses and `blocked_by` dependencies).
 - **One ticket per commit.** The whole product is broken into tickets before building starts, detailed enough to execute fairly autonomously.
 - **No standard ticket template.** Each ticket is written on its own, with whatever that piece of work needs.
+- **The sequence lives in [plan.md](plan.md)**, since Moth doesn't track order. It covers the ordered list of all tickets by milestone, how to work through them, and which ones are collaborative.
 
 ## 8d. Build order
 Thin vertical slices. Each milestone adds capabilities to something you can already talk to. **Production comes online at M4**, so every commit after that ships to the real @RunWinstonBot and gets used daily.
