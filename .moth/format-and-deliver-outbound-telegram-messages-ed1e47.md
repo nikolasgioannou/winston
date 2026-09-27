@@ -1,13 +1,13 @@
 ---
 id: "ed1e47"
 title: Format and deliver outbound Telegram messages
-status: todo
+status: done
 priority: none
 labels:
   - m1
   - telegram
 created_at: 2026-09-27T05:30:54.857Z
-updated_at: 2026-09-27T05:30:54.887Z
+updated_at: 2026-09-27T21:55:35.322Z
 blocked_by:
   - "cb9674"
 ---
@@ -23,3 +23,11 @@ Implement:
 - Recording all resulting Telegram message ids on the `outbound_messages` row.
 
 This converter is pure and a great fit for thorough unit tests: each construct, nested formatting, escaping edge cases, emoji near the split boundary, and very long code blocks.
+
+## Outcome
+
+Built as described in docs/design.md §4 ("Telegram formatting", Implementation).
+- **Parser:** `marked` 18 does the parsing (a hand-written Markdown parser isn't worth the edge cases), and a small renderer targets Telegram's HTML subset.
+- **Splitting:** done at the block level, so no split can land inside a tag.
+- **Prompt:** the front-of-house prompt now allows the subset (it previously said plain text only).
+- **Plain-text detour:** we briefly considered plain text only (no Markdown) with the user, and returned to the original plan.

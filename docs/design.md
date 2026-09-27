@@ -252,8 +252,14 @@ Everything that reaches an agent arrives as a user-role message. Real user text 
 
 ### Telegram formatting
 
-- Agents write **a small Markdown subset** (bold, italic, links, inline code, lists). The backend converts it to Telegram's **HTML parse mode**, which is more forgiving than MarkdownV2's escaping rules. If Telegram rejects the markup, the message is re-sent as plain text.
-- Messages over Telegram's **4,096-character limit** are split at paragraph boundaries into consecutive messages. Captions on attachments are capped at 1,024 characters, with overflow sent as a follow-up message.
+- Agents write **a small Markdown subset** (bold, italic, strikethrough, links, inline code, code blocks, lists). The backend converts it to Telegram's **HTML parse mode**, which is more forgiving than MarkdownV2's escaping rules. If Telegram rejects the markup, the message is re-sent as plain text.
+- Messages over Telegram's **4,096-character limit** are split into consecutive messages. Captions on attachments are capped at 1,024 characters, with overflow sent as a follow-up message.
+- **Implementation** (`apps/agents/src/telegram/format.ts`, checked against Bot API 10.3):
+  - **Parsing:** `marked` (GFM) parses the Markdown, and each token renders to Telegram HTML, which supports only b/i/u/s, spoilers, links, code/pre and blockquote. All text is escaped (`&`, `<`, `>`, plus `"` in attributes), since an unsupported tag fails the whole message.
+  - **Rendering:** lists become `•` / `1.` lines (Telegram has no list tags), headings become bold lines, and nested blockquotes flatten. Links keep only `http(s):` and `mailto:` targets. A code block's language is kept only if it's a plain identifier.
+  - **Degrading:** tables and raw HTML are shown as written, escaped. Code inside bold or a link becomes plain text, because Telegram forbids that nesting.
+  - **Splitting:** the limit counts visible characters after parsing, in UTF-16 code units. Whole blocks are packed into messages. A block too long on its own is split: a code block by lines into several code blocks, anything else as plain text at paragraph, line and space breaks, never inside an emoji. So a split never lands inside a tag.
+  - **Fallback and record:** a part rejected with "can't parse entities" is re-sent as its plain visible text and logged. `outbound_messages` keeps the model's original text and every Telegram message id.
 - Private chats only. The bot ignores groups.
 
 ### Media

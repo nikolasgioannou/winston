@@ -125,6 +125,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     if (outcome.kind === "reply")
       await deliverReply({
         db,
+        logger,
         telegram,
         userId,
         runId,

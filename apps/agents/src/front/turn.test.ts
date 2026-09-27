@@ -24,7 +24,17 @@ const logger = createLogger("agents-test", {
 
 let telegramIds = 5_000;
 
-/** A linked user, a scripted model and a fake Telegram, all rolled back afterwards. */
+interface Sent {
+  chatId: number;
+  text: string;
+  parseMode?: string;
+}
+
+/**
+ * A linked user, a scripted model and a fake Telegram, all rolled back
+ * afterwards. With `rejectMarkup`, the fake rejects HTML like Telegram does
+ * for markup it can't parse.
+ */
 async function scenario(
   replies: Record<string, unknown>[][],
   fn: (context: {
@@ -32,19 +42,38 @@ async function scenario(
     userId: string;
     say: (text: string, extra?: Partial<UserMessagePayload>) => Promise<number>;
     turn: (index?: number) => Promise<string | undefined>;
-    sent: { chatId: number; text: string }[];
+    sent: Sent[];
     requests: Record<string, unknown>[][];
   }) => Promise<void>,
+  options: { rejectMarkup?: boolean } = {},
 ) {
   await inRollback(db, async (tx) => {
     const user = await insertUser(tx, { timezone: "America/New_York" });
     await tx
       .insert(telegramLinks)
       .values({ userId: user.id, chatId: 42, telegramUserId: 42 });
-    const sent: { chatId: number; text: string }[] = [];
+    const sent: Sent[] = [];
     const telegram = {
-      sendMessage: (chatId: number, text: string) => {
-        sent.push({ chatId, text });
+      sendMessage: (
+        chatId: number,
+        text: string,
+        sendOptions?: { parse_mode?: "HTML" },
+      ) => {
+        if (options.rejectMarkup && sendOptions?.parse_mode)
+          return Promise.reject(
+            Object.assign(new Error("Call to 'sendMessage' failed!"), {
+              error_code: 400,
+              description:
+                "Bad Request: can't parse entities: Unsupported start tag",
+            }),
+          );
+        sent.push({
+          chatId,
+          text,
+          ...(sendOptions?.parse_mode
+            ? { parseMode: sendOptions.parse_mode }
+            : {}),
+        });
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
       },
@@ -87,7 +116,9 @@ describe("runFrontTurn", () => {
         const runId = await turn();
         if (!runId) throw new Error("expected a run");
 
-        expect(sent).toEqual([{ chatId: 42, text: "Morning." }]);
+        expect(sent).toEqual([
+          { chatId: 42, text: "Morning.", parseMode: "HTML" },
+        ]);
         const [outbound] = await tx
           .select()
           .from(outboundMessages)
@@ -99,6 +130,65 @@ describe("runFrontTurn", () => {
         expect(
           await tx.select().from(modelCalls).where(eq(modelCalls.runId, runId)),
         ).toHaveLength(1);
+      },
+    );
+  });
+
+  test("Markdown reaches Telegram as HTML, and the outbound row keeps what the model wrote", async () => {
+    await scenario(
+      [[textReply("**Dana** moved to 4. Notes: https://example.com")]],
+      async ({ tx, userId, say, turn, sent }) => {
+        await say("what changed?");
+        await turn();
+        expect(sent).toEqual([
+          {
+            chatId: 42,
+            text: '<b>Dana</b> moved to 4. Notes: <a href="https://example.com">https://example.com</a>',
+            parseMode: "HTML",
+          },
+        ]);
+        const [outbound] = await tx
+          .select()
+          .from(outboundMessages)
+          .where(eq(outboundMessages.userId, userId));
+        expect(outbound?.text).toBe(
+          "**Dana** moved to 4. Notes: https://example.com",
+        );
+      },
+    );
+  });
+
+  test("markup Telegram rejects is re-sent as plain text", async () => {
+    await scenario(
+      [[textReply("**Dana** moved to 4.")]],
+      async ({ say, turn, sent }) => {
+        await say("what changed?");
+        await turn();
+        expect(sent).toEqual([{ chatId: 42, text: "Dana moved to 4." }]);
+      },
+      { rejectMarkup: true },
+    );
+  });
+
+  test("a long reply goes out as several messages, recorded on one row", async () => {
+    const long = Array.from(
+      { length: 3 },
+      (_, i) => `Paragraph ${String(i + 1)}. ${"word ".repeat(500).trim()}`,
+    ).join("\n\n");
+    await scenario(
+      [[textReply(long)]],
+      async ({ tx, userId, say, turn, sent }) => {
+        await say("tell me everything");
+        await turn();
+        expect(sent.length).toBeGreaterThan(1);
+        for (const message of sent)
+          expect(message.text.length).toBeLessThanOrEqual(4096);
+        const [outbound] = await tx
+          .select()
+          .from(outboundMessages)
+          .where(eq(outboundMessages.userId, userId));
+        expect(outbound?.text).toBe(long);
+        expect(outbound?.telegramMessageIds).toHaveLength(sent.length);
       },
     );
   });
@@ -140,7 +230,9 @@ describe("runFrontTurn", () => {
         await say("capital of Portugal?");
         const runId = await turn();
         if (!runId) throw new Error("expected a run");
-        expect(sent).toEqual([{ chatId: 42, text: "Lisbon." }]);
+        expect(sent).toEqual([
+          { chatId: 42, text: "Lisbon.", parseMode: "HTML" },
+        ]);
         const rows = await tx
           .select()
           .from(runMessages)
