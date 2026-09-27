@@ -1,0 +1,6 @@
+{
+  // Type-checks the repo-root TypeScript files (tool configs). Packages have
+  // their own tsconfig.json; this one deliberately includes only the root.
+  "extends": "./tsconfig.base.json",
+  "include": ["*.ts"]
+}

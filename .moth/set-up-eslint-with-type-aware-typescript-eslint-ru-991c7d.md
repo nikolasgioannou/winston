@@ -1,25 +1,27 @@
 ---
 id: "991c7d"
 title: Set up ESLint with type-aware typescript-eslint rules
-status: todo
+status: done
 priority: none
 labels:
   - m0
   - tooling
 created_at: 2026-09-27T05:28:45.162Z
-updated_at: 2026-09-27T05:28:45.209Z
+updated_at: 2026-09-27T16:37:29.652Z
 blocked_by:
   - "154525"
   - "746193"
 ---
 
-ESLint is the correctness linter (docs/design.md §8b). It was chosen over Biome for its plugin ecosystem, because React hooks, TanStack and Tailwind plugins arrive in later tickets.
+ESLint is the correctness linter (docs/design.md §8b). It was chosen over Biome for its plugin ecosystem, since React hooks, TanStack and Tailwind plugins arrive in later tickets.
 
-Do thorough research before writing config: ESLint's flat config (`eslint.config.js`), `typescript-eslint`'s type-checked presets (`strictTypeChecked`, `stylisticTypeChecked`) and `projectService` for monorepos, performance implications of type-aware linting (it matters because lefthook will lint staged files on every commit), and how `eslint-config-prettier` turns off rules that conflict with Prettier. Understand how per-package overrides will work once `apps/web` adds React-specific plugins, and structure the config so those drop in without rewriting it.
+Research before writing config: ESLint's flat config and TypeScript config files, `typescript-eslint`'s type-checked presets and `projectService`, how files outside any tsconfig are handled, the performance of type-aware linting (lefthook will lint staged files on every commit), and how `eslint-config-prettier` turns off rules that overlap with Prettier. The config should be structured so later per-area config objects (React/TanStack for `apps/web`, Tailwind) can be appended without rewriting it, but don't add those plugins now.
 
-Rules that matter for this codebase:
-- `@typescript-eslint/no-explicit-any` as an error. No `any` is part of the type-safety invariant.
-- `no-floating-promises` and `no-misused-promises`. The agent loop and job workers are async-heavy, and a dropped promise there is a silent bug.
-- `switch-exhaustiveness-check`, because the state machines in §17 are unions.
+Decisions made:
+- ESLint 10 with `eslint.config.ts`, loaded through `jiti`.
+- `@eslint/js` recommended + `strictTypeChecked` + `stylisticTypeChecked`. `typescript-eslint` is pinned exactly, because its strict preset isn't semver-stable. `switch-exhaustiveness-check` is left out until the first switch over a union exists.
+- `projectService` with `tsconfigRootDir`. A root `tsconfig.json` covers the repo-root `.ts` config files, so they're type-checked (the root `typecheck` script now runs `tsc` first) and linted with types, with no `allowDefaultProject` workaround.
+- `eslint-config-prettier/flat` last.
+- `lint` and `lint:fix` scripts with `--max-warnings 0`.
 
-Add a root `lint` script (and `lint:fix`). The skeleton must lint clean. Add a deliberately bad file locally to confirm each of the rules above fires, then delete it.
+The rules that matter most for this codebase, all confirmed firing on a deliberately bad file (deleted afterwards): `no-explicit-any`, `no-floating-promises` and `no-misused-promises`. The repo lints clean. `eslint-config-prettier`'s checker reports no conflicts.

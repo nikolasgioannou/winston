@@ -9,12 +9,19 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "bun run --filter '*' --if-present typecheck"
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "typecheck": "tsc && bun run --filter '*' --if-present typecheck"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/bun": "1.4.2",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "jiti": "2.7.0",
     "prettier": "3.9.9",
     "prettier-plugin-packagejson": "3.0.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1"
   }
 }
