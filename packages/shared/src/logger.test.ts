@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createLogger } from "./logger.ts";
+import { createLogger, logConfigSchema } from "./logger.ts";
 
 function capture() {
   const lines: Record<string, unknown>[] = [];
@@ -78,5 +78,21 @@ describe("createLogger", () => {
     logger.info("hidden");
     logger.warn("shown");
     expect(lines.map((line) => line.msg)).toEqual(["shown"]);
+  });
+});
+
+describe("logConfigSchema", () => {
+  test("defaults to info, with pretty output left to the terminal check", () => {
+    expect(logConfigSchema.parse({})).toEqual({ LOG_LEVEL: "info" });
+  });
+
+  test("parses LOG_PRETTY from an env string", () => {
+    expect(logConfigSchema.parse({ LOG_PRETTY: "true" }).LOG_PRETTY).toBe(true);
+    expect(logConfigSchema.parse({ LOG_PRETTY: "false" }).LOG_PRETTY).toBe(
+      false,
+    );
+    expect(logConfigSchema.safeParse({ LOG_PRETTY: "maybe" }).success).toBe(
+      false,
+    );
   });
 });

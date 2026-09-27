@@ -8,7 +8,10 @@ import { loadAgentsConfig } from "./config.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
-const logger = createLogger("agents", { level: config.LOG_LEVEL });
+const logger = createLogger("agents", {
+  level: config.LOG_LEVEL,
+  pretty: config.LOG_PRETTY,
+});
 const db = createDb(config.DATABASE_URL);
 
 // Job handlers are registered here as the tickets that need them arrive.

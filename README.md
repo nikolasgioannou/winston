@@ -10,7 +10,7 @@ You need [mise](https://mise.jdx.dev/getting-started.html). Then run:
 ./scripts/setup.sh
 ```
 
-It's safe to re-run at any time, and a re-run doubles as a health check.
+It's safe to re-run at any time, and a re-run doubles as a health check. Then start everything with `bun dev` ([local development](docs/local-dev.md)).
 
 Every commit runs the same checks as CI (formatting, linting, type checks and tests), and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
 
@@ -23,3 +23,4 @@ bun run check
 - [Product](docs/product.md): what Winston is and why
 - [Design](docs/design.md): how it works, decisions and specifications
 - [Plan](docs/plan.md): the build order; tickets live in `.moth/`
+- [Local development](docs/local-dev.md): running Winston on your machine

@@ -1,13 +1,13 @@
 ---
 id: "6bac51"
 title: Add a single `bun dev` command for local development
-status: todo
+status: done
 priority: none
 labels:
   - m1
   - tooling
 created_at: 2026-09-27T05:30:54.358Z
-updated_at: 2026-09-27T05:30:54.434Z
+updated_at: 2026-09-27T19:08:22.309Z
 blocked_by:
   - "16c290"
   - "5cbe5b"
@@ -26,3 +26,7 @@ Local development should be one command (docs/design.md §8a). `bun dev` should:
 Research the options for running and prefixing several watched processes under Bun: Bun's own `--watch` per service combined with a small orchestrator script, vs `concurrently` or similar. Pick the simplest thing that gives clean shutdown on Ctrl-C, with no orphaned processes or tunnels left behind.
 
 Document it in `docs/local-dev.md`, including first-time setup: env file, seed, tunnel credentials, dev bot token. Done when `bun dev` from a fresh checkout (with `.env.local` filled in) brings everything up, and Ctrl-C brings everything down.
+
+## Outcome
+
+`scripts/dev.ts`, documented in docs/local-dev.md and docs/design.md §8a. Pretty logs through the pipe needed a new `LOG_PRETTY` setting, so `LOG_LEVEL` and `LOG_PRETTY` moved into a shared `logConfigSchema` in `@winston/shared/logger`. The dev bot token isn't documented yet because nothing reads it; the Telegram webhook ticket adds it to first-time setup.

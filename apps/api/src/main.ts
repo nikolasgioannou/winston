@@ -5,7 +5,10 @@ import { createApp } from "./app.ts";
 import { loadApiConfig } from "./config.ts";
 
 const config = loadApiConfig();
-const logger = createLogger("api", { level: config.LOG_LEVEL });
+const logger = createLogger("api", {
+  level: config.LOG_LEVEL,
+  pretty: config.LOG_PRETTY,
+});
 const db = createDb(config.DATABASE_URL);
 const server = Bun.serve({
   hostname: config.API_HOST,

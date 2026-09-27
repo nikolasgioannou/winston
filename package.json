@@ -13,6 +13,7 @@
     "db:migrate": "bun run --filter @winston/db db:migrate",
     "db:seed": "bun run --filter @winston/db db:seed",
     "db:up": "docker compose up --detach --wait postgres",
+    "dev": "bun scripts/dev.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
