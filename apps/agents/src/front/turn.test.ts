@@ -11,10 +11,10 @@ import {
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import type { UserMessagePayload } from "@winston/domain/inbound";
 import { createLogger } from "@winston/shared/logger";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
-import { emptyReplyNudge, runFrontTurn } from "./turn.ts";
+import { draftDroppedNote, emptyReplyNudge, runFrontTurn } from "./turn.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -46,7 +46,14 @@ async function scenario(
     requests: Record<string, unknown>[][];
     typing: { sends: number; running: boolean };
   }) => Promise<void>,
-  options: { rejectMarkup?: boolean } = {},
+  options: {
+    rejectMarkup?: boolean;
+    /** Runs while model request `index` of a turn is in flight. */
+    onRequest?: (
+      index: number,
+      say: (text: string) => Promise<number>,
+    ) => Promise<void>;
+  } = {},
 ) {
   await inRollback(db, async (tx) => {
     const user = await insertUser(tx, { timezone: "America/New_York" });
@@ -112,6 +119,12 @@ async function scenario(
       const fake = fakeGateway({
         replies: replies[index] ?? [textReply("")],
         sink: dbModelCallSink(tx, logger),
+        ...(options.onRequest
+          ? {
+              onRequest: (request: number) =>
+                options.onRequest?.(request, say) ?? Promise.resolve(),
+            }
+          : {}),
       });
       requests[index] = fake.requests;
       return runFrontTurn(
@@ -230,6 +243,75 @@ describe("runFrontTurn", () => {
       expect(await turn()).toBeUndefined();
       expect(typing.sends).toBe(0);
     });
+  });
+
+  test("input arriving while a reply is written drops the draft; one reply covers everything", async () => {
+    await scenario(
+      [[textReply("Booked for 7."), textReply("Booked for 8 instead.")]],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        await say("book dinner at 7");
+        const runId = await turn();
+        if (!runId) throw new Error("expected a run");
+        expect(sent.map((message) => message.text)).toEqual([
+          "Booked for 8 instead.",
+        ]);
+        const second = JSON.stringify(requests[0]?.[1]?.messages);
+        expect(second).toContain("wait, make it 8");
+        expect(second).toContain(draftDroppedNote);
+        // The new input was consumed by this turn.
+        const items = await tx
+          .select()
+          .from(inboundItems)
+          .where(
+            and(
+              eq(inboundItems.userId, userId),
+              isNull(inboundItems.consumedByRunId),
+            ),
+          );
+        expect(items).toEqual([]);
+      },
+      {
+        onRequest: async (index, say) => {
+          if (index === 0) await say("wait, make it 8");
+        },
+      },
+    );
+  });
+
+  test("input arriving mid-turn is steered in at the next model call", async () => {
+    await scenario(
+      [[textReply(""), textReply("Got both.")]],
+      async ({ say, turn, sent, requests }) => {
+        await say("first");
+        await turn();
+        expect(sent.map((message) => message.text)).toEqual(["Got both."]);
+        const second = JSON.stringify(requests[0]?.[1]?.messages);
+        expect(second).toContain("<text>second</text>");
+        // Not a dropped draft: no note.
+        expect(second).not.toContain(draftDroppedNote);
+      },
+      {
+        onRequest: async (index, say) => {
+          if (index === 0) await say("second");
+        },
+      },
+    );
+  });
+
+  test("a reply already sent stays sent; later input waits for the next turn", async () => {
+    await scenario(
+      [[textReply("Booked for 7.")], [textReply("Changed to 8.")]],
+      async ({ say, turn, sent }) => {
+        await say("book dinner at 7");
+        await turn(0);
+        await say("make it 8");
+        await turn(1);
+        expect(sent.map((message) => message.text)).toEqual([
+          "Booked for 7.",
+          "Changed to 8.",
+        ]);
+      },
+    );
   });
 
   test("no_reply ends the turn silently after one call, discarding any text beside it", async () => {

@@ -130,9 +130,8 @@ describe("front_turn serialization", () => {
     await settle();
     await workers.stop();
     expect(workers.fake.concurrency.max).toBe(1);
-    const after = await state(userId);
-    expect(after.unconsumed).toBe(0);
-    expect(after.turns).toBe(2);
+    // The mid-turn message is steered into the running turn.
+    expect(await state(userId)).toEqual({ turns: 1, unconsumed: 0 });
   });
 
   test("a message just after a turn completes gets a new turn", async () => {

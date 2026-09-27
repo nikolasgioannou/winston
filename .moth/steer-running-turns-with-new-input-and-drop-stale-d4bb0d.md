@@ -1,13 +1,13 @@
 ---
 id: "d4bb0d"
 title: Steer running turns with new input and drop stale replies
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m1
 created_at: 2026-09-27T05:30:54.993Z
-updated_at: 2026-09-27T05:30:55.039Z
+updated_at: 2026-09-27T22:18:07.648Z
 blocked_by:
   - "ed1e47"
   - "eeb50f"
@@ -28,3 +28,11 @@ Tests with the fake model:
 - A stale draft is discarded and the rewritten reply is sent.
 - A reply already sent before the input arrived isn't retracted.
 - Late input after the final step produces a new turn.
+
+## Outcome
+
+Built as described in docs/design.md §1 ("Steering", "Dropping stale replies") and §4.
+- **Own loop:** the front of house now runs its own step loop (one `generate` call per step) instead of `prepareStep` injection. Messages that `prepareStep` returns apply only to that step, so injected input would vanish from later steps. The loop also makes the draft check and the empty-reply nudge plain code.
+- **Dropped drafts:** a dropped draft stays in the append-only transcript. The injected input is led by a one-line note so the model knows the user never saw it, and the prompt explains that.
+- **Late input:** input arriving after delivery is handled by the serialization sweep (a follow-up turn). A mid-turn message in the racing test is now steered into the running turn.
+- **Tests:** a fake-model `onRequest` hook makes input arrive mid-call. A mutation check confirmed that removing the draft check fails the dropped-draft test.

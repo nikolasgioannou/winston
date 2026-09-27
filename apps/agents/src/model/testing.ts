@@ -38,6 +38,8 @@ export function fakeGateway(
     sink?: (call: ModelCall) => Promise<void>;
     /** How long each fake response takes. */
     delayMs?: number;
+    /** Runs while request `index` (from 0) is in flight, e.g. to make input arrive mid-call. */
+    onRequest?: (index: number) => Promise<void>;
   } = {},
 ) {
   const replies = options.replies ?? [{}];
@@ -48,6 +50,7 @@ export function fakeGateway(
   const fetch = (async (_url: unknown, init?: RequestInit) => {
     // The provider always sends a JSON string body.
     requests.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+    await options.onRequest?.(requests.length - 1);
     concurrency.current += 1;
     concurrency.max = Math.max(concurrency.max, concurrency.current);
     await new Promise((resolve) => setTimeout(resolve, options.delayMs ?? 0));
