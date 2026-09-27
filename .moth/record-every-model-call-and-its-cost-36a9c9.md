@@ -1,14 +1,14 @@
 ---
 id: "36a9c9"
 title: Record every model call and its cost
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - db
   - m1
 created_at: 2026-09-27T05:30:54.691Z
-updated_at: 2026-09-27T05:30:54.737Z
+updated_at: 2026-09-27T20:38:09.339Z
 blocked_by:
   - "0bfb79"
   - "87ce11"
@@ -22,3 +22,13 @@ Needs:
 - Logging failures (the DB is down) must not crash an otherwise successful turn. Log loudly and continue. Decide whether to buffer and retry.
 
 Tests: cost computation for each model with cache reads and writes, and that a gateway call with a fake transport writes exactly one row of each kind.
+
+## Outcome
+
+Built as described in docs/design.md §12 ("How recording works").
+- **Can't be forgotten:** the gateway now exposes only `generate({ profile, run, … })`, which records every step through a sink before the caller's `onStepEnd`.
+- **Sink:** `dbModelCallSink` writes `model_calls` plus `cost_ledger` in one transaction and never throws. It logs the full record on failure. I decided against a retry buffer, since the log line keeps the data.
+- **Cost:** OpenRouter's reported cost is preferred. `pricing.ts` is the fallback and flags drift above 5%.
+- **Pricing table:** it only holds the 5-minute cache-write rate, the one TTL in use. The 1-hour rate joins when something uses 1-hour caching.
+- **Verification:** the price table was checked against real smoke-test charges, and those cases are the pricing tests.
+- **Test helpers:** `fakeGateway` (a scripted fake OpenRouter transport) and `testRun` live in `apps/agents/src/model/testing.ts` for the turn tickets.

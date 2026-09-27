@@ -1,46 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { generateText, type ModelMessage } from "ai";
+import { isStepCount, tool, type ModelMessage } from "ai";
+import { z } from "zod";
 import { cacheBreakpoint } from "./cache.ts";
-import { createModelGateway } from "./gateway.ts";
-import { recordStep } from "./record.ts";
-
-/** A fake OpenRouter: records request bodies and answers with `reply`. */
-function fakeOpenRouter(reply: Record<string, unknown> = {}) {
-  const requests: Record<string, unknown>[] = [];
-  const fetch = (async (_url: unknown, init?: RequestInit) => {
-    // The provider always sends a JSON string body.
-    requests.push(JSON.parse(init?.body as string) as Record<string, unknown>);
-    await Promise.resolve();
-    return Response.json({
-      id: "gen-1",
-      model: "anthropic/claude-sonnet-5",
-      provider: "Anthropic",
-      choices: [
-        {
-          index: 0,
-          message: { role: "assistant", content: "Done." },
-          finish_reason: "stop",
-        },
-      ],
-      usage: {
-        prompt_tokens: 1200,
-        completion_tokens: 40,
-        total_tokens: 1240,
-        prompt_tokens_details: { cached_tokens: 1000, cache_write_tokens: 150 },
-        completion_tokens_details: { reasoning_tokens: 12 },
-        cost: 0.00123,
-      },
-      ...reply,
-    });
-  }) as typeof globalThis.fetch;
-  return { requests, gateway: createModelGateway({ apiKey: "test", fetch }) };
-}
+import { fakeGateway, testRun } from "./testing.ts";
 
 describe("model gateway", () => {
   test("pins Anthropic with no fallbacks, sends the profile's effort, and asks for usage", async () => {
-    const { requests, gateway } = fakeOpenRouter();
-    await generateText({
-      model: gateway.model("background"),
+    const { gateway, requests } = fakeGateway();
+    await gateway.generate({
+      profile: "background",
+      run: testRun(),
       prompt: "hi",
     });
     expect(requests[0]).toMatchObject({
@@ -49,7 +18,7 @@ describe("model gateway", () => {
       reasoning: { effort: "high" },
       usage: { include: true },
     });
-    await generateText({ model: gateway.model("front"), prompt: "hi" });
+    await gateway.generate({ profile: "front", run: testRun(), prompt: "hi" });
     expect(requests[1]).toMatchObject({
       model: "anthropic/claude-sonnet-5",
       reasoning: { effort: "low" },
@@ -57,7 +26,7 @@ describe("model gateway", () => {
   });
 
   test("cache breakpoints reach the request", async () => {
-    const { requests, gateway } = fakeOpenRouter();
+    const { gateway, requests } = fakeGateway();
     const messages: ModelMessage[] = [
       cacheBreakpoint({
         role: "user",
@@ -65,8 +34,9 @@ describe("model gateway", () => {
       }),
       { role: "user", content: "now" },
     ];
-    await generateText({
-      model: gateway.model("front"),
+    await gateway.generate({
+      profile: "front",
+      run: testRun(),
       instructions: cacheBreakpoint({
         role: "system",
         content: "You are Winston.",
@@ -92,35 +62,56 @@ describe("model gateway", () => {
   });
 
   test("rejects sampling settings and forced tool choice before sending", async () => {
-    const { requests, gateway } = fakeOpenRouter();
-    const model = gateway.model("front");
+    const { gateway, requests } = fakeGateway();
+    const base = { profile: "front" as const, run: testRun(), prompt: "hi" };
     for (const settings of [{ temperature: 0.2 }, { topP: 0.9 }, { topK: 5 }]) {
-      const error = await generateText({
-        model,
-        prompt: "hi",
-        ...settings,
-      }).catch((e: unknown) => e);
+      const error = await gateway
+        .generate({ ...base, ...settings })
+        .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(Error);
     }
-    const forced = await generateText({
-      model,
-      prompt: "hi",
-      toolChoice: "required",
-    }).catch((e: unknown) => e);
+    const forced = await gateway
+      .generate({ ...base, toolChoice: "required" })
+      .catch((e: unknown) => e);
     expect(forced).toBeInstanceOf(Error);
     expect(requests).toEqual([]);
   });
 });
 
-describe("recordStep", () => {
-  test("normalizes usage, cost, provider and latency", async () => {
-    const { gateway } = fakeOpenRouter();
-    const result = await generateText({
-      model: gateway.model("front"),
-      prompt: "hi",
+describe("recording", () => {
+  test("every step is recorded with the run, step number and context range, before the caller's onStepEnd", async () => {
+    const order: string[] = [];
+    let stored = 10;
+    const { gateway } = fakeGateway({
+      sink: (call) => {
+        order.push(
+          `record ${String(call.step)} (context to ${String(call.contextToMessageId)})`,
+        );
+        return Promise.resolve();
+      },
     });
-    const record = recordStep(result.steps[0] ?? result.finalStep);
-    expect(record).toMatchObject({
+    await gateway.generate({
+      profile: "front",
+      run: testRun({
+        contextRange: () => ({ fromMessageId: 1, toMessageId: stored }),
+      }),
+      prompt: "hi",
+      onStepEnd: () => {
+        stored += 2;
+        order.push("caller stores the step");
+      },
+    });
+    expect(order).toEqual([
+      "record 0 (context to 10)",
+      "caller stores the step",
+    ]);
+  });
+
+  test("records the call's usage, cost, provider and stop reason", async () => {
+    const { gateway, calls } = fakeGateway();
+    await gateway.generate({ profile: "front", run: testRun(), prompt: "hi" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
       model: "anthropic/claude-sonnet-5",
       provider: "Anthropic",
       inputTokens: 1200,
@@ -130,24 +121,74 @@ describe("recordStep", () => {
       reasoningTokens: 12,
       costUsd: 0.00123,
       stopReason: "stop",
+      profile: "front",
+      step: 0,
     });
-    expect(record.latencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test("a tool loop records one call per step", async () => {
+    let lookups = 0;
+    const { gateway, calls } = fakeGateway({
+      replies: [
+        {
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: "",
+                tool_calls: [
+                  {
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "lookup", arguments: "{}" },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+        {},
+      ],
+    });
+    await gateway.generate({
+      profile: "front",
+      run: testRun(),
+      prompt: "hi",
+      stopWhen: isStepCount(5),
+      tools: {
+        lookup: tool({
+          inputSchema: z.object({}),
+          execute: () => {
+            lookups += 1;
+            return Promise.resolve("found");
+          },
+        }),
+      },
+    });
+    expect(lookups).toBe(1);
+    expect(calls.map((call) => [call.step, call.stopReason])).toEqual([
+      [0, "tool-calls"],
+      [1, "stop"],
+    ]);
   });
 
   test("reports a refusal as such", async () => {
-    const { gateway } = fakeOpenRouter({
-      choices: [
+    const { gateway, calls } = fakeGateway({
+      replies: [
         {
-          index: 0,
-          message: { role: "assistant", content: "" },
-          finish_reason: "refusal",
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: "" },
+              finish_reason: "refusal",
+            },
+          ],
         },
       ],
     });
-    const result = await generateText({
-      model: gateway.model("front"),
-      prompt: "hi",
-    });
-    expect(recordStep(result.finalStep).stopReason).toBe("refusal");
+    await gateway.generate({ profile: "front", run: testRun(), prompt: "hi" });
+    expect(calls[0]?.stopReason).toBe("refusal");
   });
 });

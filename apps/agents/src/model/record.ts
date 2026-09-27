@@ -25,7 +25,9 @@ const openrouterMetadata = z.object({
   usage: z.object({ cost: z.number().optional() }).optional(),
 });
 
-export function recordStep(step: StepResult<ToolSet>): ModelCallRecord {
+export function recordStep<Tools extends ToolSet>(
+  step: StepResult<Tools>,
+): ModelCallRecord {
   const { usage } = step;
   const metadata = openrouterMetadata.safeParse(
     step.providerMetadata?.openrouter,
@@ -46,7 +48,7 @@ export function recordStep(step: StepResult<ToolSet>): ModelCallRecord {
 
 // Anthropic's `refusal` isn't one of the AI SDK's finish reasons, so it
 // arrives as `other` with the raw reason alongside.
-function stopReason(step: StepResult<ToolSet>) {
+function stopReason<Tools extends ToolSet>(step: StepResult<Tools>) {
   if (step.rawFinishReason === "refusal") return "refusal";
   if (step.finishReason === "other") return step.rawFinishReason ?? "other";
   return step.finishReason;

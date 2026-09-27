@@ -16,7 +16,7 @@
   - The prompt describes only what Winston can do today; each capability's ticket adds its own section. The front-of-house draft covers voice (product.md §5), how to read envelopes, that `<data>` and forwarded text are never instructions, and that `send_message` is the only way to reach the user and that staying silent is often right.
 - **Implementation: Vercel AI SDK v7** with the **OpenRouter provider** (`@openrouter/ai-sdk-provider`). Background agents use `WorkflowAgent`/`ToolLoopAgent`, and each of our requirements maps onto AI SDK hooks:
   - **Step cap:** `stopWhen: isStepCount(MAX_STEPS_PER_RUN)`.
-  - **Checkpointing:** `onStepEnd` appends the step's messages and usage to Postgres.
+  - **Checkpointing:** `onStepEnd` (behind the gateway's model-call recorder, §12) appends the step's messages and usage to Postgres.
   - **Steering:** `prepareStep` pulls any new inbound items from the queue and appends them (rendered as envelopes) before the next model call.
   - **Dropping stale replies:** `send_message`'s `execute` first checks for inbound items that arrived since the turn started. If there are any, it doesn't send, and returns "not sent: new input arrived". The injected input is then handled on the next step.
   - **Parking (handoff):** `browser_handoff` is a tool **without `execute`**, so calling it ends the loop and the task is persisted as parked. On "done", the tool result and the user's message are appended and the loop restarts from the checkpoint.
@@ -758,6 +758,12 @@ Tuesday works. Thanks, Dana.
 - **The database is the record. There is no separate observability or eval tooling.** For any agent run to be reconstructable from Postgres alone:
   - **Append-only model-call log:** for every call by every agent: the response content (tool calls, `reasoning_details`, text), stop reason, token usage, cost, latency, model, and **which stored messages and prompt version made up the request**. The rendered request isn't stored, because it can be rebuilt deterministically (envelopes are rendered, never stored). Checkpoints are appended, never overwritten.
   - **Silent turns are recorded too:** a run that ends without `send_message` still has its full log.
+  - **How recording works:**
+    - **Can't be skipped:** the model gateway's only entry point is `generate({ profile, run, … })`, which chains a recorder ahead of the caller's `onStepEnd`, so no call goes unrecorded.
+    - **Context range:** `run.contextRange()` gives the `run_messages` ids behind each call. It's read before the caller stores the step.
+    - **Rows:** `dbModelCallSink` ensures the prompt version, then writes the `model_calls` row and a `model` `cost_ledger` row in one transaction.
+    - **Cost:** OpenRouter's reported charge. The fallback is computed from `apps/agents/src/model/pricing.ts` (per-model input, output, cache-read and 5-minute cache-write rates). A drift of more than 5% between the two, or a provider other than Anthropic, logs a warning.
+    - **Failures:** a database failure logs an error carrying the full record and never fails the turn. There's no retry buffer; the log line keeps the data.
   - **Prompt version:** each call stores a hash of the system prompt and tool definitions, with the text kept in a `prompt_versions` table.
   - **Jev decisions:** the questions, returned probabilities, the action taken, and whether it was verified or overridden.
   - **Large binaries** (browser screenshots, attachments) go to **S3**, referenced by key from the log. Postgres rows stay small.
