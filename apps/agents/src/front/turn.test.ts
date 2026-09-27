@@ -314,6 +314,33 @@ describe("runFrontTurn", () => {
     );
   });
 
+  test("a reaction reaches the model as a telegram.reaction.added envelope", async () => {
+    await scenario(
+      [[toolCallReply("no_reply", {})]],
+      async ({ tx, userId, turn, requests }) => {
+        await tx.insert(inboundItems).values({
+          userId,
+          type: "telegram.reaction.added",
+          payload: {
+            emoji: "👍",
+            target: { telegramMessageId: 7, text: "Your 3pm moved to 4." },
+          },
+          occurredAt: new Date("2026-09-27T16:00:00Z"),
+        });
+        await turn();
+        const sent = JSON.stringify(requests[0]?.[0]?.messages);
+        expect(sent).toContain(
+          '<system_event type=\\"telegram.reaction.added\\">',
+        );
+        expect(sent).toContain(
+          "<occurred_at>2026-09-27T12:00:00-04:00</occurred_at>",
+        );
+        expect(sent).toContain('\\"emoji\\":\\"👍\\"');
+        expect(sent).toContain("Your 3pm moved to 4.");
+      },
+    );
+  });
+
   test("no_reply ends the turn silently after one call, discarding any text beside it", async () => {
     await scenario(
       [[toolCallReply("no_reply", {}, "No reply needed.")]],

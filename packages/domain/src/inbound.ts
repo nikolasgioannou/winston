@@ -23,5 +23,20 @@ export const userMessagePayloadSchema = z.object({
   forwardedFrom: forwardOriginSchema.optional(),
 });
 
+/**
+ * An emoji reaction the user added to one of Winston's messages
+ * (`telegram.reaction.added`). The target's text is captured when the
+ * reaction arrives, so rendering never needs a lookup.
+ */
+export const reactionPayloadSchema = z.object({
+  emoji: z.string(),
+  target: z.object({
+    telegramMessageId: z.number().int(),
+    /** The start of the message reacted to. */
+    text: z.string(),
+  }),
+});
+
 export type ForwardOrigin = z.infer<typeof forwardOriginSchema>;
 export type UserMessagePayload = z.infer<typeof userMessagePayloadSchema>;
+export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;

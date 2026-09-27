@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
-import { inboundItems, jobs, telegramLinks } from "@winston/db/schema";
+import {
+  inboundItems,
+  jobs,
+  outboundMessages,
+  runs,
+  telegramLinks,
+} from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { eq } from "drizzle-orm";
 import type { UserMessagePayload } from "@winston/domain/inbound";
@@ -228,6 +234,95 @@ describe("POST /webhooks/telegram", () => {
       delete update.message?.text;
       expect((await post(update)).status).toBe(200);
       expect(await itemsFor(tx, userId)).toEqual([]);
+    });
+  });
+});
+
+const emoji = (list: string[]) =>
+  list.map((e) => ({ type: "emoji", emoji: e }));
+
+function reactionUpdate(
+  messageId: number,
+  before: string[],
+  after: string[],
+  chat: Record<string, unknown> = {
+    id: chatId,
+    type: "private",
+    first_name: "Ada",
+  },
+): Update {
+  nextUpdateId += 1;
+  return {
+    update_id: nextUpdateId,
+    message_reaction: {
+      chat,
+      message_id: messageId,
+      user: { id: chatId, is_bot: false, first_name: "Ada" },
+      date: sentAt,
+      old_reaction: emoji(before),
+      new_reaction: emoji(after),
+    },
+  } as unknown as Update;
+}
+
+/** One of Winston's messages, delivered as Telegram message 777. */
+async function winstonSaid(tx: DbOrTx, userId: string, text: string) {
+  const [run] = await tx.insert(runs).values({ userId }).returning();
+  await tx.insert(outboundMessages).values({
+    userId,
+    runId: run?.id ?? "",
+    text,
+    telegramMessageIds: [776, 777],
+  });
+}
+
+describe("POST /webhooks/telegram: reactions", () => {
+  test("a reaction to Winston's message is stored with its emoji and target, and queues a turn", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      await winstonSaid(tx, userId, "Your 3pm moved to 4.");
+      expect((await post(reactionUpdate(777, [], ["👍"]))).status).toBe(200);
+      const [item] = await itemsFor(tx, userId);
+      expect(item).toMatchObject({
+        type: "telegram.reaction.added",
+        payload: {
+          emoji: "👍",
+          target: { telegramMessageId: 777, text: "Your 3pm moved to 4." },
+        },
+        occurredAt: new Date(sentAt * 1000),
+      });
+      expect(await jobsFor(tx, userId)).toHaveLength(1);
+    });
+  });
+
+  test("a removed reaction is ignored; a changed one counts as the new emoji", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      await winstonSaid(tx, userId, "Booked.");
+      await post(reactionUpdate(777, ["👍"], []));
+      expect(await itemsFor(tx, userId)).toEqual([]);
+      await post(reactionUpdate(777, ["👍"], ["👎"]));
+      const items = await itemsFor(tx, userId);
+      expect(
+        items.map((item) => (item.payload as { emoji: string }).emoji),
+      ).toEqual(["👎"]);
+    });
+  });
+
+  test("a reaction to a message Winston didn't send is ignored gracefully", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      expect((await post(reactionUpdate(12345, [], ["❤"]))).status).toBe(200);
+      expect(await itemsFor(tx, userId)).toEqual([]);
+      expect(await jobsFor(tx, userId)).toEqual([]);
+    });
+  });
+
+  test("keeps only the start of a long target message", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      await winstonSaid(tx, userId, "a".repeat(500));
+      await post(reactionUpdate(777, [], ["👍"]));
+      const [item] = await itemsFor(tx, userId);
+      expect(
+        (item?.payload as { target: { text: string } }).target.text,
+      ).toHaveLength(200);
     });
   });
 });
