@@ -27,9 +27,11 @@ describe("retryDelayMs", () => {
 describe("enqueue", () => {
   test("inside a rolled-back transaction leaves no job", async () => {
     await inRollback(db, async (tx) => {
-      await enqueue(tx, "demo");
+      await enqueue(tx, "rolled-back");
     });
-    expect(await db.select().from(jobs)).toEqual([]);
+    expect(
+      await db.select().from(jobs).where(eq(jobs.type, "rolled-back")),
+    ).toEqual([]);
   });
 
   describe("with a dedupe key", () => {

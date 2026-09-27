@@ -6,7 +6,8 @@
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
     "./testing": "./src/testing.ts",
-    "./queue": "./src/queue.ts"
+    "./queue": "./src/queue.ts",
+    "./schema": "./src/schema/index.ts"
   },
   "scripts": {
     "db:generate": "bun --env-file=../../.env.local --bun drizzle-kit generate",

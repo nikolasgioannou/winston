@@ -22,6 +22,15 @@
         "zod": "4.6.5",
       },
     },
+    "apps/agents": {
+      "name": "@winston/agents",
+      "dependencies": {
+        "@winston/db": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "zod": "4.6.5",
+      },
+    },
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
@@ -212,6 +221,8 @@
     "@typescript-eslint/utils": ["@typescript-eslint/utils@8.70.1", "", { "dependencies": { "@eslint-community/eslint-utils": "^4.9.1", "@typescript-eslint/scope-manager": "8.70.1", "@typescript-eslint/types": "8.70.1", "@typescript-eslint/typescript-estree": "8.70.1" }, "peerDependencies": { "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0", "typescript": ">=4.8.4 <6.1.0" } }, "sha512-Esgul8MsnKnRLdYU2Eb2cRV9bS5HJYtKj1ByJnOzzG2M58DGdSUQ1jUuILxipqcpB2h9WLrbD5GijIWUjX/Tqw=="],
 
     "@typescript-eslint/visitor-keys": ["@typescript-eslint/visitor-keys@8.70.1", "", { "dependencies": { "@typescript-eslint/types": "8.70.1", "eslint-visitor-keys": "^5.0.0" } }, "sha512-Vwj9lUIW5Xq3wQ9w6gv3R86g1hMK8f2zNOdGTAgeXUMMXFK78G9ruCjjqutHMNJc0+CH7LYRnHeUB9IT8wFmcw=="],
+
+    "@winston/agents": ["@winston/agents@workspace:apps/agents"],
 
     "@winston/db": ["@winston/db@workspace:packages/db"],
 

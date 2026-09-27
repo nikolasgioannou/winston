@@ -26,4 +26,5 @@ test("…", async () => {
 - **`inRollback`** is the default: the test runs in a transaction that's always rolled back, so tests can't see each other's rows.
 - **`truncateAll`** is for tests that need real concurrent connections (for example two workers racing for a job), where one rollback transaction can't be shared. Call it at the start of each such test.
 - **Factories** like `insertUser` fill in unique defaults. Add one when a new table needs test rows.
+- **Don't assume a table is empty** unless the test just called `truncateAll`. Other tests may leave committed rows behind. Filter by something the test owns (a unique type, email or id) instead.
 - `bun test` doesn't load `.env.local` by itself (test mode skips it), so the `test` script passes `--env-file=.env.local`. CI sets `TEST_DATABASE_URL` directly and runs Postgres as a service container.

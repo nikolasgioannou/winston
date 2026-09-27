@@ -1,14 +1,14 @@
 ---
 id: "5cbe5b"
 title: Create the agents service worker loop
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - backend
   - m1
 created_at: 2026-09-27T05:30:54.234Z
-updated_at: 2026-09-27T17:32:16.413Z
+updated_at: 2026-09-27T18:58:51.833Z
 blocked_by:
   - "2c5ac8"
   - "9869b7"
@@ -16,11 +16,21 @@ blocked_by:
 
 `apps/agents` runs front-of-house turns and background-agent steps by pulling jobs from the queue (docs/design.md §9). This ticket builds the process shell, with no agent logic yet.
 
-It should:
-- Load config, create a logger and a DB pool.
-- Run a worker loop with a registry of job handlers by `type`, leasing only types it has handlers for, with configurable concurrency.
-- Pass each handler a context: job payload, logger with `jobId`, DB access, and a way to extend its lease.
-- Handle SIGTERM gracefully: stop leasing, let in-flight handlers finish their current unit of work (for agent runs that will mean "finish the current step and checkpoint"), then exit. A second SIGTERM or a timeout forces exit. Leases make this safe either way.
-- Expose a health indication for ECS later. Research how Fargate health checks work for a service without an HTTP port, and either add a tiny health endpoint or note the approach.
+- **Config** (`LOG_LEVEL`, `WORKER_CONCURRENCY`, `SHUTDOWN_TIMEOUT_MS`, plus `DATABASE_URL` from `@winston/db/config`), a logger and a DB pool.
+- **`createWorker({ db, logger, handlers, concurrency })`:**
+  - Leases only the registered job types, up to `concurrency` at a time.
+  - Gives each handler `{ job, db, logger (tagged with jobId, type and user), extendLease }`.
+  - Completes or fails each job with its lease.
+  - Survives database errors while leasing (it logs, pauses and retries).
+- **Graceful shutdown:** SIGTERM or SIGINT stops leasing, waits for in-flight handlers, closes the pool and exits 0. A second signal, or the timeout, exits immediately. Leases recover anything cut short.
+- **No job handlers are registered yet.** The front-of-house turn ticket adds the first one.
+- **The ECS health check** is noted for M4 rather than built now, since nothing runs on Fargate yet.
 
-Add a trivial `noop` handler and a test that enqueues a job and sees the loop complete it. Test graceful shutdown by starting the loop, sending it a stop signal mid-job, and asserting the job completed and no new job was leased.
+Tests, with real Postgres and test-only handlers:
+- A job runs and is marked done.
+- `stop()` lets the in-flight job finish, and leases nothing new.
+- A throwing handler records the failure for a retry.
+- `concurrency` is never exceeded.
+- Unregistered types are ignored.
+
+Also verified by hand: the real process starts, and exits 0 on SIGTERM with the expected log lines.
