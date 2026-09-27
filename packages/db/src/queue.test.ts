@@ -157,6 +157,30 @@ describe("lease", () => {
 describe("fail", () => {
   beforeEach(() => truncateAll(db));
 
+  test("requeues without its dedupe key when a newer job with the key is queued", async () => {
+    const first = await enqueue(db, "demo", { dedupeKey: "k" });
+    const [leased] = await lease(db, { types, leaseMs: 60_000 });
+    if (!leased) throw new Error("expected a lease");
+    const second = await enqueue(db, "demo", { dedupeKey: "k" });
+    expect(second).not.toBe(first);
+
+    expect(await fail(db, leased, new Error("boom"))).toBe(true);
+    const rows = await db.select().from(jobs).orderBy(jobs.id);
+    expect(rows.map((row) => [row.status, row.dedupeKey])).toEqual([
+      ["queued", null],
+      ["queued", "k"],
+    ]);
+  });
+
+  test("keeps its dedupe key when no sibling is queued", async () => {
+    await enqueue(db, "demo", { dedupeKey: "k" });
+    const [leased] = await lease(db, { types, leaseMs: 60_000 });
+    if (!leased) throw new Error("expected a lease");
+    await fail(db, leased, new Error("boom"));
+    const [row] = await db.select().from(jobs);
+    expect(row?.dedupeKey).toBe("k");
+  });
+
   test("retries after a backoff, then gives up at max attempts", async () => {
     await enqueue(db, "demo", { maxAttempts: 2 });
 

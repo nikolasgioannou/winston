@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
-import {
-  frontState,
-  modelCalls,
-  promptVersions,
-  runMessages,
-} from "@winston/db/schema";
+import { frontState, modelCalls, runMessages } from "@winston/db/schema";
 import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
-import { promptVersion } from "@winston/prompts";
+import { ensurePromptVersion, promptVersion } from "@winston/prompts";
 import { createLogger } from "@winston/shared/logger";
 import type { ModelMessage } from "ai";
 import { eq } from "drizzle-orm";
@@ -31,7 +26,8 @@ async function conversation(tx: DbOrTx, count: number) {
   const user = await insertUser(tx);
   const starts: number[] = [];
   for (let i = 0; i < count; i += 1) {
-    const run = await insertRun(tx, user.id);
+    // Only completed turns are part of the window.
+    const run = await insertRun(tx, user.id, { status: "completed" });
     const messages: ModelMessage[] = [
       { role: "user", content: `turn ${String(i)} ${"x".repeat(300)}` },
       {
@@ -72,8 +68,7 @@ async function conversation(tx: DbOrTx, count: number) {
 /** Records the user's latest model call as having seen `tokens` of context. */
 async function lastCallSaw(tx: DbOrTx, userId: string, tokens: number) {
   const run = await insertRun(tx, userId);
-  // Inserted directly: ensurePromptVersion remembers hashes across rolled-back tests.
-  await tx.insert(promptVersions).values(prompt).onConflictDoNothing();
+  await ensurePromptVersion(tx, prompt);
   await tx.insert(modelCalls).values({
     runId: run.id,
     step: 0,

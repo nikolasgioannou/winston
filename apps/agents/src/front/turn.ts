@@ -15,6 +15,7 @@ import type { DbOrTx } from "@winston/db/client";
 import {
   frontState,
   inboundItems,
+  outboundMessages,
   runMessages,
   runs,
   telegramLinks,
@@ -23,10 +24,21 @@ import {
 import { renderBatch } from "@winston/domain/envelope";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
-import { isStepCount, type ModelMessage } from "ai";
-import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { APICallError, isStepCount, type ModelMessage } from "ai";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { cacheBreakpoint } from "../model/cache.ts";
-import type { ModelGateway } from "../model/gateway.ts";
+import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "./envelopes.ts";
 import {
@@ -50,6 +62,19 @@ export const frontStepBudget = 15;
  */
 export const emptyReplyNudge = "Please continue.";
 
+/** Quick retries on the front model after a transient error, before falling back (§6). */
+export const frontRetries = 2;
+
+/** Each model call's time limit, so a hung request can't hold the user's turn. */
+export const frontCallTimeoutMs = 90_000;
+
+/** Sent, without a model, when every attempt failed. At most once until a turn succeeds. */
+export const outageNotice =
+  "I'm having trouble thinking right now; I'll reply as soon as I'm back.";
+
+/** Sent, without a model, when both models refused. */
+export const refusalReply = "Sorry, I can't help with that one.";
+
 /** Leads the new input when a drafted reply was dropped for it. */
 export const draftDroppedNote =
   "Your last reply was not sent: new messages arrived while you wrote it. Reply once, covering everything.";
@@ -69,6 +94,8 @@ export interface FrontTurnDeps {
   timers?: Timers;
   /** The rolling window's size; the defaults suit production. */
   window?: WindowBudget;
+  /** For tests: the pause before a quick retry. */
+  retryDelayMs?: number;
 }
 
 /** Runs a turn over the user's unconsumed input. Returns the run id, or nothing if there was no input. */
@@ -85,6 +112,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   }
 
   const [run] = await db.transaction(async (tx) => {
+    await recoverAbandonedRuns(tx, userId);
     // Claim first: no run is created unless there's input to answer.
     const items = await lockUnconsumed(tx, userId);
     if (items.length === 0) return [];
@@ -131,13 +159,10 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   };
 
   let steps = 0;
-  let nudged = false;
-  let outcome: "reply" | "silent" | "empty" | "unfinished" = "unfinished";
-  try {
-    while (steps < frontStepBudget) {
-      if (steps > 0) await steerIn();
-      const result = await gateway.generate({
-        profile: "front",
+  const attempt = async (profile: ModelProfile) => {
+    try {
+      return await gateway.generate({
+        profile,
         run: {
           runId,
           userId,
@@ -147,16 +172,79 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
             toMessageId: log.lastStoredId,
           }),
         },
+        stepOffset: steps,
         instructions,
         messages: withRollingBreakpoint(messages),
         tools: { no_reply: noReplyTool },
         stopWhen: isStepCount(1),
-        onStepEnd: async (step) => {
-          for (const message of step.response.messages)
-            await log.store(db, message);
-          steps += 1;
-        },
+        timeout: frontCallTimeoutMs,
       });
+    } finally {
+      steps += 1;
+    }
+  };
+
+  /**
+   * One model step with the failure policy (§6): quick retries on transient
+   * errors, then one attempt on the fallback model. A refusal also goes to
+   * the fallback once. Throws if every attempt failed.
+   */
+  const callModel = async () => {
+    for (let retry = 0; ; retry += 1) {
+      try {
+        const result = await attempt("front");
+        if (!isRefusal(result)) return result;
+        logger.warn("the front model refused; trying the fallback");
+        break;
+      } catch (error) {
+        if (!isTransient(error) || retry >= frontRetries) {
+          logger.warn(
+            { err: error },
+            "the front model failed; trying the fallback",
+          );
+          break;
+        }
+        logger.warn(
+          { err: error, retry: retry + 1 },
+          "transient model error; retrying",
+        );
+        await sleep(deps.retryDelayMs ?? 500);
+      }
+    }
+    const result = await attempt("frontFallback");
+    return isRefusal(result) ? "refused" : result;
+  };
+
+  let nudged = false;
+  let outcome: "reply" | "silent" | "empty" | "refused" | "unfinished" =
+    "unfinished";
+  try {
+    while (steps < frontStepBudget) {
+      if (steps > 0) await steerIn();
+      const result = await callModel();
+
+      if (result === "refused") {
+        // The refused output is never kept; the user gets a plain answer.
+        const reply: ModelMessage = {
+          role: "assistant",
+          content: refusalReply,
+        };
+        messages.push(reply);
+        await log.store(db, reply);
+        await deliverReply({
+          db,
+          logger,
+          telegram,
+          userId,
+          runId,
+          chatId: user.chatId,
+          text: refusalReply,
+        });
+        outcome = "refused";
+        break;
+      }
+      for (const message of result.responseMessages)
+        await log.store(db, message);
       messages.push(...result.responseMessages);
       const step = result.finalStep;
 
@@ -208,7 +296,23 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     logger.info({ steps, outcome }, "turn completed");
     return runId;
   } catch (error) {
+    // Every attempt failed. The input goes back to unconsumed, so the next
+    // turn that works answers it; the job's own retry brings that turn.
     await finishRun(db, runId, "failed", steps);
+    await releaseInput(db, runId);
+    if (!(await outageNoticePending(db, userId))) {
+      await deliverReply({
+        db,
+        logger,
+        telegram,
+        userId,
+        runId,
+        chatId: user.chatId,
+        text: outageNotice,
+      }).catch((noticeError: unknown) => {
+        logger.error({ err: noticeError }, "sending the outage notice failed");
+      });
+    }
     throw error;
   } finally {
     typing.stop();
@@ -224,6 +328,82 @@ function withRollingBreakpoint(messages: readonly ModelMessage[]) {
   const last = messages.at(-1);
   if (!last || last.role === "assistant") return [...messages];
   return [...messages.slice(0, -1), cacheBreakpoint(last)];
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Anthropic's refusal, which the AI SDK reports as `other` with the raw reason. */
+function isRefusal(result: {
+  finalStep: { rawFinishReason: string | undefined };
+}) {
+  return result.finalStep.rawFinishReason === "refusal";
+}
+
+/** Worth a quick retry: rate limits, server errors, timeouts, dropped connections. */
+function isTransient(error: unknown) {
+  if (APICallError.isInstance(error)) return error.isRetryable;
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
+}
+
+/** Hands a failed turn's input back, so the next turn answers it. */
+async function releaseInput(db: DbOrTx, runId: string) {
+  await db
+    .update(inboundItems)
+    .set({ consumedByRunId: null })
+    .where(eq(inboundItems.consumedByRunId, runId));
+}
+
+/**
+ * While this user's lock is held, any other `running` run is dead (its worker
+ * crashed). Mark it failed and hand its input back.
+ */
+async function recoverAbandonedRuns(tx: DbOrTx, userId: string) {
+  const dead = await tx
+    .update(runs)
+    .set({ status: "failed", finishedAt: sql`now()` })
+    .where(and(eq(runs.userId, userId), eq(runs.status, "running")))
+    .returning({ id: runs.id });
+  if (dead.length > 0)
+    await tx
+      .update(inboundItems)
+      .set({ consumedByRunId: null })
+      .where(
+        inArray(
+          inboundItems.consumedByRunId,
+          dead.map((run) => run.id),
+        ),
+      );
+}
+
+/** True if the outage notice went out and no turn has succeeded since. */
+async function outageNoticePending(db: DbOrTx, userId: string) {
+  const [notice] = await db
+    .select({ sentAt: outboundMessages.sentAt })
+    .from(outboundMessages)
+    .where(
+      and(
+        eq(outboundMessages.userId, userId),
+        eq(outboundMessages.text, outageNotice),
+      ),
+    )
+    .orderBy(desc(outboundMessages.sentAt))
+    .limit(1);
+  if (!notice) return false;
+  const [recovered] = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.userId, userId),
+        eq(runs.status, "completed"),
+        gt(runs.finishedAt, notice.sentAt),
+      ),
+    )
+    .limit(1);
+  return recovered === undefined;
 }
 
 /** A run's append-only message log: positions and the last stored id. */
@@ -313,6 +493,8 @@ async function loadWindow(db: DbOrTx, userId: string, beforeId: number) {
     .where(
       and(
         eq(runs.userId, userId),
+        // Failed runs stay in the database as the record, never in context.
+        eq(runs.status, "completed"),
         gte(runMessages.id, state?.start ?? 0),
         lt(runMessages.id, beforeId),
       ),

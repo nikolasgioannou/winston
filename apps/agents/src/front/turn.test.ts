@@ -128,7 +128,14 @@ async function scenario(
       });
       requests[index] = fake.requests;
       return runFrontTurn(
-        { db: tx, logger, gateway: fake.gateway, telegram, timers },
+        {
+          db: tx,
+          logger,
+          gateway: fake.gateway,
+          telegram,
+          timers,
+          retryDelayMs: 0,
+        },
         user.id,
       );
     };

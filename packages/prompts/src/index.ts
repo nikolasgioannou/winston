@@ -57,11 +57,12 @@ export function promptVersion(
   return { name, ...promptHash(systemPrompts[name], tools) };
 }
 
-const stored = new Set<string>();
-
-/** Saves a prompt version the first time this process uses it. */
+/**
+ * Saves a prompt version if it isn't stored yet. Call it in the same
+ * transaction as the rows that reference it: remembering stored hashes in
+ * memory would go wrong whenever that transaction rolls back.
+ */
 export async function ensurePromptVersion(db: DbOrTx, version: PromptVersion) {
-  if (stored.has(version.hash)) return;
   await db
     .insert(promptVersions)
     .values({
@@ -70,5 +71,4 @@ export async function ensurePromptVersion(db: DbOrTx, version: PromptVersion) {
       content: version.content,
     })
     .onConflictDoNothing();
-  stored.add(version.hash);
 }

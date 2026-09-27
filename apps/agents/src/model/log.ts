@@ -20,14 +20,14 @@ const costDriftTolerance = 0.05;
 export function dbModelCallSink(db: DbOrTx, logger: Logger): ModelCallSink {
   return async (call) => {
     const costUsd = resolveCost(call, logger);
-    if (call.provider !== "Anthropic")
+    if (call.stopReason !== "error" && call.provider !== "Anthropic")
       logger.warn(
         { runId: call.run.runId, provider: call.provider },
         "model call not served by Anthropic despite pinning",
       );
     try {
-      await ensurePromptVersion(db, call.run.prompt);
       await db.transaction(async (tx) => {
+        await ensurePromptVersion(tx, call.run.prompt);
         await tx.insert(modelCalls).values({
           runId: call.run.runId,
           step: call.step,

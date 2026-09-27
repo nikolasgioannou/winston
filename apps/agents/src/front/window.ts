@@ -53,7 +53,13 @@ export async function trimWindow(
     })
     .from(runMessages)
     .innerJoin(runs, eq(runs.id, runMessages.runId))
-    .where(and(eq(runs.userId, userId), gte(runMessages.id, state?.start ?? 0)))
+    .where(
+      and(
+        eq(runs.userId, userId),
+        eq(runs.status, "completed"),
+        gte(runMessages.id, state?.start ?? 0),
+      ),
+    )
     .orderBy(asc(runMessages.id));
 
   // The stream as turns, oldest first, each with its first message id and size.

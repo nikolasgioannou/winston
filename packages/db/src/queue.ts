@@ -169,6 +169,14 @@ export async function fail(db: DbOrTx, lease: Lease, error: unknown) {
             lastError: message,
             lockedUntil: null,
             leaseToken: null,
+            // If a newer job with the same key is already queued, it will do this
+            // work; keeping the key would violate the queued-only unique index.
+            dedupeKey: sql`case when exists (
+              select 1 from ${jobs} as sibling
+              where sibling.dedupe_key = ${jobs.dedupeKey}
+                and sibling.status = 'queued'
+                and sibling.id <> ${jobs.id}
+            ) then null else ${jobs.dedupeKey} end`,
           },
     )
     .where(held(lease))

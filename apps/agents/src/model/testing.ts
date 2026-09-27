@@ -56,6 +56,11 @@ export function fakeGateway(
     await new Promise((resolve) => setTimeout(resolve, options.delayMs ?? 0));
     concurrency.current -= 1;
     const reply = replies[Math.min(requests.length, replies.length) - 1];
+    if (reply && typeof reply.httpStatus === "number")
+      return Response.json(
+        { error: { message: "fake upstream error", code: reply.httpStatus } },
+        { status: reply.httpStatus },
+      );
     return Response.json({ ...fakeCompletion, ...reply });
   }) as typeof globalThis.fetch;
   const gateway = createModelGateway({
@@ -71,11 +76,7 @@ export function fakeGateway(
   return { gateway, requests, calls, concurrency };
 }
 
-/**
- * A run for tests; ids default to placeholders. Each gets its own prompt
- * version: `ensurePromptVersion` remembers stored hashes per process, which a
- * rolled-back test would otherwise leave pointing at a row that's gone.
- */
+/** A run for tests; ids default to placeholders. */
 export function testRun(overrides: Partial<ModelRun> = {}): ModelRun {
   return {
     runId: "run_test",
@@ -126,6 +127,24 @@ export function textReply(text: string) {
         index: 0,
         message: { role: "assistant", content: text },
         finish_reason: "stop",
+      },
+    ],
+  };
+}
+
+/** A scripted reply that fails with this HTTP status, as OpenRouter does. */
+export function httpError(status: number) {
+  return { httpStatus: status };
+}
+
+/** A scripted reply in which the model refuses. */
+export function refusal() {
+  return {
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: "" },
+        finish_reason: "refusal",
       },
     ],
   };

@@ -12,7 +12,9 @@
  * - Sampling settings and forced tool choice are rejected: Anthropic's
  *   thinking models return 400 for them.
  * - Every call is recorded: `generate` hands each step to the log sink
- *   before the caller's own `onStepEnd` runs.
+ *   before the caller's own `onStepEnd` runs, and records a failed call as
+ *   `error`. The AI SDK's own retries are off (`maxRetries: 0`), since they'd
+ *   hide attempts; callers retry, and each attempt is recorded.
  */
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { PromptVersion } from "@winston/prompts";
@@ -28,6 +30,8 @@ import { recordStep, type ModelCallRecord } from "./record.ts";
 /** The model (OpenRouter id) and effort for each role. */
 export const modelProfiles = {
   front: { model: "anthropic/claude-sonnet-5", effort: "low" },
+  /** Where the front of house falls back when Sonnet keeps failing or refuses (§6). */
+  frontFallback: { model: "anthropic/claude-opus-5.5", effort: "low" },
   background: { model: "anthropic/claude-opus-5.5", effort: "high" },
 } as const;
 
@@ -76,7 +80,12 @@ type OmitModel<Options> = Options extends unknown
 
 export type GenerateOptions<Tools extends ToolSet> = OmitModel<
   GenerateTextOptions<Tools>
-> & { profile: ModelProfile; run: ModelRun };
+> & {
+  profile: ModelProfile;
+  run: ModelRun;
+  /** Added to the recorded step numbers, for callers that run one step per call. */
+  stepOffset?: number;
+};
 
 export function createModelGateway({
   apiKey,
@@ -108,28 +117,55 @@ export function createModelGateway({
 
   return {
     /** `generateText` on a profile's model, with every step recorded. */
-    generate<Tools extends ToolSet>({
+    async generate<Tools extends ToolSet>({
       profile,
       run,
+      stepOffset = 0,
       ...options
     }: GenerateOptions<Tools>) {
       const callerOnStepEnd = options.onStepEnd;
-      return generateText<Tools>({
-        ...options,
-        model: model(profile),
-        onStepEnd: async (step: StepResult<Tools>) => {
-          const { fromMessageId, toMessageId } = run.contextRange();
-          await sink({
-            ...recordStep(step),
-            run,
-            profile,
-            step: step.stepNumber,
-            contextFromMessageId: fromMessageId,
-            contextToMessageId: toMessageId,
-          });
-          await callerOnStepEnd?.(step);
-        },
-      } as unknown as GenerateTextOptions<Tools>);
+      let recordedSteps = 0;
+      const started = performance.now();
+      try {
+        return await generateText<Tools>({
+          ...options,
+          maxRetries: 0,
+          model: model(profile),
+          onStepEnd: async (step: StepResult<Tools>) => {
+            const { fromMessageId, toMessageId } = run.contextRange();
+            await sink({
+              ...recordStep(step),
+              run,
+              profile,
+              step: stepOffset + step.stepNumber,
+              contextFromMessageId: fromMessageId,
+              contextToMessageId: toMessageId,
+            });
+            recordedSteps += 1;
+            await callerOnStepEnd?.(step);
+          },
+        } as unknown as GenerateTextOptions<Tools>);
+      } catch (error) {
+        const { fromMessageId, toMessageId } = run.contextRange();
+        await sink({
+          model: modelProfiles[profile].model,
+          provider: undefined,
+          inputTokens: 0,
+          cachedTokens: 0,
+          cacheWriteTokens: 0,
+          outputTokens: 0,
+          reasoningTokens: 0,
+          costUsd: 0,
+          stopReason: "error",
+          latencyMs: Math.round(performance.now() - started),
+          run,
+          profile,
+          step: stepOffset + recordedSteps,
+          contextFromMessageId: fromMessageId,
+          contextToMessageId: toMessageId,
+        });
+        throw error;
+      }
     },
   };
 }
