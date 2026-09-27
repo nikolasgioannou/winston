@@ -9,6 +9,8 @@ export const idPrefixes = {
   frontRun: "run",
   /** Inbound items and outbound messages together form the history (`hist_`). */
   historyItem: "hist",
+  vm: "vm",
+  file: "file",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;

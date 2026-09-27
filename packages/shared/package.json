@@ -7,7 +7,8 @@
     "./ids": "./src/ids.ts",
     "./json": "./src/json.ts",
     "./logger": "./src/logger.ts",
-    "./time": "./src/time.ts"
+    "./time": "./src/time.ts",
+    "./tokens": "./src/tokens.ts"
   },
   "scripts": {
     "typecheck": "tsc"

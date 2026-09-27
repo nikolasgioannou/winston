@@ -916,6 +916,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 1. Provisioning creates a one-time **registration token** and passes it in EC2 user data (or Docker env).
 2. On first boot, `winstond` connects to `gateway` with it and receives the long-lived VM token (stored hashed in `vms.token_hash`).
+   - **Hashing:** both tokens are stored only as SHA-256 hashes (`@winston/shared/tokens`: `generateToken`, `hashToken`, and `tokenMatches`, which compares in constant time). They're 32 random bytes, so a fast hash is enough. `createVm` returns the raw registration token exactly once.
 3. The registration token is burned.
 
 **Websocket frames** (JSON with `id` and `type`; screencast frames are binary):
@@ -957,6 +958,8 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 ## 17. State machines
 
 **VM:** `requested → provisioning → registering → ready`. `ready → unhealthy` if no ping for 2 min (EC2 auto-recovery, and alert if it persists). `ready → updating → ready` during binary swaps. Any state `→ terminating → terminated` on account deletion. `provisioning|registering → failed` after a timeout (retry via job).
+
+- **The VM machine in code:** `@winston/db/vm-state`. `transition(state, event)` throws on an illegal move, and `applyVmEvent(db, vmId, event)` applies it with the row locked. The events are `provision`, `provisioned`, `registered`, `missed_pings`, `recovered`, `update_started`, `update_finished`, `timed_out`, `retry`, `terminate` and `terminated`. Two moves the sketch implies are explicit here: `unhealthy → ready` when pings resume (`recovered`), and `failed → provisioning` for the retry (`retry`). `terminate` works from any non-final state, and `terminated` is final.
 
 **Run:** `queued → running → completed | failed | cancelled | capped`. `running → parked` on `browser_handoff`. `parked → running` on `task resume`. Front-of-house turns never park: a handoff simply ends the turn.
 

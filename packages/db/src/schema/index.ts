@@ -10,3 +10,4 @@ export * from "./run-messages.ts";
 export * from "./runs.ts";
 export * from "./telegram-links.ts";
 export * from "./users.ts";
+export * from "./vms.ts";

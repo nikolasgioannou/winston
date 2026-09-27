@@ -7,7 +7,9 @@
     "./config": "./src/config.ts",
     "./testing": "./src/testing.ts",
     "./queue": "./src/queue.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./vm-state": "./src/vm-state.ts",
+    "./vms": "./src/vms.ts"
   },
   "scripts": {
     "db:generate": "bun --env-file=../../.env.local --bun drizzle-kit generate",
