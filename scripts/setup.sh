@@ -4,7 +4,7 @@
 #
 #   1. Check that mise is installed (it's global, so this script never installs it).
 #   2. Trust the repo's mise.toml.
-#   3. Install the runtimes pinned in mise.toml.
+#   3. Install the runtimes and tools pinned in mise.toml.
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
 #   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
@@ -38,7 +38,7 @@ fail() {
 
 echo "Setting up Winston"
 
-# mise pins the runtimes (mise.toml). It's a global tool, so we don't install it.
+# mise pins the runtimes and tools (mise.toml). It's a global tool, so we don't install it.
 if ! command -v mise >/dev/null 2>&1; then
   fail "mise is not installed. Install it (https://mise.jdx.dev/getting-started.html), then re-run ./scripts/setup.sh"
 fi
@@ -52,9 +52,9 @@ else
 fi
 
 if [ -z "$(mise ls --current --missing --local 2>/dev/null)" ]; then
-  done_ "pinned runtimes installed"
+  done_ "pinned runtimes and tools installed"
 else
-  doing "installing pinned runtimes"
+  doing "installing pinned runtimes and tools"
   mise install
 fi
 

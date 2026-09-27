@@ -12,7 +12,7 @@ You need [mise](https://mise.jdx.dev/getting-started.html). Then run:
 
 It's safe to re-run at any time, and a re-run doubles as a health check. Then start everything with `bun dev` ([local development](docs/local-dev.md)).
 
-Every commit runs the same checks as CI (formatting, linting, type checks and tests), and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
+Every commit runs the same checks as CI (ticket files, formatting, linting, type checks and tests), and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
 
 ```bash
 bun run check

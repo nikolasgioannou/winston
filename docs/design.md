@@ -442,7 +442,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 - **Pre-commit gate with lefthook** (a dev dependency, with hooks installed by the root `prepare` script on `bun install`, so lefthook's own install script doesn't need to be trusted). Nothing gets committed unless it passes **formatting, linting, type checking and tests**. `lefthook.yml` jobs:
   1. **format:** `prettier --write --ignore-unknown` on staged files, re-staged automatically (`stage_fixed`). `--ignore-unknown` skips files Prettier can't parse instead of failing.
-  2. **check:** `bun run check`, the **exact same command CI runs**: `format:check`, `lint` (ESLint with `--max-warnings 0`, report-only), `typecheck` and `test`, all on the whole repo. A commit that passes the hook passes CI by construction, so CI failures shouldn't reach the history.
+  2. **check:** `bun run check`, the **exact same command CI runs**: `moth check` (ticket files are valid and named after their titles), `format:check`, `lint` (ESLint with `--max-warnings 0`, report-only), `typecheck` and `test`, all on the whole repo. A commit that passes the hook passes CI by construction, so CI failures shouldn't reach the history.
   - lefthook hides unstaged changes while the hook runs, so partially staged files are safe with `stage_fixed`.
   - **commit-msg:** commitlint with `@commitlint/config-conventional`, plus `body-empty` and `footer-empty`, so messages are a single subject line (`commitlint.config.ts`).
 - **Tooling:**
@@ -487,7 +487,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 ## 8c. Work tracking
 
-- Tickets are tracked in the repo with **Moth** (`.moth/`, schema-checked Markdown, statuses and `blocked_by` dependencies).
+- Tickets are tracked in the repo with **Moth** (`.moth/`, schema-checked Markdown, statuses and `blocked_by` dependencies). Moth is pinned in `mise.toml` (installed from its GitHub releases), so `setup.sh` and CI get the same version. `moth check` runs as part of `bun run check`. Retitle tickets with `moth edit --title`, which also renames the file, as `moth check` requires.
 - **One ticket per commit.** The whole product is broken into tickets before building starts, detailed enough to execute fairly autonomously.
 - **No standard ticket template.** Each ticket is written on its own, with whatever that piece of work needs.
 - **The sequence lives in [plan.md](plan.md)**, since Moth doesn't track order. It covers the ordered list of all tickets by milestone, how to work through them, and which ones are collaborative.
