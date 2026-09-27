@@ -954,6 +954,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 - **Workspace:** Bun workspaces (`apps/*`, `packages/*`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,domain,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
 - **Pins via `mise.toml`** (project-local): Bun and Node now. Packer, Terraform and the AWS CLI get added by the tickets that introduce them.
+- **`./scripts/setup.sh`**: one idempotent command from fresh clone to working repo (check first, then act). It never installs global tools. The numbered list at the top of the script is the source of truth for its steps, and tickets that add a setup requirement extend it.
 - **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`.
 - **Local services:** `docker-compose.yml` (Postgres, and the VM container via the `VmProvider`).
 - **`packages/ui`:** the design system (Tailwind + Base UI primitives, tokens, components). The web app consumes only this.
