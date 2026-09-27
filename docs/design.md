@@ -984,7 +984,13 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
   - Google Chrome stable (apt repository), Xvfb, noVNC, Python 3, and common CLI tools (`rg`, `jq`, `unzip`, ImageMagick, `pandoc`).
   - Users `winston` (agent shell, home on the data volume) and `winstond` (daemon).
   - systemd units (`xvfb`, `chrome`, `winstond`, `novnc`), unattended-upgrades, a 2 GB swap file, and the binary-signing public key.
-- **The local container runs systemd as PID 1** so the units behave identically. _Risk: systemd in Docker on macOS needs `--privileged` and cgroup settings. Validate early in M2. The fallback is a lightweight Linux VM running the same scripts._
+- **The local container runs systemd as PID 1** so the units behave identically. Validated on 2026-09-27 on Colima (VZ, aarch64, kernel 6.8, cgroup v2, Docker 29.5), with no `--privileged` needed:
+  - **Image:** `ENV container=docker`, `STOPSIGNAL SIGRTMIN+3` and `CMD ["/sbin/init"]`. Mask the units that make no sense in a container: `systemd-udevd.service`, `systemd-udevd-kernel.socket`, `systemd-udevd-control.socket`, `systemd-modules-load.service`, `sys-kernel-config.mount`, `sys-kernel-debug.mount`, `sys-kernel-tracing.mount`, `systemd-remount-fs.service`, `getty.target`, `console-getty.service` and `systemd-logind.service`.
+  - **Run flags:** `--cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock`. No TTY is needed.
+  - **What was checked:** systemd reached `running` (not degraded). `Requires=`/`After=` dependencies behaved (stopping a dependency stopped its dependent, and starting the dependent pulled it back up). A crashing unit with `Restart=always` kept restarting (`StartLimitIntervalSec=0`). Xvfb plus a drawing app ran under systemd and was captured on screen. `docker stop` shut down cleanly through `shutdown.target` in under a second, with exit code 0.
+  - **What didn't work:** unprivileged with a private cgroup namespace, because Docker mounts `/sys/fs/cgroup` read-only ("Failed to create /init.scope control group"). Binding the cgroup mount writable with a private namespace also failed, because the container can't find its own cgroup.
+  - **The trade-off:** with the host cgroup namespace and a writable cgroup mount, the container can see and change the Colima VM's cgroup tree, including other containers like Postgres, but not the Mac. That's much narrower than `--privileged` (all capabilities and devices), and it only applies locally. Production runs on a real EC2 VM.
+  - **Architecture:** the local image is **arm64**, native on Apple Silicon. Emulating amd64 crashes Bun (see Risks). Production is x86_64, so provisioning scripts must work on both. Chrome on linux-arm64 is decided in the Chrome ticket.
 - The CLI and `winstond` binaries are baked in at build time and self-update afterwards.
 
 ## 19. CDK stacks (`infra/`)

@@ -28,3 +28,5 @@ Provisioning scripts in `image/scripts/`, split by concern and runnable on a pla
 - Swap and unattended-upgrades are EC2-only concerns. Guard them so the Docker build skips them.
 
 Add `bun run image:build:local`. Done when it produces a Docker image that boots with systemd and has both users and the directory layout.
+
+Also, from the systemd spike (docs/design.md §18): the local image is **arm64** (native on Apple Silicon; emulating amd64 crashes Bun), while the AMI is x86_64. So every provisioning script must work on both architectures (package names, download URLs chosen by `uname -m`).

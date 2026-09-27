@@ -30,3 +30,5 @@ In `winstond`: ping Chrome over CDP every ~30 s, and restart the `chrome` unit i
 Check the open question from product.md: **does Chrome with several windows fit in 4 GB?** Open 4–5 windows on heavy sites and record memory use. If it doesn't fit, raise the instance size question with the founder.
 
 Done when Chrome runs on both the local image and the AMI, survives a crash via restart, and the profile persists across restarts.
+
+Architecture: the local image is arm64 (docs/design.md §18), while production is x86_64. Check whether Google publishes Chrome stable for linux-arm64 today. If not, decide with the user between Chromium locally (and Chrome in production), or another way to keep the local and production browsers alike (profile format and CDP behaviour matter).
