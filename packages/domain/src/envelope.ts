@@ -8,6 +8,7 @@
  * - Caching: output depends only on the inputs (never the clock or the
  *   process's time zone), so the same item always renders to the same bytes.
  */
+import { canonicalJson } from "@winston/shared/json";
 import { formatInTimeZone } from "@winston/shared/time";
 import type { UserMessagePayload } from "./inbound.ts";
 
@@ -128,17 +129,4 @@ export function renderBatch(items: readonly EnvelopeItem[], timeZone: string) {
         : renderEvent(item, timeZone),
     )
     .join("\n\n");
-}
-
-/** JSON with object keys sorted at every level, so key order never changes the bytes. */
-function canonicalJson(value: unknown) {
-  return JSON.stringify(value ?? null, (_key, nested: unknown) =>
-    nested !== null && typeof nested === "object" && !Array.isArray(nested)
-      ? Object.fromEntries(
-          Object.entries(nested).sort(([a], [b]) =>
-            a < b ? -1 : a > b ? 1 : 0,
-          ),
-        )
-      : nested,
-  );
 }

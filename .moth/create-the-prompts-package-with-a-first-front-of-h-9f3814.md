@@ -1,14 +1,14 @@
 ---
 id: "9f3814"
 title: Create the prompts package with a first front-of-house prompt
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m1
   - prompts
 created_at: 2026-09-27T05:30:54.585Z
-updated_at: 2026-09-27T05:30:54.616Z
+updated_at: 2026-09-27T20:04:20.952Z
 blocked_by:
   - "87ce11"
 ---
@@ -29,3 +29,10 @@ Write a **best-effort first draft** of the front-of-house system prompt. The fou
 Leave clearly marked sections for capabilities added in later milestones (bash and CLI, delegation, triggers, notes). The prompt must be **fully static**: no dates, names or user data, which is an invariant for caching.
 
 Tests: the hash is stable across runs and key orders, and changes when the text changes.
+
+## Outcome
+
+Built as described in docs/design.md §1.
+- **No placeholder sections:** the prompt has no marked sections for later capabilities. It describes only what exists (for now, talking in chat via `send_message`) and says plainly that Winston can't do anything else yet. Each capability's ticket adds its own section. Placeholders would be speculative stubs, and they'd tell the model about tools it doesn't have.
+- **Loader:** it uses Bun's text imports (`with { type: "text" }`), which inline the Markdown at bundle time, with a `*.md` module declaration.
+- **Hashing:** `promptHash(systemPrompt, tools)` / `promptVersion(name, tools)` hash the canonical JSON of both. `canonicalJson` moved to `@winston/shared/json`, since the envelope uses it too.

@@ -5,6 +5,7 @@
   "exports": {
     "./config": "./src/config.ts",
     "./ids": "./src/ids.ts",
+    "./json": "./src/json.ts",
     "./logger": "./src/logger.ts",
     "./time": "./src/time.ts"
   },

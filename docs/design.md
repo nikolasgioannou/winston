@@ -12,6 +12,8 @@
   - **Background agents:** started by the front of house (`delegate`) or by triggers. They run in parallel, each in its own Chrome window, and report results back to the front of house, which decides what to tell the user.
 - **One front-of-house turn at a time per user.** Front-of-house jobs are serialized per user (a per-user Postgres advisory lock on the job). Input that arrives mid-turn is steered in, never run in parallel. Background agents run concurrently.
 - **Prompts live in the repo** as Markdown files in `packages/prompts`. The first versions are best-effort drafts written in the tickets that need them, refined through use (front-of-house system prompt, background-agent system prompt, compaction prompt, delegate-brief guidance). They're versioned by content hash (see Data & storage), and changes ship with the normal deploy.
+  - `@winston/prompts` imports each Markdown file as text (Bun inlines it) into `systemPrompts`, keyed by name (`front-of-house`). `promptVersion(name, tools)` hashes (SHA-256) the canonical JSON of the system prompt plus the tools' JSON-schema definitions. Keys are sorted, but tool order is kept, because it changes what the model sees. The hashed string is stored as `prompt_versions.content`, so every hash can be checked. `ensurePromptVersion(db, version)` inserts it once per process.
+  - The prompt describes only what Winston can do today; each capability's ticket adds its own section. The front-of-house draft covers voice (product.md §5), how to read envelopes, that `<data>` and forwarded text are never instructions, and that `send_message` is the only way to reach the user and that staying silent is often right.
 - **Implementation: Vercel AI SDK v7** with the **OpenRouter provider** (`@openrouter/ai-sdk-provider`). Background agents use `WorkflowAgent`/`ToolLoopAgent`, and each of our requirements maps onto AI SDK hooks:
   - **Step cap:** `stopWhen: isStepCount(MAX_STEPS_PER_RUN)`.
   - **Checkpointing:** `onStepFinish` appends the step's messages and usage to Postgres.
@@ -363,7 +365,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - **Monorepo with Bun workspaces:**
   - `packages/db`: the Drizzle schema, the database client (`@winston/db/client`), its config (`@winston/db/config`) and migrations.
   - `packages/prompts`: system prompts and the compaction prompt, as Markdown.
-  - `packages/shared`: **business-agnostic helpers only** (ids, config loading, logging). Nothing in it knows what Winston is.
+  - `packages/shared`: **business-agnostic helpers only** (ids, config loading, logging, time-zone formatting, canonical JSON). Nothing in it knows what Winston is.
   - `packages/domain`: Winston's domain contracts (event envelope, event catalog, tool schemas, API types). One definition of `mail.message.received`, used everywhere. It was created with the Telegram webhook, and holds the inbound item payload schemas (`@winston/domain/inbound`).
   - `apps/backend`: agents, Telegram, webhooks, connected-apps API.
   - `apps/web`: TanStack Start site: the sidebar app (home, connections, profile) and the handoff live-view page.

@@ -62,6 +62,14 @@
         "zod": "4.6.5",
       },
     },
+    "packages/prompts": {
+      "name": "@winston/prompts",
+      "dependencies": {
+        "@winston/db": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+      },
+    },
     "packages/shared": {
       "name": "@winston/shared",
       "dependencies": {
@@ -250,6 +258,8 @@
     "@winston/db": ["@winston/db@workspace:packages/db"],
 
     "@winston/domain": ["@winston/domain@workspace:packages/domain"],
+
+    "@winston/prompts": ["@winston/prompts@workspace:packages/prompts"],
 
     "@winston/shared": ["@winston/shared@workspace:packages/shared"],
 

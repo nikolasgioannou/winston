@@ -1,0 +1,16 @@
+{
+  "name": "@winston/prompts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@winston/db": "workspace:*",
+    "@winston/shared": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.4"
+  }
+}
