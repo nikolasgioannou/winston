@@ -25,3 +25,5 @@ Behaviour:
 The token must never be readable by the `winston` user. Verify that inside the container (`sudo -u winston cat /etc/winstond/token` fails).
 
 Tests: the backoff schedule, token persistence logic, and handling a replaced connection, with a fake gateway. Integration check: boot the local image with `winstond` baked in, and watch it register and turn `ready`.
+
+The image has no `winstond` systemd unit yet. Add it in this ticket, together with the binary: a placeholder unit without a binary would leave systemd `degraded`. Put the unit in the provisioning scripts (`image/scripts/`), as the other units will be.

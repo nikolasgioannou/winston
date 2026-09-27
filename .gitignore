@@ -1,3 +1,5 @@
 node_modules
 .DS_Store
 .env.local
+# Packer plugins, installed per checkout (bun run image:build:local).
+.packer/

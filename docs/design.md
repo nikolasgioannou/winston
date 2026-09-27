@@ -992,6 +992,12 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
   - **The trade-off:** with the host cgroup namespace and a writable cgroup mount, the container can see and change the Colima VM's cgroup tree, including other containers like Postgres, but not the Mac. That's much narrower than `--privileged` (all capabilities and devices), and it only applies locally. Production runs on a real EC2 VM.
   - **Architecture:** the local image is **arm64**, native on Apple Silicon. Emulating amd64 crashes Bun (see Risks). Production is x86_64, so provisioning scripts must work on both. Chrome on linux-arm64 is decided in the Chrome ticket.
 - The CLI and `winstond` binaries are baked in at build time and self-update afterwards.
+- **Built so far** (`image/`):
+  - **Packer:** pinned in `mise.toml`. Its Docker plugin installs into the gitignored `.packer/` in each checkout, never the global `~/.config/packer`.
+  - **Building:** `bun run image:build:local` runs `packer init` and `packer build -only=docker.local`, producing `winston-vm:local` for `linux/arm64` (the `docker_platform` variable). The Docker source commits the container with `ENV container=docker`, `STOPSIGNAL SIGRTMIN+3` and `CMD ["/sbin/init"]`.
+  - **Scripts:** `base.sh` (the CLI tools, Python 3, fonts, systemd), `systemd.sh` (masks the container-only units when `WINSTON_TARGET=docker`) and `users.sh` (`winston` with `/home/winston`, `winstond` as a system user with no login shell, and `/etc/winstond` at 0700). Every script works on both amd64 and arm64.
+  - **Arriving with their tickets:** Chrome, Xvfb and noVNC (M8), the `winstond` unit (with its binary), and the EC2-only swap and unattended-upgrades (with the AMI, M4).
+  - **Formatting:** `packer fmt` is part of `bun run format` / `format:check`.
 
 ## 19. CDK stacks (`infra/`)
 

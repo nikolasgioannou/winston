@@ -1,14 +1,14 @@
 ---
 id: "ea07c8"
 title: Create the Packer template and provisioning scripts for the local image
-status: todo
+status: done
 priority: none
 labels:
   - m2
   - tooling
   - vm
 created_at: 2026-09-27T05:32:51.127Z
-updated_at: 2026-09-27T05:32:51.158Z
+updated_at: 2026-09-27T23:43:08.984Z
 blocked_by:
   - "307272"
 ---
@@ -30,3 +30,12 @@ Provisioning scripts in `image/scripts/`, split by concern and runnable on a pla
 Add `bun run image:build:local`. Done when it produces a Docker image that boots with systemd and has both users and the directory layout.
 
 Also, from the systemd spike (docs/design.md §18): the local image is **arm64** (native on Apple Silicon; emulating amd64 crashes Bun), while the AMI is x86_64. So every provisioning script must work on both architectures (package names, download URLs chosen by `uname -m`).
+
+## Outcome
+
+Built as described in docs/design.md §18 ("Built so far").
+- **Build:** `bun run image:build:local` builds `winston-vm:local` (arm64) in about 20 s. Booted with the spike's flags, it reaches systemd `running`, with both users, the directory layout and the tools in place.
+- **Packer:** pinned in `mise.toml` (1.16.1). Plugins install into the gitignored `.packer/`, so nothing global changes. `packer fmt` joined the format check.
+- **Deferred per "build for today":**
+  - The placeholder `winstond` unit moved to the winstond ticket (#40), because without a binary it would leave systemd `degraded`.
+  - The EC2-only swap and unattended-upgrades moved to the AMI ticket (M4), because nothing could test them yet.

@@ -26,3 +26,5 @@ EC2-only provisioning steps, guarded so the Docker build skips them:
 Add a manually triggered GitHub Actions workflow `ami.yml` that builds and registers the AMI, plus a local `bun run image:build:ami`. Record the latest AMI id where the Vm stack can find it (an SSM parameter is a good fit).
 
 Done when an AMI exists, and an instance launched from it by hand boots with the data volume mounted and `winstond` installed.
+
+From the local image ticket: add the **EC2-only** provisioning here, guarded by `WINSTON_TARGET=ec2` so the Docker build skips it: the 2 GB swap file and unattended-upgrades (docs/design.md §18). They weren't written earlier because nothing could test them before the EC2 build existed.
