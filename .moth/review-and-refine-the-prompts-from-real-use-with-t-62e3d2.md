@@ -20,6 +20,6 @@ Every prompt so far was a best-effort draft written in the ticket that needed it
 With the founder:
 - Pull examples from the database log of where Winston was too chatty, too quiet, got confirm-first wrong, wrote weak briefs, forgot to check notes, set up poor triggers, or wasted steps in the browser. Use the cost report too, to find expensive patterns.
 - Rewrite the front-of-house, background and compaction prompts with those lessons. Keep them static and lean, and move command detail into `--help` wherever the prompt is carrying CLI specifics.
-- Check the tool descriptions (`send_message`, `delegate`, `bash`, `view_image`, `browser_handoff`) as carefully as the prompts. They're prompts too.
+- Check the tool descriptions (`no_reply`, `delegate`, `bash`, `view_image`, `browser_handoff`) as carefully as the prompts. They're prompts too.
 
 Each prompt change produces a new `prompt_versions` hash automatically, so before-and-after behaviour stays traceable in the log. Done when the founder is happy with how Winston behaves day to day.

@@ -107,7 +107,7 @@ Winston gets his own (local Docker) computer: `winstond`, `gateway`, `bash`, `vi
 | 48  | `245cbb` | Bake the CLI and winstond binaries into the image                       | `2dd479`, `6dc140`, `ae2a73` |
 | 49  | `961613` | Provision the seeded user's local VM in bun dev                         | `245cbb`, `6bac51`           |
 | 50  | `ca5d9c` | Save inbound Telegram attachments to the VM and show them to the model  | `980988`, `cb9674`           |
-| 51  | `68fe0c` | Let send_message deliver files from the VM                              | `980988`, `ed1e47`           |
+| 51  | `68fe0c` | Let Winston send files from the VM                                      | `980988`, `ed1e47`           |
 | 52  | `0e0c6c` | Transcribe voice notes                                                  | `0bfb79`, `ca5d9c`           |
 | 53  | `bbfa17` | Teach the front of house about its computer                             | `68e9cc`, `737b8c`, `ae2a73` |
 

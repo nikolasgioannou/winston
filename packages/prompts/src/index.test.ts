@@ -59,8 +59,8 @@ describe("promptHash", () => {
 });
 
 describe("systemPrompts", () => {
-  test("the front-of-house prompt is loaded and names its one channel to the user", () => {
-    expect(systemPrompts["front-of-house"]).toContain("send_message");
+  test("the front-of-house prompt is loaded and explains how to stay silent", () => {
+    expect(systemPrompts["front-of-house"]).toContain("no_reply");
   });
 });
 

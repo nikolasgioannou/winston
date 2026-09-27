@@ -4,7 +4,11 @@
  */
 import { createDb } from "@winston/db/client";
 import { createLogger } from "@winston/shared/logger";
+import { Api } from "grammy";
 import { loadAgentsConfig } from "./config.ts";
+import { frontTurnHandler } from "./front/handler.ts";
+import { createModelGateway } from "./model/gateway.ts";
+import { dbModelCallSink } from "./model/log.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
@@ -14,11 +18,18 @@ const logger = createLogger("agents", {
 });
 const db = createDb(config.DATABASE_URL);
 
-// Job handlers are registered here as the tickets that need them arrive.
+const gateway = createModelGateway({
+  apiKey: config.OPENROUTER_API_KEY,
+  sink: dbModelCallSink(db, logger),
+});
+const telegram = new Api(config.TELEGRAM_BOT_TOKEN);
+
 const worker = createWorker({
   db,
   logger,
-  handlers: {},
+  handlers: {
+    front_turn: frontTurnHandler({ gateway, telegram }),
+  },
   concurrency: config.WORKER_CONCURRENCY,
 });
 

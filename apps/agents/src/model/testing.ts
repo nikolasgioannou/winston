@@ -77,3 +77,46 @@ export function testRun(overrides: Partial<ModelRun> = {}): ModelRun {
     ...overrides,
   };
 }
+
+let toolCallCount = 0;
+
+/** A scripted reply in which the model calls one tool, optionally writing `text` alongside. */
+export function toolCallReply(
+  name: string,
+  input: Record<string, unknown>,
+  text = "",
+) {
+  toolCallCount += 1;
+  return {
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: text,
+          tool_calls: [
+            {
+              id: `call_${String(toolCallCount)}`,
+              type: "function",
+              function: { name, arguments: JSON.stringify(input) },
+            },
+          ],
+        },
+        finish_reason: "tool_calls",
+      },
+    ],
+  };
+}
+
+/** A scripted reply in which the model writes text and stops. */
+export function textReply(text: string) {
+  return {
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: text },
+        finish_reason: "stop",
+      },
+    ],
+  };
+}

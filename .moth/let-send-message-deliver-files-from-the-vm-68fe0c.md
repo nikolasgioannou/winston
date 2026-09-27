@@ -1,6 +1,6 @@
 ---
 id: "68fe0c"
-title: Let send_message deliver files from the VM
+title: Let Winston send files from the VM
 status: todo
 priority: none
 labels:
@@ -16,7 +16,7 @@ blocked_by:
 
 Winston can send photos and files from his computer, for example a screenshot of a booking confirmation or a downloaded PDF (docs/design.md §4 Media).
 
-Extend `send_message` with optional `attachments: string[]` of VM paths:
+Replies are the final text, not a `send_message` tool (docs/design.md §4, decision #68), so first decide how files get attached. For example, an `attach(paths)` tool whose files go out with the reply, keeping invariant 6's tiny tool surface in mind (adding a native tool needs a maintainer). Attachments are VM paths:
 - Read each file through gateway's file API and upload it to Telegram. Images go as photos (unless they're huge, in which case send as a document to avoid compression). Everything else goes as a document.
 - Telegram's upload limit for bots is 50 MB. Reject larger files with an error the model can explain.
 - Several attachments go as a media group where Telegram allows mixing, otherwise as separate messages.
