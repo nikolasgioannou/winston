@@ -8,7 +8,7 @@ labels:
   - m1
   - telegram
 created_at: 2026-09-27T05:30:54.448Z
-updated_at: 2026-09-27T05:30:54.509Z
+updated_at: 2026-09-27T18:08:36.918Z
 blocked_by:
   - "76c143"
   - "9869b7"
@@ -34,3 +34,5 @@ Behaviour:
 Also add a `bun run telegram:webhook` script that registers the webhook (URL from the tunnel base URL, plus the secret) for the configured bot and shows its current status.
 
 Tests: webhook handler unit tests with fixture updates (text, reply, forwarded, group chat, unknown chat, duplicate update, bad secret).
+
+Also document in `docs/local-dev.md` how to find your Telegram chat id for `SEED_TELEGRAM_CHAT_ID` (deferred from `762cf0`), for example by messaging the dev bot and reading the update with a `getUpdates` call before the webhook is set.

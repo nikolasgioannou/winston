@@ -1,2 +1,4 @@
 # Moth writes and owns these files; formatting them would fight its output.
 .moth/
+# drizzle-kit writes these; reformatting them would fight its output.
+packages/db/migrations/

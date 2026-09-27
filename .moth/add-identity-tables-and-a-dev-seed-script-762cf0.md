@@ -1,13 +1,13 @@
 ---
 id: "762cf0"
 title: Add identity tables and a dev seed script
-status: todo
+status: done
 priority: none
 labels:
   - db
   - m1
 created_at: 2026-09-27T05:30:53.971Z
-updated_at: 2026-09-27T17:33:02.639Z
+updated_at: 2026-09-27T18:08:36.935Z
 blocked_by:
   - "2c5ac8"
   - "5b4554"
@@ -29,6 +29,8 @@ Write `bun run db:seed` (idempotent, local only):
 - Adds that email to `allowed_emails`.
 - Links `SEED_TELEGRAM_CHAT_ID`.
 
-Document in `docs/local-dev.md` how to find your Telegram chat id: message the dev bot and read the update, for example with a tiny `getUpdates` call before a webhook is set. The seed must refuse to run when the environment is `production`.
+`SEED_TELEGRAM_CHAT_ID` is optional. How to find your chat id is documented by the Telegram webhook ticket (`e47a50`), once a dev bot exists. The seed refuses any database that isn't on `localhost`/`127.0.0.1`, which is a real guard today, with no environment-name setting needed.
+
+Also done here: the id prefix registry in `packages/db/src/ids.ts` (`idPrefixes`, `newId`, with a uniqueness test), migrations named with `--name`, Prettier ignoring `packages/db/migrations/`, the `SEED_*` values in `.env.example`, and `scripts/setup.sh` applying migrations and seeding once configured.
 
 Tests: the seed is idempotent (running it twice leaves one row of each), and uniqueness constraints hold.

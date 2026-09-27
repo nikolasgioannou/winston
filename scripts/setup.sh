@@ -11,6 +11,8 @@
 #   7. Check that a Docker engine is reachable (starting Colima if it's installed but
 #      stopped). Docker is a machine-level prerequisite, so this script never installs it.
 #   8. Start the local Postgres and wait until it's healthy.
+#   9. Apply database migrations (already-applied ones are skipped).
+#  10. Seed the local database with your user, once SEED_* values are set in .env.local.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -96,6 +98,22 @@ else
   doing "starting Postgres"
   docker compose up --detach --wait postgres >/dev/null 2>&1 || fail "Postgres failed to start. Run 'docker compose up postgres' to see why"
   done_ "Postgres running"
+fi
+
+if ! migrate_output=$(mise exec -- bun run db:migrate 2>&1); then
+  echo "$migrate_output" >&2
+  fail "database migrations failed"
+fi
+done_ "database migrated"
+
+if grep -qE '^SEED_EMAIL=.+' .env.local; then
+  if ! seed_output=$(mise exec -- bun run db:seed 2>&1); then
+    echo "$seed_output" >&2
+    fail "seeding failed"
+  fi
+  done_ "database seeded"
+else
+  done_ "seed skipped (set the SEED_* values in .env.local to create your user)"
 fi
 
 echo "Done."
