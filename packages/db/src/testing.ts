@@ -9,7 +9,7 @@ import postgres from "postgres";
 import { z } from "zod";
 import { createDb, type Db, type DbOrTx } from "./client.ts";
 import { assertLocalDatabase } from "./config.ts";
-import { users } from "./schema/index.ts";
+import { runs, users } from "./schema/index.ts";
 
 const testConfigSchema = z.object({
   TEST_DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
@@ -106,4 +106,18 @@ export async function insertUser(
     .returning();
   if (!user) throw new Error("Inserting a test user returned no row.");
   return user;
+}
+
+/** Inserts a run for `userId`; pass fields to override. */
+export async function insertRun(
+  db: DbOrTx,
+  userId: string,
+  overrides: Partial<typeof runs.$inferInsert> = {},
+) {
+  const [run] = await db
+    .insert(runs)
+    .values({ userId, ...overrides })
+    .returning();
+  if (!run) throw new Error("Inserting a test run returned no row.");
+  return run;
 }

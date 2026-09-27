@@ -1,24 +1,32 @@
 ---
 id: "c5850d"
 title: Add conversation and run tables
-status: todo
+status: done
 priority: none
 labels:
   - db
   - m1
 created_at: 2026-09-27T05:30:54.047Z
-updated_at: 2026-09-27T05:30:54.078Z
+updated_at: 2026-09-27T18:43:29.280Z
 blocked_by:
   - "762cf0"
 ---
 
-These tables are the backbone of the agent system: what arrives (`inbound_items`), what Winston sends (`outbound_messages`), each agent run (`runs`), and the append-only message log that doubles as the checkpoint (`run_messages`). Also `front_state`, the FIFO pointer for the front of house. Columns are sketched in docs/design.md §14. Treat that as a starting point and adjust if something better emerges, updating the doc in the same commit.
+The backbone of the agent system: what arrives (`inbound_items`), what Winston sends (`outbound_messages`), each agent run (`runs`), the append-only message log that doubles as the checkpoint (`run_messages`), and `front_state`, the rolling window's pointer (docs/design.md §14).
 
-Things to get right, because a lot builds on them:
-- `inbound_items.payload` holds **structured** data, never rendered XML. Envelopes are rendered at read time (invariant, §4). Include `consumed_by_run_id`, so a front-of-house turn knows which items it has handled.
-- `run_messages` is **append-only** with a per-run `seq`, and stores AI SDK `ModelMessage` JSON. Add a `kind` column now (`message` | `compaction`), even though compaction arrives in M6, so the table's meaning doesn't change later.
-- The front of house's messages across turns need to read as one continuous stream per user, for the rolling window. Decide how: for example a per-user monotonically increasing sequence, or querying across the user's `front` runs ordered by (run, seq). Record the choice in §14.
-- `runs.status` and `trigger_type` as enums matching §17, so exhaustive `switch`es work.
-- Full-text search columns (`tsv`) can wait for M9's history search. Don't add them now.
+Scoped to what M1's front-of-house turns use. Columns needed only later arrive with their tickets: background-run fields and statuses (M6), compaction's `kind` (M6), attachments (M2), full-text search (M9). Adding a column later is just a migration.
 
-Tests: inserting and reading back a run with messages in order, and the enum constraints rejecting unknown values.
+Decisions:
+- `inbound_items.payload` holds **structured** data, never rendered XML (invariant, §4). `source_ref` is unique, so redeliveries are ignored, and `consumed_by_run_id` marks what a turn has handled (set null if the run is deleted).
+- **The front-of-house stream is `run_messages` in `id` order.** `id` is a bigint identity that increases across all runs, so a user's turns read as one continuous stream. `front_state.window_start_message_id` points into it.
+- `runs.status` is a Postgres enum (today `running` | `completed` | `failed`). `seq` is unique per run.
+- New id prefixes: `run` (front-of-house runs), and `hist` for history items (inbound and outbound share it).
+
+Also adds an `insertRun` test factory. Tests:
+- A run's messages read back in order.
+- Messages across a user's runs form one stream.
+- A duplicate `seq` is rejected.
+- An unknown status is rejected.
+- Duplicate `source_ref` values are ignored.
+- Deleting a run leaves its items unconsumed.
+- The migrations apply cleanly to a fresh test database.

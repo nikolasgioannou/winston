@@ -6,6 +6,9 @@ import { createId } from "@winston/shared/ids";
  */
 export const idPrefixes = {
   user: "usr",
+  frontRun: "run",
+  /** Inbound items and outbound messages together form the history (`hist_`). */
+  historyItem: "hist",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;
