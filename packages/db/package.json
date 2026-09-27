@@ -1,0 +1,23 @@
+{
+  "name": "@winston/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./config": "./src/config.ts"
+  },
+  "scripts": {
+    "db:generate": "bun --env-file=../../.env.local --bun drizzle-kit generate",
+    "db:migrate": "bun --env-file=../../.env.local --bun drizzle-kit migrate",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@winston/shared": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.4",
+    "postgres": "3.4.9",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "1.0.0-rc.4"
+  }
+}

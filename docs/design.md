@@ -343,7 +343,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - **Explicit DTOs at every boundary.** Server functions and API routes select and return deliberate shapes, never raw rows, so fields like `token_ciphertext` can't leak through type inference.
   - No `any`, enforced by `typescript-eslint`.
 - **Monorepo with Bun workspaces:**
-  - `packages/db`: Drizzle schema and migrations.
+  - `packages/db`: the Drizzle schema, the database client (`@winston/db/client`), its config (`@winston/db/config`) and migrations.
   - `packages/prompts`: system prompts and the compaction prompt, as Markdown.
   - `packages/shared`: **business-agnostic helpers only** (ids, config loading, logging). Nothing in it knows what Winston is.
   - `packages/domain`: Winston's domain contracts (event envelope, event catalog, tool schemas, API types). One definition of `mail.message.received`, used everywhere. It's created by the first ticket that needs a domain contract (envelope rendering, M1).
@@ -712,8 +712,10 @@ Tuesday works. Thanks, Dana.
 
 ## 12. Data & storage
 
-- **Access layer: Drizzle ORM** with the `postgres` (postgres.js) driver or Bun's SQL client. The schema is TypeScript in `packages/db`, which is the source of truth for the types every service uses. SQL-shaped queries, with the raw-SQL escape hatch for `FOR UPDATE SKIP LOCKED` and `tsvector`.
-- **Migrations:** `drizzle-kit generate` produces **plain SQL migration files**, committed and reviewed. In production they run as a one-off ECS task before each deploy. Locally, `bun db:migrate`.
+- **Access layer: Drizzle ORM v1** (`1.0.0-rc.4`, pinned exactly) with the **`postgres` (postgres.js)** driver. The schema is TypeScript in `packages/db/src/schema/`, the source of truth for the types every service uses. SQL-shaped queries, with the raw-SQL escape hatch for `FOR UPDATE SKIP LOCKED` and `tsvector`.
+  - **Why v1, though it's a release candidate:** Drizzle's docs now point new projects at it, and it changes things that are painful to migrate later: the migrations folder layout (one folder per migration, no shared journal, designed so parallel branches don't conflict), relational queries v2, the casing API, and built-in Zod validators (`drizzle-orm/zod`). Adopting the stable v1 later is a version bump.
+  - **Why postgres.js over Bun's built-in SQL client:** it's the most proven driver with Drizzle, and it supports what the design needs later: transactions, reserving a connection (for session-level advisory locks) and `LISTEN/NOTIFY`. Only `src/client.ts` would change to switch.
+- **Migrations:** `drizzle-kit generate` produces **plain SQL migration files** in `packages/db/migrations/`, committed and reviewed. drizzle-kit tracks what's applied in `drizzle.__drizzle_migrations`, so `db:migrate` is safe to re-run. drizzle-kit runs under Bun (`bun --bun`) with the root `.env.local` loaded explicitly (`--env-file`), because Bun only auto-loads `.env` files from the current directory and package scripts run inside the package. Root scripts: `bun run db:generate`, `bun run db:migrate`. In production, migrations run as a one-off ECS task before each deploy.
 - **Postgres (RDS) is the single source of truth:** users, connections (tokens encrypted with KMS), messages, tasks and agent checkpoints, triggers, events, jobs, audit log, cost ledger.
 - The user's files, notes, site skills and Chrome profile live on their VM (EBS, snapshotted nightly).
 - **The database is the record. There is no separate observability or eval tooling.** For any agent run to be reconstructable from Postgres alone:
@@ -730,8 +732,8 @@ Tuesday works. Thanks, Dana.
 - **Users' Google tokens are encrypted with KMS** (envelope encryption). Only `api` and `agents` can decrypt.
 - **Database credentials:** RDS-managed master secret with automatic rotation.
 - **VM binary signing:** an asymmetric **KMS** key. CI signs through KMS and never sees the private key. VMs verify with the public key baked into the AMI.
-- **Non-secret config** (model ids, step caps, timeouts, bot username) comes from environment variables defined in CDK and is **validated at startup** with a typed Zod schema in `packages/shared`. Missing or invalid config means the service refuses to start, with a precise error.
-- **Local:** a gitignored `.env.local` holds dev credentials (dev bot, dev OAuth client, dev API keys), validated by the same schema. A committed `.env.example` lists every variable.
+- **Non-secret config** (model ids, step caps, timeouts, bot username) comes from environment variables defined in CDK and is **validated at startup** with Zod: `loadConfig(schema, env)` in `@winston/shared/config` returns a frozen, typed object, or throws one error listing every invalid or missing variable by name, never by value. Each package owns the schema for its own settings (for example `@winston/db/config` for `DATABASE_URL`). Missing or invalid config means the service refuses to start, with a precise error.
+- **Local:** a gitignored `.env.local` at the repo root holds local settings (today only `DATABASE_URL`; later dev bot, dev OAuth client and dev API keys), validated by the same schemas. A committed `.env.example` lists every variable the code reads, and `scripts/setup.sh` creates `.env.local` from it when missing. Package scripts load it with `bun --env-file=../../.env.local`.
 
 ## 13. Security
 
@@ -1028,6 +1030,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 | 61  | Users store first and last name. The web app uses a sidebar shell (Home, Connections: Accounts + Telegram, You: Profile + Delete) instead of a settings page, and `/home` doubles as first-run setup. End-to-end type safety (Drizzle → server functions / Hono RPC → clients, shared Zod contracts, explicit DTOs) is an invariant.                          | Clearer navigation, and one source of truth for types.                                                                                                                                          |
 | 62  | TypeScript 6.0.x (newest `typescript-eslint`-compatible), per-package tsconfigs extending a shared base, no project references, no `incremental`.                                                                                                                                                                                                             | Fits Bun's no-build model. Follows Turborepo's guidance for source-exporting internal packages. Avoids hand-synced references.                                                                  |
 | 63  | `packages/shared` holds business-agnostic helpers only. Winston's domain contracts live in `packages/domain`. Id prefixes are declared per entity in `packages/db`, which assembles the registry.                                                                                                                                                             | Clear ownership: plumbing vs domain. `shared` never becomes a junk drawer. Uniqueness and resolution need one list, owned where entities live.                                                  |
+| 64  | Drizzle ORM v1 RC with postgres.js; a Zod `loadConfig` in `packages/shared`, with each package owning its config schema; one root `.env.local` loaded explicitly with `--env-file`.                                                                                                                                                                           | v1's migration layout and APIs are costly to adopt later. postgres.js supports the locks and `LISTEN/NOTIFY` we'll need. Bun only auto-loads `.env` from the current directory.                 |
 
 ## Risks & flags
 

@@ -7,9 +7,10 @@
 #   3. Install the runtimes pinned in mise.toml.
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
-#   6. Check that a Docker engine is reachable (starting Colima if it's installed but
+#   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
+#   7. Check that a Docker engine is reachable (starting Colima if it's installed but
 #      stopped). Docker is a machine-level prerequisite, so this script never installs it.
-#   7. Start the local Postgres and wait until it's healthy.
+#   8. Start the local Postgres and wait until it's healthy.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -70,6 +71,13 @@ else
   doing "installing git hooks"
   mise exec -- bunx lefthook install >/dev/null
   done_ "git hooks installed"
+fi
+
+if [ -f .env.local ]; then
+  done_ ".env.local exists"
+else
+  doing "creating .env.local from .env.example"
+  cp .env.example .env.local
 fi
 
 if docker info >/dev/null 2>&1; then

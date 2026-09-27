@@ -2,10 +2,15 @@
   "name": "@winston/shared",
   "private": true,
   "type": "module",
+  "exports": {
+    "./config": "./src/config.ts",
+    "./ids": "./src/ids.ts"
+  },
   "scripts": {
     "typecheck": "tsc"
   },
   "dependencies": {
-    "typeid-js": "1.2.0"
+    "typeid-js": "1.2.0",
+    "zod": "4.6.5"
   }
 }

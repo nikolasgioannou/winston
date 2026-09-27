@@ -60,7 +60,7 @@ It starts with the database foundation (Drizzle with config, the first tables, t
 
 | #   | Ticket   | Title                                                            | Blocked by                                       |
 | --- | -------- | ---------------------------------------------------------------- | ------------------------------------------------ |
-| 11  | `2c5ac8` | Set up packages/db with Drizzle and SQL migrations               | `676648`                                         |
+| 11  | `2c5ac8` | Set up packages/db with Drizzle, migrations and typed config     | `676648`                                         |
 | 12  | `762cf0` | Add identity tables and a dev seed script                        | `2c5ac8`, `5b4554`                               |
 | 13  | `fc638d` | Build a Postgres-backed test harness                             | `2c5ac8`, `5b4554`, `762cf0`                     |
 | 14  | `9378a8` | Add structured logging shared by all services                    | `2c5ac8`                                         |
