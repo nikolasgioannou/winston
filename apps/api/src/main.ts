@@ -1,8 +1,10 @@
 /** The api service: public webhooks and OAuth callbacks (docs/design.md §9). */
 import { createDb } from "@winston/db/client";
 import { createLogger } from "@winston/shared/logger";
+import { Api } from "grammy";
 import { createApp } from "./app.ts";
 import { loadApiConfig } from "./config.ts";
+import { botIdFromToken } from "./telegram/config.ts";
 
 const config = loadApiConfig();
 const logger = createLogger("api", {
@@ -13,7 +15,15 @@ const db = createDb(config.DATABASE_URL);
 const server = Bun.serve({
   hostname: config.API_HOST,
   port: config.API_PORT,
-  fetch: createApp({ db, logger }).fetch,
+  fetch: createApp({
+    db,
+    logger,
+    telegram: {
+      sender: new Api(config.TELEGRAM_BOT_TOKEN),
+      botId: botIdFromToken(config.TELEGRAM_BOT_TOKEN),
+      webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
+    },
+  }).fetch,
 });
 
 let stopping = false;

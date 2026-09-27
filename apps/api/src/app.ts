@@ -1,12 +1,19 @@
-import type { Db } from "@winston/db/client";
+import type { DbOrTx } from "@winston/db/client";
 import type { Logger } from "@winston/shared/logger";
 import { Hono } from "hono";
 import { requestId, type RequestIdVariables } from "hono/request-id";
 import { healthRoutes } from "./routes/health.ts";
+import { telegramWebhookRoutes } from "./routes/telegram-webhook.ts";
+import type { TelegramSender } from "./telegram/handle-update.ts";
 
 export interface ApiDeps {
-  db: Db;
+  db: DbOrTx;
   logger: Logger;
+  telegram: {
+    sender: TelegramSender;
+    botId: string;
+    webhookSecret: string;
+  };
 }
 
 export interface ApiEnv {
@@ -44,5 +51,6 @@ export function createApp(deps: ApiDeps) {
   app.notFound((c) => c.json({ error: "not_found" }, 404));
 
   app.route("/health", healthRoutes(deps));
+  app.route("/webhooks/telegram", telegramWebhookRoutes(deps));
   return app;
 }

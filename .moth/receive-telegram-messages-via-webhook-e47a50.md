@@ -36,3 +36,13 @@ Also add a `bun run telegram:webhook` script that registers the webhook (URL fro
 Tests: webhook handler unit tests with fixture updates (text, reply, forwarded, group chat, unknown chat, duplicate update, bad secret).
 
 Also document in `docs/local-dev.md` how to find your Telegram chat id for `SEED_TELEGRAM_CHAT_ID` (deferred from `762cf0`), for example by messaging the dev bot and reading the update with a `getUpdates` call before the webhook is set.
+
+## Outcome
+
+Built as described in docs/design.md §4 ("Telegram inbound"); setup is in docs/local-dev.md.
+- **Route:** the webhook is our own Hono route using grammY's `Api` client and types, not `webhookCallback`. That adapter calls `getMe` before checking the secret, needs `botInfo` in tests, and hides the transaction.
+- **Payload schema:** the `user_message` payload is a Zod schema in the new `packages/domain` (`@winston/domain/inbound`), so the envelope ticket reads the same definition.
+- **Queue:** it gained `delayMs`, so the 1.5 s debounce uses the database's clock. `reschedule` now takes the would-be inserted run time (`excluded.run_at`).
+- **Lint:** `switch-exhaustiveness-check` is on, since the forward-origin mapping is the first switch over a union.
+- **Chat id:** the chat id is found from the api log line for an unlinked chat, rather than `getUpdates` (which fails with a 409 while a webhook is set).
+- **Config:** `setup.sh` generates `TELEGRAM_WEBHOOK_SECRET`. The api now requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`, and `telegram:webhook` needs `API_PUBLIC_URL`.

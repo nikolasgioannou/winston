@@ -1,0 +1,14 @@
+{
+  "name": "@winston/domain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./inbound": "./src/inbound.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}

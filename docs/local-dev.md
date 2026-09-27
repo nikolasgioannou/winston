@@ -3,8 +3,9 @@
 ## First-time setup
 
 1. Run `./scripts/setup.sh`. It installs everything, creates `.env.local` from `.env.example`, starts Postgres and reports anything that still needs you.
-2. Fill in the `SEED_*` values in `.env.local` (the user you'll develop as), then re-run `./scripts/setup.sh` to seed them.
+2. Fill in the `SEED_*` values in `.env.local` (the user you'll develop as), leaving `SEED_TELEGRAM_CHAT_ID` blank for now, then re-run `./scripts/setup.sh` to seed them.
 3. Set up your [webhook tunnel](#webhook-tunnel).
+4. Set up your [Telegram dev bot](#telegram-dev-bot), which includes linking your chat.
 
 ## Running
 
@@ -29,3 +30,19 @@ cloudflared tunnel route dns <tunnel-name> <hostname>
 ```
 
 `login` opens a browser to authorize one domain. The certificate and tunnel credentials are saved in `~/.cloudflared/`, outside the repo; keep them private. Then set `TUNNEL_NAME` (and `TUNNEL_ORIGIN_URL` if the api isn't on port 3000) in `.env.local`.
+
+## Telegram dev bot
+
+Each developer uses their own bot, so webhooks from your chats reach your machine. The maintainer's is @RunWinstonDevBot.
+
+1. In Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot` and follow the prompts. Put the token it gives you in `TELEGRAM_BOT_TOKEN` in `.env.local`. `setup.sh` already generated `TELEGRAM_WEBHOOK_SECRET`.
+2. Set `API_PUBLIC_URL` to your tunnel's hostname, then point the bot's webhook at it:
+
+   ```bash
+   bun run telegram:webhook
+   ```
+
+   It prints the webhook's status, including the last delivery error if there is one. Re-run it whenever the URL, secret or bot changes.
+
+3. Find your chat id: start `bun dev` and send your bot any message. It replies that it doesn't know you, and the `api` logs `message from an unlinked chat` with your `chatId`.
+4. Put that id in `SEED_TELEGRAM_CHAT_ID` and re-run `./scripts/setup.sh` to link your chat. Your next message is stored and queues a turn for Winston.

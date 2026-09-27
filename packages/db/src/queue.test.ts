@@ -34,8 +34,30 @@ describe("enqueue", () => {
     ).toEqual([]);
   });
 
+  test("delayMs makes the job due that long from now", async () => {
+    await inRollback(db, async (tx) => {
+      const id = await enqueue(tx, "delayed", { delayMs: 60_000 });
+      const [row] = await tx.select().from(jobs).where(eq(jobs.id, id));
+      const delay = (row?.runAt.getTime() ?? 0) - Date.now();
+      // Allow for the database's clock (in a VM locally) differing slightly from ours.
+      expect(delay).toBeGreaterThan(55_000);
+      expect(delay).toBeLessThan(61_000);
+    });
+  });
+
   describe("with a dedupe key", () => {
     beforeEach(() => truncateAll(db));
+
+    test("reschedule with delayMs pushes the queued job later", async () => {
+      const id = await enqueue(db, "demo", { dedupeKey: "k", delayMs: 1_000 });
+      await enqueue(db, "demo", {
+        dedupeKey: "k",
+        delayMs: 60_000,
+        onDuplicate: "reschedule",
+      });
+      const [row] = await db.select().from(jobs).where(eq(jobs.id, id));
+      expect(row?.runAt.getTime()).toBeGreaterThan(Date.now() + 55_000);
+    });
 
     test("ignores a duplicate of a queued job", async () => {
       const first = await enqueue(db, "demo", {

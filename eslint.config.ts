@@ -11,6 +11,10 @@ export default defineConfig(
       tseslint.configs.strictTypeChecked,
       tseslint.configs.stylisticTypeChecked,
     ],
+    rules: {
+      // Not in the presets: a switch over a union must handle every member.
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+    },
     languageOptions: {
       parserOptions: {
         // Each file is type-checked with its nearest tsconfig.json.

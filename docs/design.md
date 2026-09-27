@@ -138,14 +138,14 @@ Two classes of event:
 
 **Always delivered**
 
-| Event                                                  | When                                                                                                             | Key data                                                                      |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `user_message`                                         | User sends a Telegram message                                                                                    | text, `sent_at`, reply-to message (if any), attachments                       |
-| `telegram.reaction.added`                              | User reacts to one of Winston's messages (👍, 👎…)                                                               | emoji, target message. A cheap feedback signal ("stop sending these")         |
-| `task.completed` / `task.failed`                       | A background agent finishes                                                                                      | task id, brief, result or error                                               |
-| `task.needs_user`                                      | A background agent is blocked (handoff, or a question)                                                           | task id, handoff link or question                                             |
-| `system.onboarding.completed`                          | VM ready and Telegram linked                                                                                     | Winston sends a brief hello. No onboarding study (the user guides from there) |
-| `system.app.auth_expiring` / `system.app.auth_expired` | A connected app's token is about to expire or has expired (for example, Google testing-mode tokens every 7 days) | app, re-auth link. Winston nudges the user                                    |
+| Event                                                  | When                                                                                                             | Key data                                                                               |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `user_message`                                         | User sends a Telegram message                                                                                    | text, `sent_at`, reply-to message (if any), attachments, forward origin (if forwarded) |
+| `telegram.reaction.added`                              | User reacts to one of Winston's messages (👍, 👎…)                                                               | emoji, target message. A cheap feedback signal ("stop sending these")                  |
+| `task.completed` / `task.failed`                       | A background agent finishes                                                                                      | task id, brief, result or error                                                        |
+| `task.needs_user`                                      | A background agent is blocked (handoff, or a question)                                                           | task id, handoff link or question                                                      |
+| `system.onboarding.completed`                          | VM ready and Telegram linked                                                                                     | Winston sends a brief hello. No onboarding study (the user guides from there)          |
+| `system.app.auth_expiring` / `system.app.auth_expired` | A connected app's token is about to expire or has expired (for example, Google testing-mode tokens every 7 days) | app, re-auth link. Winston nudges the user                                             |
 
 **Mail (subscribable; provider: Gmail).** Source: see "How change notifications arrive" below.
 
@@ -223,6 +223,16 @@ Everything that reaches an agent arrives as a user-role message. Real user text 
 - **New message during the final reply:** replies are sent to Telegram only once complete. If new input arrives before the reply is sent, the unsent draft is **discarded and the turn re-run** with the new input. Once a reply is sent, it stays sent. Tool actions already taken are not undone. The re-run sees them and corrects course.
 - **No streaming or live-editing** of replies in Telegram. Instead, a **typing indicator** (`sendChatAction: typing`, re-sent every ~4 s because it expires after 5 s) runs while the front of house is working on a turn.
 - The same steering applies to background agents. For example, a parked browser task receives the "done" signal as an injected item.
+
+### Telegram inbound
+
+- Telegram posts updates to `api` at `POST /webhooks/telegram`. Requests without the right `X-Telegram-Bot-Api-Secret-Token` (`TELEGRAM_WEBHOOK_SECRET`, compared in constant time) get a 401. The webhook subscribes to `message` updates only (`allowed_updates`); the reactions ticket adds `message_reaction`, which Telegram never sends unless it's listed.
+- The route is our own Hono handler, using grammY's `Api` client and `grammy/types`, not grammY's `webhookCallback`. That adapter calls `getMe` before checking the secret on the first request, needs `botInfo` in tests, and hides the transaction inside middleware. The handler is small and fully testable in-process.
+- Only private chats linked in `telegram_links` are processed. Groups and channels are ignored silently. An unlinked private chat gets a one-line polite reply (best effort) and is logged with its chat id, which is also how a developer finds their own.
+- A text message becomes a `user_message` inbound item (`text`, `telegramMessageId`, `replyToTelegramMessageId`, `forwardedFrom` with the original sender's kind, name, username and send time; schema in `@winston/domain/inbound`), with `occurred_at` = the message's `date`. In the same transaction a `front_turn` job is enqueued with dedupe key `front_turn:<userId>`, `delayMs` 1500 and `onDuplicate: "reschedule"`, so a burst of messages produces one turn 1.5 s after the last one. Other message kinds (voice, photos, files) are logged and skipped until media handling (M2).
+- `source_ref` is `telegram:<botId>:<update_id>`, since update ids are only unique per bot, so a redelivered update is ignored (no second item, no second job).
+- Telegram redelivers on any non-2xx response and keeps undelivered updates for 24 hours, delivering one chat's updates in order. So the handler only writes and acknowledges; the work happens in the queued job. Anything that fails is a 500 and Telegram retries.
+- `bun run telegram:webhook` registers the webhook at `API_PUBLIC_URL/webhooks/telegram` with the secret and `allowed_updates`, then prints the webhook's status (pending updates, last error). Re-running it is safe.
 
 ### Telegram formatting
 
@@ -346,7 +356,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - `packages/db`: the Drizzle schema, the database client (`@winston/db/client`), its config (`@winston/db/config`) and migrations.
   - `packages/prompts`: system prompts and the compaction prompt, as Markdown.
   - `packages/shared`: **business-agnostic helpers only** (ids, config loading, logging). Nothing in it knows what Winston is.
-  - `packages/domain`: Winston's domain contracts (event envelope, event catalog, tool schemas, API types). One definition of `mail.message.received`, used everywhere. It's created by the first ticket that needs a domain contract (envelope rendering, M1).
+  - `packages/domain`: Winston's domain contracts (event envelope, event catalog, tool schemas, API types). One definition of `mail.message.received`, used everywhere. It was created with the Telegram webhook, and holds the inbound item payload schemas (`@winston/domain/inbound`).
   - `apps/backend`: agents, Telegram, webhooks, connected-apps API.
   - `apps/web`: TanStack Start site: the sidebar app (home, connections, profile) and the handoff live-view page.
   - `apps/cli`: the Winston CLI (compiled binary).
@@ -390,7 +400,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - **`prettier-plugin-tailwindcss`** for Tailwind class **ordering**, added with the web app.
   - Prettier formats everything it can parse, including `docs/`, but **ignores `.moth/`**, since Moth writes those files and reformatting them would fight its output. `bun.lock` is skipped automatically (no parser). Scripts: `format`, `format:check`.
   - **ESLint 10** (flat config, `eslint.config.ts`, loaded through `jiti`), chosen over Biome for its plugin ecosystem. It lints with the correctness rules, and Prettier owns formatting:
-    - `@eslint/js` recommended + `typescript-eslint`'s **`strictTypeChecked`** and **`stylisticTypeChecked`** presets (they include `no-explicit-any`, `no-floating-promises` and `no-misused-promises`). **`switch-exhaustiveness-check`** gets added by the first ticket that switches over a union (the state machines in §17). It isn't in the presets, and nothing needs it yet. `typescript-eslint` is pinned exactly, because its strict preset can change outside major versions.
+    - `@eslint/js` recommended + `typescript-eslint`'s **`strictTypeChecked`** and **`stylisticTypeChecked`** presets (they include `no-explicit-any`, `no-floating-promises` and `no-misused-promises`). Plus **`switch-exhaustiveness-check`**, which isn't in the presets, so a switch over a union must handle every member. `typescript-eslint` is pinned exactly, because its strict preset can change outside major versions.
     - **Typed linting via `projectService`:** each file uses its nearest `tsconfig.json`. A root `tsconfig.json` covers repo-root TypeScript files (tool configs), so they're type-checked and linted too. The root `typecheck` script runs `tsc` for them before each package's check.
     - **`eslint-config-prettier`** last, turning off anything that overlaps with Prettier. Its checker confirms there are no conflicts.
     - `lint` / `lint:fix` run with `--max-warnings 0`, so warnings fail like errors.

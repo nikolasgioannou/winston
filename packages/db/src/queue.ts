@@ -21,12 +21,14 @@ export interface EnqueueOptions {
   userId?: string;
   /** When the job becomes due. Defaults to now. */
   runAt?: Date;
+  /** Due this long from now by the database's clock. Overrides `runAt`. */
+  delayMs?: number;
   maxAttempts?: number;
   /** At most one queued job per key. */
   dedupeKey?: string;
   /**
    * When a job with the same key is already queued: `ignore` leaves it as it
-   * is (the default); `reschedule` moves its `runAt` to this call's, which is
+   * is (the default); `reschedule` moves its run time to this call's, which is
    * how a debounce pushes a job later with every new trigger.
    */
   onDuplicate?: "ignore" | "reschedule";
@@ -48,7 +50,10 @@ export async function enqueue(
     type,
     payload: options.payload ?? {},
     userId: options.userId,
-    runAt: options.runAt,
+    runAt:
+      options.delayMs === undefined
+        ? options.runAt
+        : sql`now() + ${options.delayMs} * interval '1 millisecond'`,
     maxAttempts: options.maxAttempts,
     dedupeKey: options.dedupeKey,
   });
@@ -58,7 +63,8 @@ export async function enqueue(
           .onConflictDoUpdate({
             target: jobs.dedupeKey,
             targetWhere: queuedOnly,
-            set: { runAt: options.runAt ?? sql`now()` },
+            // The run time this call would have inserted.
+            set: { runAt: sql`excluded.run_at` },
           })
           .returning({ id: jobs.id })
       : await insert

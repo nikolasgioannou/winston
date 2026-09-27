@@ -8,12 +8,14 @@
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
 #   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
-#   7. Check that a Docker engine is reachable (starting Colima if it's installed but
+#   7. Generate a Telegram webhook secret in .env.local if it has none, and check
+#      that a bot token is set (setup: docs/local-dev.md).
+#   8. Check that a Docker engine is reachable (starting Colima if it's installed but
 #      stopped). Docker is a machine-level prerequisite, so this script never installs it.
-#   8. Start the local Postgres and wait until it's healthy.
-#   9. Apply database migrations (already-applied ones are skipped).
-#  10. Seed the local database with your user, once SEED_* values are set in .env.local.
-#  11. Check that the Cloudflare Tunnel in .env.local exists (setup: docs/local-dev.md).
+#   9. Start the local Postgres and wait until it's healthy.
+#  10. Apply database migrations (already-applied ones are skipped).
+#  11. Seed the local database with your user, once SEED_* values are set in .env.local.
+#  12. Check that the Cloudflare Tunnel in .env.local exists (setup: docs/local-dev.md).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -81,6 +83,25 @@ if [ -f .env.local ]; then
 else
   doing "creating .env.local from .env.example"
   cp .env.example .env.local
+fi
+
+if grep -qE '^TELEGRAM_WEBHOOK_SECRET=.+' .env.local; then
+  done_ "Telegram webhook secret set"
+else
+  doing "generating a Telegram webhook secret in .env.local"
+  secret=$(openssl rand -hex 32)
+  # Replace the empty line in place, or append one if the file predates it.
+  awk -v line="TELEGRAM_WEBHOOK_SECRET=$secret" '
+    /^TELEGRAM_WEBHOOK_SECRET=/ { print line; found = 1; next }
+    { print }
+    END { if (!found) print line }
+  ' .env.local >.env.local.tmp
+  mv .env.local.tmp .env.local
+fi
+if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
+  done_ "Telegram bot token set"
+else
+  done_ "Telegram bot token not set yet (needed by the api; see docs/local-dev.md)"
 fi
 
 if docker info >/dev/null 2>&1; then

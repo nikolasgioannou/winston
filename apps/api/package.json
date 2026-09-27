@@ -4,12 +4,15 @@
   "type": "module",
   "scripts": {
     "start": "bun --env-file=../../.env.local src/main.ts",
+    "telegram:webhook": "bun --env-file=../../.env.local src/telegram/set-webhook.ts",
     "typecheck": "tsc"
   },
   "dependencies": {
     "@winston/db": "workspace:*",
+    "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
+    "grammy": "1.46.0",
     "hono": "4.13.9",
     "zod": "4.6.5"
   }

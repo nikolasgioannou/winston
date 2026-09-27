@@ -19,6 +19,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "prepare": "lefthook install",
+    "telegram:webhook": "bun run --filter @winston/api telegram:webhook",
     "test": "bun test --env-file=.env.local",
     "tunnel": "bun scripts/tunnel.ts",
     "typecheck": "tsc && bun run --filter '*' --if-present typecheck"
