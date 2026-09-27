@@ -2,12 +2,19 @@
   "name": "winston",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "bun run --filter '*' --if-present typecheck"
+  },
   "devDependencies": {
     "@types/bun": "1.4.2",
+    "prettier": "3.9.9",
+    "prettier-plugin-packagejson": "3.0.2",
     "typescript": "6.0.3"
-  },
-  "scripts": {
-    "typecheck": "bun run --filter '*' --if-present typecheck"
   }
 }
