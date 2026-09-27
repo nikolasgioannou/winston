@@ -1,12 +1,12 @@
 /**
- * Seeds the local database with one user, allowlisted, optionally linked to a
- * Telegram chat. Safe to run repeatedly. Refuses to touch non-local databases.
+ * Seeds the local database with the user described by the SEED_* values in
+ * .env.local. Refuses to touch non-local databases.
  */
 import { loadConfig } from "@winston/shared/config";
 import { z } from "zod";
 import { createDb } from "./client.ts";
-import { loadDbConfig } from "./config.ts";
-import { allowedEmails, telegramLinks, users } from "./schema/index.ts";
+import { assertLocalDatabase, loadDbConfig } from "./config.ts";
+import { seedUser } from "./seed-user.ts";
 
 const blankAsUndefined = (value: unknown) => (value === "" ? undefined : value);
 
@@ -31,54 +31,19 @@ function isTimeZone(value: string) {
 }
 
 const { DATABASE_URL } = loadDbConfig();
-const { hostname } = new URL(DATABASE_URL);
-if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-  throw new Error(`Refusing to seed a non-local database (${hostname}).`);
-}
-
+assertLocalDatabase(DATABASE_URL, "seed");
 const seed = loadConfig(seedConfigSchema);
 const db = createDb(DATABASE_URL);
 
 try {
-  await db.transaction(async (tx) => {
-    const [user] = await tx
-      .insert(users)
-      .values({
-        email: seed.SEED_EMAIL,
-        firstName: seed.SEED_FIRST_NAME,
-        lastName: seed.SEED_LAST_NAME,
-        timezone: seed.SEED_TIMEZONE,
-      })
-      .onConflictDoUpdate({
-        target: users.email,
-        set: {
-          firstName: seed.SEED_FIRST_NAME,
-          lastName: seed.SEED_LAST_NAME,
-          timezone: seed.SEED_TIMEZONE,
-        },
-      })
-      .returning({ id: users.id });
-    if (!user) throw new Error("Upserting the seed user returned no row.");
-
-    await tx
-      .insert(allowedEmails)
-      .values({ email: seed.SEED_EMAIL })
-      .onConflictDoNothing();
-
-    if (seed.SEED_TELEGRAM_CHAT_ID !== undefined) {
-      // In a private chat, the chat id is the user's Telegram id.
-      const chat = {
-        chatId: seed.SEED_TELEGRAM_CHAT_ID,
-        telegramUserId: seed.SEED_TELEGRAM_CHAT_ID,
-      };
-      await tx
-        .insert(telegramLinks)
-        .values({ userId: user.id, ...chat })
-        .onConflictDoUpdate({ target: telegramLinks.userId, set: chat });
-    }
-
-    console.log(`Seeded ${seed.SEED_EMAIL} (${user.id}).`);
+  const userId = await seedUser(db, {
+    email: seed.SEED_EMAIL,
+    firstName: seed.SEED_FIRST_NAME,
+    lastName: seed.SEED_LAST_NAME,
+    timezone: seed.SEED_TIMEZONE,
+    telegramChatId: seed.SEED_TELEGRAM_CHAT_ID,
   });
+  console.log(`Seeded ${seed.SEED_EMAIL} (${userId}).`);
 } finally {
   await db.$client.end();
 }

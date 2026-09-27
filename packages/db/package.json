@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     "./client": "./src/client.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "db:generate": "bun --env-file=../../.env.local --bun drizzle-kit generate",

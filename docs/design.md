@@ -398,7 +398,8 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - `no-conflicting-classes`, `no-unknown-classes`, `no-concatenated-classes` (keeps classes statically analyzable).
     - Its `enforce-consistent-class-order` rule is **off**, because ordering belongs to Prettier and two tools shouldn't fight over it. Line wrapping is left to Prettier as well. Chosen over Biome for its plugin ecosystem. Lefthook runs ESLint and Prettier on **staged files only** to keep commits fast.
   - **`tsc`** per package (see §7, TypeScript setup). The root `typecheck` script checks the root config files, then runs every package's `typecheck`.
-  - **`bun test`** for tests, run from the root (`bun run test`). Tests sit next to the code as `*.test.ts`. Conventions are in `docs/testing.md`. Once lefthook lands, all tests run in pre-commit, including the Postgres-backed ones, which need the local Docker Postgres running.
+  - **`bun test`** for tests, run from the root (`bun run test`, which passes `--env-file=.env.local`, since test mode doesn't load it). Tests sit next to the code as `*.test.ts`. Conventions are in `docs/testing.md`. All tests run in pre-commit and CI, including the Postgres-backed ones: locally they need the Docker Postgres running (and fail fast saying so), and CI runs Postgres 18.6 as a service container.
+  - **Database tests** use `@winston/db/testing`: `testDb()` creates and migrates `winston_test` once per run, `inRollback()` isolates each test in an always-rolled-back transaction, `truncateAll()` handles concurrency tests, and factories like `insertUser()` insert rows.
 - **What's tested: the deterministic code.**
   - Envelope rendering and escaping (a security boundary).
   - Trigger lifecycle and filter matching.

@@ -1,29 +1,37 @@
 ---
 id: "fc638d"
 title: Build a Postgres-backed test harness
-status: todo
+status: done
 priority: none
 labels:
   - db
   - m1
   - tooling
 created_at: 2026-09-27T05:28:45.540Z
-updated_at: 2026-09-27T17:33:02.666Z
+updated_at: 2026-09-27T18:19:30.998Z
 blocked_by:
   - "2c5ac8"
   - "5b4554"
   - "762cf0"
 ---
 
-**Order note:** this now comes after the identity tables (`762cf0`). It writes that ticket's seed-idempotency and constraint tests as its first real tests, creates the `winston_test` database (deferred from the Postgres ticket), and adds the Postgres-backed tests to CI (a Postgres service container in the workflow) as well as to the lefthook hook.
+A lot of the logic that matters most runs inside Postgres: the job queue's `SKIP LOCKED` leasing, trigger matching, full-text search, the append-only logs. Those tests must hit a real Postgres, not mocks (docs/design.md §8b). This ticket comes right after the identity tables, so its first real tests are theirs.
 
-A lot of the logic that matters most runs inside Postgres: the job queue's `SKIP LOCKED` leasing, trigger matching, full-text search, the append-only logs. Those tests must hit a real Postgres, not mocks (docs/design.md §8b).
+Build `@winston/db/testing`:
+- **`testDb()`:** creates the `winston_test` database if it's missing (deferred from the Postgres ticket), applies migrations once per test run, and returns a client. It **fails fast** with "Can't reach Postgres … Start it with ./scripts/setup.sh (or bun run db:up)", because the pre-commit hook runs these tests. It refuses non-local test databases.
+- **`inRollback(db, fn)`:** the default isolation. The test runs in a transaction that's always rolled back.
+- **`truncateAll(db)`:** the escape hatch for concurrency tests.
+- **Factories**, starting with `insertUser`.
 
-Build a harness that tests import:
-- It runs migrations once against the `winston_test` database per test run (a preload file or global setup).
-- Each test gets isolation. Research the trade-offs: wrapping each test in a transaction that rolls back is fastest, but it breaks tests that need concurrent connections, such as two workers racing for the same job. Support both: a default transactional fixture, plus a `truncateAll()` escape hatch for concurrency tests.
-- Small factory helpers for inserting rows (they grow as tables arrive).
+`seedUser` moves out of the seed script into `src/seed-user.ts`, so it can be tested, and `assertLocalDatabase` is shared by the seed and the harness.
 
-Make it fail fast and clearly when Docker Postgres isn't running ("start it with `bun run db:up`"). The pre-commit hook will run these tests, so a cryptic connection error there would be miserable.
+Tests: seed idempotency, Telegram linking and relinking, the identity constraints (unique email, one user per chat, cascade delete), and isolation (a row written in one test isn't visible in the next).
 
-Update `docs/testing.md` with how to write a DB test. Add the DB tests to the root `test` script and to the lefthook pre-commit hook. Include one real test proving isolation: a row inserted in one test is not visible in the next.
+Wiring:
+- `TEST_DATABASE_URL` in `.env.example`.
+- The root `test` script passes `--env-file=.env.local` (`bun test` doesn't load it in test mode).
+- CI gets a Postgres 18.6 service container and `TEST_DATABASE_URL`.
+- The pre-commit hook already runs `bun run check`, so it picks the tests up.
+- `docs/testing.md` explains how to write a DB test.
+
+Verify: all tests pass locally and in a simulated CI run (a clean Linux container plus a separate Postgres container). A deliberately broken assertion fails, and Postgres being down produces the clear message.

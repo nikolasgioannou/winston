@@ -18,7 +18,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "prepare": "lefthook install",
-    "test": "bun test",
+    "test": "bun test --env-file=.env.local",
     "typecheck": "tsc && bun run --filter '*' --if-present typecheck"
   },
   "devDependencies": {
