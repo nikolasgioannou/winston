@@ -23,11 +23,11 @@ Winston is a personal executive assistant that lives in Telegram. You can chat w
 **No special onboarding.** Winston doesn't run a "getting to know you" study or pre-configure anything. The user guides him, and he learns and sets up triggers as they talk.
 
 ### The website
-The site is a small **settings console**. All chat happens in Telegram.
-- **Account:** Google and Telegram connection status, and reconnecting either one.
-- **Connected apps:** mail (Gmail) and calendar (Google Calendar), with room for more later. Multiple accounts per app (work and personal). Each connection has its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), which the server enforces.
-- **Preferences:** only basic facts such as time zone. There are **no behavior-specific settings** (for example, no "ping me N minutes before meetings"). See §3.
-- **Danger zone:** delete account, which destroys the VM and wipes memory.
+A small web app with a **sidebar**. All chat happens in Telegram.
+- **Home:** Winston's status, and the first-run setup checklist until everything is connected (computer ready, Telegram linked, first account connected).
+- **Connections:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server. Plus Telegram linking.
+- **You:** profile (first and last name, email, time zone) and account deletion (destroys the computer and wipes everything).
+- **No behavior-specific settings** (for example, no "ping me N minutes before meetings"). See §3.
 - **No history page.** Conversation lives in Telegram. Background runs and triggers are internal.
 
 ## 2. Core experience (Telegram)

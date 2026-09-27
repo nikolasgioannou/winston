@@ -10,7 +10,7 @@
   - **Front of house:** a fast, low-latency model that owns the Telegram conversation. It answers simple things directly and delegates real work. It never blocks on long tasks.
   - **Background agents:** started by the front of house (`delegate`) or by triggers. They run in parallel, each in its own Chrome window, and report results back to the front of house, which decides what to tell the user.
 - **One front-of-house turn at a time per user.** Front-of-house jobs are serialized per user (a per-user Postgres advisory lock on the job). Input that arrives mid-turn is steered in, never run in parallel. Background agents run concurrently.
-- **Prompts live in the repo** as Markdown files in `packages/prompts` (front-of-house system prompt, background-agent system prompt, compaction prompt, delegate-brief guidance). They're versioned by content hash (see Data & storage), and changes ship with the normal deploy.
+- **Prompts live in the repo** as Markdown files in `packages/prompts`. The first versions are best-effort drafts written in the tickets that need them, refined through use (front-of-house system prompt, background-agent system prompt, compaction prompt, delegate-brief guidance). They're versioned by content hash (see Data & storage), and changes ship with the normal deploy.
 - **Implementation: Vercel AI SDK v7** with the **OpenRouter provider** (`@openrouter/ai-sdk-provider`). Background agents use `WorkflowAgent`/`ToolLoopAgent`, and each of our requirements maps onto AI SDK hooks:
   - **Step cap:** `stopWhen: isStepCount(MAX_STEPS_PER_RUN)`.
   - **Checkpointing:** `onStepFinish` appends the step's messages and usage to Postgres.
@@ -42,7 +42,7 @@
 ### Rolling window (FIFO)
 - The front of house's context holds the most recent conversation, word for word. When it exceeds its budget, the oldest messages drop off. Nothing is summarized.
 - Cut only at turn boundaries, never between a tool call and its result.
-- **Drop in chunks, not one message at a time.** Example: when the window passes ~N tokens, drop the oldest messages until it is down to ~0.6N. Sliding by one message per turn would shift the prompt prefix on every turn and defeat prompt caching. Chunked drops keep the prefix stable (and cached) between drops.
+- **Budget: ~150k tokens**, trimmed to ~100k when exceeded (see §16). **Drop in chunks, not one message at a time.** Sliding by one message per turn would shift the prompt prefix on every turn and defeat prompt caching. Chunked drops keep the prefix stable (and cached) between drops.
 - Background-agent transcripts do not enter the front of house's window. Only the brief and the result do.
 
 ### Background-run compaction (summarization)
@@ -81,7 +81,7 @@ Background runs are one long conversation (browser snapshots, screenshots, tool 
   - Like schedules, each subscription carries a note ("when an email from a client arrives, check whether it needs a reply today").
 
 **Handling:** when a trigger fires, it starts a **background agent run**. This is *exactly* the same kind of agent as a delegated task. The only difference is what started it, and an event run can grow into a big task. The run gets the event, the trigger's note, a read-only tail of the recent conversation, and the usual tools. Most runs end silently. If something deserves the user's attention, the run hands a message to the front of house.
-- Events that fire close together for the same subscription are batched into one run.
+- Events that fire close together for the same subscription are **batched into one run: a batch fires 30 s after its first event**.
 - New connected domains or providers plug in by publishing their event catalog. No agent code changes.
 
 ### Naming
@@ -263,8 +263,8 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - Connections get a short, user-facing **alias** ("work", "personal") that Winston uses in chat and in the CLI (`winston mail search … --account work`).
 - Events carry the connection they came from, and subscriptions can be scoped to one connection.
 - **Credentials never touch the VM.** The backend stores OAuth tokens (encrypted), refreshes them and emits `system.app.auth_expiring` / `auth_expired`.
-- **The CLI is a thin client.** On the VM it authenticates to the Winston backend with a per-VM token that is scoped to the user and revocable. The backend checks capability toggles, calls the Google API and writes an **audit log** of every call.
-- All agents reach connected apps through the CLI on the VM, which calls this backend API.
+- **The CLI is a thin client.** It talks only to local `winstond` over a unix socket. `winstond` (which alone holds the VM token) forwards requests over its websocket to `gateway`, where the backend API checks capability toggles, calls the Google API and writes an **audit log** of every call. No credential on the VM works from anywhere else (§15).
+- All agents reach connected apps through the CLI on the VM.
 
 # Part 2 — Technical decisions
 
@@ -292,12 +292,19 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 ## 7. Language & repo
 - **TypeScript everywhere, on Bun** (version pinned with mise, `bun.lock`).
+- **End-to-end type safety, from database to every client:**
+  - **Database → server:** Drizzle schema types in `packages/db` (row types inferred, with `drizzle-zod` for validators).
+  - **Server → web client:** TanStack Start server functions with Zod-validated inputs and inferred return types, consumed by TanStack Router loaders and Query on the client. No hand-written API types.
+  - **Server → CLI:** Hono RPC types for the VM-facing API.
+  - **Shared contracts:** event payloads, envelope items, config and tool inputs as Zod schemas in `packages/shared`, used on both ends.
+  - **Explicit DTOs at every boundary.** Server functions and API routes select and return deliberate shapes, never raw rows, so fields like `token_ciphertext` can't leak through type inference.
+  - No `any`, enforced by `typescript-eslint`.
 - **Monorepo with Bun workspaces:**
   - `packages/db`: Drizzle schema and migrations.
   - `packages/prompts`: system prompts and the compaction prompt, as Markdown.
   - `packages/shared`: event envelope, event catalog, tool schemas, API types. One definition of `mail.message.received`, used everywhere.
   - `apps/backend`: agents, Telegram, webhooks, connected-apps API.
-  - `apps/web`: TanStack Start site: settings console and the handoff live-view page.
+  - `apps/web`: TanStack Start site: the sidebar app (home, connections, profile) and the handoff live-view page.
   - `apps/cli`: the Winston CLI (compiled binary).
   - `apps/winstond`: the VM daemon (compiled binary).
   - `infra`: CDK.
@@ -307,7 +314,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - **Everything on AWS**, region **`us-east-1`** (N. Virginia, closest to the founder in New York). Users are US-based, so browsing from US IPs is a feature.
 - **Production domain: `runwinston.com`.** DNS is in Route 53. The site is at `runwinston.com` and the API at `api.runwinston.com`.
 - **Environments: exactly two, local and production.** Production runs in AWS. Local runs on the founder's machine (see 8a).
-- **Account isolation:** Winston gets its **own AWS account**, `winston-prod`, inside an AWS Organization, separate from the founder's other projects. Access goes through IAM Identity Center (SSO) with short-lived credentials. The account has its own AWS Budget alerts, and billing is consolidated. Resource tags alone are not isolation, because a separate account is the only hard boundary for blast radius, IAM and cost. _Setting up the Organization changes the founder's AWS account, so it needs explicit approval when we get there._
+- **Account isolation:** Winston gets its **own AWS account**, `winston-prod`, inside an AWS Organization, separate from the founder's other projects. Access goes through IAM Identity Center (SSO) with short-lived credentials. The account has AWS Budget alerts at **$150 actual and $200 forecast per month**. The baseline for one user is ~$120/mo (4 small Fargate services ~$40, RDS ~$15, ALB ~$18, public IPv4s ~$15, the VM ~$24, secrets/KMS/misc ~$8), so lower thresholds would fire constantly. Model spend is billed by OpenRouter, not AWS: set an OpenRouter credit limit and low-balance alert. Billing is consolidated. Resource tags alone are not isolation, because a separate account is the only hard boundary for blast radius, IAM and cost. _Setting up the Organization changes the founder's AWS account, so it needs explicit approval when we get there._
 - **Infrastructure as code:** AWS CDK in TypeScript, run with Bun (`bunx cdk`, app entry `bun run infra/bin/app.ts`), for everything static: VPC, subnets, security groups, IAM, the user-VM launch template, the AMI pipeline, snapshot policies, and the full backend.
 - **Per-user VMs are created at runtime**, not by the IaC. Signup calls the EC2 API with the launch template.
 - **Cost tracking per user:** model tokens (by agent and trigger type), Jev calls, VM hours and storage are recorded per user, so spend is visible from day one. Models are expected to cost more than infrastructure (a long Opus browser task ≈ $0.50–2).
@@ -360,22 +367,40 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - **One ticket per commit.** The whole product is broken into tickets before building starts, detailed enough to execute fairly autonomously.
 - **No standard ticket template.** Each ticket is written on its own, with whatever that piece of work needs.
 
+## 8d. Build order
+Thin vertical slices. Each milestone adds capabilities to something you can already talk to. **Production comes online at M4**, so every commit after that ships to the real @RunWinstonBot and gets used daily.
+
+| Milestone | What works at the end |
+|---|---|
+| **M0 Foundations** | Monorepo, Bun/mise pins, ESLint/Prettier/tsc/`bun test`, lefthook + commitlint, `packages/db` with Docker Postgres, typed config |
+| **M1 Talk to Winston (local)** | Message @RunWinstonDevBot and the front of house replies: webhook via tunnel, envelope rendering, job queue, Sonnet via AI SDK, `send_message`, steering, typing indicator. The user is seeded by a script |
+| **M2 His computer (local)** | Docker "VM" with `winstond`, gateway, `bash` + `view_image`, CLI skeleton (help, output, exit codes), attachments to/from the VM, voice transcription |
+| **M3 Accounts & website** | TanStack Start site, Google sign-in + allowlist, Telegram linking, connecting Google accounts, permission toggles, account deletion |
+| **M4 Production** | CDK stack, Packer image (the same template also builds the local Docker image), EC2 provisioning at signup, CI/CD deploys, secrets, VM self-update, backups |
+| **M5 Mail & calendar** | Connector APIs, `winston mail` / `calendar` / `accounts`, audit log, confirm-first behavior |
+| **M6 Background agents** | `delegate`, runs and checkpoints, parking, `task` commands, results via the front of house, compaction, step cap, front-of-house turn budget |
+| **M7 Triggers & events** | Push ingestion + sync, event catalog, subscriptions with filters, schedules, lifecycle fields, scheduler |
+| **M8 Browser** | Chrome on the VM, `winston browser`, windows + domain locks, screencast handoff, site skills, Jev autopilot |
+| **M9 Rounding out** | `history search`, cost ledger, prompt polish |
+
 ## 9. Backend runtime & website
 - **Compute: ECS Fargate running Bun containers.** Lambda is ruled out: agent runs are long, handoffs park for days, and Bun isn't a native Lambda runtime. Services:
-  - `api` (Hono): Telegram webhook, connected-app push notifications, OAuth callbacks, the backend API used by the CLI (connected apps, triggers, history, tasks, Jev proxy).
+  - `api` (Hono): public endpoints only: Telegram webhook, connected-app push notifications, OAuth callbacks.
   - `web`: the TanStack Start site (see below).
   - `agents`: runs front-of-house turns and background-agent steps.
-  - `gateway`: holds the `winstond` websockets for every VM and relays handoff screencasts.
+  - `gateway`: holds the `winstond` websockets for every VM, **serves the VM-facing backend API** (CLI requests arrive over the websocket and are dispatched in-process), and relays handoff screencasts.
 - **Durable agents.** Background-agent state (the full message history) is checkpointed to Postgres after every step. A parked task is a row, not a process. Any worker can resume any task. Deploys and crashes don't lose work.
 - **Queue in Postgres:** a job table using `SELECT … FOR UPDATE SKIP LOCKED`. Events, steering input and agent steps are all jobs. Saving an inbound message and enqueueing its turn happen in one transaction.
 - **Scheduler in Postgres:** triggers are rows. A loop checks every few seconds for due schedules and expired subscriptions (`on_expire`) and enqueues runs. No per-trigger AWS resources.
-- **Website: TanStack Start** (React, styled with **Tailwind CSS**), running on Bun (Nitro `bun` preset) as a fourth Fargate service, `web`, behind CloudFront (static assets cached at the edge).
-  - **Server functions** give type-safe RPC from the site straight to Postgres/backend logic (connections, permission toggles, preferences, account deletion). No separate REST layer for the site.
+- **Website: TanStack Start** (React, **Tailwind CSS + Base UI**), running on Bun (Nitro `bun` preset) as a fourth Fargate service, `web`, behind CloudFront (static assets cached at the edge).
+  - **Server functions** give type-safe RPC from the site straight to Postgres/backend logic (connections, permission toggles, profile, account deletion). No separate REST layer for the site.
   - SSR is available but not essential. The site is a small authenticated console.
+  - **Design system first** (`packages/ui`): tokens, typography and components built on Base UI primitives. It's built **collaboratively with the founder** (iterating on feedback), and the web app uses only its components.
+  - **Dev design view** (`/dev/design`, dev-only): every page in every state at desktop and mobile widths. Built right after the first page and also iterated with the founder (§20).
   - **Auth:** Sign in with Google → secure HTTP-only session cookie, with sessions in Postgres. No third-party auth provider.
   - **Public pages Google requires for the OAuth consent screen** (even in testing mode): a homepage at `runwinston.com`, `/privacy` and `/terms`. These are simple static routes in the Start app, and `runwinston.com` must be verified in Google Search Console.
   - **Handoff page** (`/t/<token>`) is a Start route that renders a canvas and opens a websocket to `gateway` for screencast frames and input. Start itself doesn't need websocket support.
-  - The `api` service (Hono on Bun) keeps machine-facing endpoints: Telegram webhook, Gmail/Calendar push, OAuth callbacks, the connected-apps API used by the CLI and agents.
+  - The `api` service (Hono on Bun) keeps the public machine-facing endpoints: Telegram webhook, Gmail/Calendar push, OAuth callbacks. The CLI's API lives behind `gateway` (§15).
   - Status note (checked 2026-09-26): Start's docs describe it as a feature-complete release candidate with a stable API. Bun deployment requires React 19.
 - Rough shared base cost: ~$70–100/mo (small Fargate tasks, small RDS, ALB).
 
@@ -409,7 +434,7 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 
 **Delivery and plumbing**
 - TypeScript, compiled to a single binary with `bun build --compile`, baked into the AMI and **self-updated by `winstond`** (§10). A version handshake guarantees the CLI matches the system prompt.
-- A thin client over the backend API (connected apps, triggers, history, tasks, and the Jev proxy for `autopilot`). The exception is `winston browser`, which talks to local Chrome over CDP directly.
+- A thin client: every call goes CLI → unix socket → `winstond` → websocket → `gateway` → backend API (connected apps, triggers, history, tasks, the Jev proxy for `autopilot`). The exception is `winston browser`, which talks to local Chrome over CDP directly (§15).
 - Every invocation carries **`WINSTON_RUN_TOKEN`** from its environment, so the backend attributes each call to an agent run (audit log, cost ledger, `send_message`-style checks).
 - The front of house's `bash` calls time out at ~10 s. Background agents have no short timeout.
 
@@ -455,7 +480,7 @@ The same filter vocabulary is used by `search` and by subscription filters:
 
 ### Errors & exit codes
 - The same exit codes everywhere: `0` ok, `1` usage error, `2` not found, `3` permission disabled by the user, `4` account auth expired, `5` upstream/transient failure (safe to retry), `6` conflict (for example, a domain lock held by another agent), `7` not supported by this account's provider.
-- Every error message says **what to do next**: "Sending is disabled for account `work`. The user can enable it at runwinston.com/settings." / "Unknown flag `--form`. Did you mean `--from`?"
+- Every error message says **what to do next**: "Sending is disabled for account `work`. The user can enable it at runwinston.com/accounts/acct_…" / "Unknown flag `--form`. Did you mean `--from`?"
 
 ### Discoverability
 - `winston` with no arguments lists the resources with one-line descriptions. `winston <resource> --help` lists verbs, flags and **2–3 real examples**.
@@ -611,7 +636,7 @@ Tuesday works. Thanks, Dana.
 ## 13. Security
 A summary of the security properties set by decisions elsewhere in this doc:
 - **Isolation:** Winston has its own AWS account. Each user has their own VM, and a compromised VM affects only that user.
-- **Credentials never touch the VM.** Google tokens live only in the backend, encrypted with KMS. The VM authenticates to the backend with a per-VM, revocable token.
+- **Credentials never touch the VM.** Google tokens live only in the backend, encrypted with KMS. The VM's own revocable token is readable only by `winstond` (not by the agent's shell), and it only works over that VM's websocket. The CLI reaches the backend through `winstond`'s unix socket (§15).
 - **No inbound attack surface on VMs:** a security group with zero inbound rules, an outbound-only `winstond` websocket, and SSM for admin access (no SSH).
 - **Permissions enforced by the server.** Per-connection capability toggles are checked in the backend on every connected-app call, so prompt injection can't bypass a disabled capability. Confirm-first for external actions is a prompt-level norm.
 - **Prompt injection:** all untrusted content (emails, web pages, files) is rendered inside `<data>` with tag-like text escaped. Only the server creates `user_message` envelopes. The system prompt treats `<data>` as data, never instructions.
@@ -621,12 +646,199 @@ A summary of the security properties set by decisions elsewhere in this doc:
 - **Runaway protection:** a per-run step cap.
 - **Account deletion:** terminate the VM, delete its EBS volume and snapshots, revoke Google tokens, and delete all Postgres rows and S3 objects for the user.
 
+# Part 3 — Specifications
+**This part is a starting sketch, not a contract.** It's concrete enough to cut tickets from, but its details (exact columns and table splits, frame names, numeric thresholds, tool choices like Packer, stack boundaries, page layouts) are expected to change once code meets reality. When implementation finds something that works better, **do that and update this doc in the same commit.** The doc tracks reality instead of constraining it.
+
+### Invariants
+These are load-bearing. Changing one means revisiting the design **with the founder**, not just editing code:
+1. **No externally usable credential on the VM.** Google tokens live only in the backend (KMS-encrypted). The VM token is readable only by `winstond` and works only over that VM's websocket.
+2. **Permissions are enforced by the server** on every connected-app call, never only by the prompt.
+3. **Untrusted content is escaped** inside envelopes. Only the server creates `user_message` envelopes. Envelopes are rendered at read time, never stored.
+4. **Front of house + background agents:** one voice (only the front of house messages the user), background agents can't delegate, and the user never waits on compaction.
+5. **Durable runs:** agent state is checkpointed to Postgres after every step, and a parked task is data, not a process. **Postgres is the single source of truth** (including the queue and scheduler).
+6. **A tiny native tool surface** (`bash`, `view_image`, `browser_handoff`, `send_message`, `delegate`). Everything else is the `winston` CLI.
+7. **End-to-end type safety** (§7) from the database schema to the web client and the CLI, with explicit DTOs at boundaries.
+8. **The CLI conventions** (§11): grammar, standard verbs and flags, typed ids, bounded output, exit codes, domain naming. Many tickets build on these.
+9. **Event names and meanings** (§3) and the **run, job and trigger lifecycle semantics** (§17), for the same reason.
+10. **The database is the record:** the append-only model-call log, silent turns included.
+11. **No hard-coded behaviors:** proactivity comes from triggers, notes and judgment.
+
+### How tickets use this part
+- Tickets state **outcomes and constraints** and **point to sections here** rather than copying details. When the doc changes, referencing tickets inherit the change.
+- **Before starting a ticket,** re-read the tickets it depends on and the current doc. If reality has moved, adjust the ticket first, in the same commit as the work.
+
+## 14. Data model (Postgres, Drizzle)
+Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`. `user_id` is on every user-owned row, and every query is scoped by it.
+
+**Identity & access**
+| Table | Key columns |
+|---|---|
+| `users` | `id` (`usr_`), `email` (unique), `first_name`, `last_name` (from Google's `given_name`/`family_name` at signup, editable), `timezone` (IANA), `created_at` |
+| `allowed_emails` | `email` (PK), `added_at` |
+| `web_sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `created_at` |
+| `telegram_links` | `user_id` (PK), `chat_id` (unique), `telegram_user_id`, `username`, `linked_at` |
+| `telegram_link_tokens` | `token_hash` (PK), `user_id`, `expires_at`, `used_at` |
+
+**VMs & connections**
+| Table | Key columns |
+|---|---|
+| `vms` | `id` (`vm_`), `user_id` (unique), `provider` (`docker`\|`ec2`), `instance_id`, `data_volume_id`, `state` (see §17), `token_hash`, `registration_token_hash`, `cli_version`, `winstond_version`, `last_seen_at`, `created_at` |
+| `connections` | `id` (`acct_`), `user_id`, `domain` (`mail`\|`calendar`), `provider` (`gmail`\|`google_calendar`), `external_email`, `alias`, `scopes[]`, `capabilities` (jsonb toggle map), `token_ciphertext` (KMS envelope), `granted_at`, `status` (`ok`\|`expiring`\|`expired`\|`disconnected`), `sync_state` (jsonb: `historyId`, or per-calendar `syncToken`s), `watch_expires_at`, `created_at` |
+
+**Conversation & runs**
+| Table | Key columns |
+|---|---|
+| `inbound_items` | `id` (`hist_`), `user_id`, `type` (`user_message`, `telegram.reaction.added`, `task.completed`, …, or an event type), `payload` (jsonb, structured), `search_text` + `tsv` (FTS), `source_ref` (Telegram message id, event id), `occurred_at`, `consumed_by_run_id`, `created_at` |
+| `outbound_messages` | `id` (`hist_`), `user_id`, `run_id`, `text`, `attachments` (jsonb: VM paths, Telegram file ids), `telegram_message_ids[]`, `tsv`, `sent_at` |
+| `runs` | `id` (`run_` for front-of-house turns, `task_` for background), `user_id`, `kind` (`front`\|`background`), `trigger_type` (`user`\|`delegate`\|`event`\|`schedule`\|`expire`), `trigger_id`, `parent_run_id`, `brief`, `effort`, `status` (see §17), `step_count`, `result`, `created_at`, `started_at`, `finished_at` |
+| `run_messages` | `id`, `run_id`, `seq`, `role`, `content` (jsonb `ModelMessage`), `step`, `kind` (`message`\|`compaction`), `created_at`. Append-only. This is both the checkpoint and the log. A `compaction` row carries the summary and marks where the live context restarts |
+| `front_state` | `user_id` (PK), `window_start_seq` (the FIFO pointer into the user's front-of-house message stream) |
+| `model_calls` | `id`, `run_id`, `step`, `model`, `provider`, `prompt_hash`, `context_from_seq`, `context_to_seq`, `input_tokens`, `cached_tokens`, `cache_write_tokens`, `output_tokens`, `reasoning_tokens`, `cost_usd`, `latency_ms`, `stop_reason`, `created_at` |
+| `prompt_versions` | `hash` (PK), `name`, `content`, `created_at` |
+| `handoffs` | `id` (`hnd_`), `run_id`, `user_id`, `window_id`, `target_id` (CDP), `token_hash`, `reason`, `status` (see §17), `connect_deadline`, `created_at`, `resolved_at` |
+
+**Triggers & events**
+| Table | Key columns |
+|---|---|
+| `triggers` | `id` (`trg_`), `user_id`, `kind` (`schedule`\|`subscription`), `at`, `cron`, `event_type`, `connection_id`, `scope_ref`, `filter` (jsonb structured), `native_query`, `lead_minutes`, `note`, `max_fires`, `fire_count`, `expires_at`, `on_expire_note`, `next_fire_at`, `status` (`active`\|`exhausted`\|`expired`\|`deleted`), `created_at` |
+| `events` | `id` (`evn_`), `user_id`, `connection_id`, `type`, `payload` (jsonb), `occurred_at`, `dedupe_key` (unique), `self_caused`, `created_at` |
+| `trigger_batches` | `id`, `trigger_id`, `event_ids[]`, `fire_at` (first event + 30 s), `run_id`, `status` (`pending`\|`fired`) |
+| `derived_timers` | `id`, `trigger_id`, `ref` (calendar event), `fire_at`. Materialized `calendar.event.starting` timers, recomputed whenever the underlying event changes |
+
+**Infrastructure & records**
+| Table | Key columns |
+|---|---|
+| `jobs` | `id`, `user_id`, `type`, `payload`, `run_at`, `locked_until`, `attempts`, `max_attempts`, `status` (`queued`\|`running`\|`done`\|`failed`), `dedupe_key` (unique, nullable), `last_error`, `created_at` |
+| `files` | `id` (`file_`), `user_id`, `vm_path`, `mime`, `size`, `telegram_file_id`, `created_at` |
+| `audit_log` | `id`, `user_id`, `run_id`, `connection_id`, `action` (e.g. `mail.send`), `target_ref`, `summary`, `request` (jsonb, redacted), `outcome`, `tsv`, `created_at` |
+| `jev_decisions` | `id`, `run_id`, `domain`, `question` (jsonb), `answer` (jsonb), `action`, `outcome` (`verified`\|`overridden`\|`unknown`), `latency_ms`, `created_at` |
+| `cost_ledger` | `id`, `user_id`, `run_id`, `category` (`model`\|`jev`\|`stt`\|`vm`), `units`, `cost_usd`, `occurred_at` |
+
+**Job types:** `front_turn`, `run_step`, `sync_connection`, `renew_watches`, `reconcile_connections`, `fire_trigger_batch`, `fire_schedule`, `expire_trigger`, `fire_derived_timer`, `provision_vm`, `deprovision_vm`, `transcribe_voice`, `deliver_outbound`, `delete_user`.
+
+## 15. VM ↔ backend: request path & protocol
+**Security property: the VM holds no credential that works outside the VM.**
+- The **CLI never talks to the internet.** It calls `winstond` over a local **unix socket** (`/run/winstond.sock`).
+- `winstond` runs as a separate system user (`winstond`). The agent's shell runs as `winston`. Only `winstond` can read the **VM token**, stored at `/etc/winstond/token` with mode 0600.
+- `winstond` forwards CLI requests over its authenticated **websocket to `gateway`**. The gateway dispatches them **in-process** to the backend API (a Hono app mounted in `gateway` and called via `app.request()`).
+- `WINSTON_RUN_TOKEN` (a short-lived signed token: run id, user id, run kind) travels with each request for attribution. Even if exfiltrated, it's useless off-VM, because the backend only accepts requests that arrive over that VM's websocket.
+- The **connected-apps API is therefore not publicly exposed.** `api` keeps only the public webhooks and OAuth callbacks.
+
+**Bootstrap:**
+1. Provisioning creates a one-time **registration token** and passes it in EC2 user data (or Docker env).
+2. On first boot, `winstond` connects to `gateway` with it and receives the long-lived VM token (stored hashed in `vms.token_hash`).
+3. The registration token is burned.
+
+**Websocket frames** (JSON with `id` and `type`; screencast frames are binary):
+| Direction | Type | Purpose |
+|---|---|---|
+| vm→gw | `hello` | vm id, `cli_version`, `winstond_version`, capabilities |
+| gw→vm | `update.available` | versions, S3 URLs, signatures (see §10 self-update) |
+| gw→vm | `exec` | `cmd`, `cwd`, `env` (incl. run token), `timeout_ms` |
+| vm→gw | `exec.output` / `exec.exit` | streamed stdout/stderr chunks; exit code |
+| gw→vm | `file.read` / `file.write` | read files (e.g. `view_image`, outbound attachments) and write files (inbound attachments), chunked |
+| vm→gw | `rpc.request` | a CLI call: `method`, `path`, `body`, `run_token` |
+| gw→vm | `rpc.response` | status + body |
+| gw→vm | `screencast.start` / `screencast.stop` / `input` | handoff live view for one CDP target |
+| vm→gw | `screencast.frame` (binary) | JPEG frames |
+| both | `ping` / `pong` | liveness every 20 s. `last_seen_at` updated |
+
+**Reconnect:** exponential backoff (1 s → 30 s). In-flight `exec` results are **buffered by id for 5 minutes** on the VM, so after a reconnect the gateway fetches them instead of re-running a possibly non-idempotent command.
+
+**CLI ↔ backend API shape:** Hono routes under `/v1/…` (`mail`, `calendar`, `accounts`, `triggers`, `events`, `history`, `tasks`, `me`, `jev`), typed end to end with Hono's RPC types in `packages/shared`. Errors are `{ error: { code, message, hint } }`, and the CLI maps `code` to exit codes (§11). Cursors are opaque strings.
+
+## 16. Front-of-house context assembly
+- **Order:** static system prompt → static tool definitions → window messages (from `front_state.window_start_seq`) → newly coalesced inbound envelopes.
+- **Window budget: ~150k tokens.** When exceeded, `window_start_seq` advances at turn boundaries until the window is ~100k. Chunked, so the prefix stays cached between trims.
+- **Cache breakpoints:** end of tools/system, and end of the previous turn.
+- **Background results** arrive as `task.completed` / `task.failed` / `task.needs_user` envelopes.
+- **Images:** screenshots older than the current turn are replaced by text stubs.
+- **Background runs** start with: system prompt → tools → one user message with the brief (or the trigger note plus event envelopes) and a **read-only conversation tail** (the last ~20 inbound/outbound items, rendered).
+
+## 17. State machines
+**VM:** `requested → provisioning → registering → ready`. `ready → unhealthy` if no ping for 2 min (EC2 auto-recovery, and alert if it persists). `ready → updating → ready` during binary swaps. Any state `→ terminating → terminated` on account deletion. `provisioning|registering → failed` after a timeout (retry via job).
+
+**Run:** `queued → running → completed | failed | cancelled | capped`. `running → parked` on `browser_handoff`. `parked → running` on `task resume`. Front-of-house turns never park: a handoff simply ends the turn.
+
+**Job:** `queued → running` (leased, `locked_until`) `→ done`. On error, `→ queued` with backoff and `attempts+1`, until `max_attempts → failed`. An expired lease returns the job to `queued`.
+
+**Handoff:** `open` (link sent) `→ connected` (page opened, token consumed) `→ resolved` (task resumed). `open → expired` if the connect deadline (~15 min) passes. The agent can issue a fresh link on request.
+
+**Event pipeline:**
+1. Webhook (Pub/Sub push, Calendar channel) → `sync_connection` job (deduped per connection).
+2. Fetch the provider delta from `sync_state`.
+3. Normalize into domain events and insert into `events` (deduped by `dedupe_key`).
+4. Mark `self_caused` if the event matches a recent `audit_log` action.
+5. Match active subscriptions: type, connection, scope, structured filter, then the native query checked against the provider.
+6. Add to that trigger's pending `trigger_batch`. The batch fires 30 s after its first event (`fire_trigger_batch` job).
+7. The batch fires: a background run with the note, the event envelopes and the conversation tail. `fire_count++`, and the trigger becomes `exhausted` at `max_fires`.
+
+**Scheduler loop** (every ~5 s, in `agents`): due schedules (`next_fire_at ≤ now`; cron evaluated in the user's time zone), due `derived_timers`, and triggers past `expires_at` (fires `on_expire` if `fire_count < max_fires`).
+
+**Account deletion:** `delete_user` job → terminate VM + delete volumes and snapshots → revoke Google tokens → delete S3 objects → delete all rows.
+
+## 18. Image build (Packer)
+- **One Packer template** (`image/winston.pkr.hcl`) with two sources: `amazon-ebs` (Ubuntu 24.04 LTS, x86_64) and `docker` (the local "VM"). Both run the **same provisioning scripts** (`image/scripts/*.sh`):
+  - Google Chrome stable (apt repository), Xvfb, noVNC, Python 3, and common CLI tools (`rg`, `jq`, `unzip`, ImageMagick, `pandoc`).
+  - Users `winston` (agent shell, home on the data volume) and `winstond` (daemon).
+  - systemd units (`xvfb`, `chrome`, `winstond`, `novnc`), unattended-upgrades, a 2 GB swap file, and the binary-signing public key.
+- **The local container runs systemd as PID 1** so the units behave identically. _Risk: systemd in Docker on macOS needs `--privileged` and cgroup settings. Validate early in M2. The fallback is a lightweight Linux VM running the same scripts._
+- The CLI and `winstond` binaries are baked in at build time and self-update afterwards.
+
+## 19. CDK stacks (`infra/`)
+| Stack | Contents |
+|---|---|
+| `Network` | VPC across 2 AZs: public subnets (Fargate tasks and VMs with public IPs, so no NAT) and isolated subnets (RDS) |
+| `Data` | RDS Postgres (single-AZ, `db.t4g.micro` to start), KMS keys (tokens, binary signing), S3 buckets (`artifacts`: images and binaries. `blobs`: screenshots and attachments) |
+| `Services` | ECS cluster, ECR repos, 4 Fargate services (`api`, `web`, `agents`, `gateway`), ALB with host-based routing (`api.`, `gateway.`), Secrets Manager secrets, per-service IAM roles |
+| `Edge` | Route 53 zone `runwinston.com`, ACM certificates, CloudFront in front of `web` |
+| `Vm` | Launch template, instance profile (SSM only), zero-inbound security group, Data Lifecycle Manager snapshot policy |
+| `Ci` | GitHub OIDC provider + deploy role |
+| `Budget` | AWS Budgets alerts (see §8) |
+- GCP resources live separately in `infra/gcp` (Terraform).
+
+## 20. Website pages & states
+**Layout:** public pages stand alone. Everything behind sign-in uses one **app shell with a sidebar**, grouped by purpose. There's no catch-all "settings" page. On mobile the sidebar collapses into a drawer.
+
+**Public**
+| Route | Purpose | Notable states |
+|---|---|---|
+| `/` | Homepage (required by Google). Signed-in users are redirected to `/home` | — |
+| `/privacy`, `/terms` | Required legal pages | — |
+| `/signin` | Google sign-in | not allowlisted, OAuth error |
+| `/t/<token>` | Handoff live view (mobile-first, no sidebar) | connecting, live, reconnecting, expired/invalid, resolved |
+
+**App (sidebar)**
+| Sidebar group | Route | Purpose | Notable states |
+|---|---|---|---|
+| — | `/home` | Overview: Winston's status (computer ready, Telegram linked, accounts needing attention). **Doubles as first-run setup:** until everything is connected it shows a setup checklist (computer provisioning, Connect Telegram with button + QR, connect a first account) | provisioning, failed, setup incomplete, all good, attention needed |
+| Connections | `/accounts` | Connected mail and calendar accounts, and **Add account** | empty, auth expiring/expired, disconnected |
+| Connections | `/accounts/<acct_id>` | One account: alias, capability toggles, reconnect, disconnect | saving, error, disconnect confirmation |
+| Connections | `/telegram` | Telegram link status, relink (button + QR) | linked, unlinked, relinking |
+| You | `/profile` | First/last name, email (read-only), time zone | saving, error |
+| You | `/profile/delete` | Delete account (everything: computer, data, tokens) | confirmation, deleting |
+
+**Dev only**
+| Route | Purpose |
+|---|---|
+| `/dev/design` | Every page × every state × desktop and mobile widths, side by side. Excluded from production builds |
+
+- **Time zone:** captured from the browser at signup. **Whenever the web app is opened and the browser's time zone differs from the saved one, it's updated automatically** (emitting `system.settings.changed`). Winston can also change it with `winston me update --timezone <IANA>` when the user says they're traveling.
+
+## 21. Repo bootstrap
+- **Workspace:** Bun workspaces with `apps/*` (`api`, `agents`, `gateway`, `web`, `cli`, `winstond`), `packages/*` (`db`, `shared`, `prompts`, `ui`), `infra/`, `image/`. Package scope `@winston/*`.
+- **Pins via `mise.toml`** (project-local): Bun, Node 22 (for Node-only tooling), Packer, Terraform, AWS CLI.
+- **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`.
+- **Local services:** `docker-compose.yml` (Postgres, and the VM container via the `VmProvider`).
+- **`packages/ui`:** the design system (Tailwind + Base UI primitives, tokens, components). The web app consumes only this.
+- **Moth:** `moth.config.yml` + `.moth/` at the root.
+
 ## Decision log
 | # | Decision | Rationale |
 |---|----------|-----------|
 | 1 | Small multi-user system (founder + friends). Google sign-in; one VM per user, provisioned at signup. | This is for friends as well, so user accounts are needed, but at small scale. |
 | 2 | Google-first signup on a website, then link Telegram through a deep link (`t.me/<bot>?start=<token>`). The token is random, single-use and short-lived (~15 min), within Telegram's 64-char `[A-Za-z0-9_-]` limit. | This is Telegram's standard account-linking mechanism. The user starting the bot also gives the bot permission to message them first. |
-| 3 | Site is a minimal settings console with no behavior-specific settings. | Behavior should be modular and emergent, not hard-coded. |
+| 3 | Site is a minimal settings console with no behavior-specific settings. _(Layout refined by #61: sidebar app, no settings page.)_ | Behavior should be modular and emergent, not hard-coded. |
 | 4 | Proactivity comes from general building blocks (wake-ups, events, memory, judgment), not dedicated features. | Keeps Winston modular. New behaviors come from prompting and memory, not code. |
 | 5 | Two-tier agents: fast front of house + parallel background agents, each with its own browser. Browser handoff by link, with auto-resume. _("Auto-resume" refined by #7: resume on the user's message.)_ | Speed of interaction is a core requirement. Browser use is a core strength. |
 | 6 | One shared persistent browser profile per user; one tab per background agent. _(Refined by #23: a window per agent, not a tab.)_ | Persistent logins make Winston feel like he has his own computer. Throwaway browsers would need a handoff on every visit to a site. |
@@ -643,7 +855,7 @@ A summary of the security properties set by decisions elsewhere in this doc:
 | 17 | Triggers have `max_fires`, `expires_at` and `on_expire`. Not visible on the site. | Enables one-shot and "nothing happened" follow-ups. Users shouldn't have to manage machinery. |
 | 18 | Per-app capability toggles (enforced by the server) + a prompt-level confirm-first norm. No tool-approval machinery. _("Per-app" → per-connection toggles, #19.)_ | Simple for the user. Hard toggles cover prompt injection. Confirming feels like a normal assistant conversation. |
 | 19 | Sign-in is identity only. Connections are separate, many per app (work/personal), each with its own permissions. | Real users have several Google accounts. |
-| 20 | Google tokens live only on the backend. The VM's CLI is a thin client calling the backend, which enforces permissions and audits calls. | The VM is the most exposed component. Makes permissions real, not advisory. |
+| 20 | Google tokens live only on the backend. The VM's CLI is a thin client calling the backend, which enforces permissions and audits calls. _(Request path refined by #58.)_ | The VM is the most exposed component. Makes permissions real, not advisory. |
 | 21 | One background-agent type for all triggers, on Opus 5.5. OpenRouter as provider, pinned to Anthropic. Front of house on Sonnet 5. Effort varies by trigger, and a run can escalate its own effort. | Event runs can turn into big tasks. One model gives one shared cache. |
 | 22 | Inbound files are saved to the VM and also given to the model when it can read them. Voice notes are transcribed. Outbound attachments come from VM file paths. | Files become part of Winston's computer and stay usable in later tasks. |
 | 23 | Browser: own function tools over raw CDP on real headful Chrome; a window per agent; per-domain lock; site skill files; mandatory verification; per-tab screencast handoff. _("Own function tools" → `winston browser` CLI commands, #41.)_ | Matches 2026 state of the art (hybrid refs + screenshots + code). Model-agnostic. Best anti-bot posture. |
@@ -676,6 +888,15 @@ A summary of the security properties set by decisions elsewhere in this doc:
 | 50 | VM processes supervised by systemd (`Restart=always`), with a CDP health check by `winstond`, swap plus a Chrome memory limit, and EC2 auto-recovery. | Standard, image-contained, no extra infrastructure. |
 | 51 | Standard calls: Telegram HTML parse mode with Markdown-subset conversion and 4,096-char splitting; one front-of-house turn per user (advisory lock); prompts as Markdown in `packages/prompts`; app disconnect cancels scoped subscriptions; homepage/privacy/terms pages for Google. | Conventional answers to routine questions. |
 | 52 | Full CLI command reference specified (mail, calendar, trigger, events, history, task, browser, accounts). State changes use `update`, not one-off verbs. Drafts via `--draft`. Triggers reuse the domain filter flags. `trigger delete`, `task resume`/`cancel`. | The CLI is Winston's toolset, so it's specified up front, with every command following the shared conventions. |
+| 53 | Build order M0–M9 as thin vertical slices, with production at M4 (after accounts, before mail/agents/triggers/browser). | Winston is usable from M1. Everything after M4 ships to real daily use. |
+| 54 | Front-of-house window ~150k tokens (trim to ~100k). Event batches fire 30 s after the first event. | Larger short-term memory. Cached reads keep it affordable. |
+| 55 | Time zone: detected at signup, auto-updated whenever the web app opens with a different browser time zone, and changeable by Winston (`winston me update --timezone`). | Stays correct while traveling. |
+| 56 | Web UI: Tailwind + Base UI, with a design system in `packages/ui` built collaboratively with the founder, plus a dev-only `/dev/design` view of every page × state × viewport, built after the first page. | Many UI states. Consistent design needs a system and a way to see everything at once. |
+| 57 | AWS budget alerts at $150 actual / $200 forecast (baseline ~$120). OpenRouter credit limit for model spend. System prompts drafted best-effort in their tickets. | Alerts only fire on real anomalies. Prompts are tuned against a working loop. |
+| 58 | The VM holds no externally usable credential: CLI → unix socket → `winstond` (sole holder of the VM token) → websocket → `gateway`, which serves the VM-facing API in-process. `api` is public webhooks only. | A prompt-injected command can't exfiltrate a token that works off-VM. |
+| 59 | Part 3 specifications: data model, VM protocol, context assembly, state machines, Packer image (AMI + local Docker from one template), CDK stacks, website pages, repo bootstrap. | Concrete enough to cut executable tickets. |
+| 60 | Part 3 is a starting sketch with an explicit invariants list. Details change freely (doc updated in the same commit). Invariants change only with the founder. Tickets reference sections and are re-checked before starting. | Avoids over-prescribing while protecting what's load-bearing. |
+| 61 | Users store first and last name. The web app uses a sidebar shell (Home, Connections: Accounts + Telegram, You: Profile + Delete) instead of a settings page, and `/home` doubles as first-run setup. End-to-end type safety (Drizzle → server functions / Hono RPC → clients, shared Zod contracts, explicit DTOs) is an invariant. | Clearer navigation, and one source of truth for types. |
 
 ## Risks & flags
 - **Datacenter IPs.** AWS IPs are known datacenter ranges. Some sites (ticketing, aggressive Cloudflare setups) may block or challenge Winston despite a real logged-in Chrome. Mitigation: route those domains through a residential proxy, using the browser-backend interface.
