@@ -291,7 +291,8 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 
 ## 7. Language & repo
-- **TypeScript everywhere, on Bun** (version pinned with mise, `bun.lock`).
+- **TypeScript everywhere, on Bun** (Bun and Node pinned exactly in `mise.toml`: Bun 1.4.2, Node 24 LTS; `bun.lock`).
+- **Isolated installs** (`bunfig.toml`: `linker = "isolated"`), pnpm-style, so a package can only import dependencies it declares. If a tool breaks under isolated linking, switch back to hoisted and note why here.
 - **End-to-end type safety, from database to every client:**
   - **Database → server:** Drizzle schema types in `packages/db` (row types inferred, with `drizzle-zod` for validators).
   - **Server → web client:** TanStack Start server functions with Zod-validated inputs and inferred return types, consumed by TanStack Router loaders and Query on the client. No hand-written API types.
@@ -827,8 +828,8 @@ Ids are prefixed strings (`<prefix>_<random>`). All timestamps are `timestamptz`
 - **Time zone:** captured from the browser at signup. **Whenever the web app is opened and the browser's time zone differs from the saved one, it's updated automatically** (emitting `system.settings.changed`). Winston can also change it with `winston me update --timezone <IANA>` when the user says they're traveling.
 
 ## 21. Repo bootstrap
-- **Workspace:** Bun workspaces with `apps/*` (`api`, `agents`, `gateway`, `web`, `cli`, `winstond`), `packages/*` (`db`, `shared`, `prompts`, `ui`), `infra/`, `image/`. Package scope `@winston/*`.
-- **Pins via `mise.toml`** (project-local): Bun, Node 22 (for Node-only tooling), Packer, Terraform, AWS CLI.
+- **Workspace:** Bun workspaces (`apps/*`, `packages/*`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
+- **Pins via `mise.toml`** (project-local): Bun and Node now. Packer, Terraform and the AWS CLI get added by the tickets that introduce them.
 - **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`.
 - **Local services:** `docker-compose.yml` (Postgres, and the VM container via the `VmProvider`).
 - **`packages/ui`:** the design system (Tailwind + Base UI primitives, tokens, components). The web app consumes only this.

@@ -1,0 +1,5 @@
+{
+  "name": "@winston/shared",
+  "private": true,
+  "type": "module"
+}
