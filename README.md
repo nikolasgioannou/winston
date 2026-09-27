@@ -11,6 +11,12 @@ mise install
 bun install
 ```
 
+`bun install` also installs the git hooks (lefthook). Every commit runs formatting, linting, type checks and tests, and commit messages must be a single Conventional Commits subject line. To run the checks yourself:
+
+```bash
+bunx lefthook run pre-commit --all-files
+```
+
 ## Docs
 
 - [Product](docs/product.md): what Winston is and why

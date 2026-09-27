@@ -376,7 +376,12 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 
 ## 8b. Checks, CI/CD & deploys
 
-- **Pre-commit gate with lefthook** (installed as a dev dependency with bun, not globally). Nothing gets committed unless it passes **formatting, linting, type checking and tests**.
+- **Pre-commit gate with lefthook** (a dev dependency, with hooks installed by the root `prepare` script on `bun install`, so lefthook's own install script doesn't need to be trusted). Nothing gets committed unless it passes **formatting, linting, type checking and tests**. `lefthook.yml` jobs, run in order:
+  1. **format:** `prettier --write --ignore-unknown` on staged files, re-staged automatically (`stage_fixed`). `--ignore-unknown` skips files Prettier can't parse instead of failing.
+  2. **lint:** ESLint on staged `.ts` files with `--max-warnings 0`. It reports only, since auto-fixing lint in a hook can change behavior unnoticed.
+  3. **typecheck** and **test** on the whole repo.
+  - lefthook hides unstaged changes while the hook runs, so partially staged files are safe with `stage_fixed`.
+  - **commit-msg:** commitlint with `@commitlint/config-conventional`, plus `body-empty` and `footer-empty`, so messages are a single subject line (`commitlint.config.ts`).
 - **Tooling:**
   - **Prettier** for formatting, with its default style (config in `prettier.config.ts`). Plugins:
     - **`prettier-plugin-packagejson`** sorts `package.json` keys (via `sort-package-json`) whenever Prettier formats one, so there's no separate sort step.
@@ -392,7 +397,6 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - `no-conflicting-classes`, `no-unknown-classes`, `no-concatenated-classes` (keeps classes statically analyzable).
     - Its `enforce-consistent-class-order` rule is **off**, because ordering belongs to Prettier and two tools shouldn't fight over it. Line wrapping is left to Prettier as well. Chosen over Biome for its plugin ecosystem. Lefthook runs ESLint and Prettier on **staged files only** to keep commits fast.
   - **`tsc`** per package (see §7, TypeScript setup). The root `typecheck` script checks the root config files, then runs every package's `typecheck`.
-  - **Conventional Commits**, enforced by **commitlint** in lefthook's `commit-msg` hook. Commit messages are a subject line only (no body or footer).
   - **`bun test`** for tests, run from the root (`bun run test`). Tests sit next to the code as `*.test.ts`. Conventions are in `docs/testing.md`. Once lefthook lands, all tests run in pre-commit, including the Postgres-backed ones, which need the local Docker Postgres running.
 - **What's tested: the deterministic code.**
   - Envelope rendering and escaping (a security boundary).
