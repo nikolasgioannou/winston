@@ -58,6 +58,7 @@
     "packages/domain": {
       "name": "@winston/domain",
       "dependencies": {
+        "@winston/shared": "workspace:*",
         "zod": "4.6.5",
       },
     },

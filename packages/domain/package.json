@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./envelope": "./src/envelope.ts",
     "./inbound": "./src/inbound.ts"
   },
   "scripts": {
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@winston/shared": "workspace:*",
     "zod": "4.6.5"
   }
 }

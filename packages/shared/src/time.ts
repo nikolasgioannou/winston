@@ -1,0 +1,34 @@
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string) {
+  let formatter = formatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "longOffset",
+    });
+    formatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * ISO 8601 local time with an explicit offset, to the second, e.g.
+ * `2026-09-26T14:03:12-07:00`. Depends only on its inputs, never the process's
+ * time zone. Throws a RangeError for an unknown IANA time zone.
+ */
+export function formatInTimeZone(date: Date, timeZone: string) {
+  const parts: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {};
+  for (const { type, value } of formatterFor(timeZone).formatToParts(date))
+    parts[type] = value;
+  // "GMT-07:00", or plain "GMT" at a zero offset.
+  const offset = (parts.timeZoneName ?? "GMT").slice(3) || "+00:00";
+  return `${parts.year ?? ""}-${parts.month ?? ""}-${parts.day ?? ""}T${parts.hour ?? ""}:${parts.minute ?? ""}:${parts.second ?? ""}${offset}`;
+}

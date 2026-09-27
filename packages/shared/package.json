@@ -5,7 +5,8 @@
   "exports": {
     "./config": "./src/config.ts",
     "./ids": "./src/ids.ts",
-    "./logger": "./src/logger.ts"
+    "./logger": "./src/logger.ts",
+    "./time": "./src/time.ts"
   },
   "scripts": {
     "typecheck": "tsc"

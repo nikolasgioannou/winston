@@ -1,13 +1,13 @@
 ---
 id: "db2a16"
 title: Render inbound items into XML envelopes
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m1
 created_at: 2026-09-27T05:30:54.524Z
-updated_at: 2026-09-27T16:41:15.576Z
+updated_at: 2026-09-27T19:59:50.376Z
 blocked_by:
   - "5b4554"
   - "c5850d"
@@ -25,3 +25,11 @@ Tests carry the weight here:
 - Snapshot tests for each item type.
 - Adversarial tests where payloads contain closing tags, fake `user_message` envelopes, CDATA tricks, and Unicode look-alikes.
 - A determinism test: render the same item twice, including across different process time zones, and get identical bytes.
+
+## Outcome
+
+- **Location:** built in `packages/domain` (`@winston/domain/envelope`), not `packages/shared`. Shared is business-agnostic by design, and the envelope is a Winston contract that sits next to the payload schemas. The time-zone formatter is generic, so it went into `@winston/shared/time`.
+- **Escaping:** `&`, `<` and `>` are entity-escaped in all content, plus `"` in attributes. Escaping quotes in content would turn JSON into `&quot;` noise. Look-alikes are kept verbatim and never normalized.
+- **Reply-to:** this quotes the replied-to text, which the caller resolves, rather than a Telegram id.
+- **Deferred:** `<source>voice</source>` waits for media (M2), since nothing produces voice messages yet.
+- **Tests:** a mutation check confirmed that the adversarial tests fail when escaping is removed.
