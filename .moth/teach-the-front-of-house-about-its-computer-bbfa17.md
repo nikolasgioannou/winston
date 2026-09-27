@@ -25,4 +25,4 @@ Also add **"Winston's home layout"** conventions to the image, so the prompt can
 
 Check it by hand with `bun dev`:
 - Tell Winston a preference, and confirm he writes a note.
-- Start a new conversation window (reset `window_start_seq`), and confirm he finds the note.
+- Start a new conversation window (reset `window_start_message_id`), and confirm he finds the note.

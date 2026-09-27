@@ -20,7 +20,7 @@ This is the milestone's heart: message the dev bot and Winston answers. It imple
 
 A turn:
 1. Creates a `runs` row (`kind: front`, `trigger_type: user`).
-2. Loads the user's front-of-house message stream from `front_state.window_start_seq`. Trimming comes in its own ticket. For now, load everything.
+2. Loads the user's front-of-house message stream from `front_state.window_start_message_id`. Trimming comes in its own ticket. For now, load everything.
 3. Renders the unconsumed inbound items into envelopes and appends them as a user message.
 4. Runs the model loop on the `front` profile with one tool, `send_message(text)`.
 5. Appends every step to `run_messages` via `onStepFinish`, and marks the consumed inbound items with the run id.

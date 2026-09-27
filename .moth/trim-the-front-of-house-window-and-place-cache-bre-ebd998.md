@@ -16,7 +16,7 @@ The front of house doesn't summarize. It keeps a rolling window of recent conver
 
 Implement:
 - Token estimation for the window. Research whether OpenRouter/Anthropic token counting is available and cheap, or whether a local estimate is good enough. The trim threshold just needs to be roughly right. Consistency matters more than precision.
-- Trimming that only cuts at turn boundaries, never between a tool call and its result. It updates `front_state.window_start_seq`. Nothing is ever deleted from the database.
+- Trimming that only cuts at turn boundaries, never between a tool call and its result. It updates `front_state.window_start_message_id`. Nothing is ever deleted from the database.
 - Cache breakpoint placement: one after the static system prompt and tools, one at the end of the previous turn. Verify with real calls (the model smoke script, or logging) that consecutive turns show large cached-token counts, and that a trim causes one cache miss, then caching resumes.
 - Make the thresholds configurable.
 
