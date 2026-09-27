@@ -31,6 +31,16 @@
         "zod": "4.6.5",
       },
     },
+    "apps/api": {
+      "name": "@winston/api",
+      "dependencies": {
+        "@winston/db": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "hono": "4.13.9",
+        "zod": "4.6.5",
+      },
+    },
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
@@ -224,6 +234,8 @@
 
     "@winston/agents": ["@winston/agents@workspace:apps/agents"],
 
+    "@winston/api": ["@winston/api@workspace:apps/api"],
+
     "@winston/db": ["@winston/db@workspace:packages/db"],
 
     "@winston/shared": ["@winston/shared@workspace:packages/shared"],
@@ -355,6 +367,8 @@
     "hashery": ["hashery@1.5.1", "", { "dependencies": { "hookified": "^1.15.0" } }, "sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ=="],
 
     "help-me": ["help-me@5.0.0", "", {}, "sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg=="],
+
+    "hono": ["hono@4.13.9", "", {}, "sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg=="],
 
     "hookified": ["hookified@1.15.1", "", {}, "sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg=="],
 

@@ -1,13 +1,13 @@
 ---
 id: "76c143"
 title: Create the api service with Hono
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - m1
 created_at: 2026-09-27T05:30:54.297Z
-updated_at: 2026-09-27T17:32:16.394Z
+updated_at: 2026-09-27T19:03:50.272Z
 blocked_by:
   - "2c5ac8"
   - "9378a8"
@@ -24,3 +24,7 @@ Build:
 - A route module pattern that the webhook tickets will follow.
 
 Test the health route and the error handler with Hono's in-process request helper, without opening a real port.
+
+## Outcome
+
+Built as described in docs/design.md §9 (`api`). Config is `API_HOST` and `API_PORT` (defaults `127.0.0.1:3000`, the tunnel's origin) plus the shared `LOG_LEVEL`. Route modules live in `apps/api/src/routes/` as factories returning a chained `Hono<ApiEnv>`, so their types carry over to Hono RPC. `AppType` isn't exported yet because nothing consumes the api's types; `gateway` will be the first RPC consumer, with its own app.
