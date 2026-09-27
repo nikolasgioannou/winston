@@ -1,14 +1,14 @@
 ---
 id: "e47a50"
 title: Receive Telegram messages via webhook
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - m1
   - telegram
 created_at: 2026-09-27T05:30:54.448Z
-updated_at: 2026-09-27T18:08:36.918Z
+updated_at: 2026-09-27T22:44:00.737Z
 blocked_by:
   - "76c143"
   - "9869b7"
