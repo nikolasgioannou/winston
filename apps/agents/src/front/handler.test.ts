@@ -25,6 +25,7 @@ const telegram = {
   sendMessage: () => Promise.resolve({ message_id: 1 }),
   sendRichMessage: () => Promise.resolve({ message_id: 1 }),
   sendChatAction: () => Promise.resolve(true),
+  sendFiles: () => Promise.resolve([]),
 };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

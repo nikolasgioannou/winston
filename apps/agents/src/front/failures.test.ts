@@ -66,6 +66,7 @@ async function withUser(
         return Promise.resolve({ message_id: messageIds });
       },
       sendChatAction: () => Promise.resolve(true),
+      sendFiles: () => Promise.resolve([]),
     };
     const say = async (text: string) => {
       await tx.insert(inboundItems).values({

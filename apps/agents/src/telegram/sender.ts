@@ -1,4 +1,18 @@
-import type { Api } from "grammy";
+import { InputFile, type Api } from "grammy";
+import type { Message } from "grammy/types";
+
+/** A file to upload: as a photo (compressed, shown inline) or a document (sent as is). */
+export interface OutgoingFile {
+  kind: "photo" | "document";
+  name: string;
+  bytes: Uint8Array;
+}
+
+/** An uploaded file: its message, and the id Telegram stores it under. */
+export interface SentFile {
+  messageId: number;
+  fileId: string;
+}
 
 /** The Telegram calls the agents make. */
 export interface TelegramSender {
@@ -10,6 +24,14 @@ export interface TelegramSender {
     markdown: string,
   ): Promise<{ message_id: number }>;
   sendChatAction(chatId: number, action: "typing"): Promise<unknown>;
+  /**
+   * Uploads 1–10 files of one kind: one file as its own message, several as
+   * a media group (an album). Returns them in order.
+   */
+  sendFiles(
+    chatId: number,
+    files: readonly OutgoingFile[],
+  ): Promise<SentFile[]>;
 }
 
 /**
@@ -29,5 +51,42 @@ export function grammySender(api: Api): TelegramSender {
       return send({ chat_id: chatId, rich_message: { markdown } });
     },
     sendChatAction: (chatId, action) => api.sendChatAction(chatId, action),
+    async sendFiles(chatId, files) {
+      const input = (file: OutgoingFile) =>
+        new InputFile(file.bytes, file.name);
+      const [only] = files;
+      if (files.length === 1 && only) {
+        const message =
+          only.kind === "photo"
+            ? await api.sendPhoto(chatId, input(only))
+            : await api.sendDocument(chatId, input(only));
+        return [sentFile(message)];
+      }
+      const kind = only?.kind ?? "document";
+      const messages =
+        kind === "photo"
+          ? await api.sendMediaGroup(
+              chatId,
+              files.map((file) => ({
+                type: "photo" as const,
+                media: input(file),
+              })),
+            )
+          : await api.sendMediaGroup(
+              chatId,
+              files.map((file) => ({
+                type: "document" as const,
+                media: input(file),
+              })),
+            );
+      return messages.map(sentFile);
+    },
   };
+}
+
+/** A photo's largest size, or the document, as Telegram stored it. */
+function sentFile(message: Message): SentFile {
+  const fileId =
+    message.photo?.at(-1)?.file_id ?? message.document?.file_id ?? "";
+  return { messageId: message.message_id, fileId };
 }

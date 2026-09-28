@@ -1,14 +1,14 @@
 ---
 id: "68fe0c"
 title: Let Winston send files from the VM
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m2
   - telegram
 created_at: 2026-09-27T05:32:52.019Z
-updated_at: 2026-09-28T04:30:27.826Z
+updated_at: 2026-09-28T04:51:52.254Z
 blocked_by:
   - "103e94"
   - "980988"
@@ -25,3 +25,9 @@ The mechanism is decided (decision #70, docs/research/reply-design.md): a native
 - Add `attach` to the front-of-house tools and one line to the prompt, as tested in the eval: "To send the user a file from your computer (a photo, a PDF, anything), call the `attach` tool with its path; it's sent immediately. Up to 10 files, 50 MB each."
 
 Tests with a fake Telegram client: photo vs document selection, media groups, oversize rejection, a missing path producing a clear tool error, and files arriving in order between messages.
+
+## Outcome
+
+- `attach({ paths })` checks every path on the VM first (exists, a file, inside the home folder, 1 byte to 50 MB) and sends nothing if any fails, listing every problem. Images within Telegram's photo limits go as photos, everything else as documents; consecutive files of one kind go as a media group of up to 10. Each sent file gets `outbound_messages` and `files` rows.
+- Found in live testing: after the last message, the model's wrap-up call (seeing the `attach` result, then `end_turn`) showed a stray "typing…". The indicator now restarts its clock after every message and file, reappearing only if the turn is still working 4 s later.
+- Verified live: a photo sent back as a photo with "Here you go."; a PDF and a README as one document album, then "Sent both."; a missing path answered plainly with nothing sent; "send a message first and then the cat pic" arrived in that order.

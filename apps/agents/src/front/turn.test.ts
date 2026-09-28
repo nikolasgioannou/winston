@@ -17,6 +17,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { keepLineBreaks } from "../telegram/line-breaks.ts";
+import type { OutgoingFile } from "../telegram/sender.ts";
 import { emptyReplyNudge, messageDroppedNote, runFrontTurn } from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import { localBlobStore } from "../blobs.ts";
@@ -36,6 +37,8 @@ interface Sent {
   text: string;
   /** Sent as a Rich Message rather than plain text. */
   rich?: boolean;
+  /** A file upload; `text` is its name. */
+  file?: "photo" | "document";
 }
 
 /**
@@ -91,6 +94,14 @@ async function scenario(
         typing.sends += 1;
         return Promise.resolve(true);
       },
+      sendFiles: (chatId: number, files: readonly OutgoingFile[]) =>
+        Promise.resolve(
+          files.map((file) => {
+            sent.push({ chatId, text: file.name, file: file.kind });
+            telegramIds += 1;
+            return { messageId: telegramIds, fileId: `tg-${file.name}` };
+          }),
+        ),
     };
     // The indicator's timer, held rather than run.
     const typing = { sends: 0, running: false };
@@ -618,6 +629,38 @@ describe("runFrontTurn", () => {
           sentWhenCommandRan = sentSoFar.length;
           return { stdout: "notes.md\ntodo.md\n" };
         },
+      },
+    );
+  });
+
+  test("a file attached beside a message arrives right after it, in order", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply(
+            "attach",
+            { paths: ["~/inbox/boarding-pass.pdf"] },
+            "Here's your boarding pass. Seat 14C, gate F12.",
+          ),
+          toolCallReply("end_turn", {}),
+        ],
+      ],
+      async ({ say, turn, sent, requests }) => {
+        await say("send me my boarding pass and remind me of my seat");
+        await turn();
+        expect(sent.map((m) => [m.file ?? "text", m.text])).toEqual([
+          ["text", "Here's your boarding pass. Seat 14C, gate F12."],
+          ["document", "boarding-pass.pdf"],
+        ]);
+        expect(JSON.stringify(requests[0]?.[1]?.messages)).toContain(
+          "Sent boarding-pass.pdf",
+        );
+      },
+      {
+        vmAnswer: (cmd) =>
+          cmd.includes("realpath")
+            ? { stdout: "file 58000 0 0\ninbox/boarding-pass.pdf" }
+            : {},
       },
     );
   });

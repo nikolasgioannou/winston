@@ -53,6 +53,40 @@ describe("startTyping", () => {
     expect(sends).toBe(4);
   });
 
+  test("after a message is sent, typing resumes only an interval later", () => {
+    const clock = fakeTimers();
+    let sends = 0;
+    const typing = startTyping(
+      () => {
+        sends += 1;
+        return Promise.resolve();
+      },
+      logger,
+      clock.timers,
+    );
+    expect(sends).toBe(1);
+    typing.sent();
+    // Nothing right after the message; the turn ending now shows no stray indicator.
+    expect(sends).toBe(1);
+    typing.stop();
+    clock.advance(typingIntervalMs * 2);
+    expect(sends).toBe(1);
+
+    const again = startTyping(
+      () => {
+        sends += 1;
+        return Promise.resolve();
+      },
+      logger,
+      clock.timers,
+    );
+    again.sent();
+    clock.advance(typingIntervalMs);
+    // Still working an interval later: typing is back.
+    expect(sends).toBe(3);
+    again.stop();
+  });
+
   test("a failing send is logged, never thrown, and doesn't stop the repeats", async () => {
     const clock = fakeTimers();
     let sends = 0;

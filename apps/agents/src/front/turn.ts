@@ -53,6 +53,7 @@ import {
 import { cacheBreakpoint } from "../model/cache.ts";
 import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
 import { storableMessage, type BlobStore } from "../blobs.ts";
+import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
@@ -104,6 +105,7 @@ const notRun =
 const prompt = promptVersion("front-of-house", [
   bashDefinition("front"),
   viewImageDefinition,
+  attachDefinition,
   endTurnDefinition,
 ]);
 const instructions = cacheBreakpoint({
@@ -132,7 +134,7 @@ export interface FrontTurnDeps {
 
 /** Runs a turn over the user's unconsumed input. Returns the run id, or nothing if there was no input. */
 export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
-  const { db, gateway, telegram } = deps;
+  const { db, gateway } = deps;
   const [user] = await db
     .select({ timezone: users.timezone, chatId: telegramLinks.chatId })
     .from(users)
@@ -160,10 +162,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   const logger = deps.logger.child({ runId });
   // "Typing…" shows work between messages (§4).
   const typing = startTyping(
-    () => telegram.sendChatAction(user.chatId, "typing"),
+    () => deps.telegram.sendChatAction(user.chatId, "typing"),
     logger,
     deps.timers,
   );
+  // Every message and file sent restarts the indicator's clock.
+  const telegram = pausingTyping(deps.telegram, typing);
 
   await trimWindow(
     db,
@@ -244,6 +248,18 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   const tools = {
     bash: unlessDropped(bash, () => stream.dropStep),
     view_image: unlessDropped(viewImage, () => stream.dropStep),
+    attach: unlessDropped(
+      attachTool({
+        db,
+        vm: deps.vm,
+        telegram,
+        logger,
+        userId,
+        runId,
+        chatId: user.chatId,
+      }),
+      () => stream.dropStep,
+    ),
     end_turn: unlessDropped(endTurnTool, () => stream.dropStep),
   };
   const attempt = async (profile: ModelProfile) => {
@@ -410,6 +426,25 @@ function withRollingBreakpoint(messages: readonly ModelMessage[]) {
   const last = messages.at(-1);
   if (!last || last.role === "assistant") return [...messages];
   return [...messages.slice(0, -1), cacheBreakpoint(last)];
+}
+
+/** A sender that tells the typing indicator whenever something was sent. */
+function pausingTyping(
+  telegram: TelegramSender,
+  typing: { sent: () => void },
+): TelegramSender {
+  const after = <T>(result: Promise<T>) =>
+    result.then((value) => {
+      typing.sent();
+      return value;
+    });
+  return {
+    ...telegram,
+    sendMessage: (chatId, text) => after(telegram.sendMessage(chatId, text)),
+    sendRichMessage: (chatId, markdown) =>
+      after(telegram.sendRichMessage(chatId, markdown)),
+    sendFiles: (chatId, files) => after(telegram.sendFiles(chatId, files)),
+  };
 }
 
 /**
