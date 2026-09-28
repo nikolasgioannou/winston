@@ -591,6 +591,15 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 - Every invocation carries **`WINSTON_RUN_TOKEN`** from its environment, so the backend attributes each call to an agent run (audit log, cost ledger).
 - The front of house's `bash` calls time out at ~10 s. Background agents have no short timeout.
 
+**As built** (`apps/cli`):
+
+- **No framework:** a declarative command table with a hand-rolled flag parser (the reasoning is in `apps/cli/README.md`).
+- **Flags:** unknown flags, resources and verbs get Levenshtein "Did you mean" suggestions and exit 1. The standard flags are defined once (`standardFlags`), `--json` and `--help` work everywhere, and long-text flags resolve a literal, `-` (stdin) or `@path`.
+- **Output:** `record` prints id-first lines joined by " · ". `list` is bounded (20 by default) with a "… N more. To see them, use --cursor … or narrow with …" footer. `json` has sorted keys, and times format in the user's zone with the offset.
+- **Transport:** Hono's `hc<VmApi>` client over winstond's socket, with `Authorization: Bearer $WINSTON_RUN_TOKEN`. Response types come from the API (`InferResponseType`), and backend error codes map to exit codes (`@winston/domain/api-errors`). An unreachable winstond is exit 5.
+- **Commands:** so far `winston me get` and `winston me update --timezone <iana>`.
+- **Verified:** it runs in the local VM as `winston`, compiled with `bun build --compile --target=bun-linux-arm64`.
+
 ### Grammar
 
 `winston <resource> <verb> [<id>] [--flags]`, always noun then verb.

@@ -48,6 +48,16 @@
         "zod": "4.6.5",
       },
     },
+    "apps/cli": {
+      "name": "@winston/cli",
+      "version": "0.1.0",
+      "dependencies": {
+        "@winston/domain": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "@winston/vm-api": "workspace:*",
+        "hono": "4.13.9",
+      },
+    },
     "apps/gateway": {
       "name": "@winston/gateway",
       "dependencies": {
@@ -301,6 +311,8 @@
     "@winston/agents": ["@winston/agents@workspace:apps/agents"],
 
     "@winston/api": ["@winston/api@workspace:apps/api"],
+
+    "@winston/cli": ["@winston/cli@workspace:apps/cli"],
 
     "@winston/db": ["@winston/db@workspace:packages/db"],
 

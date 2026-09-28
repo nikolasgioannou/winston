@@ -1,13 +1,13 @@
 ---
 id: "ae2a73"
 title: Build the winston CLI skeleton and its conventions
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - m2
 created_at: 2026-09-27T05:32:51.711Z
-updated_at: 2026-09-27T05:32:51.742Z
+updated_at: 2026-09-28T02:37:12.832Z
 blocked_by:
   - "8251fd"
 ---
@@ -32,3 +32,11 @@ Build the framework every command will use:
 - **First commands:** `winston me get` and `winston me update --timezone <IANA>`.
 
 Tests: flag parsing including stdin and `@file`, output truncation and footers, exit code mapping for each error code, unknown-flag suggestions, and `--json` output.
+
+## Outcome
+
+Built as described in docs/design.md §11 ("As built"). `apps/cli/README.md` records why there's no framework: every candidate would have needed its help, errors and exit codes overridden to meet §11, and the grammar is small.
+- **Typing:** response types come from the API through Hono RPC (`InferResponseType<…>`), not hand-written interfaces.
+- **Time flags:** `--since` and `--until` are defined but not yet parsed. Human times are the next ticket.
+- **Tests:** flags (values, switches, integers, errors, suggestions), long text (literal, stdin, `@file`), bounded lists and footers, deterministic JSON, help at every level, every API error code to its exit code, an unreachable socket, and the `me` commands.
+- **Checked in the local VM:** the compiled binary was copied in temporarily; baking it into the image is its own ticket. It printed help, ran `me get` (text and `--json`), suggested a fix for `--jsno` and refused a call without a token.
