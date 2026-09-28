@@ -294,7 +294,15 @@ Most event runs, and some front-of-house turns (for example a 👍 reaction), sh
 
 ## 5. Tools
 
-**Principle: a tiny native tool surface, with everything else in the `winston` CLI run through `bash`.** New capabilities are new CLI subcommands, not new tool schemas. Tool definitions never change (cache-stable), and the CLI is self-documenting through `--help`.
+**Principle: a tiny native tool surface, with everything else in the `winston` CLI run through `bash`.**
+
+**`bash` as built** (`apps/agents/src/tools/bash.ts`):
+
+- **The call:** each call runs through the gateway's internal exec endpoint as `winston` (§15), with a fresh **run token** in `WINSTON_RUN_TOKEN`: `{ runId, userId, kind, exp }`, HMAC-SHA256-signed with `RUN_TOKEN_SECRET` (`@winston/domain/run-token`), expiring 5 minutes after the command's own timeout.
+- **Timeouts:** 10 s for the front of house and 10 minutes for background runs. The tool's description states the limit, so the two kinds have different tool definitions.
+- **What the model gets:** `exit code N` and the non-empty streams. A timeout says so and keeps the partial output. Output over ~4k tokens (16,000 characters) is cut to a head (60%) and tail (40%) with a marker, and the full text is saved on the VM at `~/.winston/outputs/<runId>/<step>.txt`, whose path the model is told.
+- **Errors:** an unreachable computer is a plain sentence, never an exception: "isn't reachable right now, so the command didn't run", or "stopped responding … may or may not have completed".
+- **Front-of-house tools:** today `bash` and `no_reply`, in that order. New capabilities are new CLI subcommands, not new tool schemas. Tool definitions never change (cache-stable), and the CLI is self-documenting through `--help`.
 
 | Native tool               |   Front of house   | Background | Why it's native                                                                                           |
 | ------------------------- | :----------------: | :--------: | --------------------------------------------------------------------------------------------------------- |

@@ -26,6 +26,15 @@ const agentsConfigSchema = dbConfigSchema
     VM_IMAGE: z.string().min(1).default("winston-vm:local"),
     /** Where `winstond` dials the gateway from inside a local VM container. */
     VM_GATEWAY_URL: z.url().default("ws://host.docker.internal:3001"),
+    /** The gateway's internal API, how agents reach users' VMs. */
+    GATEWAY_INTERNAL_URL: z.url().default("http://127.0.0.1:3001"),
+    GATEWAY_INTERNAL_SECRET: z
+      .string()
+      .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+    /** Signs `WINSTON_RUN_TOKEN`s; the gateway verifies them with the same secret. */
+    RUN_TOKEN_SECRET: z
+      .string()
+      .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
     /** How many jobs this process runs at once. */
     WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
     /** How long in-flight jobs get to finish on shutdown before the process exits anyway. */

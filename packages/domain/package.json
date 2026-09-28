@@ -6,7 +6,8 @@
     "./envelope": "./src/envelope.ts",
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",
-    "./jobs": "./src/jobs.ts"
+    "./jobs": "./src/jobs.ts",
+    "./run-token": "./src/run-token.ts"
   },
   "scripts": {
     "typecheck": "tsc"

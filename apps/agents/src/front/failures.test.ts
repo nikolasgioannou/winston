@@ -18,6 +18,7 @@ import {
   textReply,
 } from "../model/testing.ts";
 import { outageNotice, refusalReply, runFrontTurn } from "./turn.ts";
+import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -77,6 +78,8 @@ async function withUser(
           db: tx,
           logger,
           gateway: fake.gateway,
+          vm: fakeVmClient().client,
+          runTokenSecret: testRunTokenSecret,
           telegram,
           timers: noTimers,
           retryDelayMs: 0,

@@ -1,13 +1,13 @@
 ---
 id: "737b8c"
 title: Give agents the bash tool
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m2
 created_at: 2026-09-27T05:32:51.521Z
-updated_at: 2026-09-27T05:32:51.569Z
+updated_at: 2026-09-28T01:48:44.566Z
 blocked_by:
   - "6bde95"
   - "cb9674"
@@ -24,3 +24,11 @@ Implement it in `apps/agents`:
 Register the tool for front-of-house turns. Background runs pick it up in M6.
 
 Tests with a fake gateway: the token is present in the env and verifiable, truncation and the saved-output path, the different timeouts per run kind, and the unreachable-VM message.
+
+## Outcome
+
+Built as described in docs/design.md §5 ("`bash` as built").
+- **Run token:** a compact HMAC-signed token (`@winston/shared/signed` for the generic signer, `@winston/domain/run-token` for the shape), verifiable by the gateway in the VM API ticket. `setup.sh` generates `RUN_TOKEN_SECRET`.
+- **Agents' gateway client:** `apps/agents/src/vm/gateway-client.ts` (`GATEWAY_INTERNAL_URL`, `GATEWAY_INTERNAL_SECRET`), used for exec and for saving full output.
+- **Prompt:** "What you can do" now describes the computer briefly and accurately, instead of saying Winston can only chat. The full guide stays with "Teach the front of house about its computer".
+- **Tests:** token presence and verification, per-kind timeouts, plain errors, timeout with partial output, head and tail truncation with the saved path, and a whole turn where the model runs `ls ~` and answers from the output.

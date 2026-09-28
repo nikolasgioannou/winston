@@ -9,12 +9,14 @@ import {
   telegramLinks,
 } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
+import type { ExecResult } from "@winston/domain/frames";
 import type { UserMessagePayload } from "@winston/domain/inbound";
 import { createLogger } from "@winston/shared/logger";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { draftDroppedNote, emptyReplyNudge, runFrontTurn } from "./turn.ts";
+import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -45,10 +47,13 @@ async function scenario(
     turn: (index?: number) => Promise<string | undefined>;
     sent: Sent[];
     requests: Record<string, unknown>[][];
+    commands: string[];
     typing: { sends: number; running: boolean };
   }) => Promise<void>,
   options: {
     rejectRich?: boolean;
+    /** How the fake computer answers each command. */
+    vmAnswer?: (cmd: string) => Partial<ExecResult>;
     /** Runs while model request `index` of a turn is in flight. */
     onRequest?: (
       index: number,
@@ -94,6 +99,7 @@ async function scenario(
       },
     };
     const requests: Record<string, unknown>[][] = [];
+    const vm = fakeVmClient(options.vmAnswer);
     const say = async (
       text: string,
       extra: Partial<UserMessagePayload> = {},
@@ -124,6 +130,8 @@ async function scenario(
           db: tx,
           logger,
           gateway: fake.gateway,
+          vm: vm.client,
+          runTokenSecret: testRunTokenSecret,
           telegram,
           timers,
           retryDelayMs: 0,
@@ -131,7 +139,16 @@ async function scenario(
         user.id,
       );
     };
-    await fn({ tx, userId: user.id, say, turn, sent, requests, typing });
+    await fn({
+      tx,
+      userId: user.id,
+      say,
+      turn,
+      sent,
+      requests,
+      typing,
+      commands: vm.commands,
+    });
   });
 }
 
@@ -352,6 +369,30 @@ describe("runFrontTurn", () => {
         expect(sent).toContain('\\"emoji\\":\\"👍\\"');
         expect(sent).toContain("Your 3pm moved to 4.");
       },
+    );
+  });
+
+  test("the model can run a command on its computer and answer with the result", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("bash", { command: "ls ~" }),
+          textReply("You have one file: notes.md."),
+        ],
+      ],
+      async ({ say, turn, sent, commands, requests }) => {
+        await say("what's in your home folder?");
+        await turn();
+        expect(commands).toEqual(["ls ~"]);
+        expect(sent.map((message) => message.text)).toEqual([
+          "You have one file: notes.md.",
+        ]);
+        // The command's output went back to the model before it answered.
+        expect(JSON.stringify(requests[0]?.[1]?.messages)).toContain(
+          "notes.md",
+        );
+      },
+      { vmAnswer: () => ({ stdout: "notes.md\n" }) },
     );
   });
 

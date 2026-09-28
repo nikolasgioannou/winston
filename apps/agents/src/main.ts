@@ -12,6 +12,7 @@ import { createModelGateway } from "./model/gateway.ts";
 import { dbModelCallSink } from "./model/log.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
+import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
 import { provisionVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
@@ -43,6 +44,11 @@ const worker = createWorker({
     [frontTurnJob.type]: frontTurnHandler({
       gateway,
       telegram,
+      vm: gatewayClient({
+        baseUrl: config.GATEWAY_INTERNAL_URL,
+        secret: config.GATEWAY_INTERNAL_SECRET,
+      }),
+      runTokenSecret: config.RUN_TOKEN_SECRET,
       window: {
         maxTokens: config.FRONT_WINDOW_MAX_TOKENS,
         targetTokens: config.FRONT_WINDOW_TARGET_TOKENS,

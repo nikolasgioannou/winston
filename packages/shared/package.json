@@ -7,6 +7,7 @@
     "./ids": "./src/ids.ts",
     "./json": "./src/json.ts",
     "./logger": "./src/logger.ts",
+    "./signed": "./src/signed.ts",
     "./time": "./src/time.ts",
     "./tokens": "./src/tokens.ts"
   },

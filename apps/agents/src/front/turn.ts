@@ -39,6 +39,8 @@ import {
 } from "drizzle-orm";
 import { cacheBreakpoint } from "../model/cache.ts";
 import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
+import { bashDefinition, bashTool } from "../tools/bash.ts";
+import type { VmClient } from "../vm/gateway-client.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "./envelopes.ts";
 import {
@@ -79,7 +81,11 @@ export const refusalReply = "Sorry, I can't help with that one.";
 export const draftDroppedNote =
   "Your last reply was not sent: new messages arrived while you wrote it. Reply once, covering everything.";
 
-const prompt = promptVersion("front-of-house", [noReplyDefinition]);
+// Tools in the order the model sees them; the prompt version hashes them in that order.
+const prompt = promptVersion("front-of-house", [
+  bashDefinition("front"),
+  noReplyDefinition,
+]);
 const instructions = cacheBreakpoint({
   role: "system" as const,
   content: systemPrompts["front-of-house"],
@@ -90,6 +96,10 @@ export interface FrontTurnDeps {
   logger: Logger;
   gateway: ModelGateway;
   telegram: TelegramSender;
+  /** The user's computer, through the gateway. */
+  vm: VmClient;
+  /** Signs the run tokens `bash` hands to commands. */
+  runTokenSecret: string;
   /** For tests: the typing indicator's timers. */
   timers?: Timers;
   /** The rolling window's size; the defaults suit production. */
@@ -159,6 +169,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   };
 
   let steps = 0;
+  const bash = bashTool({
+    vm: deps.vm,
+    logger,
+    runTokenSecret: deps.runTokenSecret,
+    run: { runId, userId, kind: "front" },
+  });
   const attempt = async (profile: ModelProfile) => {
     try {
       return await gateway.generate({
@@ -175,7 +191,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         stepOffset: steps,
         instructions,
         messages: withRollingBreakpoint(messages),
-        tools: { no_reply: noReplyTool },
+        tools: { bash, no_reply: noReplyTool },
         stopWhen: isStepCount(1),
         timeout: frontCallTimeoutMs,
       });

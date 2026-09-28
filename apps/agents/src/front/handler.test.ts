@@ -8,6 +8,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { fakeGateway, textReply } from "../model/testing.ts";
 import { createWorker } from "../worker.ts";
 import { frontTurnHandler } from "./handler.ts";
+import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 
 // These tests commit for real: turns run on separate workers and connections.
 const db = await testDb();
@@ -57,6 +58,8 @@ function startWorkers(count: number, delayMs = 0) {
   const fake = fakeGateway({ replies: [textReply("ok")], delayMs });
   const handler = frontTurnHandler({
     gateway: fake.gateway,
+    vm: fakeVmClient().client,
+    runTokenSecret: testRunTokenSecret,
     telegram,
     timers: noTimers,
   });
