@@ -3,6 +3,7 @@ import { enqueue } from "@winston/db/queue";
 import { inboundItems } from "@winston/db/schema";
 import { frontTurnJob } from "@winston/domain/jobs";
 import { and, eq, isNull } from "drizzle-orm";
+import type { BlobStore } from "../blobs.ts";
 import type { ModelGateway } from "../model/gateway.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import type { Timers } from "../telegram/typing.ts";
@@ -28,6 +29,7 @@ export function frontTurnHandler(deps: {
   telegram: TelegramSender;
   vm: VmClient;
   runTokenSecret: string;
+  blobs: BlobStore;
   timers?: Timers;
   window?: WindowBudget;
 }): JobHandler {

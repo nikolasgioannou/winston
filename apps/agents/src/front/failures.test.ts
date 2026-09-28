@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import {
@@ -19,6 +20,9 @@ import {
 } from "../model/testing.ts";
 import { outageNotice, refusalReply, runFrontTurn } from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
+import { localBlobStore } from "../blobs.ts";
+
+const testBlobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -80,6 +84,7 @@ async function withUser(
           gateway: fake.gateway,
           vm: fakeVmClient().client,
           runTokenSecret: testRunTokenSecret,
+          blobs: testBlobs,
           telegram,
           timers: noTimers,
           retryDelayMs: 0,

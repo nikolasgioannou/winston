@@ -39,7 +39,9 @@ import {
 } from "drizzle-orm";
 import { cacheBreakpoint } from "../model/cache.ts";
 import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
+import { storableMessage, type BlobStore } from "../blobs.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
+import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "./envelopes.ts";
@@ -84,6 +86,7 @@ export const draftDroppedNote =
 // Tools in the order the model sees them; the prompt version hashes them in that order.
 const prompt = promptVersion("front-of-house", [
   bashDefinition("front"),
+  viewImageDefinition,
   noReplyDefinition,
 ]);
 const instructions = cacheBreakpoint({
@@ -100,6 +103,8 @@ export interface FrontTurnDeps {
   vm: VmClient;
   /** Signs the run tokens `bash` hands to commands. */
   runTokenSecret: string;
+  /** Where images from tool results are kept, instead of inline in `run_messages`. */
+  blobs: BlobStore;
   /** For tests: the typing indicator's timers. */
   timers?: Timers;
   /** The rolling window's size; the defaults suit production. */
@@ -175,6 +180,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     runTokenSecret: deps.runTokenSecret,
     run: { runId, userId, kind: "front" },
   });
+  const viewImage = viewImageTool({ vm: deps.vm, logger, userId });
   const attempt = async (profile: ModelProfile) => {
     try {
       return await gateway.generate({
@@ -191,7 +197,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         stepOffset: steps,
         instructions,
         messages: withRollingBreakpoint(messages),
-        tools: { bash, no_reply: noReplyTool },
+        tools: { bash, view_image: viewImage, no_reply: noReplyTool },
         stopWhen: isStepCount(1),
         timeout: frontCallTimeoutMs,
       });
@@ -259,8 +265,9 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         outcome = "refused";
         break;
       }
+      // Images go to blob storage; the stored message keeps a stub.
       for (const message of result.responseMessages)
-        await log.store(db, message);
+        await log.store(db, await storableMessage(message, deps.blobs));
       messages.push(...result.responseMessages);
       const step = result.finalStep;
 

@@ -5,3 +5,5 @@ node_modules
 .packer/
 # Binaries compiled for the VM image.
 image/build/
+# Local blob storage (images from tool results; S3 in production).
+.data/

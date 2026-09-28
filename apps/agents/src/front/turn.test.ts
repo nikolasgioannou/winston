@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import {
@@ -18,6 +19,9 @@ import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { keepLineBreaks } from "../telegram/line-breaks.ts";
 import { draftDroppedNote, emptyReplyNudge, runFrontTurn } from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
+import { localBlobStore } from "../blobs.ts";
+
+const testBlobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -133,6 +137,7 @@ async function scenario(
           gateway: fake.gateway,
           vm: vm.client,
           runTokenSecret: testRunTokenSecret,
+          blobs: testBlobs,
           telegram,
           timers,
           retryDelayMs: 0,
@@ -396,6 +401,45 @@ describe("runFrontTurn", () => {
         );
       },
       { vmAnswer: () => ({ stdout: "notes.md\n" }) },
+    );
+  });
+
+  test("an image the model looks at is stored as a blob stub, not inline", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("view_image", { path: "~/shot.png" }),
+          textReply("It's a login page."),
+        ],
+      ],
+      async ({ tx, say, turn, sent, requests }) => {
+        await say("what's in the screenshot?");
+        const runId = await turn();
+        if (!runId) throw new Error("expected a run");
+        expect(sent.map((message) => message.text)).toEqual([
+          "It's a login page.",
+        ]);
+        // The model saw the image itself on the next call…
+        expect(JSON.stringify(requests[0]?.[1]?.messages)).toContain(
+          "data:image/png;base64,",
+        );
+        // …but run_messages holds only a stub.
+        const rows = await tx
+          .select()
+          .from(runMessages)
+          .where(eq(runMessages.runId, runId));
+        const stored = JSON.stringify(rows.map((row) => row.content));
+        expect(stored).toContain("stored as blob");
+        expect(stored.length).toBeLessThan(5_000);
+      },
+      {
+        vmAnswer: (cmd) =>
+          cmd.includes("identify -format '%m")
+            ? { stdout: "image PNG 800 600 50000" }
+            : cmd.includes("mkdir -p")
+              ? { stdout: "800 600" }
+              : {},
+      },
     );
   });
 

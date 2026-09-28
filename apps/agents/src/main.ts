@@ -6,6 +6,7 @@ import { createDb } from "@winston/db/client";
 import { frontTurnJob, provisionVmJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { Api } from "grammy";
+import { localBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
@@ -49,6 +50,7 @@ const worker = createWorker({
         secret: config.GATEWAY_INTERNAL_SECRET,
       }),
       runTokenSecret: config.RUN_TOKEN_SECRET,
+      blobs: localBlobStore(config.BLOB_DIR),
       window: {
         maxTokens: config.FRONT_WINDOW_MAX_TOKENS,
         targetTokens: config.FRONT_WINDOW_TARGET_TOKENS,

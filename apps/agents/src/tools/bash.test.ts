@@ -28,6 +28,7 @@ function fakeVm(answer: Partial<ExecResult> | GatewayError) {
         ...answer,
       });
     },
+    readFile: () => Promise.resolve(new Uint8Array()),
     writeFile: (_userId, path, bytes) => {
       files.push({ path, text: new TextDecoder().decode(bytes) });
       return Promise.resolve();

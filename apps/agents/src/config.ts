@@ -35,6 +35,11 @@ const agentsConfigSchema = dbConfigSchema
     RUN_TOKEN_SECRET: z
       .string()
       .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+    /** Local blob storage for images and other binaries (S3 in production, M4). */
+    BLOB_DIR: z
+      .string()
+      .min(1)
+      .default(new URL("../../../.data/blobs", import.meta.url).pathname),
     /** How many jobs this process runs at once. */
     WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
     /** How long in-flight jobs get to finish on shutdown before the process exits anyway. */

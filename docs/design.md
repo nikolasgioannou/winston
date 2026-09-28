@@ -303,7 +303,13 @@ Most event runs, and some front-of-house turns (for example a 👍 reaction), sh
 - **Timeouts:** 10 s for the front of house and 10 minutes for background runs. The tool's description states the limit, so the two kinds have different tool definitions.
 - **What the model gets:** `exit code N` and the non-empty streams. A timeout says so and keeps the partial output. Output over ~4k tokens (16,000 characters) is cut to a head (60%) and tail (40%) with a marker, and the full text is saved on the VM at `~/.winston/outputs/<runId>/<step>.txt`, whose path the model is told.
 - **Errors:** an unreachable computer is a plain sentence, never an exception: "isn't reachable right now, so the command didn't run", or "stopped responding … may or may not have completed".
-- **Front-of-house tools:** today `bash` and `no_reply`, in that order. New capabilities are new CLI subcommands, not new tool schemas. Tool definitions never change (cache-stable), and the CLI is self-documenting through `--help`.
+- **Front-of-house tools:** today `bash`, `view_image` and `no_reply`, in that order.
+
+**`view_image` as built** (`apps/agents/src/tools/view-image.ts`):
+
+- **Reading the image:** a script on the VM (run as `winston`, with the path passed only through an environment variable, never in the command text) identifies the file with ImageMagick. It then copies it, or converts it, into `~/.winston/view/`. The backend reads it through the files API and removes the copy.
+- **Conversion:** PNG, JPEG, GIF and WebP pass through when they fit within 1568 px on the long edge, about 1.15 megapixels (Anthropic's sweet spot, roughly 1.5k tokens) and 4.5 MB. Anything else, such as HEIC from iPhones, AVIF or TIFF, or anything bigger, is converted with `-auto-orient`, downscaled and stripped: photographic formats to JPEG at quality 85, the rest to PNG.
+- **What the model gets:** the path and size as text, plus the image as a `file` part in the tool result. The OpenRouter provider sends it as `image_url`, and Anthropic reads it (verified). Missing files, directories, non-images and an unreachable computer come back as plain sentences. New capabilities are new CLI subcommands, not new tool schemas. Tool definitions never change (cache-stable), and the CLI is self-documenting through `--help`.
 
 | Native tool               |   Front of house   | Background | Why it's native                                                                                           |
 | ------------------------- | :----------------: | :--------: | --------------------------------------------------------------------------------------------------------- |
@@ -811,6 +817,8 @@ Tuesday works. Thanks, Dana.
   - **Prompt version:** each call stores a hash of the system prompt and tool definitions, with the text kept in a `prompt_versions` table.
   - **Jev decisions:** the questions, returned probabilities, the action taken, and whether it was verified or overridden.
   - **Large binaries** (browser screenshots, attachments) go to **S3**, referenced by key from the log. Postgres rows stay small.
+    - **As built:** a `BlobStore` interface keyed by SHA-256, so identical files are stored once. Locally it's a directory (`BLOB_DIR`, default `.data/blobs/`, gitignored); S3 comes in M4 behind the same interface.
+    - **Images:** before a message is stored in `run_messages`, every image in a tool result goes to the blob store and is replaced by a text stub naming its key (`storableMessage`). The model sees the real image within the current turn, and later turns load the stub. That's §2's "older images become text stubs" rule, with the bytes still recoverable.
   - The front of house's FIFO window only drops messages from the _model context_. Nothing is ever deleted from the database.
 
 ## 12a. Secrets & config

@@ -22,6 +22,7 @@ export interface VmClient {
     },
   ): Promise<ExecResult>;
   writeFile(userId: string, path: string, bytes: Uint8Array): Promise<void>;
+  readFile(userId: string, path: string): Promise<Uint8Array>;
 }
 
 export function gatewayClient({
@@ -70,6 +71,19 @@ export function gatewayClient({
         );
       });
       if (!response.ok) throw await failure(response);
+    },
+    async readFile(userId, path) {
+      const response = await fetch(
+        url(`/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`),
+        { headers },
+      ).catch(() => {
+        throw new GatewayError(
+          "gateway_unreachable",
+          "The gateway isn't reachable.",
+        );
+      });
+      if (!response.ok) throw await failure(response);
+      return new Uint8Array(await response.arrayBuffer());
     },
   };
 }

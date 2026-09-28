@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { enqueue } from "@winston/db/queue";
 import { inboundItems, jobs, runs, telegramLinks } from "@winston/db/schema";
@@ -9,6 +10,9 @@ import { fakeGateway, textReply } from "../model/testing.ts";
 import { createWorker } from "../worker.ts";
 import { frontTurnHandler } from "./handler.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
+import { localBlobStore } from "../blobs.ts";
+
+const testBlobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);
 
 // These tests commit for real: turns run on separate workers and connections.
 const db = await testDb();
@@ -60,6 +64,7 @@ function startWorkers(count: number, delayMs = 0) {
     gateway: fake.gateway,
     vm: fakeVmClient().client,
     runTokenSecret: testRunTokenSecret,
+    blobs: testBlobs,
     telegram,
     timers: noTimers,
   });
