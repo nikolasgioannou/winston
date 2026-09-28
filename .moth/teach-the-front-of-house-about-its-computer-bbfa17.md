@@ -1,13 +1,13 @@
 ---
 id: "bbfa17"
 title: Teach the front of house about its computer
-status: todo
+status: done
 priority: none
 labels:
   - m2
   - prompts
 created_at: 2026-09-27T05:32:52.145Z
-updated_at: 2026-09-27T05:32:52.212Z
+updated_at: 2026-09-28T05:41:50.490Z
 blocked_by:
   - "68e9cc"
   - "737b8c"
@@ -26,3 +26,9 @@ Also add **"Winston's home layout"** conventions to the image, so the prompt can
 Check it by hand with `bun dev`:
 - Tell Winston a preference, and confirm he writes a note.
 - Start a new conversation window (reset `window_start_message_id`), and confirm he finds the note.
+
+## Outcome
+
+- Front-of-house prompt: "Your computer" (the machine, `bash`, `view_image`, 10 s commands, the home layout), "The `winston` command" (noun-verb, `--help` over guessing, bounded output), "Your memory is files" (write down when learned, check `~/notes/preferences.md` and search the rest before answering anything about the user's plans or people, re-read before editing, small appends, don't announce notes), and "What you can't do yet" now says to check notes before declining and never to offer reminders.
+- Image: `~/notes`, `~/inbox` and `~/downloads` are created at boot by `systemd-tmpfiles`, since the data volume hides anything baked into `/home/winston`.
+- Checked by hand: a stated preference was written to `~/notes/preferences.md` with a dated entry. After resetting the window, "book me a 9am call with Dana" first got no notes check at all; prompt iterations measured by eval raised that to 4/5 checks and 3/5 mentioning the 10am rule. Live, he checked but searched only for "dana" and missed `preferences.md`. Accepted for now by the user; prompt tuning continues with real use.
