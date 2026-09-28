@@ -15,6 +15,7 @@ import { createLogger } from "@winston/shared/logger";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
+import { keepLineBreaks } from "../telegram/line-breaks.ts";
 import { draftDroppedNote, emptyReplyNudge, runFrontTurn } from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 
@@ -177,7 +178,7 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("the model's Markdown reaches Telegram untouched, as a Rich Message", async () => {
+  test("the model's Markdown reaches Telegram as a Rich Message, keeping its line breaks", async () => {
     const markdown =
       "**Dana** moved to 4.\n\n- bring the deck\n\n| a | b |\n| - | - |\n| 1 | 2 |";
     await scenario(
@@ -185,7 +186,9 @@ describe("runFrontTurn", () => {
       async ({ tx, userId, say, turn, sent }) => {
         await say("what changed?");
         await turn();
-        expect(sent).toEqual([{ chatId: 42, text: markdown, rich: true }]);
+        expect(sent).toEqual([
+          { chatId: 42, text: keepLineBreaks(markdown), rich: true },
+        ]);
         const [outbound] = await tx
           .select()
           .from(outboundMessages)

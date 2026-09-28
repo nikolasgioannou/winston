@@ -5,6 +5,7 @@ import { tool } from "ai";
 import type { Logger } from "@winston/shared/logger";
 import { z } from "zod";
 import type { TelegramSender } from "../telegram/sender.ts";
+import { keepLineBreaks } from "../telegram/line-breaks.ts";
 import { sanitizeRichMarkdown } from "../telegram/sanitize.ts";
 import { richMessageLimit, splitText } from "../telegram/split.ts";
 
@@ -54,7 +55,7 @@ export async function deliverReply(context: {
   try {
     for (const part of splitText(context.text, richMessageLimit)) {
       const sent = await telegram
-        .sendRichMessage(chatId, sanitizeRichMarkdown(part))
+        .sendRichMessage(chatId, sanitizeRichMarkdown(keepLineBreaks(part)))
         .catch((error: unknown) => {
           context.logger.warn(
             { err: error },
