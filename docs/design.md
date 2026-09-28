@@ -935,6 +935,12 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 - **Liveness:** `ping` updates `last_seen_at` (and recovers an `unhealthy` VM) and gets a `pong`. A sweeper in the gateway, every 30 s, marks `ready` VMs with no ping for 2 minutes `unhealthy`. It also fails VMs stuck in `provisioning` or `registering` for 10 minutes (`timed_out`), using `vms.state_changed_at`, which `applyVmEvent` sets.
 - **Internal API:** a Hono app under `/internal`, behind `Authorization: Bearer $GATEWAY_INTERNAL_SECRET` (compared in constant time). `setup.sh` generates the secret. It serves `GET /internal/vms/:userId/status` (state, whether it's connected, last seen, versions). One `Bun.serve` hosts both the websocket and the internal API.
 - **Connection settings:** websocket frames are capped at 1 MiB (`maxPayloadLength`), and a socket idle for 60 s is closed. The gateway listens on `GATEWAY_PORT` (3001), which local VMs reach as `host.docker.internal:3001`.
+- **`winstond`** (`apps/winstond`):
+  - **Binary and unit:** it's compiled with `bun build --compile` into one ~80 MB binary (`--target=bun-linux-arm64` for the local image; x64 comes with the AMI). `bun run image:build:local` compiles it, and Packer installs it at `/usr/local/bin/winstond` along with its systemd unit. The unit runs as `winstond`, with `Restart=always` and `PassEnvironment=WINSTON_REGISTRATION_TOKEN WINSTON_GATEWAY_URL`.
+  - **Credentials:** it presents the stored VM token, or the registration token on first boot. A connection refused before opening makes it try the other credential next, which covers a re-provisioned VM (Bun's websocket client can't see the HTTP status of a refusal). After `registered`, it writes the token atomically (temp file, then rename, 0600) and only then sends `hello`, so the VM can't become `ready` on a token that was never stored.
+  - **Connection:** it reconnects with backoff (1 s doubling to 30 s, 50–100% jitter, reset once connected) and pings every 20 s. A replaced connection (4000) just reconnects. A spent registration token (4401) is dropped.
+  - **Verified in the local VM:** it registered and turned `ready` about 100 ms after the container started. The `winston` user can't read `/etc/winstond/token` or list its directory.
+  - **Unit hardening** is left to the exec ticket, because how `winstond` runs commands as `winston` constrains it (for example, `NoNewPrivileges` would rule out `sudo`).
 - **Frames:** these are Zod schemas in `@winston/domain/frames`, one discriminated union per direction, each frame with a unique `id` and `replyTo` on responses. They're Winston contracts, so they live in `domain`, not `shared`. Each ticket adds the frame types it needs.
 
 **Websocket frames** (JSON with `id` and `type`; screencast frames are binary):
@@ -1017,7 +1023,8 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
   - **Packer:** pinned in `mise.toml`. Its Docker plugin installs into the gitignored `.packer/` in each checkout, never the global `~/.config/packer`.
   - **Building:** `bun run image:build:local` runs `packer init` and `packer build -only=docker.local`, producing `winston-vm:local` for `linux/arm64` (the `docker_platform` variable). The Docker source commits the container with `ENV container=docker`, `STOPSIGNAL SIGRTMIN+3` and `CMD ["/sbin/init"]`.
   - **Scripts:** `base.sh` (the CLI tools, Python 3, fonts, systemd), `systemd.sh` (masks the container-only units when `WINSTON_TARGET=docker`) and `users.sh` (`winston` with `/home/winston`, `winstond` as a system user with no login shell, and `/etc/winstond` at 0700). Every script works on both amd64 and arm64.
-  - **Arriving with their tickets:** Chrome, Xvfb and noVNC (M8), the `winstond` unit (with its binary), and the EC2-only swap and unattended-upgrades (with the AMI, M4).
+  - **`winstond.sh`:** installs the `winstond` binary (compiled into `image/build/`, gitignored, and uploaded by Packer) and its systemd unit.
+  - **Arriving with their tickets:** Chrome, Xvfb and noVNC (M8), and the EC2-only swap and unattended-upgrades (with the AMI, M4).
   - **Formatting:** `packer fmt` is part of `bun run format` / `format:check`.
 
 ## 19. CDK stacks (`infra/`)

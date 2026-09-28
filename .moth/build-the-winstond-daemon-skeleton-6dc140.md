@@ -1,13 +1,13 @@
 ---
 id: "6dc140"
 title: Build the winstond daemon skeleton
-status: todo
+status: done
 priority: none
 labels:
   - m2
   - vm
 created_at: 2026-09-27T05:32:51.365Z
-updated_at: 2026-09-27T05:32:51.414Z
+updated_at: 2026-09-28T00:20:14.809Z
 blocked_by:
   - "4e6f9b"
   - "ea07c8"
@@ -29,3 +29,15 @@ Tests: the backoff schedule, token persistence logic, and handling a replaced co
 The image has no `winstond` systemd unit yet. Add it in this ticket, together with the binary: a placeholder unit without a binary would leave systemd `degraded`. Put the unit in the provisioning scripts (`image/scripts/`), as the other units will be.
 
 The provider passes the registration token and gateway URL as the container environment variables `WINSTON_REGISTRATION_TOKEN` and `WINSTON_GATEWAY_URL` (docs/design.md §8a). They land in PID 1's (systemd's) environment, and `winstond` runs as a non-root user, so its unit needs `PassEnvironment=WINSTON_REGISTRATION_TOKEN WINSTON_GATEWAY_URL`. The EC2 path will use user data instead, so read both through one small config step.
+
+## Outcome
+
+Built as described in docs/design.md §15 ("winstond").
+- **Binary:** `bun build --compile --target=bun-linux-arm64` produces an ~80 MB binary (mostly the Bun runtime). It runs on Ubuntu, with pino logging JSON as usual.
+- **Target:** only arm64 today, for the local image. x64 comes with the AMI (M4).
+- **Image:** `image/scripts/winstond.sh` installs the binary and the unit (`User=winstond`, `Restart=always`, `PassEnvironment=`).
+- **Credentials:** the stored token first. A pre-open refusal switches to the other credential, because Bun's client can't see the 401. `hello` is sent only after the VM token is safely stored.
+- **Frames:** `hello.cliVersion` is now nullable until the CLI exists.
+- **Tests:** backoff, the token store (0600, atomic) and the daemon against a fake gateway (first boot, stored token, re-provisioned fallback, replaced connection).
+- **Integration check:** a re-provisioned local VM registered and turned `ready` about 100 ms after start. `runuser -u winston -- cat /etc/winstond/token` is denied, and pings keep `last_seen_at` fresh.
+- **Unit hardening:** deferred to the exec ticket, with the reasoning.

@@ -25,3 +25,5 @@ In `gateway`: an internal endpoint `POST /internal/vms/:userId/exec` that sends 
 Research how to switch users from a daemon: `winstond` needs just enough privilege to spawn as `winston` (a `sudo` rule limited to that, a setuid helper, or systemd-run), without ever handing `winston` access to `/etc/winstond`. Pick the least-privileged approach and document why.
 
 Tests: output streaming and ordering, exit codes, timeout killing children, user isolation (a command can't read the token), and result retrieval after a simulated reconnect.
+
+From the winstond ticket: `winstond` runs as the unprivileged `winstond` user, and commands must run as `winston` (docs/design.md §15). Decide how, for example a narrow sudoers rule (`winstond ALL=(winston) NOPASSWD: …`), `runuser` from a small privileged helper, or systemd transient units (`systemd-run --uid=winston`). Harden the winstond unit to match (`NoNewPrivileges` would rule out sudo).

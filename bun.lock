@@ -59,6 +59,14 @@
         "zod": "4.6.5",
       },
     },
+    "apps/winstond": {
+      "name": "@winston/winstond",
+      "version": "0.1.0",
+      "dependencies": {
+        "@winston/domain": "workspace:*",
+        "@winston/shared": "workspace:*",
+      },
+    },
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
@@ -292,6 +300,8 @@
     "@winston/prompts": ["@winston/prompts@workspace:packages/prompts"],
 
     "@winston/shared": ["@winston/shared@workspace:packages/shared"],
+
+    "@winston/winstond": ["@winston/winstond@workspace:apps/winstond"],
 
     "@workflow/serde": ["@workflow/serde@4.1.0", "", {}, "sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ=="],
 

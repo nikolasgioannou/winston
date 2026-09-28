@@ -16,7 +16,8 @@ const base = { id: frameId };
 export const helloFrame = z.object({
   ...base,
   type: z.literal("hello"),
-  cliVersion: z.string().min(1).max(64),
+  /** Null until the VM has a CLI. */
+  cliVersion: z.string().min(1).max(64).nullable(),
   winstondVersion: z.string().min(1).max(64),
   capabilities: z.array(z.string().max(64)).max(64),
 });

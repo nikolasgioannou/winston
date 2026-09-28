@@ -30,8 +30,19 @@ source "docker" "local" {
   ]
 }
 
+variable "winstond_binary" {
+  type        = string
+  default     = "build/winstond-linux-arm64"
+  description = "The compiled winstond for the image's architecture, relative to image/."
+}
+
 build {
   sources = ["source.docker.local"]
+
+  provisioner "file" {
+    source      = "${path.root}/${var.winstond_binary}"
+    destination = "/tmp/winstond"
+  }
 
   provisioner "shell" {
     environment_vars = ["WINSTON_TARGET=docker", "DEBIAN_FRONTEND=noninteractive"]
@@ -39,6 +50,7 @@ build {
       "${path.root}/scripts/base.sh",
       "${path.root}/scripts/systemd.sh",
       "${path.root}/scripts/users.sh",
+      "${path.root}/scripts/winstond.sh",
     ]
   }
 

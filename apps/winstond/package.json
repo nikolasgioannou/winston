@@ -1,0 +1,13 @@
+{
+  "name": "@winston/winstond",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@winston/domain": "workspace:*",
+    "@winston/shared": "workspace:*"
+  }
+}

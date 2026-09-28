@@ -3,3 +3,5 @@ node_modules
 .env.local
 # Packer plugins, installed per checkout (bun run image:build:local).
 .packer/
+# Binaries compiled for the VM image.
+image/build/
