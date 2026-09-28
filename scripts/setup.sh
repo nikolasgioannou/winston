@@ -8,8 +8,8 @@
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
 #   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
-#   7. Generate a Telegram webhook secret in .env.local if it has none, and check
-#      that a bot token is set (setup: docs/local-dev.md).
+#   7. Generate the Telegram webhook and gateway internal secrets in .env.local if
+#      they're missing, and check that a bot token is set (setup: docs/local-dev.md).
 #   8. Check that a Docker engine is reachable (starting Colima if it's installed but
 #      stopped). Docker is a machine-level prerequisite, so this script never installs it.
 #   9. Start the local Postgres and wait until it's healthy.
@@ -85,19 +85,25 @@ else
   cp .env.example .env.local
 fi
 
-if grep -qE '^TELEGRAM_WEBHOOK_SECRET=.+' .env.local; then
-  done_ "Telegram webhook secret set"
-else
-  doing "generating a Telegram webhook secret in .env.local"
-  secret=$(openssl rand -hex 32)
-  # Replace the empty line in place, or append one if the file predates it.
-  awk -v line="TELEGRAM_WEBHOOK_SECRET=$secret" '
-    /^TELEGRAM_WEBHOOK_SECRET=/ { print line; found = 1; next }
+# Fills an empty secret in .env.local with a random value: replaces the empty
+# line in place, or appends one if the file predates the variable.
+ensure_secret() {
+  local name=$1 label=$2
+  if grep -qE "^$name=.+" .env.local; then
+    done_ "$label set"
+    return
+  fi
+  doing "generating $label in .env.local"
+  awk -v line="$name=$(openssl rand -hex 32)" -v name="$name" '
+    index($0, name "=") == 1 { print line; found = 1; next }
     { print }
     END { if (!found) print line }
   ' .env.local >.env.local.tmp
   mv .env.local.tmp .env.local
-fi
+}
+
+ensure_secret TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret"
+ensure_secret GATEWAY_INTERNAL_SECRET "gateway internal secret"
 if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
   done_ "Telegram bot token set"
 else

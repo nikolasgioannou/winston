@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./envelope": "./src/envelope.ts",
+    "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",
     "./jobs": "./src/jobs.ts"
   },

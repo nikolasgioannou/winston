@@ -48,6 +48,17 @@
         "zod": "4.6.5",
       },
     },
+    "apps/gateway": {
+      "name": "@winston/gateway",
+      "dependencies": {
+        "@winston/db": "workspace:*",
+        "@winston/domain": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "hono": "4.13.9",
+        "zod": "4.6.5",
+      },
+    },
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
@@ -275,6 +286,8 @@
     "@winston/db": ["@winston/db@workspace:packages/db"],
 
     "@winston/domain": ["@winston/domain@workspace:packages/domain"],
+
+    "@winston/gateway": ["@winston/gateway@workspace:apps/gateway"],
 
     "@winston/prompts": ["@winston/prompts@workspace:packages/prompts"],
 

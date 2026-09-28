@@ -23,10 +23,11 @@ const watch = (entry: string) => [
 ];
 
 // Commands run directly, not through `bun run`, which would pass each signal on
-// a second time. Add gateway and web here as they're created.
+// a second time. Add web here when it's created.
 const services: Service[] = [
   { name: "api", cwd: "apps/api", cmd: watch("src/main.ts") },
   { name: "agents", cwd: "apps/agents", cmd: watch("src/main.ts") },
+  { name: "gateway", cwd: "apps/gateway", cmd: watch("src/main.ts") },
   {
     name: "tunnel",
     cwd: ".",

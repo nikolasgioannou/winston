@@ -44,8 +44,10 @@ export async function provisionVm(
     .update(vms)
     .set({ instanceId, dataVolumeId })
     .where(eq(vms.id, vm.id));
-  await provider.start(instanceId);
+  // Registering before the instance starts, so a fast-booting winstond never
+  // finds the VM still provisioning.
   await applyVmEvent(db, vm.id, "provisioned");
+  await provider.start(instanceId);
   logger.info(
     { vmId: vm.id, instanceId },
     "VM started; waiting for winstond to register",

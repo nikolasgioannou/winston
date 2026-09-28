@@ -2,7 +2,7 @@
  * The VM state machine (docs/design.md §17), in one place for every service
  * that changes a VM's state.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { vms, type vmState } from "./schema/index.ts";
 
@@ -66,7 +66,10 @@ export async function applyVmEvent(db: DbOrTx, vmId: string, event: VmEvent) {
       .for("update");
     if (!vm) throw new Error(`No VM ${vmId}`);
     const next = transition(vm.state, event);
-    await tx.update(vms).set({ state: next }).where(eq(vms.id, vmId));
+    await tx
+      .update(vms)
+      .set({ state: next, stateChangedAt: sql`now()` })
+      .where(eq(vms.id, vmId));
     return next;
   });
 }

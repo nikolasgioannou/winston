@@ -38,10 +38,12 @@ export const vms = snakeCase.table("vms", {
   instanceId: text(),
   dataVolumeId: text(),
   state: vmState().notNull().default("requested"),
-  /** The long-lived VM token `winstond` holds, hashed (§15). */
-  tokenHash: text(),
+  /** When `state` last changed, for timeouts (docs/design.md §17). */
+  stateChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /** The long-lived VM token `winstond` holds, hashed (§15). Looked up by hash. */
+  tokenHash: text().unique(),
   /** The one-time bootstrap token, hashed, until it's exchanged (§15). */
-  registrationTokenHash: text(),
+  registrationTokenHash: text().unique(),
   /** Versions `winstond` reports on connect. */
   cliVersion: text(),
   winstondVersion: text(),
