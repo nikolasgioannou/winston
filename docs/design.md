@@ -940,7 +940,17 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
   - **Credentials:** it presents the stored VM token, or the registration token on first boot. A connection refused before opening makes it try the other credential next, which covers a re-provisioned VM (Bun's websocket client can't see the HTTP status of a refusal). After `registered`, it writes the token atomically (temp file, then rename, 0600) and only then sends `hello`, so the VM can't become `ready` on a token that was never stored.
   - **Connection:** it reconnects with backoff (1 s doubling to 30 s, 50–100% jitter, reset once connected) and pings every 20 s. A replaced connection (4000) just reconnects. A spent registration token (4401) is dropped.
   - **Verified in the local VM:** it registered and turned `ready` about 100 ms after the container started. The `winston` user can't read `/etc/winstond/token` or list its directory.
-  - **Unit hardening** is left to the exec ticket, because how `winstond` runs commands as `winston` constrains it (for example, `NoNewPrivileges` would rule out `sudo`).
+  - **Running commands as `winston`:** a sudoers drop-in, `winstond ALL=(winston) NOPASSWD: ALL` (validated with `visudo` at build time), lets `winstond` run anything as `winston`, and nothing as anyone else. `winston` has no sudo rights at all. This is the least privilege that works:
+    - `CAP_SETUID` would allow becoming any user, root included.
+    - `systemd-run --uid=winston` needs a polkit rule that can't restrict the unit's `User=`, which is a path to root, and polkit and D-Bus in the image.
+    - A custom setuid helper is privileged code of our own.
+    - Because of sudo, the unit can't set `NoNewPrivileges`.
+  - **Exec** (`exec` frame):
+    - **The command line:** `sudo -n -u winston -- env -i -C <cwd> <base env + given env> timeout --kill-after=5 <secs> bash -lc <cmd>`, with cwd defaulting to `/home/winston`. `env -i` means nothing of `winstond`'s environment leaks; only the base variables and the frame's `env` (for example `WINSTON_RUN_TOKEN`) are set. coreutils `timeout` signals its whole process group, so a timeout kills children too (exit 124, reported as `timedOut`).
+    - **Output:** streamed as `exec.output` chunks (up to 16 K characters, in order per stream) on the connection the command arrived on, then `exec.exit`. Each stream is capped at 1 MiB (`truncated`).
+    - **Buffered results:** results are kept for 5 minutes. If the connection drops mid-command, the gateway sends `exec.fetch` once the VM reconnects and gets the whole result (`exec.result`), waiting if the command is still running, instead of running it again.
+  - **Gateway side:** `POST /internal/vms/:userId/exec` (`{ cmd, cwd?, env?, timeoutMs }`) returns `{ stdout, stderr, exitCode, timedOut, truncated }`. Errors are `409 vm_unavailable` when the VM isn't connected, and `504 vm_unreachable` when it doesn't report back within the timeout plus 60 s.
+  - **Verified in the local VM:** commands run as `winston` in `/home/winston`, can't read the VM token, see only the passed environment, and can't use sudo. A timeout killed a background child, and output was capped at 1 MiB.
 - **Frames:** these are Zod schemas in `@winston/domain/frames`, one discriminated union per direction, each frame with a unique `id` and `replyTo` on responses. They're Winston contracts, so they live in `domain`, not `shared`. Each ticket adds the frame types it needs.
 
 **Websocket frames** (JSON with `id` and `type`; screencast frames are binary):

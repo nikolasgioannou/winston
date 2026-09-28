@@ -10,6 +10,7 @@ import {
 import type { Logger } from "@winston/shared/logger";
 import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, eq, or, sql } from "drizzle-orm";
+import type { Execs } from "./execs.ts";
 
 /** What a VM connection carries once authenticated. */
 export interface VmSocketData {
@@ -68,7 +69,7 @@ export async function register(
 
 /** Handles one frame from a VM. Returns the frames to send back. */
 export async function handleVmFrame(
-  { db, logger }: { db: DbOrTx; logger: Logger },
+  { db, logger, execs }: { db: DbOrTx; logger: Logger; execs: Execs },
   vmId: string,
   text: string,
 ): Promise<GatewayToVmFrame[]> {
@@ -83,6 +84,7 @@ export async function handleVmFrame(
       },
     ];
   const frame = parsed.frame;
+  if (execs.handle(vmId, frame)) return [];
 
   switch (frame.type) {
     case "hello": {
@@ -119,6 +121,11 @@ export async function handleVmFrame(
       return [{ id: newFrameId(), type: "pong", replyTo: frame.id }];
     }
     case "pong":
+      return [];
+    case "exec.output":
+    case "exec.exit":
+    case "exec.result":
+      // Handled by the exec registry above.
       return [];
     case "error":
       logger.warn(

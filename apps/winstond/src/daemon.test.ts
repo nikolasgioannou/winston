@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "@winston/shared/logger";
 import { createDaemon } from "./daemon.ts";
+import { createExecutor } from "./exec.ts";
 import { tokenStore } from "./token-store.ts";
 
 const logger = createLogger("winstond-test", {
@@ -83,6 +84,7 @@ async function start(
     gatewayUrl: url,
     registrationToken,
     tokens: tokenStore(path),
+    executor: createExecutor({ prefix: [] }),
     versions: { winstond: "0.1.0", cli: null },
     logger,
     backoff: () => 20,

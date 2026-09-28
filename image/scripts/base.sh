@@ -8,6 +8,6 @@ apt-get install -y --no-install-recommends \
   imagemagick pandoc \
   python3 python3-pip python3-venv \
   fonts-dejavu-core fonts-liberation fonts-noto-core fonts-noto-color-emoji \
-  systemd systemd-sysv dbus
+  systemd systemd-sysv dbus sudo
 apt-get clean
 rm -rf /var/lib/apt/lists/*

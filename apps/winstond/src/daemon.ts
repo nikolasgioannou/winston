@@ -6,6 +6,7 @@ import {
 } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import { backoffDelayMs } from "./backoff.ts";
+import type { Executor } from "./exec.ts";
 import type { TokenStore } from "./token-store.ts";
 
 /** Liveness pings (docs/design.md §15). */
@@ -20,6 +21,7 @@ export interface DaemonOptions {
   /** From the environment on first boot; unused once a VM token is stored. */
   registrationToken: string | undefined;
   tokens: TokenStore;
+  executor: Executor;
   versions: { winstond: string; cli: string | null };
   logger: Logger;
   /** For tests: faster reconnects and pings. */
@@ -128,6 +130,57 @@ export function createDaemon(options: DaemonOptions) {
             ws.close();
           },
         );
+      } else if (frame.type === "exec") {
+        // Output streams on this connection only; after a reconnect the
+        // gateway fetches the buffered result instead.
+        const sendIfOpen = (out: VmToGatewayFrame) => {
+          if (ws.readyState === WebSocket.OPEN) send(ws, out);
+        };
+        options.executor.run(frame, {
+          output: (stream, data) => {
+            sendIfOpen({
+              id: newFrameId(),
+              type: "exec.output",
+              execId: frame.id,
+              stream,
+              data,
+            });
+          },
+          exit: (result) => {
+            sendIfOpen({
+              id: newFrameId(),
+              type: "exec.exit",
+              execId: frame.id,
+              ...result,
+            });
+          },
+        });
+      } else if (frame.type === "exec.fetch") {
+        void options.executor.fetch(frame.execId).then((result) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          send(
+            ws,
+            result
+              ? {
+                  id: newFrameId(),
+                  type: "exec.result",
+                  execId: frame.execId,
+                  found: true,
+                  ...result,
+                }
+              : {
+                  id: newFrameId(),
+                  type: "exec.result",
+                  execId: frame.execId,
+                  found: false,
+                  stdout: "",
+                  stderr: "",
+                  exitCode: null,
+                  timedOut: false,
+                  truncated: false,
+                },
+          );
+        });
       } else if (frame.type === "ping") {
         send(ws, { id: newFrameId(), type: "pong", replyTo: frame.id });
       } else if (frame.type === "error") {

@@ -3,6 +3,7 @@ import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { Connections } from "./connections.ts";
+import { createExecs } from "./execs.ts";
 import { internalRoutes } from "./internal.ts";
 import {
   authenticateVm,
@@ -32,10 +33,17 @@ export function createGateway({
   internalSecret: string;
 }) {
   const connections = new Connections<VmSocket>();
+  const execs = createExecs((vmId, frame) => {
+    const ws = connections.get(vmId);
+    if (!ws) return false;
+    ws.send(JSON.stringify(frame));
+    return true;
+  });
   const internal = internalRoutes({
     db,
     secret: internalSecret,
     isConnected: (vmId) => connections.get(vmId) !== undefined,
+    execs,
   });
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
@@ -60,6 +68,7 @@ export function createGateway({
       }
       connections.add(vmId, ws);
       logger.info({ vmId }, "VM connected");
+      execs.reconnected(vmId);
     },
     async message(ws, message) {
       if (typeof message !== "string") {
@@ -73,7 +82,7 @@ export function createGateway({
       }
       const vmLogger = logger.child({ vmId: ws.data.vmId });
       for (const reply of await handleVmFrame(
-        { db, logger: vmLogger },
+        { db, logger: vmLogger, execs },
         ws.data.vmId,
         message,
       ))
@@ -87,6 +96,7 @@ export function createGateway({
 
   return {
     connections,
+    execs,
     websocket,
     fetch: async (request: Request, server: Server<VmSocketData>) => {
       const url = new URL(request.url);

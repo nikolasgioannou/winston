@@ -257,3 +257,157 @@ describe("gateway", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+/** A registered VM ready for commands: its user id, VM token and live client. */
+async function readyVm() {
+  const vm = await registeringVm();
+  const client = await connect(vm.registrationToken);
+  const registered = await client.next("registered");
+  if (registered.type !== "registered") throw new Error("expected registered");
+  client.send(hello);
+  await eventually(async () => (await vmRow(vm.vmId))?.state === "ready");
+  return { ...vm, client, vmToken: registered.vmToken };
+}
+
+const execUrl = (userId: string) =>
+  `http://localhost:${String(server.port)}/internal/vms/${userId}/exec`;
+const postExec = (userId: string, body: Record<string, unknown>) =>
+  fetch(execUrl(userId), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${internalSecret}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+describe("gateway exec", () => {
+  test("sends the command and returns the streamed output and exit code", async () => {
+    const { userId, client } = await readyVm();
+    const response = postExec(userId, {
+      cmd: "echo hi",
+      env: { WINSTON_RUN_TOKEN: "run-1" },
+      timeoutMs: 5_000,
+    });
+    const exec = await client.next("exec");
+    if (exec.type !== "exec") throw new Error("expected exec");
+    expect(exec).toMatchObject({
+      cmd: "echo hi",
+      env: { WINSTON_RUN_TOKEN: "run-1" },
+      timeoutMs: 5_000,
+    });
+    client.send({
+      id: "o1",
+      type: "exec.output",
+      execId: exec.id,
+      stream: "stdout",
+      data: "h",
+    });
+    client.send({
+      id: "o2",
+      type: "exec.output",
+      execId: exec.id,
+      stream: "stdout",
+      data: "i\n",
+    });
+    client.send({
+      id: "o3",
+      type: "exec.output",
+      execId: exec.id,
+      stream: "stderr",
+      data: "warn\n",
+    });
+    client.send({
+      id: "x1",
+      type: "exec.exit",
+      execId: exec.id,
+      exitCode: 2,
+      timedOut: false,
+      truncated: false,
+    });
+    const result = await response;
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({
+      stdout: "hi\n",
+      stderr: "warn\n",
+      exitCode: 2,
+      timedOut: false,
+      truncated: false,
+    });
+    client.ws.close();
+  });
+
+  test("a VM that isn't connected gets a clear error", async () => {
+    const { userId, client } = await readyVm();
+    client.ws.close();
+    await client.closed;
+    // The server notices the close a moment after the client does.
+    await Bun.sleep(50);
+    const response = await postExec(userId, {
+      cmd: "echo hi",
+      timeoutMs: 5_000,
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: "vm_unavailable" },
+    });
+  });
+
+  test("after a reconnect mid-command, the buffered result is fetched instead of rerunning it", async () => {
+    const { userId, client, vmToken } = await readyVm();
+    const response = postExec(userId, { cmd: "make coffee", timeoutMs: 5_000 });
+    const exec = await client.next("exec");
+    client.send({
+      id: "o1",
+      type: "exec.output",
+      execId: exec.id,
+      stream: "stdout",
+      data: "partial",
+    });
+    client.ws.close();
+    await client.closed;
+
+    const again = await connect(vmToken);
+    const fetchFrame = await again.next("exec.fetch");
+    expect(fetchFrame).toMatchObject({ type: "exec.fetch", execId: exec.id });
+    expect(again.frames.some((frame) => frame.type === "exec")).toBe(false);
+    again.send({
+      id: "r1",
+      type: "exec.result",
+      execId: exec.id,
+      found: true,
+      stdout: "partial and the rest\n",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+      truncated: false,
+    });
+    expect(await (await response).json()).toMatchObject({
+      stdout: "partial and the rest\n",
+      exitCode: 0,
+    });
+    again.ws.close();
+  });
+
+  test("the exec endpoint rejects bad requests and needs the secret", async () => {
+    const { userId, client } = await readyVm();
+    expect((await postExec(userId, { cmd: "", timeoutMs: 5_000 })).status).toBe(
+      400,
+    );
+    expect(
+      (
+        await postExec(userId, {
+          cmd: "ls",
+          env: { "bad-key": "x" },
+          timeoutMs: 5_000,
+        })
+      ).status,
+    ).toBe(400);
+    const noSecret = await fetch(execUrl(userId), {
+      method: "POST",
+      body: "{}",
+    });
+    expect(noSecret.status).toBe(401);
+    client.ws.close();
+  });
+});

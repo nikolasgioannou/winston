@@ -6,6 +6,7 @@
 import { createLogger } from "@winston/shared/logger";
 import packageJson from "../package.json" with { type: "json" };
 import { createDaemon } from "./daemon.ts";
+import { createExecutor } from "./exec.ts";
 import { tokenStore } from "./token-store.ts";
 
 // Docker passes these as environment variables (the unit's PassEnvironment=);
@@ -24,6 +25,7 @@ const logger = createLogger("winstond", { pretty: false });
 const daemon = createDaemon({
   gatewayUrl,
   registrationToken: nonEmpty(process.env.WINSTON_REGISTRATION_TOKEN),
+  executor: createExecutor(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
   versions: { winstond: packageJson.version, cli: null },
   logger,

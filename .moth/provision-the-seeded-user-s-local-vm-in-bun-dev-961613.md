@@ -25,3 +25,5 @@ On `bun dev` startup, after migrations:
 Also add small scripts: `bun run vm:shell` (a shell inside the user's container as `winston`, for debugging) and `bun run vm:reset` (destroy the container but keep the data volume, then re-provision).
 
 Update `docs/local-dev.md`. Done when a clean `bun dev` leads to "ask Winston to run `ls ~` and he answers."
+
+From the exec ticket: while developing, putting the VM on a rebuilt image has meant marking it `failed` by hand and running `bun run vm:provision`. `provision_vm` does nothing for a `ready` VM, and §17 has no path from `ready` back to `provisioning`. So `vm:reset` needs a decision: for example a `reset` event, or terminate plus a fresh VM row. Lifecycle semantics are a Part 3 invariant, so decide it with the user.
