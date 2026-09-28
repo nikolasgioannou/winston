@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "@winston/shared/logger";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
+import { localFiles } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
 
 const logger = createLogger("winstond-test", {
@@ -77,6 +79,7 @@ async function start(
   url: string,
   registrationToken: string | undefined,
   tokenPath?: string,
+  filesRoot?: string,
 ) {
   const path =
     tokenPath ?? join(await mkdtemp(join(tmpdir(), "winstond-")), "token");
@@ -85,6 +88,7 @@ async function start(
     registrationToken,
     tokens: tokenStore(path),
     executor: createExecutor({ prefix: [] }),
+    files: localFiles(filesRoot ?? tmpdir()),
     versions: { winstond: "0.1.0", cli: null },
     logger,
     backoff: () => 20,
@@ -159,5 +163,86 @@ describe("winstond", () => {
         ) ?? false,
     );
     expect(gateway.connections[1]?.token).toBe("vm-1");
+  });
+});
+
+describe("winstond file transfers", () => {
+  test("an upload in chunks lands intact, and reads back byte for byte; escapes are refused", async () => {
+    const gateway = fakeGateway();
+    running.push({ stop: () => void gateway.server.stop(true) });
+    const home = await realpath(
+      await mkdtemp(join(tmpdir(), "winstond-home-")),
+    );
+    await start(gateway.url, "reg-1", undefined, home);
+    await eventually(
+      () =>
+        gateway.connections[0]?.frames.some(
+          (frame) => frame.type === "hello",
+        ) ?? false,
+    );
+    const vm = gateway.connections[0];
+    if (!vm) throw new Error("no connection");
+    const frames = vm.frames as {
+      type: string;
+      transferId?: string;
+      data?: string;
+      code?: string;
+    }[];
+
+    const data = new Uint8Array(600 * 1024).map((_, i) => (i * 7) % 256);
+    const digest = createHash("sha256").update(data).digest("hex");
+    vm.ws.send(
+      JSON.stringify({
+        id: "w1",
+        type: "file.write",
+        path: "inbox/photo.jpg",
+        size: data.length,
+        sha256: digest,
+      }),
+    );
+    for (let seq = 0, at = 0; at < data.length; seq += 1, at += 256 * 1024)
+      vm.ws.send(
+        JSON.stringify({
+          id: `c${String(seq)}`,
+          type: "file.chunk",
+          transferId: "w1",
+          seq,
+          data: Buffer.from(data.subarray(at, at + 256 * 1024)).toString(
+            "base64",
+          ),
+        }),
+      );
+    vm.ws.send(
+      JSON.stringify({ id: "e1", type: "file.end", transferId: "w1" }),
+    );
+    await eventually(() => frames.some((frame) => frame.type === "file.done"));
+    const written = new Uint8Array(
+      await Bun.file(join(home, "inbox/photo.jpg")).arrayBuffer(),
+    );
+    expect(createHash("sha256").update(written).digest("hex")).toBe(digest);
+
+    vm.ws.send(
+      JSON.stringify({ id: "r1", type: "file.read", path: "inbox/photo.jpg" }),
+    );
+    await eventually(
+      () => frames.filter((frame) => frame.type === "file.done").length === 2,
+    );
+    const chunks = frames.filter(
+      (frame) => frame.type === "file.chunk" && frame.transferId === "r1",
+    );
+    const readBack = Buffer.concat(
+      chunks.map((chunk) => Buffer.from(chunk.data ?? "", "base64")),
+    );
+    expect(createHash("sha256").update(readBack).digest("hex")).toBe(digest);
+    expect(chunks.length).toBeGreaterThan(1);
+
+    vm.ws.send(
+      JSON.stringify({ id: "r2", type: "file.read", path: "../../etc/passwd" }),
+    );
+    await eventually(() => frames.some((frame) => frame.type === "file.error"));
+    expect(frames.find((frame) => frame.type === "file.error")).toMatchObject({
+      transferId: "r2",
+      code: "outside_home",
+    });
   });
 });

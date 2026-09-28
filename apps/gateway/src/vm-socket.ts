@@ -11,6 +11,7 @@ import type { Logger } from "@winston/shared/logger";
 import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { Execs } from "./execs.ts";
+import type { FileTransfers } from "./files.ts";
 
 /** What a VM connection carries once authenticated. */
 export interface VmSocketData {
@@ -69,7 +70,12 @@ export async function register(
 
 /** Handles one frame from a VM. Returns the frames to send back. */
 export async function handleVmFrame(
-  { db, logger, execs }: { db: DbOrTx; logger: Logger; execs: Execs },
+  {
+    db,
+    logger,
+    execs,
+    files,
+  }: { db: DbOrTx; logger: Logger; execs: Execs; files: FileTransfers },
   vmId: string,
   text: string,
 ): Promise<GatewayToVmFrame[]> {
@@ -84,7 +90,7 @@ export async function handleVmFrame(
       },
     ];
   const frame = parsed.frame;
-  if (execs.handle(vmId, frame)) return [];
+  if (execs.handle(vmId, frame) || files.handle(vmId, frame)) return [];
 
   switch (frame.type) {
     case "hello": {
@@ -125,7 +131,10 @@ export async function handleVmFrame(
     case "exec.output":
     case "exec.exit":
     case "exec.result":
-      // Handled by the exec registry above.
+    case "file.chunk":
+    case "file.done":
+    case "file.error":
+      // Handled by the exec and file registries above.
       return [];
     case "error":
       logger.warn(

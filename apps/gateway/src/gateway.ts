@@ -4,6 +4,7 @@ import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { Connections } from "./connections.ts";
 import { createExecs } from "./execs.ts";
+import { createFileTransfers } from "./files.ts";
 import { internalRoutes } from "./internal.ts";
 import {
   authenticateVm,
@@ -33,17 +34,20 @@ export function createGateway({
   internalSecret: string;
 }) {
   const connections = new Connections<VmSocket>();
-  const execs = createExecs((vmId, frame) => {
+  /** Sends a frame to a VM's live connection; returns that socket, or undefined if it isn't connected. */
+  const sendTo = (vmId: string, frame: GatewayToVmFrame) => {
     const ws = connections.get(vmId);
-    if (!ws) return false;
-    ws.send(JSON.stringify(frame));
-    return true;
-  });
+    ws?.send(JSON.stringify(frame));
+    return ws;
+  };
+  const execs = createExecs((vmId, frame) => sendTo(vmId, frame) !== undefined);
+  const files = createFileTransfers(sendTo);
   const internal = internalRoutes({
     db,
     secret: internalSecret,
     isConnected: (vmId) => connections.get(vmId) !== undefined,
     execs,
+    files,
   });
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
@@ -82,7 +86,7 @@ export function createGateway({
       }
       const vmLogger = logger.child({ vmId: ws.data.vmId });
       for (const reply of await handleVmFrame(
-        { db, logger: vmLogger, execs },
+        { db, logger: vmLogger, execs, files },
         ws.data.vmId,
         message,
       ))
@@ -90,6 +94,7 @@ export function createGateway({
     },
     close(ws, code) {
       connections.remove(ws.data.vmId, ws);
+      files.closed(ws);
       logger.info({ vmId: ws.data.vmId, code }, "VM disconnected");
     },
   };
@@ -97,6 +102,7 @@ export function createGateway({
   return {
     connections,
     execs,
+    files,
     websocket,
     fetch: async (request: Request, server: Server<VmSocketData>) => {
       const url = new URL(request.url);

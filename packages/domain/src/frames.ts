@@ -96,6 +96,66 @@ export const execResultFrame = z.object({
   truncated: z.boolean(),
 });
 
+/**
+ * File transfers (§15), confined to /home/winston and at most 50 MB. The
+ * request frame's `id` is the transfer id. Bytes move as base64 chunks of at
+ * most 256 KiB, numbered from 0, with a SHA-256 over the whole file.
+ */
+export const fileReadFrame = z.object({
+  ...base,
+  type: z.literal("file.read"),
+  path: z.string().min(1).max(4096),
+});
+
+/** Starts an upload; `size` and `sha256` are checked before the file is renamed into place. */
+export const fileWriteFrame = z.object({
+  ...base,
+  type: z.literal("file.write"),
+  path: z.string().min(1).max(4096),
+  size: z.number().int().nonnegative(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+export const fileChunkFrame = z.object({
+  ...base,
+  type: z.literal("file.chunk"),
+  transferId: frameId,
+  seq: z.number().int().nonnegative(),
+  data: z.string(),
+});
+
+/** The last chunk of an upload was sent. */
+export const fileEndFrame = z.object({
+  ...base,
+  type: z.literal("file.end"),
+  transferId: frameId,
+});
+
+/** A read finished sending, or an upload was written into place. */
+export const fileDoneFrame = z.object({
+  ...base,
+  type: z.literal("file.done"),
+  transferId: frameId,
+  size: z.number().int().nonnegative(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+export const fileErrorFrame = z.object({
+  ...base,
+  type: z.literal("file.error"),
+  transferId: frameId,
+  code: z.enum([
+    "outside_home",
+    "not_found",
+    "not_a_file",
+    "too_large",
+    "mismatch",
+    "permission_denied",
+    "failed",
+  ]),
+  message: z.string(),
+});
+
 // both ways
 
 /** Liveness, every 20 s from the VM; `last_seen_at` is updated. */
@@ -111,6 +171,9 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   execOutputFrame,
   execExitFrame,
   execResultFrame,
+  fileChunkFrame,
+  fileDoneFrame,
+  fileErrorFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -120,6 +183,10 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   registeredFrame,
   execFrame,
   execFetchFrame,
+  fileReadFrame,
+  fileWriteFrame,
+  fileChunkFrame,
+  fileEndFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -127,6 +194,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
 
 export type VmToGatewayFrame = z.infer<typeof vmToGatewayFrame>;
 export type GatewayToVmFrame = z.infer<typeof gatewayToVmFrame>;
+export type FileErrorCode = z.infer<typeof fileErrorFrame>["code"];
 export type ExecResult = Omit<
   z.infer<typeof execResultFrame>,
   "id" | "type" | "execId" | "found"

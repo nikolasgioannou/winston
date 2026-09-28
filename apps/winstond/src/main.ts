@@ -7,7 +7,13 @@ import { createLogger } from "@winston/shared/logger";
 import packageJson from "../package.json" with { type: "json" };
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
+import { helperFiles, runFileHelper } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
+
+// Helper mode: winstond re-invokes itself as winston for file operations.
+const [command] = Bun.argv.slice(2);
+if (command === "file-read" || command === "file-write")
+  process.exit(await runFileHelper(Bun.argv.slice(2)));
 
 // Docker passes these as environment variables (the unit's PassEnvironment=);
 // EC2 will pass them in instance user data. Either way, read them here.
@@ -26,6 +32,7 @@ const daemon = createDaemon({
   gatewayUrl,
   registrationToken: nonEmpty(process.env.WINSTON_REGISTRATION_TOKEN),
   executor: createExecutor(),
+  files: helperFiles(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
   versions: { winstond: packageJson.version, cli: null },
   logger,

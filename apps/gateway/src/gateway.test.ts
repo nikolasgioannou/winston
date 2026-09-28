@@ -411,3 +411,113 @@ describe("gateway exec", () => {
     client.ws.close();
   });
 });
+
+const filesUrl = (userId: string, path: string) =>
+  `http://localhost:${String(server.port)}/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`;
+const auth = { Authorization: `Bearer ${internalSecret}` };
+const sha = (bytes: Uint8Array) =>
+  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+
+describe("gateway files", () => {
+  test("a download streams the VM's chunks and checks the hash", async () => {
+    const { userId, client } = await readyVm();
+    const data = new Uint8Array(300 * 1024).map((_, i) => i % 256);
+    const response = fetch(filesUrl(userId, "notes/big.bin"), {
+      headers: auth,
+    });
+    const read = await client.next("file.read");
+    if (read.type !== "file.read") throw new Error("expected file.read");
+    expect(read.path).toBe("notes/big.bin");
+    client.send({
+      id: "c0",
+      type: "file.chunk",
+      transferId: read.id,
+      seq: 0,
+      data: Buffer.from(data.subarray(0, 256 * 1024)).toString("base64"),
+    });
+    client.send({
+      id: "c1",
+      type: "file.chunk",
+      transferId: read.id,
+      seq: 1,
+      data: Buffer.from(data.subarray(256 * 1024)).toString("base64"),
+    });
+    client.send({
+      id: "d",
+      type: "file.done",
+      transferId: read.id,
+      size: data.length,
+      sha256: sha(data),
+    });
+    const body = new Uint8Array(await (await response).arrayBuffer());
+    expect(sha(body)).toBe(sha(data));
+    client.ws.close();
+  });
+
+  test("a file the VM can't read comes back as the right HTTP error", async () => {
+    const { userId, client } = await readyVm();
+    for (const [code, status] of [
+      ["not_found", 404],
+      ["outside_home", 403],
+    ] as const) {
+      const response = fetch(filesUrl(userId, "x"), { headers: auth });
+      const read = await client.next("file.read");
+      client.frames.splice(client.frames.indexOf(read), 1);
+      client.send({
+        id: "e",
+        type: "file.error",
+        transferId: read.id,
+        code,
+        message: "nope",
+      });
+      const result = await response;
+      expect(result.status).toBe(status);
+      expect(await result.json()).toMatchObject({ error: { code } });
+    }
+    client.ws.close();
+  });
+
+  test("an upload sends size and hash first, then the chunks, and reports the result", async () => {
+    const { userId, client } = await readyVm();
+    const data = new Uint8Array(270 * 1024).map((_, i) => (i * 3) % 256);
+    const response = fetch(filesUrl(userId, "inbox/a.bin"), {
+      method: "PUT",
+      headers: auth,
+      body: data,
+    });
+    const write = await client.next("file.write");
+    if (write.type !== "file.write") throw new Error("expected file.write");
+    expect(write).toMatchObject({
+      path: "inbox/a.bin",
+      size: data.length,
+      sha256: sha(data),
+    });
+    await client.next("file.end");
+    const chunks = client.frames.filter((frame) => frame.type === "file.chunk");
+    expect(chunks.map((chunk) => chunk.seq)).toEqual([0, 1]);
+    client.send({
+      id: "d",
+      type: "file.done",
+      transferId: write.id,
+      size: data.length,
+      sha256: sha(data),
+    });
+    expect(await (await response).json()).toEqual({
+      size: data.length,
+      sha256: sha(data),
+    });
+    client.ws.close();
+  });
+
+  test("a VM that drops mid-transfer fails it cleanly", async () => {
+    const { userId, client } = await readyVm();
+    const response = fetch(filesUrl(userId, "slow.bin"), { headers: auth });
+    await client.next("file.read");
+    client.ws.close();
+    const result = await response;
+    expect(result.status).toBe(409);
+    expect(await result.json()).toMatchObject({
+      error: { code: "vm_unavailable" },
+    });
+  });
+});

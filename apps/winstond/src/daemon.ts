@@ -6,11 +6,17 @@ import {
 } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import { backoffDelayMs } from "./backoff.ts";
+import { createHash } from "node:crypto";
 import type { Executor } from "./exec.ts";
+import { FileTransferError, type Files } from "./files.ts";
+import { pushQueue } from "./queue.ts";
 import type { TokenStore } from "./token-store.ts";
 
 /** Liveness pings (docs/design.md §15). */
 export const pingIntervalMs = 20_000;
+
+/** File transfers move in chunks of at most this many bytes (base64 in a frame). */
+export const fileChunkBytes = 256 * 1024;
 
 /** Close codes the gateway uses. */
 const replaced = 4000;
@@ -22,6 +28,7 @@ export interface DaemonOptions {
   registrationToken: string | undefined;
   tokens: TokenStore;
   executor: Executor;
+  files: Files;
   versions: { winstond: string; cli: string | null };
   logger: Logger;
   /** For tests: faster reconnects and pings. */
@@ -46,6 +53,11 @@ export function createDaemon(options: DaemonOptions) {
   let socket: WebSocket | undefined;
   let pinger: ReturnType<typeof setInterval> | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
+  /** Uploads in progress, by transfer id: where their chunks go, and the next expected seq. */
+  const uploads = new Map<
+    string,
+    { queue: ReturnType<typeof pushQueue<Uint8Array>>; seq: number }
+  >();
 
   const send = (ws: WebSocket, frame: VmToGatewayFrame) => {
     ws.send(JSON.stringify(frame));
@@ -68,6 +80,57 @@ export function createDaemon(options: DaemonOptions) {
     if (registrationToken)
       return { token: registrationToken, registering: true };
     return stored ? { token: stored, registering: false } : undefined;
+  };
+
+  const sendFileError = (ws: WebSocket, transferId: string, error: unknown) => {
+    const failure =
+      error instanceof FileTransferError
+        ? error
+        : new FileTransferError(
+            "failed",
+            error instanceof Error ? error.message : String(error),
+          );
+    if (ws.readyState === WebSocket.OPEN)
+      send(ws, {
+        id: newFrameId(),
+        type: "file.error",
+        transferId,
+        code: failure.code,
+        message: failure.message,
+      });
+  };
+
+  /** Streams a file to the gateway as numbered chunks, then its size and hash. */
+  const sendFile = async (ws: WebSocket, transferId: string, path: string) => {
+    try {
+      const hash = createHash("sha256");
+      let size = 0;
+      let seq = 0;
+      for await (const chunk of await options.files.read(path)) {
+        for (let at = 0; at < chunk.length; at += fileChunkBytes) {
+          const piece = chunk.subarray(at, at + fileChunkBytes);
+          hash.update(piece);
+          size += piece.length;
+          send(ws, {
+            id: newFrameId(),
+            type: "file.chunk",
+            transferId,
+            seq,
+            data: Buffer.from(piece).toString("base64"),
+          });
+          seq += 1;
+        }
+      }
+      send(ws, {
+        id: newFrameId(),
+        type: "file.done",
+        transferId,
+        size,
+        sha256: hash.digest("hex"),
+      });
+    } catch (error) {
+      sendFileError(ws, transferId, error);
+    }
   };
 
   const scheduleReconnect = () => {
@@ -181,6 +244,44 @@ export function createDaemon(options: DaemonOptions) {
                 },
           );
         });
+      } else if (frame.type === "file.read") {
+        void sendFile(ws, frame.id, frame.path);
+      } else if (frame.type === "file.write") {
+        const queue = pushQueue<Uint8Array>();
+        uploads.set(frame.id, { queue, seq: 0 });
+        options.files
+          .write(frame.path, { size: frame.size, sha256: frame.sha256 }, queue)
+          .then(
+            () => {
+              send(ws, {
+                id: newFrameId(),
+                type: "file.done",
+                transferId: frame.id,
+                size: frame.size,
+                sha256: frame.sha256,
+              });
+            },
+            (error: unknown) => {
+              sendFileError(ws, frame.id, error);
+            },
+          )
+          .finally(() => uploads.delete(frame.id));
+      } else if (frame.type === "file.chunk") {
+        const upload = uploads.get(frame.transferId);
+        if (!upload) return;
+        if (frame.seq !== upload.seq) {
+          upload.queue.fail(
+            new FileTransferError(
+              "failed",
+              `chunk ${String(frame.seq)} arrived out of order`,
+            ),
+          );
+          return;
+        }
+        upload.seq += 1;
+        upload.queue.push(Buffer.from(frame.data, "base64"));
+      } else if (frame.type === "file.end") {
+        uploads.get(frame.transferId)?.queue.close();
       } else if (frame.type === "ping") {
         send(ws, { id: newFrameId(), type: "pong", replyTo: frame.id });
       } else if (frame.type === "error") {
