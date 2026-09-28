@@ -29,5 +29,5 @@ Tests with a fake Telegram client: photo vs document selection, media groups, ov
 ## Outcome
 
 - `attach({ paths })` checks every path on the VM first (exists, a file, inside the home folder, 1 byte to 50 MB) and sends nothing if any fails, listing every problem. Images within Telegram's photo limits go as photos, everything else as documents; consecutive files of one kind go as a media group of up to 10. Each sent file gets `outbound_messages` and `files` rows.
-- Found in live testing: after the last message, the model's wrap-up call (seeing the `attach` result, then `end_turn`) showed a stray "typing…". The indicator now restarts its clock after every message and file, reappearing only if the turn is still working 4 s later.
+- Found in live testing: the model's wrap-up call after the last message (seeing the `attach` result, then `end_turn`) can show a brief "typing…" after the reply. A pause after each message was tried, then dropped at the user's request in favour of showing the indicator for the whole turn.
 - Verified live: a photo sent back as a photo with "Here you go."; a PDF and a README as one document album, then "Sent both."; a missing path answered plainly with nothing sent; "send a message first and then the cat pic" arrived in that order.

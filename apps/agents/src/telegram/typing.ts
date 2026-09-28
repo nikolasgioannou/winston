@@ -20,11 +20,6 @@ const realTimers: Timers = {
  * Failures are logged and ignored: the indicator must never fail a turn.
  * Telegram can't cancel the indicator, so after `stop()` it fades within
  * about 5 s unless a message is sent, which clears it at once.
- *
- * `sent()` is called after each message or file: sending cleared the
- * indicator, so it's shown again only if the turn is still working an
- * interval later. The short wrap-up call that often follows a last message
- * then shows no stray "typing…".
  */
 export function startTyping(
   sendTyping: () => Promise<unknown>,
@@ -37,14 +32,9 @@ export function startTyping(
     });
   };
   send();
-  let handle = timers.setInterval(send, typingIntervalMs);
+  const handle = timers.setInterval(send, typingIntervalMs);
   let stopped = false;
   return {
-    sent() {
-      if (stopped) return;
-      timers.clearInterval(handle);
-      handle = timers.setInterval(send, typingIntervalMs);
-    },
     stop() {
       if (stopped) return;
       stopped = true;
