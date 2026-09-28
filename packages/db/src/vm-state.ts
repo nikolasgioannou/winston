@@ -18,6 +18,7 @@ export type VmEvent =
   | "update_finished"
   | "timed_out"
   | "retry"
+  | "replace"
   | "terminate"
   | "terminated";
 
@@ -37,11 +38,20 @@ const transitions: Record<VmState, Partial<Record<VmEvent, VmState>>> = {
   ready: {
     missed_pings: "unhealthy",
     update_started: "updating",
+    replace: "provisioning",
     terminate: "terminating",
   },
-  unhealthy: { recovered: "ready", terminate: "terminating" },
+  unhealthy: {
+    recovered: "ready",
+    replace: "provisioning",
+    terminate: "terminating",
+  },
   updating: { update_finished: "ready", terminate: "terminating" },
-  failed: { retry: "provisioning", terminate: "terminating" },
+  failed: {
+    retry: "provisioning",
+    replace: "provisioning",
+    terminate: "terminating",
+  },
   terminating: { terminated: "terminated" },
   terminated: {},
 };

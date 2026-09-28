@@ -11,6 +11,8 @@ interface Service {
   cmd: string[];
   /** A failure doesn't stop the other services (the tunnel needs per-developer setup). */
   optional?: boolean;
+  /** A one-off job, not a server: finishing is expected. */
+  task?: boolean;
 }
 
 // Restarts on changes to any file the service imports, including packages/*.
@@ -28,6 +30,14 @@ const services: Service[] = [
   { name: "api", cwd: "apps/api", cmd: watch("src/main.ts") },
   { name: "agents", cwd: "apps/agents", cmd: watch("src/main.ts") },
   { name: "gateway", cwd: "apps/gateway", cmd: watch("src/main.ts") },
+  // Checks the seeded user's VM, provisions or replaces it as needed, and reports it until it's ready.
+  {
+    name: "vm",
+    cwd: "apps/agents",
+    cmd: ["bun", "--env-file=../../.env.local", "src/vm/seeded.ts", "ensure"],
+    optional: true,
+    task: true,
+  },
   {
     name: "tunnel",
     cwd: ".",
@@ -92,7 +102,7 @@ const running = services.map((service, i) => {
   ]);
   const done = proc.exited.then(async (code) => {
     await output;
-    if (stopping) return;
+    if (stopping || (service.task && code === 0)) return;
     log(`${service.name} exited with code ${String(code)}`);
     if (!service.optional) stop(1);
   });

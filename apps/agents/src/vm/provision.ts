@@ -21,11 +21,25 @@ export async function provisionVm(
     provider,
   }: { db: DbOrTx; logger: Logger; provider: VmProvider },
   userId: string,
+  options: { replace?: boolean } = {},
 ) {
   const [existing] = await db.select().from(vms).where(eq(vms.userId, userId));
   const vm = existing ?? (await createVm(db, userId, provider.kind));
 
-  if (vm.state === "requested") await applyVmEvent(db, vm.id, "provision");
+  const replacing =
+    options.replace === true &&
+    (vm.state === "ready" || vm.state === "unhealthy" || vm.state === "failed");
+  if (replacing) {
+    // A new instance on the same data volume (§17 `replace`): the old one goes,
+    // and so does its VM token, so nothing left of it could reconnect.
+    await applyVmEvent(db, vm.id, "replace");
+    if (vm.instanceId) await provider.destroy(vm.instanceId);
+    await db
+      .update(vms)
+      .set({ tokenHash: null, instanceId: null })
+      .where(eq(vms.id, vm.id));
+  } else if (vm.state === "requested")
+    await applyVmEvent(db, vm.id, "provision");
   else if (vm.state === "failed") await applyVmEvent(db, vm.id, "retry");
   else if (vm.state !== "provisioning") {
     logger.info(
@@ -58,6 +72,8 @@ export async function provisionVm(
 export function provisionVmHandler(provider: VmProvider): JobHandler {
   return async ({ job, db, logger }) => {
     if (!job.userId) throw new Error("provision_vm job has no user");
-    await provisionVm({ db, logger, provider }, job.userId);
+    const replace =
+      (job.payload as { replace?: unknown } | null)?.replace === true;
+    await provisionVm({ db, logger, provider }, job.userId, { replace });
   };
 }

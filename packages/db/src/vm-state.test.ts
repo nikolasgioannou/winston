@@ -23,6 +23,7 @@ const events: VmEvent[] = [
   "update_finished",
   "timed_out",
   "retry",
+  "replace",
   "terminate",
   "terminated",
 ];
@@ -39,6 +40,10 @@ const legal: [VmState, VmEvent, VmState][] = [
   ["provisioning", "timed_out", "failed"],
   ["registering", "timed_out", "failed"],
   ["failed", "retry", "provisioning"],
+  // A new instance on the same data volume: image upgrades, a vanished container, AMI moves.
+  ["ready", "replace", "provisioning"],
+  ["unhealthy", "replace", "provisioning"],
+  ["failed", "replace", "provisioning"],
   ...(
     [
       "requested",

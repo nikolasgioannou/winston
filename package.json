@@ -25,7 +25,9 @@
     "test": "bun test --env-file=.env.local",
     "tunnel": "bun scripts/tunnel.ts",
     "typecheck": "tsc && bun run --filter '*' --if-present typecheck",
-    "vm:provision": "bun run --filter @winston/agents vm:provision"
+    "vm:provision": "bun run --filter @winston/agents vm:provision",
+    "vm:reset": "bun run --filter @winston/agents vm:reset",
+    "vm:shell": "bun run --filter @winston/agents vm:shell"
   },
   "dependencies": {},
   "devDependencies": {

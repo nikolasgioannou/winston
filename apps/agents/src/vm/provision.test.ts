@@ -105,6 +105,41 @@ describe("provisionVm", () => {
     });
   });
 
+  test("replace gives a ready VM a new instance on the same volume, and drops the old token", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const destroyed: string[] = [];
+      const { provider, tokens, started } = fakeProvider();
+      provider.destroy = (instanceId) => {
+        destroyed.push(instanceId);
+        return Promise.resolve();
+      };
+      await provisionVm({ db: tx, logger, provider }, user.id);
+      const first = await vmOf(tx, user.id);
+      await tx
+        .update(vms)
+        .set({ state: "ready", tokenHash: "old-token-hash" })
+        .where(eq(vms.userId, user.id));
+
+      await provisionVm({ db: tx, logger, provider }, user.id, {
+        replace: true,
+      });
+      const vm = await vmOf(tx, user.id);
+      expect(vm?.id).toBe(first?.id ?? "");
+      expect(destroyed).toEqual(["inst-1"]);
+      expect(started).toEqual(["inst-1", "inst-2"]);
+      expect(vm).toMatchObject({
+        state: "registering",
+        instanceId: "inst-2",
+        dataVolumeId: "vol-1",
+        tokenHash: null,
+      });
+      expect(
+        tokenMatches(tokens[1] ?? "", vm?.registrationTokenHash ?? ""),
+      ).toBe(true);
+    });
+  });
+
   test("an already provisioned VM is left alone", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

@@ -12,7 +12,11 @@ export const frontTurnJob = {
   debounceMs: 1_500,
 } as const;
 
-/** Provisioning a user's VM (§10, §15). Queued by account creation (M3); a script for now. */
+/**
+ * Provisioning a user's VM (§10, §15). Queued by account creation (M3); a
+ * script for now. Payload `{ replace: true }` rebuilds a VM that's already
+ * running: a new instance on the same data volume (§17 `replace`).
+ */
 export const provisionVmJob = {
   type: "provision_vm",
   /** One provisioning job queued per user at a time. */

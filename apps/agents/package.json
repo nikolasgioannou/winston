@@ -6,7 +6,9 @@
     "model:smoke": "bun --env-file=../../.env.local src/model/smoke.ts",
     "start": "bun --env-file=../../.env.local src/main.ts",
     "typecheck": "tsc",
-    "vm:provision": "bun --env-file=../../.env.local src/vm/provision-seeded.ts"
+    "vm:provision": "bun --env-file=../../.env.local src/vm/seeded.ts provision",
+    "vm:reset": "bun --env-file=../../.env.local src/vm/seeded.ts reset",
+    "vm:shell": "bun --env-file=../../.env.local src/vm/seeded.ts shell"
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "3.1.0",
