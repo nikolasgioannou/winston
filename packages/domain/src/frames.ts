@@ -156,6 +156,27 @@ export const fileErrorFrame = z.object({
   message: z.string(),
 });
 
+/**
+ * A CLI call to the VM-facing API (§15), forwarded by winstond with the run
+ * token the command carried. The gateway answers with `rpc.response`.
+ */
+export const rpcRequestFrame = z.object({
+  ...base,
+  type: z.literal("rpc.request"),
+  method: z.enum(["GET", "POST", "PATCH", "PUT", "DELETE"]),
+  path: z.string().startsWith("/v1/").max(2048),
+  body: z.string().nullable(),
+  runToken: z.string().max(4096),
+});
+
+export const rpcResponseFrame = z.object({
+  ...base,
+  type: z.literal("rpc.response"),
+  replyTo: frameId,
+  status: z.number().int().min(100).max(599),
+  body: z.string(),
+});
+
 // both ways
 
 /** Liveness, every 20 s from the VM; `last_seen_at` is updated. */
@@ -174,6 +195,7 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   fileChunkFrame,
   fileDoneFrame,
   fileErrorFrame,
+  rpcRequestFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -187,6 +209,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   fileWriteFrame,
   fileChunkFrame,
   fileEndFrame,
+  rpcResponseFrame,
   pingFrame,
   pongFrame,
   errorFrame,

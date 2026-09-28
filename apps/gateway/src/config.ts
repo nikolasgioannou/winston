@@ -9,6 +9,10 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   /** Local VMs dial ws://host.docker.internal:3001 (`VM_GATEWAY_URL` in agents). */
   GATEWAY_PORT: z.coerce.number().int().positive().default(3001),
   /** Authenticates `agents` to the internal API. Never exposed publicly. */
+  /** Verifies WINSTON_RUN_TOKENs (agents signs them with the same secret). */
+  RUN_TOKEN_SECRET: z
+    .string()
+    .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
   GATEWAY_INTERNAL_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),

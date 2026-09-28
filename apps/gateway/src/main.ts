@@ -19,6 +19,7 @@ const gateway = createGateway({
   db,
   logger,
   internalSecret: config.GATEWAY_INTERNAL_SECRET,
+  runTokenSecret: config.RUN_TOKEN_SECRET,
 });
 const server = Bun.serve<VmSocketData>({
   hostname: config.GATEWAY_HOST,

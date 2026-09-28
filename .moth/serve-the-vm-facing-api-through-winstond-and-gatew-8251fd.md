@@ -1,14 +1,14 @@
 ---
 id: "8251fd"
 title: Serve the VM-facing API through winstond and gateway
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - m2
   - vm
 created_at: 2026-09-27T05:32:51.647Z
-updated_at: 2026-09-27T05:32:51.695Z
+updated_at: 2026-09-28T02:31:50.239Z
 blocked_by:
   - "6dc140"
   - "737b8c"
@@ -30,3 +30,13 @@ Tests:
 - A valid token presented over a *different* VM's connection is rejected.
 - Expired and tampered tokens are rejected.
 - The error shape is enforced.
+
+## Outcome
+
+Built as described in docs/design.md §15 ("The request path as built").
+- **API package:** the API is its own package, `packages/vm-api`, which exports `createVmApi` and `type VmApi` for the CLI's typed client. The type isn't in `packages/shared` (business-agnostic by design) or `packages/domain`, because the API needs the database.
+- **Socket path:** `/run/winstond/winstond.sock` instead of `/run/winstond.sock`, since the non-root `winstond` gets `/run/winstond` from systemd's `RuntimeDirectory=`.
+- **Carrying VM's identity:** it rides the connection (`VmSocketData.userId`), and the API reads it only from Hono's env.
+- **Error codes:** fixed in `@winston/domain/api-errors`, with statuses and exit codes.
+- **Tests:** API auth (valid, other user's VM, expired, tampered, missing), the error shape, `/v1/me` read and update. Gateway RPC for own user and for another user's token. `winstond`'s socket relaying and the `unavailable` path.
+- **End to end in the real VM:** the same checks over the real socket.

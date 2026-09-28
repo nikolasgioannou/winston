@@ -1,0 +1,136 @@
+/**
+ * The VM-facing API (docs/design.md §15): what the `winston` CLI calls. It's
+ * never exposed publicly. Requests arrive over a VM's websocket and the
+ * gateway dispatches them in-process with `app.request()`, passing which
+ * user's VM carried the request as `env.vmUserId`. Every request needs a
+ * valid run token for that same user, so a token copied off the VM is
+ * useless anywhere else.
+ */
+import type { DbOrTx } from "@winston/db/client";
+import { users } from "@winston/db/schema";
+import { apiError, apiErrors } from "@winston/domain/api-errors";
+import { verifyRunToken, type RunKind } from "@winston/domain/run-token";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
+
+export interface VmApiEnv {
+  Bindings: {
+    /** The user whose VM's websocket carried this request. Set by the gateway, never by the caller. */
+    vmUserId: string;
+  };
+  Variables: {
+    run: { userId: string; runId: string; runKind: RunKind };
+  };
+}
+
+const isTimeZone = (zone: string) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const meUpdate = z.object({
+  timezone: z
+    .string()
+    .refine(isTimeZone, "not an IANA time zone, e.g. America/New_York"),
+});
+
+export function createVmApi({
+  db,
+  runTokenSecret,
+}: {
+  db: DbOrTx;
+  runTokenSecret: string;
+}) {
+  const app = new Hono<VmApiEnv>();
+
+  app.use(async (c, next) => {
+    const token = c.req.header("Authorization")?.match(/^Bearer (\S+)$/)?.[1];
+    const run = token ? verifyRunToken(runTokenSecret, token) : undefined;
+    // The token must be valid and belong to the user whose VM carried the request.
+    if (run?.userId !== c.env.vmUserId)
+      return c.json(
+        apiError(
+          "unauthorized",
+          "This command isn't authorized.",
+          "Run winston commands through your bash tool; they carry WINSTON_RUN_TOKEN automatically.",
+        ),
+        apiErrors.unauthorized.status,
+      );
+    c.set("run", { userId: run.userId, runId: run.runId, runKind: run.kind });
+    await next();
+  });
+
+  app.onError((error, c) => {
+    console.error(error);
+    return c.json(
+      apiError(
+        "internal",
+        "Something went wrong on Winston's side.",
+        "Try again in a moment.",
+      ),
+      apiErrors.internal.status,
+    );
+  });
+  app.notFound((c) =>
+    c.json(
+      apiError(
+        "not_found",
+        `There's no ${c.req.method} ${c.req.path}.`,
+        "Run winston --help to see the commands.",
+      ),
+      apiErrors.not_found.status,
+    ),
+  );
+
+  const selectMe = (userId: string) =>
+    db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        timezone: users.timezone,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+
+  return app
+    .get("/v1/me", async (c) => {
+      const [me] = await selectMe(c.get("run").userId);
+      if (!me)
+        return c.json(
+          apiError("not_found", "This user no longer exists."),
+          apiErrors.not_found.status,
+        );
+      return c.json(me);
+    })
+    .patch("/v1/me", async (c) => {
+      const body = meUpdate.safeParse(
+        await c.req.json().catch(() => undefined),
+      );
+      if (!body.success)
+        return c.json(
+          apiError(
+            "invalid_request",
+            z.prettifyError(body.error),
+            "Pass --timezone with an IANA zone like Europe/London.",
+          ),
+          apiErrors.invalid_request.status,
+        );
+      const userId = c.get("run").userId;
+      await db
+        .update(users)
+        .set({ timezone: body.data.timezone })
+        .where(eq(users.id, userId));
+      const [me] = await selectMe(userId);
+      return c.json(me);
+    });
+}
+
+/** The API's type, for the CLI's typed client (Hono RPC). */
+export type VmApi = ReturnType<typeof createVmApi>;

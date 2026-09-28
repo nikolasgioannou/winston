@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./api-errors": "./src/api-errors.ts",
     "./envelope": "./src/envelope.ts",
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",

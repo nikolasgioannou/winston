@@ -27,6 +27,9 @@ Group=winstond
 ExecStart=/usr/local/bin/winstond
 Restart=always
 RestartSec=2
+# /run/winstond holds the CLI's socket (/run/winstond/winstond.sock).
+RuntimeDirectory=winstond
+RuntimeDirectoryMode=0755
 # Docker passes these to PID 1 (systemd); a service only sees what's passed on.
 PassEnvironment=WINSTON_REGISTRATION_TOKEN WINSTON_GATEWAY_URL
 # No NoNewPrivileges=: winstond runs commands as winston through sudo.

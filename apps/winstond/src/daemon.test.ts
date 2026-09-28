@@ -4,6 +4,7 @@ import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createLogger } from "@winston/shared/logger";
+import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
 import { localFiles } from "./files.ts";
@@ -53,6 +54,25 @@ function fakeGateway() {
         }
       },
       message(ws, message) {
+        const frame = JSON.parse(String(message)) as {
+          id: string;
+          type: string;
+          path?: string;
+          runToken?: string;
+        };
+        if (frame.type === "rpc.request")
+          ws.send(
+            JSON.stringify({
+              id: `resp-${frame.id}`,
+              type: "rpc.response",
+              replyTo: frame.id,
+              status: 200,
+              body: JSON.stringify({
+                path: frame.path,
+                runToken: frame.runToken,
+              }),
+            }),
+          );
         connections
           .find((connection) => connection.ws === ws)
           ?.frames.push(JSON.parse(String(message)) as { type: string });
@@ -243,6 +263,70 @@ describe("winstond file transfers", () => {
     expect(frames.find((frame) => frame.type === "file.error")).toMatchObject({
       transferId: "r2",
       code: "outside_home",
+    });
+  });
+});
+
+describe("winstond CLI socket", () => {
+  test("a call on the unix socket goes to the gateway with its run token, and the answer comes back", async () => {
+    const gateway = fakeGateway();
+    running.push({ stop: () => void gateway.server.stop(true) });
+    const { daemon } = await start(gateway.url, "reg-1");
+    await eventually(
+      () =>
+        gateway.connections[0]?.frames.some(
+          (frame) => frame.type === "hello",
+        ) ?? false,
+    );
+    const socketPath = join(
+      await mkdtemp(join(tmpdir(), "winstond-sock-")),
+      "winstond.sock",
+    );
+    const server = await serveCliSocket(socketPath, (request) =>
+      daemon.rpc(request),
+    );
+    running.push({ stop: () => void server.stop(true) });
+
+    const response = await fetch("http://winstond/v1/me?fields=all", {
+      unix: socketPath,
+      headers: { Authorization: "Bearer run-token-abc" },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      path: "/v1/me?fields=all",
+      runToken: "run-token-abc",
+    });
+
+    const outside = await fetch("http://winstond/internal/anything", {
+      unix: socketPath,
+    });
+    expect(outside.status).toBe(404);
+  });
+
+  test("without a connection to the backend, calls get the standard unavailable error", async () => {
+    const daemon = createDaemon({
+      gatewayUrl: "ws://127.0.0.1:1",
+      registrationToken: undefined,
+      tokens: tokenStore(
+        join(await mkdtemp(join(tmpdir(), "winstond-")), "token"),
+      ),
+      executor: createExecutor({ prefix: [] }),
+      files: localFiles(tmpdir()),
+      versions: { winstond: "0.1.0", cli: null },
+      logger,
+    });
+    const socketPath = join(
+      await mkdtemp(join(tmpdir(), "winstond-sock-")),
+      "winstond.sock",
+    );
+    const server = await serveCliSocket(socketPath, (request) =>
+      daemon.rpc(request),
+    );
+    running.push({ stop: () => void server.stop(true) });
+    const response = await fetch("http://winstond/v1/me", { unix: socketPath });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: "unavailable" },
     });
   });
 });

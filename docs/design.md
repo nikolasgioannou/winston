@@ -929,7 +929,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 **Security property: the VM holds no credential that works outside the VM.**
 
-- The **CLI never talks to the internet.** It calls `winstond` over a local **unix socket** (`/run/winstond.sock`).
+- The **CLI never talks to the internet.** It calls `winstond` over a local **unix socket** (`/run/winstond/winstond.sock`).
 - `winstond` runs as a separate system user (`winstond`). The agent's shell runs as `winston`. Only `winstond` can read the **VM token**, stored at `/etc/winstond/token` with mode 0600.
 - `winstond` forwards CLI requests over its authenticated **websocket to `gateway`**. The gateway dispatches them **in-process** to the backend API (a Hono app mounted in `gateway` and called via `app.request()`).
 - `WINSTON_RUN_TOKEN` (a short-lived signed token: run id, user id, run kind) travels with each request for attribution. Even if exfiltrated, it's useless off-VM, because the backend only accepts requests that arrive over that VM's websocket.
@@ -996,7 +996,16 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 **Reconnect:** exponential backoff (1 s → 30 s). In-flight `exec` results are **buffered by id for 5 minutes** on the VM, so after a reconnect the gateway fetches them instead of re-running a possibly non-idempotent command.
 
-**CLI ↔ backend API shape:** Hono routes under `/v1/…` (`mail`, `calendar`, `accounts`, `triggers`, `events`, `history`, `tasks`, `me`, `jev`), typed end to end with Hono's RPC types in `packages/domain`. Errors are `{ error: { code, message, hint } }`, and the CLI maps `code` to exit codes (§11). Cursors are opaque strings.
+**CLI ↔ backend API shape:** Hono routes under `/v1/…` (`mail`, `calendar`, `accounts`, `triggers`, `events`, `history`, `tasks`, `me`, `jev`), typed end to end with Hono's RPC types (`VmApi`, exported by `packages/vm-api`). Errors are `{ error: { code, message, hint } }`, and the CLI maps `code` to exit codes (§11). Cursors are opaque strings.
+
+**The request path as built:**
+
+- **`winstond`:** serves HTTP on the unix socket `/run/winstond/winstond.sock` (`Bun.serve({ unix })`). The socket is mode 0666 in systemd's `RuntimeDirectory=winstond`, since `winstond` can't create files in `/run` itself. Only `/v1/*` is forwarded: each request becomes an `rpc.request` frame carrying the `Authorization: Bearer $WINSTON_RUN_TOKEN` it arrived with, and the `rpc.response` is relayed back. With no backend connection, or if it drops, or after 60 s, the caller gets the standard `unavailable` error (exit 5, safe to retry).
+- **`gateway`:** dispatches `rpc.request` **in-process** to `createVmApi()` (`packages/vm-api`) with `app.request(path, init, { vmUserId })`. `vmUserId` is the user of the VM whose websocket carried the frame, taken from the connection, never from anything the caller sends.
+- **The API:** its middleware accepts only a run token with a valid signature and expiry **whose user is `vmUserId`**. That's what makes a token copied off a VM useless anywhere else. Handlers get `{ userId, runId, runKind }`.
+- **Errors:** a fixed set in `@winston/domain/api-errors`, each with its HTTP status and CLI exit code: `invalid_request` and `unauthorized` (1), `not_found` (2), `permission_disabled` (3), `auth_expired` (4), `unavailable` and `internal` (5), `conflict` (6), `not_supported` (7). Every error has a `hint` saying what to do next.
+- **Endpoints:** so far `GET /v1/me` and `PATCH /v1/me` (time zone, validated as IANA).
+- **Verified in the local VM:** the run's own token gets the profile over the socket. Another user's valid token, or none, gets `unauthorized`.
 
 ## 16. Front-of-house context assembly
 

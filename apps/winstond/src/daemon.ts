@@ -7,6 +7,7 @@ import {
 import type { Logger } from "@winston/shared/logger";
 import { backoffDelayMs } from "./backoff.ts";
 import { createHash } from "node:crypto";
+import { apiError, apiErrors } from "@winston/domain/api-errors";
 import type { Executor } from "./exec.ts";
 import { FileTransferError, type Files } from "./files.ts";
 import { pushQueue } from "./queue.ts";
@@ -18,9 +19,29 @@ export const pingIntervalMs = 20_000;
 /** File transfers move in chunks of at most this many bytes (base64 in a frame). */
 export const fileChunkBytes = 256 * 1024;
 
+/** How long a CLI call may wait for the backend. */
+export const rpcTimeoutMs = 60_000;
+
 /** Close codes the gateway uses. */
 const replaced = 4000;
 const registrationUsed = 4401;
+
+export type RpcMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+export interface RpcResponse {
+  status: number;
+  body: string;
+}
+
+const unavailableResponse: RpcResponse = {
+  status: apiErrors.unavailable.status,
+  body: JSON.stringify(
+    apiError(
+      "unavailable",
+      "Winston's computer can't reach the backend right now.",
+      "Try again in a moment.",
+    ),
+  ),
+};
 
 export interface DaemonOptions {
   gatewayUrl: string;
@@ -53,6 +74,21 @@ export function createDaemon(options: DaemonOptions) {
   let socket: WebSocket | undefined;
   let pinger: ReturnType<typeof setInterval> | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
+  /** CLI calls waiting for their `rpc.response`, by request id. */
+  const calls = new Map<
+    string,
+    {
+      resolve: (response: RpcResponse) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  const answer = (id: string, response: RpcResponse) => {
+    const call = calls.get(id);
+    if (!call) return;
+    calls.delete(id);
+    clearTimeout(call.timer);
+    call.resolve(response);
+  };
   /** Uploads in progress, by transfer id: where their chunks go, and the next expected seq. */
   const uploads = new Map<
     string,
@@ -282,6 +318,8 @@ export function createDaemon(options: DaemonOptions) {
         upload.queue.push(Buffer.from(frame.data, "base64"));
       } else if (frame.type === "file.end") {
         uploads.get(frame.transferId)?.queue.close();
+      } else if (frame.type === "rpc.response") {
+        answer(frame.replyTo, { status: frame.status, body: frame.body });
       } else if (frame.type === "ping") {
         send(ws, { id: newFrameId(), type: "pong", replyTo: frame.id });
       } else if (frame.type === "error") {
@@ -294,6 +332,8 @@ export function createDaemon(options: DaemonOptions) {
 
     ws.addEventListener("close", (event) => {
       clearInterval(pinger);
+      // Calls waiting on this connection won't get an answer.
+      for (const id of [...calls.keys()]) answer(id, unavailableResponse);
       if (socket === ws) socket = undefined;
       if (!opened) {
         // Refused before opening: network trouble, or the token was rejected.
@@ -313,6 +353,31 @@ export function createDaemon(options: DaemonOptions) {
   }
 
   return {
+    /**
+     * Forwards a CLI call to the backend over the websocket (docs/design.md
+     * §15) and resolves with its response. When the backend isn't reachable,
+     * resolves with the standard `unavailable` error, which is safe to retry.
+     */
+    rpc(request: {
+      method: RpcMethod;
+      path: string;
+      body: string | null;
+      runToken: string;
+    }): Promise<RpcResponse> {
+      const ws = socket;
+      if (ws?.readyState !== WebSocket.OPEN)
+        return Promise.resolve(unavailableResponse);
+      const id = newFrameId();
+      return new Promise((resolve) => {
+        calls.set(id, {
+          resolve,
+          timer: setTimeout(() => {
+            answer(id, unavailableResponse);
+          }, rpcTimeoutMs),
+        });
+        send(ws, { id, type: "rpc.request", ...request });
+      });
+    },
     start() {
       void connect();
     },

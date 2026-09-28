@@ -12,10 +12,13 @@ import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { Execs } from "./execs.ts";
 import type { FileTransfers } from "./files.ts";
+import type { VmApi } from "@winston/vm-api";
 
 /** What a VM connection carries once authenticated. */
 export interface VmSocketData {
   vmId: string;
+  /** Whose VM this is: the only user its requests may act for. */
+  userId: string;
   /** Set when the VM connected with its one-time registration token. */
   registrationHash?: string;
 }
@@ -36,13 +39,18 @@ export async function authenticateVm(
   if (!token) return undefined;
   const hash = hashToken(token);
   const [vm] = await db
-    .select({ id: vms.id, state: vms.state, tokenHash: vms.tokenHash })
+    .select({
+      id: vms.id,
+      userId: vms.userId,
+      state: vms.state,
+      tokenHash: vms.tokenHash,
+    })
     .from(vms)
     .where(or(eq(vms.tokenHash, hash), eq(vms.registrationTokenHash, hash)));
   if (!vm) return undefined;
-  if (vm.tokenHash === hash) return { vmId: vm.id };
+  if (vm.tokenHash === hash) return { vmId: vm.id, userId: vm.userId };
   return vm.state === "registering"
-    ? { vmId: vm.id, registrationHash: hash }
+    ? { vmId: vm.id, userId: vm.userId, registrationHash: hash }
     : undefined;
 }
 
@@ -75,8 +83,15 @@ export async function handleVmFrame(
     logger,
     execs,
     files,
-  }: { db: DbOrTx; logger: Logger; execs: Execs; files: FileTransfers },
-  vmId: string,
+    vmApi,
+  }: {
+    db: DbOrTx;
+    logger: Logger;
+    execs: Execs;
+    files: FileTransfers;
+    vmApi: VmApi;
+  },
+  vm: { vmId: string; userId: string },
   text: string,
 ): Promise<GatewayToVmFrame[]> {
   const parsed = parseFrame(vmToGatewayFrame, text);
@@ -90,6 +105,7 @@ export async function handleVmFrame(
       },
     ];
   const frame = parsed.frame;
+  const { vmId } = vm;
   if (execs.handle(vmId, frame) || files.handle(vmId, frame)) return [];
 
   switch (frame.type) {
@@ -125,6 +141,31 @@ export async function handleVmFrame(
         .returning({ state: vms.state });
       if (vm?.state === "unhealthy") await applyVmEvent(db, vmId, "recovered");
       return [{ id: newFrameId(), type: "pong", replyTo: frame.id }];
+    }
+    case "rpc.request": {
+      // In-process dispatch; env.vmUserId says whose VM carried it, and the
+      // API refuses any run token for someone else.
+      const response = await vmApi.request(
+        frame.path,
+        {
+          method: frame.method,
+          headers: {
+            Authorization: `Bearer ${frame.runToken}`,
+            "Content-Type": "application/json",
+          },
+          ...(frame.body === null ? {} : { body: frame.body }),
+        },
+        { vmUserId: vm.userId },
+      );
+      return [
+        {
+          id: newFrameId(),
+          type: "rpc.response",
+          replyTo: frame.id,
+          status: response.status,
+          body: await response.text(),
+        },
+      ];
     }
     case "pong":
       return [];

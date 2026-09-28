@@ -5,6 +5,7 @@
  */
 import { createLogger } from "@winston/shared/logger";
 import packageJson from "../package.json" with { type: "json" };
+import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
 import { helperFiles, runFileHelper } from "./files.ts";
@@ -38,6 +39,10 @@ const daemon = createDaemon({
   logger,
 });
 daemon.start();
+await serveCliSocket(
+  process.env.WINSTOND_SOCKET ?? "/run/winstond/winstond.sock",
+  (request) => daemon.rpc(request),
+);
 
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   process.on(signal, () => {

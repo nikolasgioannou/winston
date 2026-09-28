@@ -4,6 +4,7 @@ import { insertUser, testDb } from "@winston/db/testing";
 import { applyVmEvent } from "@winston/db/vm-state";
 import { createVm, issueRegistrationToken } from "@winston/db/vms";
 import type { GatewayToVmFrame } from "@winston/domain/frames";
+import { mintRunToken } from "@winston/domain/run-token";
 import { createLogger } from "@winston/shared/logger";
 import { hashToken } from "@winston/shared/tokens";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -20,7 +21,8 @@ const logger = createLogger("gateway-test", {
   destination: { write: () => undefined },
 });
 const internalSecret = "internal-secret-0123456789abcdefghijklmnop";
-const gateway = createGateway({ db, logger, internalSecret });
+const runTokenSecret = "gateway-test-run-token-secret-0123456789";
+const gateway = createGateway({ db, logger, internalSecret, runTokenSecret });
 const server = Bun.serve<VmSocketData>({
   port: 0,
   fetch: gateway.fetch,
@@ -519,5 +521,56 @@ describe("gateway files", () => {
     expect(await result.json()).toMatchObject({
       error: { code: "vm_unavailable" },
     });
+  });
+});
+
+describe("gateway RPC (the VM-facing API)", () => {
+  test("a CLI call with its own user's run token reaches the API over the VM's websocket", async () => {
+    const { userId, client } = await readyVm();
+    const token = mintRunToken(
+      runTokenSecret,
+      { runId: "run_1", userId, kind: "front" },
+      60_000,
+    );
+    client.send({
+      id: "q1",
+      type: "rpc.request",
+      method: "GET",
+      path: "/v1/me",
+      body: null,
+      runToken: token,
+    });
+    const response = await client.next("rpc.response");
+    if (response.type !== "rpc.response")
+      throw new Error("expected rpc.response");
+    expect(response).toMatchObject({ replyTo: "q1", status: 200 });
+    expect(JSON.parse(response.body)).toMatchObject({ id: userId });
+    client.ws.close();
+  });
+
+  test("another user's valid run token, carried over this VM, is refused", async () => {
+    const mine = await readyVm();
+    const theirs = await registeringVm();
+    const stolen = mintRunToken(
+      runTokenSecret,
+      { runId: "run_2", userId: theirs.userId, kind: "front" },
+      60_000,
+    );
+    mine.client.send({
+      id: "q2",
+      type: "rpc.request",
+      method: "GET",
+      path: "/v1/me",
+      body: null,
+      runToken: stolen,
+    });
+    const response = await mine.client.next("rpc.response");
+    if (response.type !== "rpc.response")
+      throw new Error("expected rpc.response");
+    expect(response.status).toBe(401);
+    expect(JSON.parse(response.body)).toMatchObject({
+      error: { code: "unauthorized" },
+    });
+    mine.client.ws.close();
   });
 });

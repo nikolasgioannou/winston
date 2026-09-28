@@ -3,6 +3,7 @@ import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { Connections } from "./connections.ts";
+import { createVmApi } from "@winston/vm-api";
 import { createExecs } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
 import { internalRoutes } from "./internal.ts";
@@ -28,11 +29,15 @@ export function createGateway({
   db,
   logger,
   internalSecret,
+  runTokenSecret,
 }: {
   db: DbOrTx;
   logger: Logger;
   internalSecret: string;
+  /** Verifies the run tokens CLI calls carry (agents signs them). */
+  runTokenSecret: string;
 }) {
+  const vmApi = createVmApi({ db, runTokenSecret });
   const connections = new Connections<VmSocket>();
   /** Sends a frame to a VM's live connection; returns that socket, or undefined if it isn't connected. */
   const sendTo = (vmId: string, frame: GatewayToVmFrame) => {
@@ -86,8 +91,8 @@ export function createGateway({
       }
       const vmLogger = logger.child({ vmId: ws.data.vmId });
       for (const reply of await handleVmFrame(
-        { db, logger: vmLogger, execs, files },
-        ws.data.vmId,
+        { db, logger: vmLogger, execs, files, vmApi },
+        ws.data,
         message,
       ))
         send(ws, reply);
