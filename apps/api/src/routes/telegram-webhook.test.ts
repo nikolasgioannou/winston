@@ -228,11 +228,18 @@ describe("POST /webhooks/telegram", () => {
     });
   });
 
-  test("skips messages that are neither text nor a file, like voice notes", async () => {
+  test("skips messages that are neither text nor a file, like stickers", async () => {
     await withApp(async ({ tx, userId, post }) => {
       const update = textUpdate({
-        voice: { file_id: "v", file_unique_id: "v", duration: 3 },
-        caption: "listen",
+        sticker: {
+          file_id: "s",
+          file_unique_id: "s",
+          type: "regular",
+          width: 512,
+          height: 512,
+          is_animated: false,
+          is_video: false,
+        },
       });
       delete update.message?.text;
       expect((await post(update)).status).toBe(200);
@@ -335,6 +342,40 @@ describe("messages with files", () => {
       },
       "",
       { kind: "animation", telegramFileId: "g", mimeType: "video/mp4" },
+    ],
+    [
+      "a voice note",
+      {
+        voice: file("vn", {
+          duration: 4,
+          mime_type: "audio/ogg",
+          file_size: 24_000,
+        }),
+      },
+      "",
+      {
+        kind: "voice",
+        telegramFileId: "vn",
+        mimeType: "audio/ogg",
+        size: 24_000,
+      },
+    ],
+    [
+      "a round video note",
+      {
+        video_note: file("rv", {
+          length: 240,
+          duration: 6,
+          file_size: 300_000,
+        }),
+      },
+      "",
+      {
+        kind: "video_note",
+        telegramFileId: "rv",
+        mimeType: "video/mp4",
+        size: 300_000,
+      },
     ],
   ])(
     "%s is held and queued to be saved, not answered yet",

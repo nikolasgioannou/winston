@@ -1,14 +1,14 @@
 ---
 id: "0e0c6c"
 title: Transcribe voice notes
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m2
   - telegram
 created_at: 2026-09-27T05:32:52.082Z
-updated_at: 2026-09-27T05:32:52.130Z
+updated_at: 2026-09-28T05:22:22.282Z
 blocked_by:
   - "0bfb79"
   - "ca5d9c"
@@ -27,3 +27,10 @@ Flow:
 Also handle `video_note` (round videos) the same way if the audio can be extracted cheaply. Otherwise treat it as a regular attachment.
 
 Tests with a fake transcription client: the transcript lands in the envelope with the voice marker, the turn waits for transcription, and failure sends the fixed message and still stores the file.
+
+## Outcome
+
+- Voice notes and round video notes go through the attachment pipeline: saved to `~/inbox/<date>/`, held `pending`, then a `transcribe_voice` job reads the audio back from the VM, transcribes it with `openai/gpt-4o-mini-transcribe` via OpenRouter (plain `fetch`, base64 JSON), records the cost in `cost_ledger` (`stt`), and releases the item with the transcript as text and `source: "voice"`, rendered as `<source>voice</source>`.
+- OGG/Opus and MP4 are accepted as they are (tested against three models), so round videos need no audio extraction.
+- Changed from the ticket: a failed or empty transcription releases the item with `transcriptionFailed`, and the front of house tells the user, instead of a fixed message sent without a model (which would leave the item with no run, and break "one voice"). The audio stays on the VM.
+- Verified live: a voice note and a round video answered as typed text, and a silent note got "Didn't catch that one… Can you try again or type it?"; each file landed in the inbox, with costs under $0.0001.

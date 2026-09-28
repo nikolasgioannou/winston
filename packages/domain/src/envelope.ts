@@ -104,6 +104,8 @@ export function renderUserMessage(item: UserMessageItem, timeZone: string) {
     );
   }
   if (payload.attachment) lines.push(renderAttachment(payload.attachment));
+  // The text is what the user said in a voice or video note.
+  if (payload.source === "voice") lines.push(element("source", "voice"));
   // A file sent without a caption has no text.
   if (payload.text !== "" || !payload.attachment)
     lines.push(element("text", payload.text));
@@ -128,7 +130,9 @@ function renderAttachment(attachment: Attachment) {
       attachment.size === undefined ? undefined : formatSize(attachment.size),
     status: saved ? undefined : attachment.status,
   });
-  const problem = attachmentProblems[attachment.status];
+  const problem = attachment.transcriptionFailed
+    ? "Not transcribed: the speech couldn't be made out."
+    : attachmentProblems[attachment.status];
   return problem
     ? `  <attachment${attrs}>${escapeText(problem)}</attachment>`
     : `  <attachment${attrs}/>`;

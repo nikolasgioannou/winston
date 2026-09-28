@@ -94,8 +94,8 @@ async function handleMessage(
     return "unlinked_chat";
   }
 
-  // Text, or a file with an optional caption. Voice notes, stickers and the
-  // like aren't handled yet.
+  // Text, or a file (voice notes included) with an optional caption.
+  // Stickers, locations and the like aren't handled.
   const attachment =
     message.text === undefined ? attachmentOf(message) : undefined;
   const text =
@@ -149,12 +149,23 @@ export function attachmentOf(message: Message): Attachment | undefined {
     }) ??
     (message.document && { kind: "document" as const, ...message.document }) ??
     (message.video && { kind: "video" as const, ...message.video }) ??
-    (message.audio && { kind: "audio" as const, ...message.audio });
+    (message.audio && { kind: "audio" as const, ...message.audio }) ??
+    (message.voice && { kind: "voice" as const, ...message.voice });
+  if (message.video_note)
+    return withOptional(
+      {
+        kind: "video_note",
+        telegramFileId: message.video_note.file_id,
+        mimeType: "video/mp4",
+        ...pending,
+      },
+      { size: message.video_note.file_size },
+    );
   if (!file) return undefined;
   return withOptional(
     { kind: file.kind, telegramFileId: file.file_id, ...pending },
     {
-      fileName: file.file_name,
+      fileName: "file_name" in file ? file.file_name : undefined,
       mimeType: file.mime_type,
       size: file.file_size,
     },

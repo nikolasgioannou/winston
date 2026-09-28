@@ -171,6 +171,60 @@ describe("renderUserMessage", () => {
   });
 });
 
+describe("voice notes", () => {
+  const voice = {
+    kind: "voice" as const,
+    telegramFileId: "v1",
+    mimeType: "audio/ogg",
+    size: 24_000,
+    status: "saved" as const,
+    path: "~/inbox/2026-09-26/voice-140312.ogg",
+  };
+
+  test("a transcribed voice note reads as text, marked as voice", () => {
+    expect(
+      renderUserMessage(
+        {
+          occurredAt: sentAt,
+          payload: {
+            text: "remind me to call mum",
+            telegramMessageId: 11,
+            attachment: voice,
+            source: "voice",
+          },
+        },
+        zone,
+      ),
+    ).toMatchInlineSnapshot(`
+      "<system_event type="user_message">
+        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <attachment kind="voice" path="~/inbox/2026-09-26/voice-140312.ogg" type="audio/ogg" size="23 KB"/>
+        <source>voice</source>
+        <text>remind me to call mum</text>
+      </system_event>"
+    `);
+  });
+
+  test("a voice note that couldn't be transcribed says so", () => {
+    const xml = renderUserMessage(
+      {
+        occurredAt: sentAt,
+        payload: {
+          text: "",
+          telegramMessageId: 12,
+          attachment: { ...voice, transcriptionFailed: true },
+        },
+      },
+      zone,
+    );
+    expect(xml).toContain(
+      '<attachment kind="voice" path="~/inbox/2026-09-26/voice-140312.ogg" type="audio/ogg" size="23 KB">Not transcribed: the speech couldn\'t be made out.</attachment>',
+    );
+    expect(xml).not.toContain("<source>");
+    expect(xml).not.toContain("<text>");
+  });
+});
+
 describe("formatSize", () => {
   test("bytes, KB and MB", () => {
     expect(formatSize(512)).toBe("512 bytes");

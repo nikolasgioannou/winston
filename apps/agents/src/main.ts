@@ -7,16 +7,21 @@ import {
   frontTurnJob,
   provisionVmJob,
   saveAttachmentJob,
+  transcribeVoiceJob,
 } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { Api } from "grammy";
-import { saveAttachmentHandler } from "./attachments.ts";
+import {
+  saveAttachmentHandler,
+  transcribeVoiceHandler,
+} from "./attachments.ts";
 import { localBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
 import { dbModelCallSink } from "./model/log.ts";
 import { botApiFiles } from "./telegram/files.ts";
+import { openRouterTranscriber } from "./transcribe.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
@@ -58,6 +63,10 @@ const worker = createWorker({
       vm,
       telegram: botApiFiles(telegramApi, config.TELEGRAM_BOT_TOKEN),
       blobs,
+    }),
+    [transcribeVoiceJob.type]: transcribeVoiceHandler({
+      vm,
+      transcriber: openRouterTranscriber({ apiKey: config.OPENROUTER_API_KEY }),
     }),
     [frontTurnJob.type]: frontTurnHandler({
       gateway,

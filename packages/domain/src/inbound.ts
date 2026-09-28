@@ -20,7 +20,15 @@ export const forwardOriginSchema = z.object({
  * VM and fills in the rest.
  */
 export const attachmentSchema = z.object({
-  kind: z.enum(["photo", "document", "video", "audio", "animation"]),
+  kind: z.enum([
+    "photo",
+    "document",
+    "video",
+    "audio",
+    "animation",
+    "voice",
+    "video_note",
+  ]),
   telegramFileId: z.string(),
   /** The name from the sender's app. Photos have none. */
   fileName: z.string().optional(),
@@ -33,6 +41,8 @@ export const attachmentSchema = z.object({
   status: z.enum(["pending", "saved", "too_large", "failed"]),
   /** Where it was saved on the VM, e.g. `~/inbox/2026-09-27/photo-140312.jpg`. */
   path: z.string().optional(),
+  /** A voice or video note whose speech couldn't be transcribed. */
+  transcriptionFailed: z.boolean().optional(),
   /** The copy the model is shown with the message, in the blob store. */
   shown: z
     .object({
@@ -53,6 +63,8 @@ export const userMessagePayloadSchema = z.object({
   replyToTelegramMessageId: z.number().int().optional(),
   forwardedFrom: forwardOriginSchema.optional(),
   attachment: attachmentSchema.optional(),
+  /** Set when `text` is the transcript of a voice or video note. */
+  source: z.literal("voice").optional(),
 });
 
 /**

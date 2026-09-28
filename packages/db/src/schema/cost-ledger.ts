@@ -10,8 +10,8 @@ import {
 import { runs } from "./runs.ts";
 import { users } from "./users.ts";
 
-/** What a charge was for. More categories arrive with Jev, transcription and VMs. */
-export const costCategory = pgEnum("cost_category", ["model"]);
+/** What a charge was for: model calls, or speech-to-text. More arrive with Jev and VMs. */
+export const costCategory = pgEnum("cost_category", ["model", "stt"]);
 
 /** One row per charge, so spend is a sum over this table. */
 export const costLedger = snakeCase.table(

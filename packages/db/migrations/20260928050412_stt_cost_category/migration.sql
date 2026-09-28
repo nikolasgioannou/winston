@@ -1,0 +1,1 @@
+ALTER TYPE "cost_category" ADD VALUE 'stt';

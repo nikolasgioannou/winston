@@ -1,11 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import type { Job } from "@winston/db/queue";
-import { files, inboundItems, jobs } from "@winston/db/schema";
+import { costLedger, files, inboundItems, jobs } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import type { ExecResult } from "@winston/domain/frames";
-import type { Attachment } from "@winston/domain/inbound";
-import { frontTurnJob, saveAttachmentJob } from "@winston/domain/jobs";
+import { renderUserMessage } from "@winston/domain/envelope";
+import {
+  userMessagePayloadSchema,
+  type Attachment,
+} from "@winston/domain/inbound";
+import {
+  frontTurnJob,
+  saveAttachmentJob,
+  transcribeVoiceJob,
+} from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { eq } from "drizzle-orm";
 import {
@@ -13,9 +21,11 @@ import {
   maxShownTextBytes,
   safeFileName,
   saveAttachmentHandler,
+  transcribeVoiceHandler,
 } from "./attachments.ts";
 import type { BlobStore } from "./blobs.ts";
 import type { TelegramFiles } from "./telegram/files.ts";
+import type { Transcriber } from "./transcribe.ts";
 import { GatewayError, type VmClient } from "./vm/gateway-client.ts";
 
 const db = await testDb();
@@ -403,6 +413,185 @@ describe("save_attachment", () => {
       );
       expect(big).toMatchObject({ status: "saved" });
       expect(big?.shown).toBeUndefined();
+    });
+  });
+});
+
+describe("voice notes", () => {
+  const voice = {
+    kind: "voice" as const,
+    telegramFileId: "tg-voice",
+    mimeType: "audio/ogg",
+    size: 14_000,
+  };
+
+  function fakeTranscriber(result: string | Error) {
+    const calls: { bytes: number; format: string }[] = [];
+    const transcriber: Transcriber = {
+      transcribe: (audio, format) => {
+        calls.push({ bytes: audio.length, format });
+        return result instanceof Error
+          ? Promise.reject(result)
+          : Promise.resolve({ text: result, costUsd: 0.00018 });
+      },
+    };
+    return { transcriber, calls };
+  }
+
+  async function transcribe(
+    tx: DbOrTx,
+    itemId: string,
+    transcriber: Transcriber,
+    attempt = { attempts: 1, maxAttempts: 5 },
+  ) {
+    const job = {
+      id: "job_2",
+      type: transcribeVoiceJob.type,
+      payload: { inboundItemId: itemId },
+      ...attempt,
+    } as unknown as Job;
+    await transcribeVoiceHandler({ vm: fakeVm().vm, transcriber })({
+      job,
+      db: tx as never,
+      logger,
+      extendLease: () => Promise.resolve(true),
+    });
+    const [item] = await tx
+      .select()
+      .from(inboundItems)
+      .where(eq(inboundItems.id, itemId));
+    return item;
+  }
+
+  const queuedTypes = async (tx: DbOrTx, userId: string) =>
+    (await tx.select().from(jobs).where(eq(jobs.userId, userId))).map(
+      (job) => job.type,
+    );
+
+  test("a saved voice note stays held and goes to transcription, not a turn", async () => {
+    await inRollback(db, async (tx) => {
+      const held = await heldItem(tx, voice);
+      const { item, attachment } = await runJob(tx, held.id, {
+        vm: fakeVm().vm,
+        telegram: fakeTelegram(new Uint8Array(14_000)).telegram,
+        blobs: memoryBlobs().blobs,
+      });
+      expect(item?.pending).toBe(true);
+      expect(attachment).toMatchObject({
+        status: "saved",
+        path: "~/inbox/2026-09-26/voice-140312.ogg",
+      });
+      expect(await queuedTypes(tx, held.userId)).toEqual([
+        transcribeVoiceJob.type,
+      ]);
+      const recorded = await tx
+        .select()
+        .from(files)
+        .where(eq(files.userId, held.userId));
+      expect(recorded).toHaveLength(1);
+    });
+  });
+
+  test("the transcript becomes the message text, marked as voice, and the turn is queued", async () => {
+    await inRollback(db, async (tx) => {
+      const held = await heldItem(tx, {
+        ...voice,
+        path: "~/inbox/2026-09-26/voice-140312.ogg",
+      });
+      await tx
+        .update(inboundItems)
+        .set({
+          payload: {
+            text: "",
+            telegramMessageId: 1,
+            attachment: {
+              ...voice,
+              status: "saved",
+              path: "~/inbox/2026-09-26/voice-140312.ogg",
+            },
+          },
+        })
+        .where(eq(inboundItems.id, held.id));
+      const { transcriber, calls } = fakeTranscriber(
+        " Remind me to call Dana at 4:30. ",
+      );
+      const item = await transcribe(tx, held.id, transcriber);
+      expect(calls).toEqual([{ bytes: 3, format: "ogg" }]);
+      expect(item?.pending).toBe(false);
+      expect(item?.payload).toMatchObject({
+        text: "Remind me to call Dana at 4:30.",
+        source: "voice",
+      });
+      const xml = renderUserMessage(
+        {
+          occurredAt: sentAt,
+          payload: userMessagePayloadSchema.parse(item?.payload),
+        },
+        "America/Los_Angeles",
+      );
+      expect(xml).toContain("<source>voice</source>");
+      expect(xml).toContain("<text>Remind me to call Dana at 4:30.</text>");
+      const [cost] = await tx
+        .select()
+        .from(costLedger)
+        .where(eq(costLedger.userId, held.userId));
+      expect(cost).toMatchObject({ category: "stt", costUsd: "0.000180" });
+      expect(await queuedTypes(tx, held.userId)).toEqual([frontTurnJob.type]);
+    });
+  });
+
+  test("a failing transcription is retried, then released marked as failed with the audio kept", async () => {
+    await inRollback(db, async (tx) => {
+      const path = "~/inbox/2026-09-26/voice-140312.ogg";
+      const held = await heldItem(tx, { ...voice, path });
+      const { transcriber } = fakeTranscriber(new Error("upstream 502"));
+      const early = await transcribe(tx, held.id, transcriber).catch(
+        (error: unknown) => error,
+      );
+      expect(early).toBeInstanceOf(Error);
+
+      const item = await transcribe(tx, held.id, transcriber, {
+        attempts: 5,
+        maxAttempts: 5,
+      });
+      expect(item?.pending).toBe(false);
+      expect(item?.payload).toMatchObject({
+        text: "",
+        attachment: { path, transcriptionFailed: true },
+      });
+      expect(item?.payload).not.toHaveProperty("source");
+    });
+  });
+
+  test("silence isn't retried: an empty transcript is released as failed at once", async () => {
+    await inRollback(db, async (tx) => {
+      const held = await heldItem(tx, {
+        ...voice,
+        path: "~/inbox/2026-09-26/voice-140312.ogg",
+      });
+      const item = await transcribe(
+        tx,
+        held.id,
+        fakeTranscriber("  ").transcriber,
+      );
+      expect(item?.pending).toBe(false);
+      expect(item?.payload).toMatchObject({
+        attachment: { transcriptionFailed: true },
+      });
+    });
+  });
+
+  test("a round video note is sent as MP4", async () => {
+    await inRollback(db, async (tx) => {
+      const held = await heldItem(tx, {
+        kind: "video_note",
+        telegramFileId: "tg-round",
+        mimeType: "video/mp4",
+        path: "~/inbox/2026-09-26/video_note-140312.mp4",
+      });
+      const { transcriber, calls } = fakeTranscriber("hi");
+      await transcribe(tx, held.id, transcriber);
+      expect(calls[0]?.format).toBe("mp4");
     });
   });
 });

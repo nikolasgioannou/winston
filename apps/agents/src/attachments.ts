@@ -8,18 +8,19 @@
  */
 import type { DbOrTx } from "@winston/db/client";
 import { enqueue } from "@winston/db/queue";
-import { files, inboundItems, users } from "@winston/db/schema";
+import { costLedger, files, inboundItems, users } from "@winston/db/schema";
 import {
   userMessagePayloadSchema,
   type Attachment,
   type UserMessagePayload,
 } from "@winston/domain/inbound";
-import { frontTurnJob } from "@winston/domain/jobs";
+import { frontTurnJob, transcribeVoiceJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { formatInTimeZone } from "@winston/shared/time";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { BlobStore } from "./blobs.ts";
+import type { Transcriber } from "./transcribe.ts";
 import { maxDownloadBytes, type TelegramFiles } from "./telegram/files.ts";
 import { showImage } from "./tools/view-image.ts";
 import type { VmClient } from "./vm/gateway-client.ts";
@@ -296,26 +297,34 @@ function withoutSaved(
 }
 
 /**
- * Stores the outcome, records a saved file, and lets turns take the item.
- * Guarded on `pending`, so a duplicate run does nothing.
+ * Stores the outcome and passes the item on: to transcription while it stays
+ * held (a saved voice or video note), or to a turn, released. A newly saved
+ * file is recorded in `files`. Guarded on `pending`, so a duplicate run does
+ * nothing.
  */
 async function release(
   db: DbOrTx,
   inboundItemId: string,
   userId: string,
   payload: UserMessagePayload,
+  options: { recordFile: boolean } = { recordFile: true },
 ) {
+  const attachment = payload.attachment;
+  const saved = attachment?.status === "saved" && attachment.path;
+  const transcribe =
+    options.recordFile &&
+    saved &&
+    (attachment.kind === "voice" || attachment.kind === "video_note");
   await db.transaction(async (tx) => {
-    const released = await tx
+    const updated = await tx
       .update(inboundItems)
-      .set({ payload, pending: false })
+      .set({ payload, pending: Boolean(transcribe) })
       .where(
         and(eq(inboundItems.id, inboundItemId), eq(inboundItems.pending, true)),
       )
       .returning({ id: inboundItems.id });
-    if (released.length === 0) return;
-    const attachment = payload.attachment;
-    if (attachment?.status === "saved" && attachment.path)
+    if (updated.length === 0) return;
+    if (options.recordFile && saved && attachment.path)
       await tx.insert(files).values({
         userId,
         vmPath: attachment.path,
@@ -323,6 +332,14 @@ async function release(
         size: attachment.size ?? 0,
         telegramFileId: attachment.telegramFileId,
       });
+    if (transcribe) {
+      await enqueue(tx, transcribeVoiceJob.type, {
+        userId,
+        payload: { inboundItemId },
+        dedupeKey: transcribeVoiceJob.dedupeKey(inboundItemId),
+      });
+      return;
+    }
     await enqueue(tx, frontTurnJob.type, {
       userId,
       dedupeKey: frontTurnJob.dedupeKey(userId),
@@ -330,4 +347,78 @@ async function release(
       onDuplicate: "reschedule",
     });
   });
+}
+
+/**
+ * The `transcribe_voice` job (§4, Media): reads a saved voice or video note
+ * back from the VM, transcribes it, and releases the item with the
+ * transcript as its text (`source: voice`). If it can't be transcribed, the
+ * item is released anyway, marked so the model can tell the user; the audio
+ * stays on the VM.
+ */
+export function transcribeVoiceHandler(deps: {
+  vm: VmClient;
+  transcriber: Transcriber;
+}): JobHandler {
+  return async ({ job, db, logger }) => {
+    const { inboundItemId } = z
+      .object({ inboundItemId: z.string() })
+      .parse(job.payload);
+    const [item] = await db
+      .select()
+      .from(inboundItems)
+      .where(eq(inboundItems.id, inboundItemId));
+    if (!item?.pending) return;
+    const payload = userMessagePayloadSchema.parse(item.payload);
+    const attachment = payload.attachment;
+    if (!attachment?.path) {
+      await release(db, inboundItemId, item.userId, payload, {
+        recordFile: false,
+      });
+      return;
+    }
+
+    let next: UserMessagePayload;
+    try {
+      const audio = await deps.vm.readFile(
+        item.userId,
+        attachment.path.slice(2),
+      );
+      const format = attachment.kind === "video_note" ? "mp4" : "ogg";
+      const { text, costUsd } = await deps.transcriber.transcribe(
+        audio,
+        format,
+      );
+      await db.insert(costLedger).values({
+        userId: item.userId,
+        category: "stt",
+        costUsd: costUsd.toFixed(6),
+      });
+      const transcript = text.trim();
+      if (!transcript) throw new EmptyTranscript();
+      // A caption, if any, follows what was said.
+      const caption = payload.text.trim();
+      next = {
+        ...payload,
+        text: caption ? `${transcript}\n\n${caption}` : transcript,
+        source: "voice",
+      };
+    } catch (error) {
+      if (!(error instanceof EmptyTranscript) && job.attempts < job.maxAttempts)
+        throw error;
+      logger.warn({ err: error }, "transcribing a voice note failed");
+      next = {
+        ...payload,
+        attachment: { ...attachment, transcriptionFailed: true },
+      };
+    }
+    await release(db, inboundItemId, item.userId, next, { recordFile: false });
+  };
+}
+
+/** Speech that transcribed to nothing, such as silence; not worth a retry. */
+class EmptyTranscript extends Error {
+  constructor() {
+    super("the transcript was empty");
+  }
 }

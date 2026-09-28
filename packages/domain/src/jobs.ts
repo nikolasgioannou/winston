@@ -32,3 +32,13 @@ export const saveAttachmentJob = {
   type: "save_attachment",
   dedupeKey: (inboundItemId: string) => `save_attachment:${inboundItemId}`,
 } as const;
+
+/**
+ * Transcribing a saved voice or video note (§4, Media). Payload
+ * `{ inboundItemId }`. Queued by `save_attachment`; the item stays `pending`
+ * until this releases it and queues the turn.
+ */
+export const transcribeVoiceJob = {
+  type: "transcribe_voice",
+  dedupeKey: (inboundItemId: string) => `transcribe_voice:${inboundItemId}`,
+} as const;
