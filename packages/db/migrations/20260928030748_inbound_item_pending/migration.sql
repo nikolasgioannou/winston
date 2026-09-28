@@ -1,0 +1,1 @@
+ALTER TABLE "inbound_items" ADD COLUMN "pending" boolean DEFAULT false NOT NULL;

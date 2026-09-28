@@ -88,14 +88,17 @@ ${
 }
 identify -format '%w %h' -- "$HOME/${out}"`;
 
-type Output =
+export type ShownImage =
   { error: string } | { text: string; data: string; mediaType: string };
 
-export function viewImageTool(context: {
-  vm: VmClient;
-  logger: Logger;
-  userId: string;
-}) {
+/**
+ * Reads an image from the user's VM in a form the model accepts, converting
+ * or downscaling it there first if needed. Problems come back as sentences.
+ */
+export async function showImage(
+  context: { vm: VmClient; logger: Logger; userId: string },
+  path: string,
+): Promise<ShownImage> {
   const { vm, userId } = context;
   const run = async (script: string, path: string) => {
     const result = await vm.exec(userId, {
@@ -108,70 +111,76 @@ export function viewImageTool(context: {
     return result.stdout.trim();
   };
 
+  try {
+    const inspected = await run(inspectScript, path);
+    if (inspected === "missing")
+      return { error: `There's no file at ${path}.` };
+    if (inspected === "not_a_file")
+      return { error: `${path} is a directory, not an image.` };
+    if (inspected === "not_an_image")
+      return { error: `${path} isn't an image I can read.` };
+    const [, format = "", width = "0", height = "0", bytes = "0"] =
+      inspected.split(/\s+/);
+    const image = {
+      format,
+      width: Number(width),
+      height: Number(height),
+      bytes: Number(bytes),
+    };
+    const plan = planImage(image);
+
+    const extension = plan.convert
+      ? plan.to === "jpeg"
+        ? "jpg"
+        : "png"
+      : format.toLowerCase();
+    const out = `.winston/view/${crypto.randomUUID()}.${extension}`;
+    const [shownWidth, shownHeight] = (
+      await run(prepareScript(out, plan.convert && plan.to), path)
+    ).split(/\s+/);
+    const bytesRead = await vm.readFile(userId, out);
+    // Best effort: the copy is only needed until it's been read.
+    void vm
+      .exec(userId, {
+        cmd: `rm -f -- "$HOME/${out}"`,
+        env: {},
+        timeoutMs: 5_000,
+      })
+      .catch(() => undefined);
+
+    const mediaType =
+      mediaTypes[plan.convert ? plan.to : format] ?? "image/png";
+    const size = `${String(image.width)}×${String(image.height)} ${format}`;
+    const text = plan.convert
+      ? `${path} (${size}, shown as ${shownWidth ?? "?"}×${shownHeight ?? "?"} ${plan.to.toUpperCase()})`
+      : `${path} (${size})`;
+    return {
+      text,
+      data: Buffer.from(bytesRead).toString("base64"),
+      mediaType,
+    };
+  } catch (error) {
+    if (error instanceof GatewayError)
+      return {
+        error:
+          "Your computer isn't reachable right now, so the image couldn't be opened.",
+      };
+    context.logger.warn({ err: error, path }, "view_image failed");
+    return {
+      error: `Couldn't open ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+export function viewImageTool(context: {
+  vm: VmClient;
+  logger: Logger;
+  userId: string;
+}) {
   return tool({
     description,
     inputSchema,
-    execute: async ({ path }): Promise<Output> => {
-      try {
-        const inspected = await run(inspectScript, path);
-        if (inspected === "missing")
-          return { error: `There's no file at ${path}.` };
-        if (inspected === "not_a_file")
-          return { error: `${path} is a directory, not an image.` };
-        if (inspected === "not_an_image")
-          return { error: `${path} isn't an image I can read.` };
-        const [, format = "", width = "0", height = "0", bytes = "0"] =
-          inspected.split(/\s+/);
-        const image = {
-          format,
-          width: Number(width),
-          height: Number(height),
-          bytes: Number(bytes),
-        };
-        const plan = planImage(image);
-
-        const extension = plan.convert
-          ? plan.to === "jpeg"
-            ? "jpg"
-            : "png"
-          : format.toLowerCase();
-        const out = `.winston/view/${crypto.randomUUID()}.${extension}`;
-        const [shownWidth, shownHeight] = (
-          await run(prepareScript(out, plan.convert && plan.to), path)
-        ).split(/\s+/);
-        const bytesRead = await vm.readFile(userId, out);
-        // Best effort: the copy is only needed until it's been read.
-        void vm
-          .exec(userId, {
-            cmd: `rm -f -- "$HOME/${out}"`,
-            env: {},
-            timeoutMs: 5_000,
-          })
-          .catch(() => undefined);
-
-        const mediaType =
-          mediaTypes[plan.convert ? plan.to : format] ?? "image/png";
-        const size = `${String(image.width)}×${String(image.height)} ${format}`;
-        const text = plan.convert
-          ? `${path} (${size}, shown as ${shownWidth ?? "?"}×${shownHeight ?? "?"} ${plan.to.toUpperCase()})`
-          : `${path} (${size})`;
-        return {
-          text,
-          data: Buffer.from(bytesRead).toString("base64"),
-          mediaType,
-        };
-      } catch (error) {
-        if (error instanceof GatewayError)
-          return {
-            error:
-              "Your computer isn't reachable right now, so the image couldn't be opened.",
-          };
-        context.logger.warn({ err: error, path }, "view_image failed");
-        return {
-          error: `Couldn't open ${path}: ${error instanceof Error ? error.message : String(error)}`,
-        };
-      }
-    },
+    execute: ({ path }) => showImage(context, path),
     toModelOutput: ({ output }) =>
       "error" in output
         ? { type: "text", value: output.error }

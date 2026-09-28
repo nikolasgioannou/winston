@@ -1,4 +1,11 @@
-import { index, jsonb, snakeCase, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  jsonb,
+  snakeCase,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { newId } from "../ids.ts";
 import { runs } from "./runs.ts";
 import { users } from "./users.ts";
@@ -22,6 +29,11 @@ export const inboundItems = snakeCase.table(
     /** Where it came from (e.g. a Telegram update id), unique so redeliveries are ignored. */
     sourceRef: text().unique(),
     occurredAt: timestamp({ withTimezone: true }).notNull(),
+    /**
+     * Held back from turns while its media is processed (a file being saved
+     * to the VM). Later items wait too, so input stays in order.
+     */
+    pending: boolean().notNull().default(false),
     /** The run that handled it; unset until then. */
     consumedByRunId: text().references(() => runs.id, { onDelete: "set null" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

@@ -22,3 +22,13 @@ export const provisionVmJob = {
   /** One provisioning job queued per user at a time. */
   dedupeKey: (userId: string) => `provision_vm:${userId}`,
 } as const;
+
+/**
+ * Saving a file the user sent to their VM (§4, Media). Payload
+ * `{ inboundItemId }`. The item stays `pending`, holding back the turn,
+ * until this finishes; then it queues the turn.
+ */
+export const saveAttachmentJob = {
+  type: "save_attachment",
+  dedupeKey: (inboundItemId: string) => `save_attachment:${inboundItemId}`,
+} as const;

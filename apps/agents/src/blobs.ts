@@ -3,13 +3,14 @@
  * Postgres (docs/design.md §12). Locally that's a directory; production uses
  * S3 behind the same interface (M4).
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ModelMessage } from "ai";
 
 export interface BlobStore {
   /** Stores bytes and returns their key: the SHA-256, so identical files are stored once. */
   put(bytes: Uint8Array): Promise<string>;
+  get(key: string): Promise<Uint8Array>;
 }
 
 export function localBlobStore(dir: string): BlobStore {
@@ -19,6 +20,11 @@ export function localBlobStore(dir: string): BlobStore {
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, key), bytes);
       return key;
+    },
+    async get(key) {
+      if (!/^[0-9a-f]{64}$/.test(key))
+        throw new Error(`Not a blob key: ${key}`);
+      return new Uint8Array(await readFile(join(dir, key)));
     },
   };
 }

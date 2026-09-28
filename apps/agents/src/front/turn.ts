@@ -21,10 +21,19 @@ import {
   telegramLinks,
   users,
 } from "@winston/db/schema";
-import { renderBatch } from "@winston/domain/envelope";
+import {
+  renderAttachmentContent,
+  renderBatch,
+  type EnvelopeItem,
+} from "@winston/domain/envelope";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
-import { APICallError, isStepCount, type ModelMessage } from "ai";
+import {
+  APICallError,
+  isStepCount,
+  type ModelMessage,
+  type UserContent,
+} from "ai";
 import {
   and,
   asc,
@@ -35,6 +44,7 @@ import {
   inArray,
   isNull,
   lt,
+  notExists,
   sql,
 } from "drizzle-orm";
 import { cacheBreakpoint } from "../model/cache.ts";
@@ -134,7 +144,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     const [created] = await tx.insert(runs).values({ userId }).returning();
     if (!created) throw new Error("Creating a run returned no row.");
     const log = new RunLog(created.id);
-    const input = await log.claim(tx, userId, items, user.timezone);
+    const input = await log.claim(tx, userId, items, user.timezone, deps.blobs);
     return [{ log, input }];
   });
   if (!run) return undefined;
@@ -167,7 +177,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       const items = await lockUnconsumed(tx, userId);
       return items.length === 0
         ? undefined
-        : log.claim(tx, userId, items, user.timezone, note);
+        : log.claim(tx, userId, items, user.timezone, deps.blobs, note);
     });
     if (claimed) messages.push(claimed.message);
     return claimed !== undefined;
@@ -462,17 +472,38 @@ class RunLog {
     userId: string,
     items: InboundItem[],
     timeZone: string,
+    blobs: BlobStore,
     note?: string,
   ) {
-    const envelopes = renderBatch(
-      await toEnvelopeItems(tx, userId, items),
-      timeZone,
-    );
-    const message: ModelMessage = {
-      role: "user",
-      content: note ? `${note}\n\n${envelopes}` : envelopes,
-    };
-    const id = await this.store(tx, message);
+    const envelopeItems = await toEnvelopeItems(tx, userId, items);
+    const envelopes = renderBatch(envelopeItems, timeZone);
+    const text = note ? `${note}\n\n${envelopes}` : envelopes;
+    const shown = await shownFiles(envelopeItems, blobs);
+    // The model sees the files now; the stored message keeps stubs (§2).
+    const message: ModelMessage =
+      shown.length === 0
+        ? { role: "user", content: text }
+        : {
+            role: "user",
+            content: [
+              { type: "text", text },
+              ...shown.flatMap((file) => file.parts),
+            ],
+          };
+    const stored: ModelMessage =
+      shown.length === 0
+        ? message
+        : {
+            role: "user",
+            content: [
+              { type: "text", text },
+              ...shown.map((file) => ({
+                type: "text" as const,
+                text: file.stub,
+              })),
+            ],
+          };
+    const id = await this.store(tx, stored);
     await tx
       .update(inboundItems)
       .set({ consumedByRunId: this.runId })
@@ -488,17 +519,75 @@ class RunLog {
 
 type InboundItem = typeof inboundItems.$inferSelect;
 
-/** The user's unconsumed inbound items, oldest first, locked for this transaction. */
+/**
+ * The files sent with these messages that the model reads directly (§4,
+ * Media): images and PDFs as file parts, text as escaped text. Each has a
+ * stub for the stored copy, which later turns see instead.
+ */
+async function shownFiles(items: readonly EnvelopeItem[], blobs: BlobStore) {
+  const shown: { parts: Exclude<UserContent, string>; stub: string }[] = [];
+  for (const item of items) {
+    if (item.kind !== "user_message") continue;
+    const { attachment } = item.payload;
+    if (!attachment?.shown || !attachment.path) continue;
+    const { path, shown: file } = attachment;
+    const bytes = await blobs.get(file.blobKey);
+    const stub = `[${path} was shown here; not shown again. Open it on your computer to see it again.]`;
+    if (file.as === "text") {
+      shown.push({
+        parts: [
+          {
+            type: "text",
+            text: renderAttachmentContent(
+              path,
+              new TextDecoder().decode(bytes),
+            ),
+          },
+        ],
+        stub,
+      });
+      continue;
+    }
+    shown.push({
+      parts: [
+        { type: "text", text: `${path}:` },
+        {
+          type: "file",
+          mediaType: file.mediaType,
+          filename: path.split("/").at(-1) ?? path,
+          data: { type: "data", data: Buffer.from(bytes).toString("base64") },
+        },
+      ],
+      stub,
+    });
+  }
+  return shown;
+}
+
+/**
+ * The user's input a turn can take now: unconsumed, not `pending`, and
+ * older than any pending item, so a message never overtakes a file sent
+ * before it.
+ */
+export function claimableInput(userId: string) {
+  return and(
+    eq(inboundItems.userId, userId),
+    isNull(inboundItems.consumedByRunId),
+    eq(inboundItems.pending, false),
+    notExists(
+      sql`(select 1 from ${inboundItems} as held
+        where held.user_id = ${userId} and held.consumed_by_run_id is null and held.pending
+          and (held.occurred_at, held.created_at) <= (${inboundItems.occurredAt}, ${inboundItems.createdAt}))`,
+    ),
+  );
+}
+
+/** The user's claimable inbound items, oldest first, locked for this transaction. */
 async function lockUnconsumed(tx: DbOrTx, userId: string) {
   return tx
     .select()
     .from(inboundItems)
-    .where(
-      and(
-        eq(inboundItems.userId, userId),
-        isNull(inboundItems.consumedByRunId),
-      ),
-    )
+    .where(claimableInput(userId))
     .orderBy(asc(inboundItems.occurredAt), asc(inboundItems.createdAt))
     .for("update");
 }

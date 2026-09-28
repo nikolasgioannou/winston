@@ -10,7 +10,7 @@ import {
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { eq } from "drizzle-orm";
 import type { UserMessagePayload } from "@winston/domain/inbound";
-import { frontTurnJob } from "@winston/domain/jobs";
+import { frontTurnJob, saveAttachmentJob } from "@winston/domain/jobs";
 import type { Update } from "grammy/types";
 import { createApp } from "../app.ts";
 import { unlinkedChatReply } from "../telegram/handle-update.ts";
@@ -228,14 +228,135 @@ describe("POST /webhooks/telegram", () => {
     });
   });
 
-  test("skips messages that aren't text", async () => {
+  test("skips messages that are neither text nor a file, like voice notes", async () => {
     await withApp(async ({ tx, userId, post }) => {
-      const update = textUpdate();
+      const update = textUpdate({
+        voice: { file_id: "v", file_unique_id: "v", duration: 3 },
+        caption: "listen",
+      });
       delete update.message?.text;
       expect((await post(update)).status).toBe(200);
       expect(await itemsFor(tx, userId)).toEqual([]);
     });
   });
+});
+
+/** A message carrying a file instead of text. */
+function fileUpdate(message: Record<string, unknown>) {
+  const update = textUpdate(message);
+  delete update.message?.text;
+  return update;
+}
+
+const file = (id: string, extra: Record<string, unknown> = {}) => ({
+  file_id: id,
+  file_unique_id: `u${id}`,
+  ...extra,
+});
+
+describe("messages with files", () => {
+  test.each([
+    [
+      "the largest photo size, with its caption",
+      {
+        photo: [
+          file("small", { width: 90, height: 67, file_size: 1_200 }),
+          file("large", { width: 1280, height: 960, file_size: 180_000 }),
+          file("medium", { width: 320, height: 240, file_size: 15_000 }),
+        ],
+        caption: "what is this plant?",
+      },
+      "what is this plant?",
+      {
+        kind: "photo",
+        telegramFileId: "large",
+        mimeType: "image/jpeg",
+        size: 180_000,
+      },
+    ],
+    [
+      "a document without a caption",
+      {
+        document: file("d", {
+          file_name: "lease.pdf",
+          mime_type: "application/pdf",
+          file_size: 2_400_000,
+        }),
+      },
+      "",
+      {
+        kind: "document",
+        telegramFileId: "d",
+        fileName: "lease.pdf",
+        mimeType: "application/pdf",
+        size: 2_400_000,
+      },
+    ],
+    [
+      "a video",
+      {
+        video: file("v", {
+          width: 1920,
+          height: 1080,
+          duration: 12,
+          mime_type: "video/mp4",
+        }),
+      },
+      "",
+      { kind: "video", telegramFileId: "v", mimeType: "video/mp4" },
+    ],
+    [
+      "an audio file",
+      {
+        audio: file("a", {
+          duration: 200,
+          file_name: "song.mp3",
+          mime_type: "audio/mpeg",
+        }),
+      },
+      "",
+      {
+        kind: "audio",
+        telegramFileId: "a",
+        fileName: "song.mp3",
+        mimeType: "audio/mpeg",
+      },
+    ],
+    [
+      "an animation, which also fills document",
+      {
+        animation: file("g", {
+          width: 320,
+          height: 240,
+          duration: 2,
+          mime_type: "video/mp4",
+        }),
+        document: file("g", { mime_type: "video/mp4" }),
+      },
+      "",
+      { kind: "animation", telegramFileId: "g", mimeType: "video/mp4" },
+    ],
+  ])(
+    "%s is held and queued to be saved, not answered yet",
+    async (_name, message, text, attachment) => {
+      await withApp(async ({ tx, userId, post }) => {
+        expect((await post(fileUpdate(message))).status).toBe(200);
+        const [item] = await itemsFor(tx, userId);
+        expect(item?.pending).toBe(true);
+        expect(item?.payload).toEqual({
+          text,
+          telegramMessageId: nextUpdateId,
+          attachment: { ...attachment, status: "pending" },
+        });
+        const queued = await jobsFor(tx, userId);
+        expect(queued).toHaveLength(1);
+        expect(queued[0]).toMatchObject({
+          type: saveAttachmentJob.type,
+          payload: { inboundItemId: item?.id },
+        });
+      });
+    },
+  );
 });
 
 const emoji = (list: string[]) =>

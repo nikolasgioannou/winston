@@ -6,11 +6,12 @@ import {
   telegramLinks,
 } from "@winston/db/schema";
 import type {
+  Attachment,
   ForwardOrigin,
   ReactionPayload,
   UserMessagePayload,
 } from "@winston/domain/inbound";
-import { frontTurnJob } from "@winston/domain/jobs";
+import { frontTurnJob, saveAttachmentJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { and, arrayContains, eq } from "drizzle-orm";
 import type {
@@ -93,23 +94,84 @@ async function handleMessage(
     return "unlinked_chat";
   }
 
-  const text = message.text;
+  // Text, or a file with an optional caption. Voice notes, stickers and the
+  // like aren't handled yet.
+  const attachment =
+    message.text === undefined ? attachmentOf(message) : undefined;
+  const text =
+    message.text ?? (attachment ? (message.caption ?? "") : undefined);
   if (text === undefined) {
     logger.info(
       { userId, updateId: update.update_id },
-      "ignoring a message that isn't text",
+      "ignoring a message that isn't text or a file",
     );
     return "unsupported_message";
   }
 
+  const payload = userMessagePayload(message, text);
+  if (attachment) payload.attachment = attachment;
   return storeAndQueueTurn(db, userId, [
     {
       type: "user_message",
-      payload: userMessagePayload(message, text),
+      payload,
       sourceRef: `telegram:${botId}:${String(update.update_id)}`,
       occurredAt: fromUnix(message.date),
+      pending: attachment !== undefined,
     },
   ]);
+}
+
+/**
+ * The file a message carries, as Telegram describes it. A photo comes in
+ * several sizes; the largest is kept. An animation also fills `document`
+ * for older clients, so it's checked first.
+ */
+export function attachmentOf(message: Message): Attachment | undefined {
+  const pending = { status: "pending" as const };
+  if (message.photo && message.photo.length > 0) {
+    const largest = message.photo.reduce((best, size) =>
+      size.width * size.height > best.width * best.height ? size : best,
+    );
+    return withOptional(
+      {
+        kind: "photo",
+        telegramFileId: largest.file_id,
+        mimeType: "image/jpeg",
+        ...pending,
+      },
+      { size: largest.file_size },
+    );
+  }
+  const file =
+    (message.animation && {
+      kind: "animation" as const,
+      ...message.animation,
+    }) ??
+    (message.document && { kind: "document" as const, ...message.document }) ??
+    (message.video && { kind: "video" as const, ...message.video }) ??
+    (message.audio && { kind: "audio" as const, ...message.audio });
+  if (!file) return undefined;
+  return withOptional(
+    { kind: file.kind, telegramFileId: file.file_id, ...pending },
+    {
+      fileName: file.file_name,
+      mimeType: file.mime_type,
+      size: file.file_size,
+    },
+  );
+}
+
+/** Adds only the fields that are set, since the payload schema has no undefined values. */
+function withOptional<T extends object>(
+  base: T,
+  optional: Record<string, string | number | undefined>,
+) {
+  return {
+    ...base,
+    ...Object.fromEntries(
+      Object.entries(optional).filter((entry) => entry[1] !== undefined),
+    ),
+  } as T & Partial<Attachment>;
 }
 
 /**
@@ -196,6 +258,8 @@ async function storeAndQueueTurn(
     payload: unknown;
     sourceRef: string;
     occurredAt: Date;
+    /** Waits for its file to be saved before a turn can take it. */
+    pending?: boolean;
   }[],
 ): Promise<UpdateOutcome> {
   return db.transaction(async (tx) => {
@@ -203,8 +267,17 @@ async function storeAndQueueTurn(
       .insert(inboundItems)
       .values(items.map((item) => ({ ...item, userId })))
       .onConflictDoNothing({ target: inboundItems.sourceRef })
-      .returning({ id: inboundItems.id });
+      .returning({ id: inboundItems.id, pending: inboundItems.pending });
     if (stored.length === 0) return "duplicate";
+
+    // A held item's turn is queued once its file is saved.
+    for (const item of stored.filter((row) => row.pending))
+      await enqueue(tx, saveAttachmentJob.type, {
+        userId,
+        payload: { inboundItemId: item.id },
+        dedupeKey: saveAttachmentJob.dedupeKey(item.id),
+      });
+    if (stored.every((row) => row.pending)) return "stored";
 
     await enqueue(tx, frontTurnJob.type, {
       userId,

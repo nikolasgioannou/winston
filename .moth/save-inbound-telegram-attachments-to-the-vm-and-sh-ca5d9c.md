@@ -1,14 +1,14 @@
 ---
 id: "ca5d9c"
 title: Save inbound Telegram attachments to the VM and show them to the model
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m2
   - telegram
 created_at: 2026-09-27T05:32:51.948Z
-updated_at: 2026-09-27T05:32:52.003Z
+updated_at: 2026-09-28T03:20:44.367Z
 blocked_by:
   - "980988"
   - "cb9674"
@@ -28,3 +28,10 @@ The envelope lists each file's path, type and size. For images, PDFs and text fi
 Ordering matters: the turn must not start before the files are in place. Hold the item until its downloads finish, then enqueue the turn.
 
 Tests: each message type maps to the right stored item and envelope, filename sanitization, the oversize path, and turn enqueueing waiting for downloads.
+
+## Outcome
+
+- The webhook stores a file message as a `pending` item with its `attachment` and queues `save_attachment`. The job downloads the file, reserves a collision-free name under `~/inbox/<local date>/` (noclobber, remembered for retries), writes it, prepares what the model is shown (images via `view_image`'s conversion; PDFs ≤ 10 MB and ≤ 20 pages; text ≤ 50 KB), records a `files` row, then releases the item and queues the turn. Turns only claim input older than the oldest pending item, so order is kept.
+- Over 20 MB (known size, or `getFile`'s "file is too big") becomes `too_large`; the last failed attempt becomes `failed`. Either way the message is released and the envelope says why.
+- The image gained `poppler-utils` (`pdfinfo`, `pdftotext`).
+- Verified live: a captioned photo (described from the image), a 37-page PDF (saved, over the page limit, so Winston read it with `pdftotext`), a Markdown file (shown as text) and a 52 MB video (told it's over the 20 MB limit). All landed in `~/inbox/2026-09-27/`. Short-PDF display is covered by tests only.

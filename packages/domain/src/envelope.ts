@@ -10,7 +10,7 @@
  */
 import { canonicalJson } from "@winston/shared/json";
 import { formatInTimeZone } from "@winston/shared/time";
-import type { UserMessagePayload } from "./inbound.ts";
+import type { Attachment, UserMessagePayload } from "./inbound.ts";
 
 /** The message a user message replies to, resolved by the caller. */
 export interface ReplyContext {
@@ -103,8 +103,52 @@ export function renderUserMessage(item: UserMessageItem, timeZone: string) {
         : "  <reply_to/>",
     );
   }
-  lines.push(element("text", payload.text));
+  if (payload.attachment) lines.push(renderAttachment(payload.attachment));
+  // A file sent without a caption has no text.
+  if (payload.text !== "" || !payload.attachment)
+    lines.push(element("text", payload.text));
   return envelope("user_message", lines);
+}
+
+/** Why a file isn't on the VM, in words the model can pass on. */
+const attachmentProblems: Partial<Record<Attachment["status"], string>> = {
+  too_large: "Not saved: Telegram only lets bots download files up to 20 MB.",
+  failed: "Not saved: downloading it failed.",
+};
+
+/** A file the user sent: where it was saved, or why it wasn't. */
+function renderAttachment(attachment: Attachment) {
+  const saved = attachment.status === "saved";
+  const attrs = attributes({
+    kind: attachment.kind,
+    path: saved ? attachment.path : undefined,
+    name: saved ? undefined : attachment.fileName,
+    type: attachment.mimeType,
+    size:
+      attachment.size === undefined ? undefined : formatSize(attachment.size),
+    status: saved ? undefined : attachment.status,
+  });
+  const problem = attachmentProblems[attachment.status];
+  return problem
+    ? `  <attachment${attrs}>${escapeText(problem)}</attachment>`
+    : `  <attachment${attrs}/>`;
+}
+
+/** Sizes as people write them: bytes, then KB and MB to one decimal (1 KB = 1024 bytes). */
+export function formatSize(bytes: number) {
+  if (bytes < 1024) return `${String(bytes)} bytes`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
+/**
+ * The contents of a text file the user sent, shown alongside the message.
+ * The file could say anything, so it's escaped like any untrusted content.
+ */
+export function renderAttachmentContent(path: string, text: string) {
+  return `<attachment_content${attributes({ path })}>\n${escapeText(text)}\n</attachment_content>`;
 }
 
 /** Any catalog event. Its data is untrusted and rendered as escaped, key-sorted JSON. */

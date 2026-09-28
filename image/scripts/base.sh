@@ -5,7 +5,7 @@ set -euo pipefail
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl unzip jq ripgrep \
-  imagemagick pandoc \
+  imagemagick pandoc poppler-utils \
   python3 python3-pip python3-venv \
   fonts-dejavu-core fonts-liberation fonts-noto-core fonts-noto-color-emoji \
   systemd systemd-sysv dbus sudo

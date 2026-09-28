@@ -3,14 +3,20 @@
  * from the job queue (docs/design.md §9).
  */
 import { createDb } from "@winston/db/client";
-import { frontTurnJob, provisionVmJob } from "@winston/domain/jobs";
+import {
+  frontTurnJob,
+  provisionVmJob,
+  saveAttachmentJob,
+} from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { Api } from "grammy";
+import { saveAttachmentHandler } from "./attachments.ts";
 import { localBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
 import { dbModelCallSink } from "./model/log.ts";
+import { botApiFiles } from "./telegram/files.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
@@ -29,7 +35,13 @@ const gateway = createModelGateway({
   apiKey: config.OPENROUTER_API_KEY,
   sink: dbModelCallSink(db, logger),
 });
-const telegram = grammySender(new Api(config.TELEGRAM_BOT_TOKEN));
+const telegramApi = new Api(config.TELEGRAM_BOT_TOKEN);
+const telegram = grammySender(telegramApi);
+const vm = gatewayClient({
+  baseUrl: config.GATEWAY_INTERNAL_URL,
+  secret: config.GATEWAY_INTERNAL_SECRET,
+});
+const blobs = localBlobStore(config.BLOB_DIR);
 
 const vmProvider = dockerVmProvider({
   engine: dockerEngine(await dockerSocketPath()),
@@ -42,15 +54,17 @@ const worker = createWorker({
   logger,
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
+    [saveAttachmentJob.type]: saveAttachmentHandler({
+      vm,
+      telegram: botApiFiles(telegramApi, config.TELEGRAM_BOT_TOKEN),
+      blobs,
+    }),
     [frontTurnJob.type]: frontTurnHandler({
       gateway,
       telegram,
-      vm: gatewayClient({
-        baseUrl: config.GATEWAY_INTERNAL_URL,
-        secret: config.GATEWAY_INTERNAL_SECRET,
-      }),
+      vm,
       runTokenSecret: config.RUN_TOKEN_SECRET,
-      blobs: localBlobStore(config.BLOB_DIR),
+      blobs,
       window: {
         maxTokens: config.FRONT_WINDOW_MAX_TOKENS,
         targetTokens: config.FRONT_WINDOW_TARGET_TOKENS,
