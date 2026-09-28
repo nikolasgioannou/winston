@@ -2,7 +2,6 @@
  * Runs one `winston` invocation: finds the command, parses its flags,
  * prints the result or the error, and returns the exit code.
  */
-import packageJson from "../package.json" with { type: "json" };
 import type { ApiClient } from "./client.ts";
 import type { Resource, Verb } from "./commands.ts";
 import { CliError } from "./errors.ts";
@@ -14,6 +13,7 @@ import {
 } from "./flags.ts";
 import { me } from "./resources/me.ts";
 import { suggest } from "./suggest.ts";
+import { version } from "./version.ts";
 
 export const resources: Resource[] = [me];
 
@@ -90,7 +90,7 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
       return 0;
     }
     if (resourceName === "--version") {
-      io.out(packageJson.version);
+      io.out(version);
       return 0;
     }
     const resource = resources.find((r) => r.name === resourceName);

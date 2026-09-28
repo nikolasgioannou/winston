@@ -4,12 +4,12 @@
  * `winstond` user under systemd.
  */
 import { createLogger } from "@winston/shared/logger";
-import packageJson from "../package.json" with { type: "json" };
 import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
 import { helperFiles, runFileHelper } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
+import { version } from "./version.ts";
 
 // Helper mode: winstond re-invokes itself as winston for file operations.
 const [command] = Bun.argv.slice(2);
@@ -24,6 +24,20 @@ if (!gatewayUrl) {
   process.exit(1);
 }
 
+/** The installed CLI's version, reported in hello; null if there's no CLI. */
+async function cliVersion() {
+  try {
+    const proc = Bun.spawn(
+      [process.env.WINSTON_CLI ?? "/usr/local/bin/winston", "--version"],
+      { stdout: "pipe", stderr: "ignore" },
+    );
+    const output = (await new Response(proc.stdout).text()).trim();
+    return (await proc.exited) === 0 && output ? output : null;
+  } catch {
+    return null;
+  }
+}
+
 /** An unset or empty variable counts as absent. */
 const nonEmpty = (value: string | undefined) =>
   value === "" ? undefined : value;
@@ -35,7 +49,7 @@ const daemon = createDaemon({
   executor: createExecutor(),
   files: helperFiles(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
-  versions: { winstond: packageJson.version, cli: null },
+  versions: { winstond: version, cli: await cliVersion() },
   logger,
 });
 daemon.start();

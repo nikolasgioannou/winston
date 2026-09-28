@@ -4,7 +4,9 @@
 # that can read /etc/winstond/token.
 set -euo pipefail
 
-install -o root -g root -m 0755 /tmp/winstond /usr/local/bin/winstond
+# Owned by winstond, so it can replace itself when it self-updates (M4).
+install -d -o winstond -g winstond -m 0755 /usr/local/lib/winstond
+install -o winstond -g winstond -m 0755 /tmp/winstond /usr/local/lib/winstond/winstond
 rm -f /tmp/winstond
 
 # winstond runs the agent's commands as winston, and may do nothing else as
@@ -24,7 +26,7 @@ After=network-online.target
 [Service]
 User=winstond
 Group=winstond
-ExecStart=/usr/local/bin/winstond
+ExecStart=/usr/local/lib/winstond/winstond
 Restart=always
 RestartSec=2
 # /run/winstond holds the CLI's socket (/run/winstond/winstond.sock).
