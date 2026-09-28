@@ -1,6 +1,4 @@
-import type { DbOrTx } from "@winston/db/client";
 import { enqueue } from "@winston/db/queue";
-import { inboundItems } from "@winston/db/schema";
 import { frontTurnJob } from "@winston/domain/jobs";
 import type { BlobStore } from "../blobs.ts";
 import type { ModelGateway } from "../model/gateway.ts";
@@ -9,7 +7,7 @@ import type { Timers } from "../telegram/typing.ts";
 import type { JobHandler } from "../worker.ts";
 import { withFrontTurnLock } from "./lock.ts";
 import type { TelegramSender } from "./reply.ts";
-import { claimableInput, runFrontTurn } from "./turn.ts";
+import { hasClaimableInput, runFrontTurn } from "./turn.ts";
 import type { WindowBudget } from "./window.ts";
 
 /**
@@ -44,20 +42,10 @@ export function frontTurnHandler(deps: {
       );
       return;
     }
-    if (await hasUnconsumedInput(db, userId))
+    if (await hasClaimableInput(db, userId))
       await enqueue(db, frontTurnJob.type, {
         userId,
         dedupeKey: frontTurnJob.dedupeKey(userId),
       });
   };
-}
-
-/** Pending items aren't counted: saving their file queues the turn. */
-async function hasUnconsumedInput(db: DbOrTx, userId: string) {
-  const [item] = await db
-    .select({ id: inboundItems.id })
-    .from(inboundItems)
-    .where(claimableInput(userId))
-    .limit(1);
-  return item !== undefined;
 }

@@ -2,14 +2,15 @@
  * One front-of-house turn (docs/design.md §1, §4, §16): everything the user
  * sent since the last turn becomes one envelope message, the model runs over
  * the conversation one step at a time, and every step is appended to
- * `run_messages`. The final text (the last step's, with no tool calls) is the
- * reply. Calling `no_reply` ends the turn in silence. Text written alongside
- * tool calls is never sent.
+ * `run_messages`. Replies are streamed: whatever the model writes in a step
+ * is sent to the user as soon as the step's model call ends, before its tool
+ * calls run, so messages and actions reach the user in the order they were
+ * written. `end_turn` ends the turn; called without text, it's silence.
  *
  * Steering: input that arrives mid-turn is claimed before the next model
- * call, and a drafted reply is sent only if nothing new arrived while it was
- * written. Otherwise the draft is dropped and the model writes one reply
- * covering everything.
+ * call. A step's text is sent only if nothing new arrived while it was
+ * written. Otherwise it isn't sent, its tool calls don't run, and the model
+ * continues with the new input in view.
  */
 import type { DbOrTx } from "@winston/db/client";
 import {
@@ -31,7 +32,9 @@ import type { Logger } from "@winston/shared/logger";
 import {
   APICallError,
   isStepCount,
+  type LanguageModelCallEndEvent,
   type ModelMessage,
+  type Tool,
   type UserContent,
 } from "ai";
 import {
@@ -62,8 +65,8 @@ import {
 } from "./window.ts";
 import {
   deliverReply,
-  noReplyDefinition,
-  noReplyTool,
+  endTurnDefinition,
+  endTurnTool,
   type TelegramSender,
 } from "./reply.ts";
 
@@ -71,7 +74,7 @@ import {
 export const frontStepBudget = 15;
 
 /**
- * Added once when a turn ends with neither a reply nor `no_reply`. Anthropic's
+ * Added once when a turn ends having sent nothing, without `end_turn`. Anthropic's
  * advice for an empty response is a new user message, not a plain retry.
  */
 export const emptyReplyNudge = "Please continue.";
@@ -89,15 +92,19 @@ export const outageNotice =
 /** Sent, without a model, when both models refused. */
 export const refusalReply = "Sorry, I can't help with that one.";
 
-/** Leads the new input when a drafted reply was dropped for it. */
-export const draftDroppedNote =
-  "Your last reply was not sent: new messages arrived while you wrote it. Reply once, covering everything.";
+/** Leads the new input when a step's message was dropped for it. */
+export const messageDroppedNote =
+  "Your last message was not sent, and the tools you called with it didn't run: new messages arrived while you wrote it.";
+
+/** What a tool call in a dropped step returns instead of running. */
+const notRun =
+  "Not run: new messages arrived before this step's message was sent.";
 
 // Tools in the order the model sees them; the prompt version hashes them in that order.
 const prompt = promptVersion("front-of-house", [
   bashDefinition("front"),
   viewImageDefinition,
-  noReplyDefinition,
+  endTurnDefinition,
 ]);
 const instructions = cacheBreakpoint({
   role: "system" as const,
@@ -151,7 +158,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   const { log, input } = run;
   const runId = log.runId;
   const logger = deps.logger.child({ runId });
-  // Replies aren't streamed, so "typing…" is the only sign of work (§4).
+  // "Typing…" shows work between messages (§4).
   const typing = startTyping(
     () => telegram.sendChatAction(user.chatId, "typing"),
     logger,
@@ -191,6 +198,54 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     run: { runId, userId, kind: "front" },
   });
   const viewImage = viewImageTool({ vm: deps.vm, logger, userId });
+
+  // Streamed replies (§4): a step's text goes out as soon as its model call
+  // ends, before its tools run, unless new input arrived meanwhile. Then the
+  // step is dropped: nothing is sent and its tools return `notRun`.
+  // Mutated from the SDK callback, so kept in an object TypeScript won't narrow.
+  const stream = {
+    sent: 0,
+    dropStep: false,
+    deliveryError: undefined as Error | undefined,
+  };
+  const deliverStepText = async ({
+    content,
+    finishReason,
+  }: LanguageModelCallEndEvent) => {
+    stream.dropStep = false;
+    // A refusal arrives as "other"; its output is never sent.
+    if (finishReason !== "stop" && finishReason !== "tool-calls") return;
+    const text = content
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("")
+      .trim();
+    if (!text) return;
+    if (await hasClaimableInput(db, userId)) {
+      stream.dropStep = true;
+      return;
+    }
+    try {
+      await deliverReply({
+        db,
+        logger,
+        telegram,
+        userId,
+        runId,
+        chatId: user.chatId,
+        text,
+      });
+      stream.sent += 1;
+    } catch (error) {
+      // The SDK swallows callback errors; the loop rethrows this after the step.
+      stream.deliveryError =
+        error instanceof Error ? error : new Error(String(error));
+    }
+  };
+  const tools = {
+    bash: unlessDropped(bash, () => stream.dropStep),
+    view_image: unlessDropped(viewImage, () => stream.dropStep),
+    end_turn: unlessDropped(endTurnTool, () => stream.dropStep),
+  };
   const attempt = async (profile: ModelProfile) => {
     try {
       return await gateway.generate({
@@ -207,8 +262,9 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         stepOffset: steps,
         instructions,
         messages: withRollingBreakpoint(messages),
-        tools: { bash, view_image: viewImage, no_reply: noReplyTool },
+        tools,
         stopWhen: isStepCount(1),
+        onLanguageModelCallEnd: deliverStepText,
         timeout: frontCallTimeoutMs,
       });
     } finally {
@@ -248,11 +304,13 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   };
 
   let nudged = false;
+  let droppedNote: string | undefined;
   let outcome: "reply" | "silent" | "empty" | "refused" | "unfinished" =
     "unfinished";
   try {
     while (steps < frontStepBudget) {
-      if (steps > 0) await steerIn();
+      if (steps > 0) await steerIn(droppedNote);
+      droppedNote = undefined;
       const result = await callModel();
 
       if (result === "refused") {
@@ -279,52 +337,43 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       for (const message of result.responseMessages)
         await log.store(db, await storableMessage(message, deps.blobs));
       messages.push(...result.responseMessages);
+      if (stream.deliveryError) throw stream.deliveryError;
       const step = result.finalStep;
 
-      if (step.toolCalls.some((call) => call.toolName === "no_reply")) {
-        outcome = "silent";
+      if (stream.dropStep) {
+        logger.info(
+          "new input arrived; the step's message wasn't sent and its tools didn't run",
+        );
+        droppedNote = messageDroppedNote;
+        continue;
+      }
+      if (step.toolCalls.some((call) => call.toolName === "end_turn")) {
+        outcome = stream.sent > 0 ? "reply" : "silent";
         break;
       }
-      // Tool calls (beyond no_reply) continue the loop with their results.
+      // Other tool calls continue the loop with their results.
       if (step.toolCalls.length > 0) continue;
-
-      const text = step.text.trim();
-      if (!text) {
-        if (nudged) {
-          outcome = "empty";
-          break;
-        }
-        // A glitch, not silence: silence is always an explicit `no_reply`.
-        logger.warn("turn ended with an empty reply; nudging once");
-        nudged = true;
-        const nudge: ModelMessage = { role: "user", content: emptyReplyNudge };
-        messages.push(nudge);
-        await log.store(db, nudge);
-        continue;
+      // Text with no tool calls was sent and ends the turn, as does an empty
+      // step after earlier messages.
+      if (stream.sent > 0) {
+        outcome = "reply";
+        break;
       }
-
-      // Send only if nothing new arrived while the reply was written.
-      if (await steerIn(draftDroppedNote)) {
-        logger.info("new input arrived; dropping the draft reply");
-        continue;
+      if (nudged) {
+        outcome = "empty";
+        break;
       }
-      await deliverReply({
-        db,
-        logger,
-        telegram,
-        userId,
-        runId,
-        chatId: user.chatId,
-        text,
-      });
-      outcome = "reply";
-      break;
+      // A glitch, not silence: silence is always an explicit `end_turn`.
+      logger.warn("turn ended without sending anything; nudging once");
+      nudged = true;
+      const nudge: ModelMessage = { role: "user", content: emptyReplyNudge };
+      messages.push(nudge);
+      await log.store(db, nudge);
     }
 
     if (outcome === "empty")
       logger.error("turn ended with an empty reply twice; nothing sent");
-    else if (outcome === "unfinished")
-      logger.warn("turn hit the step budget before replying");
+    else if (outcome === "unfinished") logger.warn("turn hit the step budget");
     await finishRun(db, runId, "completed", steps);
     logger.info({ steps, outcome }, "turn completed");
     return runId;
@@ -361,6 +410,29 @@ function withRollingBreakpoint(messages: readonly ModelMessage[]) {
   const last = messages.at(-1);
   if (!last || last.role === "assistant") return [...messages];
   return [...messages.slice(0, -1), cacheBreakpoint(last)];
+}
+
+/**
+ * A tool that returns `notRun` instead of running while `dropped()` is true,
+ * so a dropped step still gets a result for every call.
+ */
+function unlessDropped<T extends Tool>(tool: T, dropped: () => boolean): T {
+  const { execute, toModelOutput } = tool;
+  if (!execute) return tool;
+  const skipped = { notRun } as const;
+  return {
+    ...tool,
+    execute: (input: never, options: never): unknown =>
+      dropped() ? skipped : execute(input, options),
+    toModelOutput: (options: never) =>
+      (options as { output: unknown }).output === skipped
+        ? { type: "text", value: notRun }
+        : toModelOutput
+          ? toModelOutput(options)
+          : typeof (options as { output: unknown }).output === "string"
+            ? { type: "text", value: (options as { output: unknown }).output }
+            : { type: "json", value: (options as { output: unknown }).output },
+  };
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -580,6 +652,16 @@ export function claimableInput(userId: string) {
           and (held.occurred_at, held.created_at) <= (${inboundItems.occurredAt}, ${inboundItems.createdAt}))`,
     ),
   );
+}
+
+/** Whether the user has input a turn could take now. Pending items don't count: saving their file queues a turn. */
+export async function hasClaimableInput(db: DbOrTx, userId: string) {
+  const [item] = await db
+    .select({ id: inboundItems.id })
+    .from(inboundItems)
+    .where(claimableInput(userId))
+    .limit(1);
+  return item !== undefined;
 }
 
 /** The user's claimable inbound items, oldest first, locked for this transaction. */

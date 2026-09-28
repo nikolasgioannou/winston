@@ -12,29 +12,29 @@ import { richMessageLimit, splitText } from "../telegram/split.ts";
 export type { TelegramSender };
 
 const description =
-  "End your turn without messaging the user. Use it when nothing needs saying; any text you wrote is discarded.";
+  "End your turn. Any text you write in the same step is sent first. Call it without writing anything when nothing needs saying.";
 const inputSchema = z.object({});
 
-/** How `no_reply` appears to the model, for the prompt version. */
-export const noReplyDefinition: ToolDefinition = {
-  name: "no_reply",
+/** How `end_turn` appears to the model, for the prompt version. */
+export const endTurnDefinition: ToolDefinition = {
+  name: "end_turn",
   description,
   inputSchema: z.toJSONSchema(inputSchema),
 };
 
 /**
- * Deliberate silence (docs/design.md §4). It has an `execute` so the call and
- * its result are both stored; a call without a result would make the next
- * request invalid. The turn's `stopWhen` ends the loop right after it.
+ * Ends the turn (docs/design.md §4); called without text, it's deliberate
+ * silence. It has an `execute` so the call and its result are both stored; a
+ * call without a result would make the next request invalid.
  */
-export const noReplyTool = tool({
+export const endTurnTool = tool({
   description,
   inputSchema,
-  execute: () => Promise.resolve("Not sent."),
+  execute: () => Promise.resolve("Turn ended."),
 });
 
 /**
- * Sends the turn's reply as a Telegram Rich Message: the model's Markdown,
+ * Sends one of the turn's messages as a Telegram Rich Message: the model's Markdown,
  * with images and HTML neutralized (docs/design.md §4, "Telegram
  * formatting"; `sanitizeRichMarkdown`), split only past Rich
  * Messages' 32,768-character limit. A part Telegram won't take as a Rich

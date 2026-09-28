@@ -17,7 +17,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { keepLineBreaks } from "../telegram/line-breaks.ts";
-import { draftDroppedNote, emptyReplyNudge, runFrontTurn } from "./turn.ts";
+import { emptyReplyNudge, messageDroppedNote, runFrontTurn } from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import { localBlobStore } from "../blobs.ts";
 
@@ -264,7 +264,7 @@ describe("runFrontTurn", () => {
   test("shows typing while working and stops when the turn ends, however it ends", async () => {
     for (const [replies, throws] of [
       [[textReply("Hi.")], false],
-      [[toolCallReply("no_reply", {})], false],
+      [[toolCallReply("end_turn", {})], false],
       [[{ error: { message: "upstream exploded", code: 500 } }], true],
     ] as const) {
       await scenario([[...replies]], async ({ say, turn, typing }) => {
@@ -284,7 +284,7 @@ describe("runFrontTurn", () => {
     });
   });
 
-  test("input arriving while a reply is written drops the draft; one reply covers everything", async () => {
+  test("input arriving while a message is written drops it; the model continues with the new input", async () => {
     await scenario(
       [[textReply("Booked for 7."), textReply("Booked for 8 instead.")]],
       async ({ tx, userId, say, turn, sent, requests }) => {
@@ -296,7 +296,7 @@ describe("runFrontTurn", () => {
         ]);
         const second = JSON.stringify(requests[0]?.[1]?.messages);
         expect(second).toContain("wait, make it 8");
-        expect(second).toContain(draftDroppedNote);
+        expect(second).toContain(messageDroppedNote);
         // The new input was consumed by this turn.
         const items = await tx
           .select()
@@ -326,8 +326,8 @@ describe("runFrontTurn", () => {
         expect(sent.map((message) => message.text)).toEqual(["Got both."]);
         const second = JSON.stringify(requests[0]?.[1]?.messages);
         expect(second).toContain("<text>second</text>");
-        // Not a dropped draft: no note.
-        expect(second).not.toContain(draftDroppedNote);
+        // Nothing was dropped: no note.
+        expect(second).not.toContain(messageDroppedNote);
       },
       {
         onRequest: async (index, say) => {
@@ -355,7 +355,7 @@ describe("runFrontTurn", () => {
 
   test("a reaction reaches the model as a telegram.reaction.added envelope", async () => {
     await scenario(
-      [[toolCallReply("no_reply", {})]],
+      [[toolCallReply("end_turn", {})]],
       async ({ tx, userId, turn, requests }) => {
         await tx.insert(inboundItems).values({
           userId,
@@ -541,9 +541,9 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("no_reply ends the turn silently after one call, discarding any text beside it", async () => {
+  test("end_turn without text ends the turn silently after one call", async () => {
     await scenario(
-      [[toolCallReply("no_reply", {}, "No reply needed.")]],
+      [[toolCallReply("end_turn", {})]],
       async ({ tx, userId, say, turn, sent, requests }) => {
         await say("thanks");
         const runId = await turn();
@@ -567,6 +567,113 @@ describe("runFrontTurn", () => {
           "assistant",
           "tool",
         ]);
+      },
+    );
+  });
+
+  test("end_turn with text sends the text, then ends", async () => {
+    await scenario(
+      [[toolCallReply("end_turn", {}, "Anytime.")]],
+      async ({ say, turn, sent, requests }) => {
+        await say("thanks, that's all");
+        await turn();
+        expect(sent.map((message) => message.text)).toEqual(["Anytime."]);
+        expect(requests[0]).toHaveLength(1);
+      },
+    );
+  });
+
+  test("text beside a tool call is sent before the tool runs, and text after the last call is sent too", async () => {
+    let sentWhenCommandRan = -1;
+    let sentSoFar: Sent[] = [];
+    await scenario(
+      [
+        [
+          toolCallReply("bash", { command: "ls ~" }, "On it."),
+          textReply("Two files: notes.md and todo.md."),
+        ],
+      ],
+      async ({ tx, userId, say, turn, sent }) => {
+        sentSoFar = sent;
+        await say("what's in your home folder?");
+        await turn();
+        expect(sentWhenCommandRan).toBe(1);
+        expect(sent.map((message) => message.text)).toEqual([
+          "On it.",
+          "Two files: notes.md and todo.md.",
+        ]);
+        // Each message is its own record, in order.
+        const rows = await tx
+          .select()
+          .from(outboundMessages)
+          .where(eq(outboundMessages.userId, userId))
+          .orderBy(asc(outboundMessages.id));
+        expect(rows.map((row) => row.text)).toEqual([
+          "On it.",
+          "Two files: notes.md and todo.md.",
+        ]);
+      },
+      {
+        vmAnswer: () => {
+          sentWhenCommandRan = sentSoFar.length;
+          return { stdout: "notes.md\ntodo.md\n" };
+        },
+      },
+    );
+  });
+
+  test("an empty step after messages were sent ends the turn without a nudge", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply(
+            "bash",
+            { command: "df -h" },
+            "Plenty of space: 40 GB free.",
+          ),
+          textReply(""),
+        ],
+      ],
+      async ({ say, turn, sent, requests }) => {
+        await say("disk space?");
+        await turn();
+        expect(sent.map((message) => message.text)).toEqual([
+          "Plenty of space: 40 GB free.",
+        ]);
+        expect(requests[0]).toHaveLength(2);
+        expect(JSON.stringify(requests[0])).not.toContain(emptyReplyNudge);
+      },
+    );
+  });
+
+  test("a step dropped for new input sends nothing and runs none of its tools", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply(
+            "bash",
+            { command: "rm ~/notes.md" },
+            "Deleting it now.",
+          ),
+          textReply("Okay, I've left it."),
+        ],
+      ],
+      async ({ say, turn, sent, requests, commands }) => {
+        await say("delete my notes file");
+        await turn();
+        expect(commands).toEqual([]);
+        expect(sent.map((message) => message.text)).toEqual([
+          "Okay, I've left it.",
+        ]);
+        const second = JSON.stringify(requests[0]?.[1]?.messages);
+        expect(second).toContain("Not run: new messages arrived");
+        expect(second).toContain(messageDroppedNote);
+        expect(second).toContain("wait, don't");
+      },
+      {
+        onRequest: async (index, say) => {
+          if (index === 0) await say("wait, don't");
+        },
       },
     );
   });

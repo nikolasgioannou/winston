@@ -60,7 +60,7 @@ describe("promptHash", () => {
 
 describe("systemPrompts", () => {
   test("the front-of-house prompt is loaded and explains how to stay silent", () => {
-    expect(systemPrompts["front-of-house"]).toContain("no_reply");
+    expect(systemPrompts["front-of-house"]).toContain("end_turn");
   });
 });
 
