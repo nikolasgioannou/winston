@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./config": "./src/config.ts",
+    "./human-time": "./src/human-time.ts",
     "./ids": "./src/ids.ts",
     "./json": "./src/json.ts",
     "./logger": "./src/logger.ts",

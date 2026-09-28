@@ -631,6 +631,11 @@ Same name and meaning everywhere:
 - `--account <alias>`: which connection. Optional if the user has exactly one for that app. Otherwise an error lists the choices.
 - `--limit <n>`, `--cursor <c>`: pagination. The output footer prints the next cursor.
 - `--since <t>`, `--until <t>`: accept ISO-8601 or relative (`2h`, `3d`, `today`, `tomorrow`). Resolved in the user's time zone.
+  - **As built** (`@winston/shared/human-time`, `parseHumanTime(input, { timeZone, direction })`):
+    - **Where it's resolved:** the CLI sends time flags to the backend as raw strings, and the backend resolves them in the user's zone. One source of truth, shared with triggers.
+    - **A strict grammar, not natural language:** ISO-8601 (no offset means the user's zone), durations (`30m`, `2h`, `3d`, `1w`, `in 2h`, `2h ago`), `now`, `today`, `tomorrow`, `yesterday`, and weekdays (`fri`, `next mon`, `last friday`), each optionally with a time (`9am`, `9:30pm`, `15:00`, `noon`, `midnight`), in either order. Anything else is an error listing the accepted forms (exit 1), never a guess. That includes a bare `9`, which could be am or pm.
+    - **Direction:** each flag says whether bare durations and weekdays look back (`--since`) or ahead (`--expires`), and `in …` / `… ago` override it. A weekday never means today.
+    - **Zone math:** native Temporal (Bun 1.4, no dependency). Days and weeks are calendar days, so the wall time is kept across DST. A time the clocks skip or repeat is rejected (`disambiguation: "reject"`) with a hint to add an offset.
 - `--json`: machine-readable output for scripting. The default is agent-readable text.
 - `--dry-run` on every write: prints exactly what _would_ happen (the email that would be sent, the event that would be created) without doing it. It's the natural way to show the user something before a confirm-first action.
 - **Long text arguments** (`--body`, `--note`, `--description`) accept a literal, `-` for stdin, or `@path` for a file. Agents use heredocs instead of fighting shell quoting.
