@@ -17,7 +17,7 @@ blocked_by:
 
 Deleting an account wipes everything: the computer, all data and all tokens (product.md §1, docs/design.md §13 account deletion, §17).
 
-`/profile/delete` explains exactly what will be deleted, requires typing a confirmation, then starts a `delete_user` job and signs the user out. The job:
+A **Delete account** section on `/profile` (not a separate page or sidebar item; the founder's call) explains exactly what will be deleted, requires typing a confirmation in a dialog, then starts a `delete_user` job and signs the user out. The job:
 1. Destroys the VM through the `VmProvider`, including the data volume and any snapshots. The EC2 specifics arrive in M4, and the provider interface should already cover it.
 2. Revokes every connected Google token.
 3. Deletes stored blobs. S3 in production. Locally, whatever stand-in the view-image ticket chose.

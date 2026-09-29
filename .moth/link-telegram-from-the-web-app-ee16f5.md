@@ -19,7 +19,7 @@ The Google-first onboarding flow (product.md §1, Onboarding flow). The user tap
 
 Build:
 - A server function that creates a link token (stores the hash, 15-minute expiry) and returns the deep link. The bot username comes from config: `RunWinstonDevBot` locally, `RunWinstonBot` in production.
-- The `/telegram` page: status (linked as @username, or not linked), a **Connect** button, and a **QR code** for users on desktop. Research a small QR library that renders client-side. Relinking replaces the old link.
+- A **Telegram** section on `/profile` (not its own page; the founder's call): status (linked as @username, or not linked), a **Connect** button, and a **QR code** for users on desktop. Research a small QR library that renders client-side. Relinking replaces the old link.
 - Also surface the same connect action in `/home`'s checklist.
 - In `api`'s Telegram handler: `/start <token>` validates the token (unused, unexpired), links `chat_id` to the user (moving it if that chat was linked elsewhere), marks the token used, and produces the always-delivered `system.onboarding.completed` item, so Winston sends his brief hello through a normal front-of-house turn. A `/start` with a bad or expired token gets a helpful reply pointing back to the site.
 - The web page updates to "linked" without a manual refresh (poll while the page is open).

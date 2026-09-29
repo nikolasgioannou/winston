@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PlaceholderPage } from "../../components/placeholder-page";
 
 // A placeholder until its own ticket.
-export const Route = createFileRoute("/_authed/home")({
-  component: HomePage,
+export const Route = createFileRoute("/_authed/accounts")({
+  component: AccountsPage,
 });
 
-function HomePage() {
-  return <PlaceholderPage title="Home" />;
+function AccountsPage() {
+  return <PlaceholderPage title="Connected accounts" />;
 }

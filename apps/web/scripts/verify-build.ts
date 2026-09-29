@@ -10,9 +10,10 @@ const before = await Bun.file(routeTree).text();
 await $`rm -rf dist`;
 await $`bun --bun vite build`.quiet();
 
-const leaks = await $`grep -rlE "/dev/design|signInFixtures|designPages" dist`
-  .nothrow()
-  .text();
+const leaks =
+  await $`grep -rlE "/dev/design|signInFixtures|appShellFixtures|designPages" dist`
+    .nothrow()
+    .text();
 if (leaks.trim()) {
   console.error(`The production build includes the dev design view:\n${leaks}`);
   process.exit(1);

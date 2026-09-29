@@ -1,7 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { getSessionUser } from "../server/session-functions";
 
-// A placeholder until the real pages arrive with the design system.
+// The public homepage (a placeholder until its own ticket). Signed-in
+// visitors go straight to the app.
 export const Route = createFileRoute("/")({
+  beforeLoad: async () => {
+    if (await getSessionUser()) throw redirect({ to: "/home" });
+  },
   component: Home,
 });
 

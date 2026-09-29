@@ -12,7 +12,7 @@ blocked_by:
   - "5e3c6d"
 ---
 
-`/profile` shows and edits the user's first and last name, shows their email (read-only), and shows and edits their time zone (docs/design.md §20).
+`/profile` shows and edits the user's first and last name, shows their email (read-only), and shows and edits their time zone (docs/design.md §20). It's also where the account actions live (the founder moved them out of the sidebar): the **Telegram** link section (from the Telegram-linking ticket), **Sign out** (already on the placeholder page) and a **Delete account** section that opens the deletion flow from the account-deletion ticket.
 
 Time zone behaviour matters, because it determines how every timestamp is rendered and when schedules fire (§4 envelope, §11):
 - Captured from the browser at sign-up (the sign-in ticket).
