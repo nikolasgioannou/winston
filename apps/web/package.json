@@ -6,7 +6,8 @@
   "scripts": {
     "build": "bun --bun vite build",
     "dev": "bun --env-file=../../.env.local --bun vite dev",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "verify:build": "bun scripts/verify-build.ts"
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.40",

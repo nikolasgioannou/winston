@@ -67,7 +67,12 @@ export function Select<Value extends string>({
             option lands exactly where the trigger's text was, and its
             checkmark where the chevron was. It fades in but closes at once,
             since the trigger's text changes as a choice is made. */}
-        <BaseSelect.Positioner className="z-50 outline-none select-none">
+        <BaseSelect.Positioner
+          className="z-50 outline-none select-none"
+          // Used only when Base UI falls back to opening below (the trigger is
+          // near the window's edge, or touch opened it): a gap like other popovers.
+          sideOffset={4}
+        >
           <BaseSelect.Popup className="min-w-[calc(var(--anchor-width)+6px)] rounded-[10px] bg-surface-raised p-1 text-fg shadow-menu transition-opacity duration-150 outline-none data-ending-style:transition-none data-starting-style:opacity-0">
             <BaseSelect.List className="max-h-(--available-height) overflow-y-auto">
               {options.map((option) => (

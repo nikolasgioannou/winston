@@ -9,3 +9,5 @@ image/build/
 .data/
 # The site's build output (bun run --filter @winston/web build).
 apps/web/dist/
+# The route tree production builds generate without the dev design view.
+apps/web/src/routeTree.prod.gen.ts

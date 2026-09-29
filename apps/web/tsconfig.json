@@ -8,5 +8,5 @@
     // code into client bundles, so the site turns it off.
     "verbatimModuleSyntax": false
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "scripts", "vite.config.ts"]
 }

@@ -16,6 +16,8 @@ import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthGoogleStartRouteImport } from './routes/auth/google/start'
+import { Route as DevDesignIndexRouteImport } from './routes/dev/design/index'
+import { Route as DevDesignFrameRouteImport } from './routes/dev/design/frame'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -51,6 +53,16 @@ const AuthGoogleStartRoute = AuthGoogleStartRouteImport.update({
   path: '/auth/google/start',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevDesignIndexRoute = DevDesignIndexRouteImport.update({
+  id: '/dev/design/',
+  path: '/dev/design/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevDesignFrameRoute = DevDesignFrameRouteImport.update({
+  id: '/dev/design/frame',
+  path: '/dev/design/frame',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +71,8 @@ export interface FileRoutesByFullPath {
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
+  '/dev/design/frame': typeof DevDesignFrameRoute
+  '/dev/design/': typeof DevDesignIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -67,6 +81,8 @@ export interface FileRoutesByTo {
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
+  '/dev/design/frame': typeof DevDesignFrameRoute
+  '/dev/design': typeof DevDesignIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,6 +93,8 @@ export interface FileRoutesById {
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
+  '/dev/design/frame': typeof DevDesignFrameRoute
+  '/dev/design/': typeof DevDesignIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -87,6 +105,8 @@ export interface FileRouteTypes {
     | '/auth/sign-out'
     | '/auth/google/callback'
     | '/auth/google/start'
+    | '/dev/design/frame'
+    | '/dev/design/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -95,6 +115,8 @@ export interface FileRouteTypes {
     | '/auth/sign-out'
     | '/auth/google/callback'
     | '/auth/google/start'
+    | '/dev/design/frame'
+    | '/dev/design'
   id:
     | '__root__'
     | '/'
@@ -104,6 +126,8 @@ export interface FileRouteTypes {
     | '/auth/sign-out'
     | '/auth/google/callback'
     | '/auth/google/start'
+    | '/dev/design/frame'
+    | '/dev/design/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -113,6 +137,8 @@ export interface RootRouteChildren {
   AuthSignOutRoute: typeof AuthSignOutRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
   AuthGoogleStartRoute: typeof AuthGoogleStartRoute
+  DevDesignFrameRoute: typeof DevDesignFrameRoute
+  DevDesignIndexRoute: typeof DevDesignIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -166,6 +192,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleStartRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev/design/': {
+      id: '/dev/design/'
+      path: '/dev/design'
+      fullPath: '/dev/design/'
+      preLoaderRoute: typeof DevDesignIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/design/frame': {
+      id: '/dev/design/frame'
+      path: '/dev/design/frame'
+      fullPath: '/dev/design/frame'
+      preLoaderRoute: typeof DevDesignFrameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -187,6 +227,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignOutRoute: AuthSignOutRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
   AuthGoogleStartRoute: AuthGoogleStartRoute,
+  DevDesignFrameRoute: DevDesignFrameRoute,
+  DevDesignIndexRoute: DevDesignIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

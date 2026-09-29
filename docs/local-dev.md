@@ -37,6 +37,8 @@ For a shell inside the VM as `winston`:
 bun run vm:shell
 ```
 
+While working on the site, http://localhost:3002/dev/design shows every page in every state, at desktop or mobile width, in light or dark. It exists only in development.
+
 Logs are human-readable in `bun dev` and in a terminal, and JSON lines otherwise. Set `LOG_PRETTY` in `.env.local` to force one or the other.
 
 ## Webhook tunnel

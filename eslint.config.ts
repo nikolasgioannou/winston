@@ -8,7 +8,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   // TanStack Router generates this.
-  globalIgnores(["**/routeTree.gen.ts", "apps/web/dist/"]),
+  globalIgnores(["**/routeTree*.gen.ts", "apps/web/dist/"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -39,7 +39,9 @@ export default defineConfig(
     ],
     settings: {
       "better-tailwindcss": {
-        cwd: "./apps/web",
+        // Anchored to this file, so it works from any working directory
+        // (editors may run ESLint from the file's folder).
+        cwd: `${import.meta.dirname}/apps/web`,
         entryPoint: "src/styles/app.css",
         // Lets it turn pixel values into the spacing scale (h-[30px] → h-7.5).
         rootFontSize: 16,
