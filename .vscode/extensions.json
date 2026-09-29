@@ -1,0 +1,14 @@
+{
+  // Extensions for the tools this repo uses. VS Code offers to install them
+  // when the folder opens. See docs/local-dev.md.
+  "recommendations": [
+    // Lints with the repo's ESLint and eslint.config.ts.
+    "dbaeumer.vscode-eslint",
+    // Formats with the repo's Prettier, its plugins and .prettierignore.
+    "esbenp.prettier-vscode",
+    // Tailwind class completion and hovers in apps/web.
+    "bradlc.vscode-tailwindcss",
+    // Syntax highlighting for the Packer template in image/ (packer fmt formats it).
+    "hashicorp.hcl"
+  ]
+}

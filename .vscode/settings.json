@@ -1,0 +1,23 @@
+{
+  // Project settings for the repo's tools; personal preferences (theme, font,
+  // autosave) belong in your user settings. See docs/local-dev.md.
+
+  // Use the repo's TypeScript, not the one bundled with VS Code.
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+
+  // Prettier formats on save; ESLint fixes apply on an explicit save.
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+
+  // Tailwind v4: the stylesheet is the config. Matches prettier.config.ts.
+  "files.associations": { "*.css": "tailwindcss" },
+  "tailwindCSS.experimental.configFile": "apps/web/src/styles/app.css",
+  "tailwindCSS.classFunctions": ["cn", "clsx", "cva"],
+
+  // TanStack Router generates the route tree; its recommended settings.
+  "files.readonlyInclude": { "**/routeTree.gen.ts": true },
+  "files.watcherExclude": { "**/routeTree.gen.ts": true },
+  "search.exclude": { "**/routeTree.gen.ts": true }
+}
