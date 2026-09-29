@@ -1,0 +1,239 @@
+/*
+ * Winston's design tokens (docs/design.md §9): Notion's visual language,
+ * captured from app.notion.com on 2026-09-28.
+ *
+ * Every color is declared once as light-dark(light, dark). The browser picks
+ * by color-scheme: the system's, unless <html data-theme="light|dark">
+ * chooses. Shadows change shape between themes, so they switch in blocks.
+ * The inline theme block below maps them to Tailwind utilities (bg-surface,
+ * text-fg-muted, shadow-menu, ...), so components rarely need `dark:`.
+ */
+
+@source "./";
+
+:root {
+  color-scheme: light dark;
+
+  /* Text */
+  --w-fg: light-dark(#2c2c2b, #f0efed);
+  --w-fg-secondary: light-dark(#5f5e59, #bcbab6);
+  --w-fg-muted: light-dark(#7d7a75, #ada9a3);
+  --w-fg-subtle: light-dark(#a19e99, #7d7a75);
+  --w-fg-disabled: light-dark(#bcbab6, #5f5e59);
+
+  /* Surfaces */
+  --w-surface: light-dark(#fff, #191919);
+  --w-surface-sunken: light-dark(#f9f8f7, #202020);
+  --w-surface-raised: light-dark(#fff, #252525);
+  --w-surface-strong: light-dark(#f0efed, #383836);
+
+  /* Translucent washes, layered over any surface */
+  --w-hover: light-dark(rgba(33, 27, 23, 0.05), rgba(255, 255, 255, 0.055));
+  --w-pressed: light-dark(rgba(55, 53, 47, 0.16), rgba(255, 255, 255, 0.03));
+  --w-field: light-dark(rgba(66, 35, 3, 0.03), rgba(252, 252, 252, 0.03));
+  --w-backdrop: light-dark(rgba(15, 15, 15, 0.6), rgba(15, 15, 15, 0.8));
+
+  /* Borders */
+  --w-border: light-dark(rgba(28, 19, 1, 0.11), rgba(255, 255, 235, 0.1));
+  --w-border-subtle: light-dark(
+    rgba(42, 28, 0, 0.07),
+    rgba(255, 255, 243, 0.082)
+  );
+  --w-border-strong: light-dark(
+    rgba(27, 21, 0, 0.19),
+    rgba(255, 252, 235, 0.306)
+  );
+
+  /* The sidebar's right edge */
+  --w-sidebar-edge: light-dark(#f0efed, #2c2c2b);
+  /* The resize line over that edge: solid, measured from Notion (dark provisional) */
+  --w-sidebar-resize: light-dark(#e1dfdc, #383836);
+
+  /* Icons */
+  --w-icon: light-dark(#8e8b86, #ada9a3);
+  --w-icon-strong: light-dark(#383836, #e6e5e3);
+
+  /* Accent: Notion blue, the same in both themes */
+  --w-accent: #2783de;
+  --w-accent-hover: #0077d4;
+  --w-accent-pressed: #006bc7;
+  --w-on-accent: #f3f9fd;
+  --w-focus: #2383e2;
+
+  /* Inverse: a dark surface with light text, the same in both themes (toasts) */
+  --w-inverse-surface: #2c2c2b;
+  --w-inverse-fg: #f0efed;
+  --w-inverse-fg-muted: #ada9a3;
+
+  /* The plain button */
+  --w-button: light-dark(#fff, #252525);
+  --w-button-hover: light-dark(#efefee, #2f2f2f);
+  --w-button-pressed: light-dark(#dfdfde, #252525);
+
+  /* Switch track when off */
+  --w-switch-off: light-dark(
+    rgba(135, 131, 120, 0.3),
+    rgba(120, 129, 135, 0.3)
+  );
+
+  /* Status: text on its background, plus a stronger dot color */
+  --w-ok-fg: light-dark(#2a533c, #e8f1ec);
+  --w-ok-bg: light-dark(#e8f1ec, #263d30);
+  --w-ok-dot: light-dark(#46a171, #8bb79d);
+  --w-attention-fg: light-dark(#655121, #f9f3dc);
+  --w-attention-bg: light-dark(#f9f3dc, #504425);
+  --w-attention-dot: light-dark(#d8a32f, #d8c283);
+  --w-error-fg: light-dark(#6d3531, #fce9e7);
+  --w-error-bg: light-dark(#fce9e7, #502c29);
+  --w-error-dot: light-dark(#e56458, #d0988d);
+  /* Red text (danger buttons, field errors): readable on both themes */
+  --w-error-text: light-dark(#cf5148, #e56458);
+  --w-error-focus: #cd3c3a;
+  --w-pending-fg: light-dark(#264a72, #e5f2fc);
+  --w-pending-bg: light-dark(#e5f2fc, #233850);
+  --w-pending-dot: light-dark(#2783de, #83abe1);
+  --w-neutral-fg: light-dark(#494846, #f0efed);
+  --w-neutral-bg: light-dark(#f0efed, #383836);
+  --w-neutral-dot: light-dark(#8e8b86, #ada9a3);
+
+  /* Shadows (each includes a hairline ring) */
+  --w-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(42, 28, 0, 0.07);
+  --w-shadow-md:
+    0 8px 12px rgba(25, 25, 25, 0.027), 0 2px 6px rgba(25, 25, 25, 0.027),
+    0 0 0 1px rgba(42, 28, 0, 0.07);
+  --w-shadow-menu:
+    0 20px 24px rgba(25, 25, 25, 0.05), 0 5px 8px rgba(25, 25, 25, 0.027),
+    0 0 0 1px rgba(42, 28, 0, 0.07);
+  --w-shadow-dialog:
+    0 24px 48px rgba(25, 25, 25, 0.24), 0 4px 12px rgba(25, 25, 25, 0.14),
+    0 0 0 1px rgba(42, 28, 0, 0.07);
+  --w-shadow-button:
+    inset 0 0 0 1px rgba(15, 15, 15, 0.1), 0 1px 2px rgba(15, 15, 15, 0.1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Dark shadows: for the system preference, or an explicit choice. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --w-shadow-sm: 0 0 0 1px #383836, 0 2px 4px rgba(25, 25, 25, 0.08);
+    --w-shadow-md: 0 0 0 1px #383836, 0 4px 12px -2px rgba(25, 25, 25, 0.08);
+    --w-shadow-menu:
+      0 0 0 1px #383836, 0 14px 28px -6px rgba(25, 25, 25, 0.2),
+      0 2px 4px -1px rgba(25, 25, 25, 0.118);
+    --w-shadow-dialog:
+      0 0 0 1px #383836, 0 24px 48px rgba(25, 25, 25, 0.64),
+      0 4px 12px rgba(25, 25, 25, 0.56);
+    --w-shadow-button: inset 0 0 0 1px rgba(255, 255, 255, 0.094);
+  }
+}
+
+:root[data-theme="dark"] {
+  --w-shadow-sm: 0 0 0 1px #383836, 0 2px 4px rgba(25, 25, 25, 0.08);
+  --w-shadow-md: 0 0 0 1px #383836, 0 4px 12px -2px rgba(25, 25, 25, 0.08);
+  --w-shadow-menu:
+    0 0 0 1px #383836, 0 14px 28px -6px rgba(25, 25, 25, 0.2),
+    0 2px 4px -1px rgba(25, 25, 25, 0.118);
+  --w-shadow-dialog:
+    0 0 0 1px #383836, 0 24px 48px rgba(25, 25, 25, 0.64),
+    0 4px 12px rgba(25, 25, 25, 0.56);
+  --w-shadow-button: inset 0 0 0 1px rgba(255, 255, 255, 0.094);
+}
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, -apple-system, "system-ui", "Segoe UI Variable Display",
+    "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif,
+    "Segoe UI Emoji", "Segoe UI Symbol";
+
+  --color-fg: var(--w-fg);
+  --color-fg-secondary: var(--w-fg-secondary);
+  --color-fg-muted: var(--w-fg-muted);
+  --color-fg-subtle: var(--w-fg-subtle);
+  --color-fg-disabled: var(--w-fg-disabled);
+  --color-surface: var(--w-surface);
+  --color-surface-sunken: var(--w-surface-sunken);
+  --color-surface-raised: var(--w-surface-raised);
+  --color-surface-strong: var(--w-surface-strong);
+  --color-hover: var(--w-hover);
+  --color-pressed: var(--w-pressed);
+  --color-field: var(--w-field);
+  --color-backdrop: var(--w-backdrop);
+  --color-border: var(--w-border);
+  --color-border-subtle: var(--w-border-subtle);
+  --color-border-strong: var(--w-border-strong);
+  --color-sidebar-edge: var(--w-sidebar-edge);
+  --color-sidebar-resize: var(--w-sidebar-resize);
+  --color-icon: var(--w-icon);
+  --color-icon-strong: var(--w-icon-strong);
+  --color-accent: var(--w-accent);
+  --color-accent-hover: var(--w-accent-hover);
+  --color-accent-pressed: var(--w-accent-pressed);
+  --color-on-accent: var(--w-on-accent);
+  --color-focus: var(--w-focus);
+  --color-inverse-surface: var(--w-inverse-surface);
+  --color-inverse-fg: var(--w-inverse-fg);
+  --color-inverse-fg-muted: var(--w-inverse-fg-muted);
+  --color-button: var(--w-button);
+  --color-button-hover: var(--w-button-hover);
+  --color-button-pressed: var(--w-button-pressed);
+  --color-switch-off: var(--w-switch-off);
+  --color-ok: var(--w-ok-fg);
+  --color-ok-bg: var(--w-ok-bg);
+  --color-ok-dot: var(--w-ok-dot);
+  --color-attention: var(--w-attention-fg);
+  --color-attention-bg: var(--w-attention-bg);
+  --color-attention-dot: var(--w-attention-dot);
+  --color-error: var(--w-error-fg);
+  --color-error-bg: var(--w-error-bg);
+  --color-error-dot: var(--w-error-dot);
+  --color-error-text: var(--w-error-text);
+  --color-error-focus: var(--w-error-focus);
+  --color-pending: var(--w-pending-fg);
+  --color-pending-bg: var(--w-pending-bg);
+  --color-pending-dot: var(--w-pending-dot);
+  --color-neutral: var(--w-neutral-fg);
+  --color-neutral-bg: var(--w-neutral-bg);
+  --color-neutral-dot: var(--w-neutral-dot);
+
+  --shadow-sm: var(--w-shadow-sm);
+  --shadow-md: var(--w-shadow-md);
+  --shadow-menu: var(--w-shadow-menu);
+  --shadow-dialog: var(--w-shadow-dialog);
+  --shadow-button: var(--w-shadow-button);
+}
+
+/* Notion's type sizes beyond Tailwind's defaults (text-sm is 14/20, text-xs 12/16). */
+@theme {
+  --text-control: 14px;
+  --text-control--line-height: 16.8px;
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-title: 26px;
+  --text-title--line-height: 32px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--w-fg);
+    background: var(--w-surface);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Base UI: portals render above the app, and iOS Safari backdrops cover after scrolling. */
+  body {
+    position: relative;
+  }
+
+  #root,
+  body > div:first-child {
+    isolation: isolate;
+  }
+}

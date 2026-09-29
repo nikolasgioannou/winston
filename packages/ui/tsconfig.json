@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // Matches apps/web, which turns it off for TanStack Start.
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src"]
+}

@@ -28,3 +28,5 @@ Build with `packages/ui` primitives, adding to the design system where needed:
 - Placeholder content for routes that don't exist yet, so navigation works end to end.
 
 Add the shell's states to the dev design view: desktop, mobile closed, mobile drawer open, long names. Check it on a real phone-sized viewport.
+
+Persist the sidebar's width (the `Sidebar` component's `defaultWidth` and `onWidthChange` from `packages/ui`) in a cookie, not local storage, so the server renders the saved width and the sidebar doesn't jump after the page loads. Same approach as the light/dark theme choice.

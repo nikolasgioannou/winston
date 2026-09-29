@@ -28,19 +28,21 @@ export default defineConfig(
       },
     },
   },
-  // The site: React hooks (with the React Compiler rules), TanStack Router,
-  // and Tailwind class checks against its stylesheet (docs/design.md §8b).
+  // The site and its design system: React hooks (with the React Compiler
+  // rules) and Tailwind class checks against the site's stylesheet, which
+  // imports the design system's tokens (docs/design.md §8b).
   {
-    files: ["apps/web/**/*.{ts,tsx}"],
+    files: ["apps/web/**/*.{ts,tsx}", "packages/ui/**/*.{ts,tsx}"],
     extends: [
       reactHooks.configs.flat.recommended,
-      tanstackRouter.configs["flat/recommended"],
       betterTailwind.configs["recommended-error"],
     ],
     settings: {
       "better-tailwindcss": {
         cwd: "./apps/web",
         entryPoint: "src/styles/app.css",
+        // Lets it turn pixel values into the spacing scale (h-[30px] → h-7.5).
+        rootFontSize: 16,
       },
     },
     rules: {
@@ -50,6 +52,10 @@ export default defineConfig(
       "better-tailwindcss/enforce-consistent-line-wrapping": "off",
       "better-tailwindcss/no-unnecessary-whitespace": "off",
     },
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    extends: [tanstackRouter.configs["flat/recommended"]],
   },
   // Last: turns off rules that overlap with Prettier's formatting.
   prettier,
