@@ -1,3 +1,4 @@
+export { GoogleIcon } from "./brand-icons";
 export { Button, type ButtonProps } from "./button";
 export { Callout } from "./callout";
 export { Card } from "./card";

@@ -56,6 +56,21 @@ export default defineConfig(
   {
     files: ["apps/web/**/*.{ts,tsx}"],
     extends: [tanstackRouter.configs["flat/recommended"]],
+    rules: {
+      // TanStack Router's guards throw its redirect() value, which isn't an Error.
+      "@typescript-eslint/only-throw-error": [
+        "error",
+        {
+          allow: [
+            {
+              from: "package",
+              package: "@tanstack/router-core",
+              name: "Redirect",
+            },
+          ],
+        },
+      ],
+    },
   },
   // Last: turns off rules that overlap with Prettier's formatting.
   prettier,

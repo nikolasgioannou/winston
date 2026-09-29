@@ -6,6 +6,11 @@ export const users = snakeCase.table("users", {
     .primaryKey()
     .$default(() => newId("user")),
   email: text().notNull().unique(),
+  /**
+   * Google's stable account id (the ID token's `sub`). Emails can be
+   * reassigned; this can't. Set at first sign-in.
+   */
+  googleSub: text().unique(),
   firstName: text().notNull(),
   lastName: text().notNull(),
   /** IANA time zone, e.g. `America/New_York`. */

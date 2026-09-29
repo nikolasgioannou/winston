@@ -80,9 +80,13 @@
       "dependencies": {
         "@tanstack/react-router": "1.170.40",
         "@tanstack/react-start": "1.168.59",
+        "@winston/db": "workspace:*",
+        "@winston/shared": "workspace:*",
         "@winston/ui": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
         "react": "19.3.0",
         "react-dom": "19.3.0",
+        "zod": "4.6.5",
       },
       "devDependencies": {
         "@tailwindcss/vite": "4.3.3",
