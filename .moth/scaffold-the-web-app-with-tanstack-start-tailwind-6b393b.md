@@ -1,14 +1,14 @@
 ---
 id: "6b393b"
 title: Scaffold the web app with TanStack Start, Tailwind and its lint setup
-status: todo
+status: done
 priority: none
 labels:
   - m3
   - tooling
   - web
 created_at: 2026-09-27T05:34:40.281Z
-updated_at: 2026-09-27T05:34:40.329Z
+updated_at: 2026-09-29T00:40:46.236Z
 blocked_by:
   - "51d785"
   - "6bac51"
@@ -23,3 +23,10 @@ blocked_by:
 Deliver a running app with one placeholder route. Add `web` to `bun dev`. Confirm lint catches, for example, `mx-2 my-2` and `p-2 p-4`, and that Prettier sorts classes, so the pre-commit hook enforces all of it.
 
 No real pages yet. The design system comes first, in the next ticket.
+
+## Outcome
+
+- `apps/web` (`@winston/web`): TanStack Start 1.168 / Router 1.170 (stable), React 19.3, Vite 8, Tailwind 4.3 via `@tailwindcss/vite`, all pinned; hand-written files (`vite.config.ts` on port 3002, `router.tsx`, `routes/__root.tsx`, a placeholder `routes/index.tsx`, `styles/app.css`); `routeTree.gen.ts` committed. `verbatimModuleSyntax` is off for the site, per Start's docs. `vite build` works; the production server (Nitro v3 is still beta vs a `Bun.serve` script) is decided with the containers in M4.
+- `bun dev` runs the site as `web`.
+- Prettier: `prettier-plugin-tailwindcss` last, with `tailwindStylesheet` and `cn`/`clsx`/`cva`. ESLint: TSX included; for `apps/web`, react-hooks `recommended`, TanStack Router `flat/recommended`, better-tailwindcss `recommended-error` plus `enforce-shorthand-classes`, with class order, line wrapping and whitespace off. `packages/ui`'s block comes with the design system.
+- Checked: `mx-2 my-2`, `p-2 p-4` and an unknown class fail lint; Prettier sorted `text-sm flex p-2 bg-red-500` to `flex bg-red-500 p-2 text-sm`; the page renders server-side with Tailwind's classes compiled.

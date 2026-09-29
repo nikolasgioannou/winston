@@ -30,6 +30,8 @@ const services: Service[] = [
   { name: "api", cwd: "apps/api", cmd: watch("src/main.ts") },
   { name: "agents", cwd: "apps/agents", cmd: watch("src/main.ts") },
   { name: "gateway", cwd: "apps/gateway", cmd: watch("src/main.ts") },
+  // Vite's dev server reloads the site itself (http://localhost:3002).
+  { name: "web", cwd: "apps/web", cmd: ["bun", "--bun", "vite", "dev"] },
   // Checks the seeded user's VM, provisions or replaces it as needed, and reports it until it's ready.
   {
     name: "vm",

@@ -7,3 +7,5 @@ node_modules
 image/build/
 # Local blob storage (images from tool results; S3 in production).
 .data/
+# The site's build output (bun run --filter @winston/web build).
+apps/web/dist/

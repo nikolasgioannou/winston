@@ -13,7 +13,7 @@
 bun dev
 ```
 
-`bun dev` starts Postgres and applies migrations, then runs `api`, `agents`, `gateway` and the tunnel together, with each line of output prefixed by its service. `api` and `agents` restart when any file they import changes, including shared packages. Ctrl-C stops everything, waiting for in-flight work like a deploy would, and a second Ctrl-C forces it. If the tunnel isn't set up, it reports that and the other services keep running.
+`bun dev` starts Postgres and applies migrations, then runs `api`, `agents`, `gateway`, the site (`web`, at http://localhost:3002) and the tunnel together, with each line of output prefixed by its service. `api` and `agents` restart when any file they import changes, including shared packages. Ctrl-C stops everything, waiting for in-flight work like a deploy would, and a second Ctrl-C forces it. If the tunnel isn't set up, it reports that and the other services keep running.
 
 `bun dev` also checks your computer, the seeded user's local VM (a Docker container). It provisions it if there isn't one, replaces it if its container is gone, and prints `vm_… ready` with the `winstond` and CLI versions once it connects. If the image is missing or older than the code baked into it, it says so; rebuild it with:
 

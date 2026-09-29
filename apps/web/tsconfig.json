@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun", "vite/client"],
+    "jsx": "react-jsx",
+    // TanStack Start's docs warn that verbatimModuleSyntax can leak server
+    // code into client bundles, so the site turns it off.
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src", "vite.config.ts"]
+}

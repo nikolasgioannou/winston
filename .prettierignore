@@ -2,3 +2,5 @@
 .moth/
 # drizzle-kit writes these; reformatting them would fight its output.
 packages/db/migrations/
+# TanStack Router generates the route tree.
+**/routeTree.gen.ts
