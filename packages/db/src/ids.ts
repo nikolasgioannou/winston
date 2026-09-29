@@ -11,6 +11,7 @@ export const idPrefixes = {
   historyItem: "hist",
   vm: "vm",
   file: "file",
+  webSession: "ses",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;

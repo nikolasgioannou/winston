@@ -588,6 +588,8 @@ Thin vertical slices. Each milestone adds capabilities to something you can alre
     - **Accessibility** comes from Base UI (focus trapping, keyboard navigation, ARIA, labels through `Field`). Focus rings follow Notion's: a 1px blue ring on inputs and selects, a gapped ring on primary buttons and switches.
   - **Dev design view** (`/dev/design`, dev-only): every page in every state at desktop and mobile widths. Built right after the first page and also iterated with the founder (§20).
   - **Auth:** Sign in with Google → secure HTTP-only session cookie, with sessions in Postgres. No third-party auth provider.
+    - **Sessions as built** (`@winston/db/web-sessions`): `createSession` returns a fresh `generateToken()` once, for the cookie, and stores its SHA-256; `findSession` looks a session up by the hash of the cookie's token and ignores expired ones; `deleteSession` signs out. Sessions last 30 days. Starting a session deletes expired ones, so no scheduled cleanup is needed yet. Lookups go by hash, so the raw token is never stored or compared.
+    - **Telegram link tokens as built** (`@winston/db/telegram-link-tokens`): `issueLinkToken` returns a 43-character base64url token, checked against Telegram's deep-link payload rule (at most 64 of `[A-Za-z0-9_-]`, `isLinkTokenFormat`), and stores its hash with a 15-minute expiry. `consumeLinkToken` marks it used in one conditional `UPDATE … WHERE used_at IS NULL AND expires_at > now`, so it links at most once, even when two requests race. Issuing a token deletes expired ones.
   - **Public pages Google requires for the OAuth consent screen** (even in testing mode): a homepage at `runwinston.com`, `/privacy` and `/terms`. These are simple static routes in the Start app, and `runwinston.com` must be verified in Google Search Console.
   - **Handoff page** (`/t/<token>`) is a Start route that renders a canvas and opens a websocket to `gateway` for screencast frames and input. Start itself doesn't need websocket support.
   - The `api` service (Hono on Bun) keeps the public machine-facing endpoints: Telegram webhook, Gmail/Calendar push, OAuth callbacks. The CLI's API lives behind `gateway` (§15).
@@ -931,13 +933,13 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 **Identity & access**
 
-| Table                  | Key columns                                                                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`                | `id` (`usr_`), `email` (unique), `first_name`, `last_name` (from Google's `given_name`/`family_name` at signup, editable), `timezone` (IANA), `created_at` |
-| `allowed_emails`       | `email` (PK), `added_at`                                                                                                                                   |
-| `web_sessions`         | `id`, `user_id`, `token_hash`, `expires_at`, `created_at`                                                                                                  |
-| `telegram_links`       | `user_id` (PK), `chat_id` (unique), `telegram_user_id`, `username`, `linked_at`                                                                            |
-| `telegram_link_tokens` | `token_hash` (PK), `user_id`, `expires_at`, `used_at`                                                                                                      |
+| Table                  | Key columns                                                                                                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`                | `id` (`usr_`), `email` (unique), `first_name`, `last_name` (from Google's `given_name`/`family_name` at signup, editable), `timezone` (IANA), `created_at`                                                  |
+| `allowed_emails`       | `email` (PK), `added_at`                                                                                                                                                                                    |
+| `web_sessions`         | `id` (`ses_`), `user_id`, `token_hash` (unique; the raw token lives only in the HTTP-only cookie), `expires_at` (30 days after sign-in), `created_at`. Indexed by `expires_at` for cleanup and by `user_id` |
+| `telegram_links`       | `user_id` (PK), `chat_id` (unique), `telegram_user_id`, `username`, `linked_at`                                                                                                                             |
+| `telegram_link_tokens` | `token_hash` (PK), `user_id`, `expires_at` (15 minutes after issue), `used_at`                                                                                                                              |
 
 **VMs & connections**
 

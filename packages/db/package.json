@@ -9,7 +9,9 @@
     "./queue": "./src/queue.ts",
     "./schema": "./src/schema/index.ts",
     "./vm-state": "./src/vm-state.ts",
-    "./vms": "./src/vms.ts"
+    "./vms": "./src/vms.ts",
+    "./telegram-link-tokens": "./src/telegram-link-tokens.ts",
+    "./web-sessions": "./src/web-sessions.ts"
   },
   "scripts": {
     "db:generate": "bun --env-file=../../.env.local --bun drizzle-kit generate",
