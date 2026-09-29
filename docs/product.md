@@ -120,5 +120,5 @@ Decided _not_ to build:
 
 - Does Chrome with several agent windows fit comfortably in a 4 GB `t3a.medium`? Measure before choosing the default size.
 - Jev access: join TypeSafe's waitlist. The browser loop must work without it.
-- Will the founder's work (Workspace) account allow connecting an unverified app?
+- ~~Will the founder's work (Workspace) account allow connecting an unverified app?~~ Yes for `ni@nikolas.ai` (checked 2026-09-28; docs/runbooks/google-cloud.md).
 - Mobile quality of the handoff live view: test on iPhone and Android.
