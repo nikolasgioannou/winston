@@ -57,17 +57,23 @@ async function findOrCreateUser(
   if (!allowed) return { outcome: "problem", problem: "not_allowlisted" };
 
   const [bySub] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, deleting: users.deletionRequestedAt })
     .from(users)
     .where(eq(users.googleSub, claims.sub));
+  // An account being deleted is gone as far as signing in goes.
+  if (bySub?.deleting) return { outcome: "problem", problem: "oauth" };
   if (bySub) return { outcome: "signed_in", userId: bySub.id, created: false };
 
   const [byEmail] = await db
-    .select({ id: users.id, googleSub: users.googleSub })
+    .select({
+      id: users.id,
+      googleSub: users.googleSub,
+      deleting: users.deletionRequestedAt,
+    })
     .from(users)
     .where(eq(sql`lower(${users.email})`, email));
   if (byEmail) {
-    if (byEmail.googleSub !== null)
+    if (byEmail.googleSub !== null || byEmail.deleting)
       return { outcome: "problem", problem: "oauth" };
     await db
       .update(users)

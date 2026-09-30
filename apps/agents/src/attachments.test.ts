@@ -146,6 +146,10 @@ function memoryBlobs() {
       return Promise.resolve(key);
     },
     get: (key) => Promise.resolve(stored.get(key) ?? new Uint8Array()),
+    delete: (key) => {
+      stored.delete(key);
+      return Promise.resolve();
+    },
   };
   return { blobs, stored };
 }

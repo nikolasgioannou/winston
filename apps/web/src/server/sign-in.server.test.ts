@@ -111,6 +111,21 @@ describe("signInWithGoogle", () => {
     });
   });
 
+  test("an account being deleted can't be signed in to", async () => {
+    await inRollback(db, async (tx) => {
+      await insertUser(tx, {
+        email: "ada@example.com",
+        googleSub: "google-sub-1",
+        deletionRequestedAt: new Date(),
+      });
+      await tx.insert(allowedEmails).values({ email: "ada@example.com" });
+      expect(await signInWithGoogle(tx, goodClaims, undefined)).toEqual({
+        outcome: "problem",
+        problem: "oauth",
+      });
+    });
+  });
+
   test("an email already tied to a different Google account is refused", async () => {
     await inRollback(db, async (tx) => {
       await insertUser(tx, {

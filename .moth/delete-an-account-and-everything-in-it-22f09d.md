@@ -1,14 +1,14 @@
 ---
 id: "22f09d"
 title: Delete an account and everything in it
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - m3
   - web
 created_at: 2026-09-27T05:34:41.162Z
-updated_at: 2026-09-27T05:34:41.231Z
+updated_at: 2026-09-30T05:03:58.618Z
 blocked_by:
   - "0a5f39"
   - "89a2b0"
@@ -29,3 +29,14 @@ The job must be **idempotent and resumable**: if it dies halfway, a retry finish
 Guard against missing a table later: add a test that enumerates every table with a `user_id` column from the schema and asserts that deletion leaves zero rows in each. That catches future tables that forget to join the deletion.
 
 Add the page's states to the dev design view.
+
+## Outcome
+
+- **Delete account** on `/profile`: what's deleted, a confirmation that needs "delete" typed (`ConfirmDialog` gained `confirmText`), then `requestAccountDeletion` marks the user (`users.deletion_requested_at`, which blocks sign-in), ends their sessions and queues `delete_user`; the site signs them out to `/?deleted=1`, where sign-in says the account was deleted.
+- `delete_user` in `agents`, idempotent and resumable: drops their queued jobs, says a brief goodbye in Telegram (decided: yes, one line, best effort) and unlinks, terminates the VM through `VmProvider` (new `destroyDataVolume`; Docker removes the named volume, and EC2 will delete the EBS volume and snapshots), revokes every Google grant, deletes the blobs only they refer to (new `BlobStore.delete`; shared content-addressed blobs stay), then deletes the user row. The allowlist entry stays.
+- The job has no `user_id`, so it survives the cascade it causes.
+- Guard: a test reads the database catalog and fails if any `user_id` column lacks an `ON DELETE CASCADE` reference to `users`; another fills a user across the tables and asserts zero rows in every schema table with a `user_id` after deletion.
+- Dev design view: the delete confirmation on Profile, the deleted notice on sign-in.
+- Tests: the catalog guard, full deletion (goodbye, VM and volume, revocation, blobs, zero rows, allowlist kept), a shared blob kept, a retry after a failure part-way finishing without repeating done steps, a second run doing nothing, requesting deletion (marker, sessions, one job without `user_id`), and sign-in refused while deleting.
+- Checked live: a throwaway user with a real local VM, deleted from its Profile page (the confirm button stayed disabled until "delete" was typed); the job finished, and the rows, container and volume were gone.
+

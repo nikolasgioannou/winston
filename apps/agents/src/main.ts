@@ -4,6 +4,7 @@
  */
 import { createDb } from "@winston/db/client";
 import {
+  deleteUserJob,
   frontTurnJob,
   provisionVmJob,
   revokeConnectionTokenJob,
@@ -32,6 +33,7 @@ import {
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
 import { localTokenVault } from "@winston/shared/token-vault";
+import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
   reconnectUrlFor,
   sweepConnectionGrants,
@@ -64,14 +66,23 @@ const vmProvider = dockerVmProvider({
   gatewayUrl: config.VM_GATEWAY_URL,
 });
 
+const tokenVault = localTokenVault(config.TOKEN_ENCRYPTION_KEY);
+
 const worker = createWorker({
   db,
   logger,
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
-      vault: localTokenVault(config.TOKEN_ENCRYPTION_KEY),
+      vault: tokenVault,
       revoke: googleTokenRevoker(),
+    }),
+    [deleteUserJob.type]: deleteUserHandler({
+      provider: vmProvider,
+      vault: tokenVault,
+      revoke: googleTokenRevoker(),
+      blobs,
+      telegram,
     }),
     [saveAttachmentJob.type]: saveAttachmentHandler({
       vm,

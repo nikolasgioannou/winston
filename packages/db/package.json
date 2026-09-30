@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account-deletion": "./src/account-deletion.ts",
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
     "./ids": "./src/ids.ts",

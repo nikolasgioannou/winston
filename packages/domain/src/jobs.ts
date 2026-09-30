@@ -61,3 +61,13 @@ export const revokeConnectionTokenJob = {
   dedupeKey: (connectionId: string) =>
     `revoke_connection_token:${connectionId}`,
 } as const;
+
+/**
+ * Deleting an account and everything in it (§13, §17). Payload `{ userId }`,
+ * and deliberately no job `user_id`: deleting the user cascades to their jobs,
+ * and this one must outlive that. Idempotent, so a retry finishes the job.
+ */
+export const deleteUserJob = {
+  type: "delete_user",
+  dedupeKey: (userId: string) => `delete_user:${userId}`,
+} as const;

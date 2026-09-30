@@ -6,6 +6,8 @@ import { getSessionUser } from "../server/session-functions";
 
 const searchSchema = z.object({
   error: z.enum(["not_allowlisted", "oauth"]).optional(),
+  /** Set after deleting an account. */
+  deleted: z.literal(1).optional(),
 });
 
 // The front door: sign in with Google. There's no public homepage while
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function SignIn() {
-  const { error } = Route.useSearch();
+  const { error, deleted } = Route.useSearch();
   const [redirecting, setRedirecting] = useState(false);
   const state: SignInState = redirecting
     ? "redirecting"
@@ -28,7 +30,9 @@ function SignIn() {
       ? "not_allowlisted"
       : error === "oauth"
         ? "oauth_error"
-        : "default";
+        : deleted
+          ? "deleted"
+          : "default";
   return (
     <SignInPage
       state={state}

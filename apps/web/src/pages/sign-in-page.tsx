@@ -2,7 +2,7 @@ import { Button, Callout, GoogleIcon } from "@winston/ui";
 
 /** The sign-in page's states (at /), so the dev design view can render each one. */
 export type SignInState =
-  "default" | "redirecting" | "not_allowlisted" | "oauth_error";
+  "default" | "redirecting" | "not_allowlisted" | "oauth_error" | "deleted";
 
 export function SignInPage({
   state,
@@ -25,6 +25,12 @@ export function SignInPage({
           <Callout tone="attention" title="That account isn't invited yet">
             Winston is invite-only for now. Try another Google account, or ask
             for an invite.
+          </Callout>
+        )}
+        {state === "deleted" && (
+          <Callout tone="neutral" title="Your account was deleted">
+            Your computer, connected accounts and everything Winston knew are
+            being removed now.
           </Callout>
         )}
         {state === "oauth_error" && (

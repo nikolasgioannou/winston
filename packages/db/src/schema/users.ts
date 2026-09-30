@@ -16,4 +16,9 @@ export const users = snakeCase.table("users", {
   /** IANA time zone, e.g. `America/New_York`. */
   timezone: text().notNull(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /**
+   * Set when the user asks to delete their account; the `delete_user` job
+   * then removes the row. Such a user can't sign in meanwhile.
+   */
+  deletionRequestedAt: timestamp({ withTimezone: true }),
 });

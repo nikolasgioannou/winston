@@ -38,6 +38,7 @@ function fakeProvider(options: { failCreate?: boolean } = {}) {
     },
     stop: () => Promise.resolve(),
     destroy: () => Promise.resolve(),
+    destroyDataVolume: () => Promise.resolve(),
     status: () => Promise.resolve("running"),
   };
   return { provider, tokens, started };

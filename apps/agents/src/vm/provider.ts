@@ -17,6 +17,11 @@ export interface VmProvider {
   stop(instanceId: string): Promise<void>;
   /** Removes the instance. The data volume stays; account deletion removes it. */
   destroy(instanceId: string): Promise<void>;
+  /**
+   * Deletes a data volume, and in production its snapshots (account
+   * deletion). One that's already gone is fine, so a retry can repeat it.
+   */
+  destroyDataVolume(dataVolumeId: string): Promise<void>;
   status(instanceId: string): Promise<VmInstanceStatus>;
 }
 

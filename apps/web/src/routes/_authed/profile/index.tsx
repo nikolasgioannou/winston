@@ -5,6 +5,7 @@ import { useReloadWhile } from "../../../components/use-reload-while";
 import { useTelegramLink } from "../../../components/use-telegram-link";
 import { ProfilePage } from "../../../pages/profile-page";
 import {
+  deleteAccount,
   getProfileState,
   saveProfile,
 } from "../../../server/profile-functions";
@@ -40,6 +41,16 @@ function Profile() {
           toast.success("Saved");
         }
         return result;
+      }}
+      onDeleteAccount={() => {
+        void deleteAccount({ data: { confirmation: "delete" } })
+          .then(() => {
+            // A full load, so nothing signed-in lingers.
+            window.location.assign("/?deleted=1");
+          })
+          .catch(() => {
+            toast.error("Couldn't delete your account. Please try again.");
+          });
       }}
       onTimezoneChange={(zone) => {
         void saveProfile({ data: { timezone: zone } })

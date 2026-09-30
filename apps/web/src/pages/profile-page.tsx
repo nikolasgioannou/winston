@@ -1,6 +1,7 @@
 import type { ProfileUpdateResult } from "@winston/db/profile";
 import {
   Button,
+  ConfirmDialog,
   SearchSelect,
   Section,
   SettingRow,
@@ -21,6 +22,9 @@ export interface ProfilePageProps {
     lastName: string;
   }) => Promise<ProfileUpdateResult>;
   onTimezoneChange: (timezone: string) => void;
+  onDeleteAccount: () => void;
+  /** Opens the deletion confirmation, for the dev design view. */
+  confirmingDelete?: boolean;
   telegram: TelegramLinkState | null;
   /** The Connect Telegram link while connecting (null until issued). */
   telegramLink: string | null;
@@ -70,6 +74,23 @@ export function ProfilePage(props: ProfilePageProps) {
             <form method="post" action="/auth/sign-out">
               <Button type="submit">Sign out</Button>
             </form>
+          }
+        />
+      </Section>
+      <Section title="Delete account">
+        <SettingRow
+          label="Delete your account"
+          description="Deletes your computer and its files, disconnects every account (revoking Winston's access with Google), and erases your conversations and everything Winston knows about you. It can't be undone."
+          control={
+            <ConfirmDialog
+              {...(props.confirmingDelete ? { defaultOpen: true } : {})}
+              trigger={<Button variant="danger">Delete account</Button>}
+              title="Delete your account?"
+              description="Your computer, its files, your connected accounts, your conversations and everything Winston knows about you will be deleted. Winston says goodbye in Telegram. This can't be undone."
+              confirmText="delete"
+              confirmLabel="Delete everything"
+              onConfirm={props.onDeleteAccount}
+            />
           }
         />
       </Section>

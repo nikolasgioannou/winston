@@ -16,6 +16,7 @@ const profile = (props: Partial<ProfilePageProps>) => () => (
       timezone="Europe/London"
       onSaveName={() => Promise.resolve({ ok: true, changed: [] })}
       onTimezoneChange={noop}
+      onDeleteAccount={noop}
       telegram={null}
       telegramLink={fixtureTelegramLink}
       relinking={false}
@@ -39,6 +40,10 @@ export const profileFixtures: PageFixtures = {
     no_username: {
       label: "Linked, no username",
       render: profile({ telegram: { ...linked, username: null } }),
+    },
+    deleting: {
+      label: "Delete confirmation",
+      render: profile({ telegram: linked, confirmingDelete: true }),
     },
     relinking: {
       label: "Linking another account",

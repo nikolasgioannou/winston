@@ -20,6 +20,10 @@ export const signInFixtures: PageFixtures = {
       label: "Not allowlisted",
       render: () => <SignInPage state="not_allowlisted" onSignIn={noop} />,
     },
+    deleted: {
+      label: "Account deleted",
+      render: () => <SignInPage state="deleted" onSignIn={noop} />,
+    },
     oauth_error: {
       label: "OAuth error",
       render: () => <SignInPage state="oauth_error" onSignIn={noop} />,

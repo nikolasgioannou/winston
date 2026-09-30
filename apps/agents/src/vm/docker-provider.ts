@@ -103,6 +103,10 @@ export function dockerVmProvider({
       await call("DELETE", `/containers/${instanceId}?force=true`, [204, 404]);
     },
 
+    async destroyDataVolume(dataVolumeId) {
+      await call("DELETE", `/volumes/${dataVolumeId}?force=true`, [204, 404]);
+    },
+
     async status(instanceId): Promise<VmInstanceStatus> {
       const response = await call(
         "GET",
