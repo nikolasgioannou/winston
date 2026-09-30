@@ -117,7 +117,18 @@ async function ensure(db: Db) {
       `The VM image is older than its sources. Rebuild it with: bun run image:build:local && bun run vm:reset`,
     );
 
-  const userId = await seededUser(db);
+  const [seeded] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, config.SEED_EMAIL));
+  if (!seeded) {
+    // Signing up sets up the computer, so there's nothing to do until then.
+    say(
+      `No user ${config.SEED_EMAIL} yet. Sign in at the site (or run ./scripts/setup.sh), and your computer is set up then.`,
+    );
+    return;
+  }
+  const userId = seeded.id;
   const [vm] = await db.select().from(vms).where(eq(vms.userId, userId));
   const running =
     docker("inspect", "--format", "{{.State.Running}}", containerFor(userId))
