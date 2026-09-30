@@ -70,5 +70,7 @@ Each developer uses their own bot, so webhooks from your chats reach your machin
 
    It prints the webhook's status, including the last delivery error if there is one. Re-run it whenever the URL, secret or bot changes.
 
-3. Find your chat id: start `bun dev` and send your bot any message. It replies that it doesn't know you, and the `api` logs `message from an unlinked chat` with your `chatId`.
-4. Put that id in `SEED_TELEGRAM_CHAT_ID` and re-run `./scripts/setup.sh` to link your chat. Your next message is stored and queues a turn for Winston.
+3. If your bot isn't @RunWinstonDevBot, set `TELEGRAM_BOT_USERNAME` in `.env.local` to its username (without the @).
+4. Start `bun dev`, sign in at http://localhost:3002 and tap **Connect** under Telegram on Home or Profile (or scan the QR code with your phone). Telegram opens your bot; tap **Start**, and Winston says hello. Your chat is linked.
+
+After resetting your database you can skip the site: the bot's `api` log line `message from an unlinked chat` shows your `chatId`, and putting it in `SEED_TELEGRAM_CHAT_ID` links it whenever `./scripts/setup.sh` seeds.

@@ -1,14 +1,14 @@
 ---
 id: "ee16f5"
 title: Link Telegram from the web app
-status: todo
+status: done
 priority: none
 labels:
   - m3
   - telegram
   - web
 created_at: 2026-09-27T05:34:40.796Z
-updated_at: 2026-09-27T05:34:40.863Z
+updated_at: 2026-09-30T03:27:15.632Z
 blocked_by:
   - "bb2d67"
   - "e47a50"
@@ -27,3 +27,15 @@ Build:
 Add the page's states to the dev design view.
 
 Tests: token single-use and expiry, relinking behaviour, a chat already linked to another user, and that the onboarding item triggers a turn.
+
+## Outcome
+
+- Site: a `createTelegramLink` server function issues a link token and returns `https://t.me/<TELEGRAM_BOT_USERNAME>?start=<token>` (new web config, `RunWinstonDevBot` by default) with its expiry. `useTelegramLink` asks for one while connecting and replaces it a minute before it expires; `useReloadWhile` re-runs the page's loaders every 3 s while waiting (it now also drives `/home`'s computer polling).
+- QR: lean-qr 2.7.4 (actively maintained, no dependencies, about 69 KB unpacked), used through its `generate` and `toSvgPath` in a new `QrCode` component in `packages/ui`: one SVG path with a 4-module quiet zone, black on white even in dark mode. Shown from 640px up; phones get the button.
+- `/profile` has its first real page (`src/pages/profile-page.tsx`): a Telegram section (Connect + QR; "Linked as @username" with **Link another account**, which lasts until the link changes or it's cancelled) and an Account section with Sign out. `/home`'s checklist has the same Connect button and QR.
+- Bot: `/start <token>` consumes the token and links the chat in one transaction, moving it from another user and replacing the user's old chat. A newly linked chat gets a `system.onboarding.completed` item (new `onboardingCompletedType` in `@winston/domain/inbound`) and a debounced front-of-house turn; relinking the same chat replies "You're already connected. Just message me." A bad, used or expired token gets a reply pointing back to the site. The front-of-house prompt says what the event means: a brief hello, no questionnaire.
+- `SEED_TELEGRAM_CHAT_ID` stays as a shortcut after database resets; docs/local-dev.md now links through the site.
+- Dev design view: Home's states show the QR; Profile has not linked, link loading, linked, linked without a username, and linking another account. The relink buttons moved under the row after a mobile check.
+- Tests: linking and the hello's turn, single use, expired/unknown/malformed tokens, moving a chat from another user, relinking the same chat, a plain `/start`, the deep link's shape and token, and the linked username. Token expiry and races were already covered in `@winston/db`.
+- Checked live against `bun dev` with a throwaway user: the profile page issued a real link and QR, a `/start` update posted to the local api linked the chat and stored the onboarding item, and the page switched to "Linked as @linky_test" on its own. The hello turn was dropped since the chat was fake, and the user was deleted afterwards.
+

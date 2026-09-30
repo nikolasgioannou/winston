@@ -10,6 +10,7 @@ import {
 } from "@winston/ui";
 import { Check, Loader, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { TelegramButton, TelegramQr } from "../components/telegram-connect";
 import type { HomeState } from "../server/home-state";
 
 /**
@@ -18,40 +19,29 @@ import type { HomeState } from "../server/home-state";
  * summary. Everything comes from `state`, so the dev design view can render
  * each case.
  */
-export function HomePage({
-  state,
-  retrying,
-  onRetry,
-}: {
+export interface HomePageProps {
   state: HomeState;
+  /** The Connect Telegram link, while Telegram isn't linked (null until issued). */
+  telegramLink: string | null;
   /** A retry of the computer's setup is on its way. */
   retrying: boolean;
   onRetry: () => void;
-}) {
+}
+
+export function HomePage(props: HomePageProps) {
+  const { state } = props;
   const computerDone =
     state.computer === "ready" || state.computer === "unreachable";
   const setUp =
     computerDone && state.telegramLinked && state.accountsConnected > 0;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8 sm:px-10">
-      {setUp ? (
-        <Summary state={state} />
-      ) : (
-        <Checklist state={state} retrying={retrying} onRetry={onRetry} />
-      )}
+      {setUp ? <Summary state={state} /> : <Checklist {...props} />}
     </div>
   );
 }
 
-function Checklist({
-  state,
-  retrying,
-  onRetry,
-}: {
-  state: HomeState;
-  retrying: boolean;
-  onRetry: () => void;
-}) {
+function Checklist({ state, telegramLink, retrying, onRetry }: HomePageProps) {
   return (
     <>
       <header className="flex flex-col gap-1.5">
@@ -75,8 +65,11 @@ function Checklist({
           }
           end={
             state.telegramLinked ? undefined : (
-              <StatusPill tone="neutral">Not linked</StatusPill>
+              <TelegramButton url={telegramLink} />
             )
+          }
+          detail={
+            state.telegramLinked ? undefined : <TelegramQr url={telegramLink} />
           }
         />
         <Step
@@ -150,30 +143,38 @@ function Step({
   title,
   description,
   end,
+  detail,
 }: {
   number: number;
   progress: Progress;
   title: string;
   description: string;
   end?: ReactNode;
+  /** More to the step, under it. */
+  detail?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
-        <Marker number={number} progress={progress} />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span
-            className={cn(
-              "text-sm font-medium",
-              progress === "done" ? "text-fg-muted" : "text-fg",
-            )}
-          >
-            {title}
-          </span>
-          <span className="text-caption text-fg-muted">{description}</span>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Marker number={number} progress={progress} />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span
+              className={cn(
+                "text-sm font-medium",
+                progress === "done" ? "text-fg-muted" : "text-fg",
+              )}
+            >
+              {title}
+            </span>
+            <span className="text-caption text-fg-muted">{description}</span>
+          </div>
         </div>
+        {end !== undefined && (
+          <div className="shrink-0 pl-9 sm:pl-0">{end}</div>
+        )}
       </div>
-      {end !== undefined && <div className="shrink-0 pl-9 sm:pl-0">{end}</div>}
+      {detail !== undefined && <div className="pl-9">{detail}</div>}
     </div>
   );
 }

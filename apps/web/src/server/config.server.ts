@@ -11,6 +11,11 @@ const webConfigSchema = dbConfigSchema.extend({
    * makes cookies Secure.
    */
   WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
+  /** The bot Connect Telegram opens: @RunWinstonBot in production. */
+  TELEGRAM_BOT_USERNAME: z
+    .string()
+    .regex(/^\w{5,32}$/, "expected a bot username without the @")
+    .default("RunWinstonDevBot"),
 });
 
 let config: Readonly<z.output<typeof webConfigSchema>> | undefined;

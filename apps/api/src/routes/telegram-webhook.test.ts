@@ -8,12 +8,20 @@ import {
   telegramLinks,
 } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
+import { issueLinkToken } from "@winston/db/telegram-link-tokens";
 import { eq } from "drizzle-orm";
-import type { UserMessagePayload } from "@winston/domain/inbound";
+import {
+  onboardingCompletedType,
+  type UserMessagePayload,
+} from "@winston/domain/inbound";
 import { frontTurnJob, saveAttachmentJob } from "@winston/domain/jobs";
 import type { Update } from "grammy/types";
 import { createApp } from "../app.ts";
-import { unlinkedChatReply } from "../telegram/handle-update.ts";
+import {
+  alreadyLinkedReply,
+  badLinkReply,
+  unlinkedChatReply,
+} from "../telegram/handle-update.ts";
 import { testDeps, testWebhookSecret } from "../testing.ts";
 
 const db = await testDb();
@@ -485,6 +493,114 @@ describe("POST /webhooks/telegram: reactions", () => {
       expect(
         (item?.payload as { target: { text: string } }).target.text,
       ).toHaveLength(200);
+    });
+  });
+});
+
+describe("linking a chat with /start <token>", () => {
+  const newChat = 8_880_001;
+  /** `/start <token>` from `chat`, as the site's deep link sends it. */
+  const start = (token: string, chat = newChat, username = "ada_l") =>
+    textUpdate({
+      text: `/start ${token}`,
+      chat: { id: chat, type: "private", first_name: "Ada" },
+      from: { id: chat, is_bot: false, first_name: "Ada", username },
+    });
+  const linkOf = async (tx: DbOrTx, userId: string) =>
+    (
+      await tx
+        .select({
+          chatId: telegramLinks.chatId,
+          username: telegramLinks.username,
+        })
+        .from(telegramLinks)
+        .where(eq(telegramLinks.userId, userId))
+    )[0];
+
+  test("links the chat, replacing the user's old one, and queues Winston's hello", async () => {
+    await withApp(async ({ tx, userId, post, sent }) => {
+      const token = await issueLinkToken(tx, userId);
+      const update = start(token);
+      expect((await post(update)).status).toBe(200);
+
+      expect(await linkOf(tx, userId)).toEqual({
+        chatId: newChat,
+        username: "ada_l",
+      });
+      const [item] = await itemsFor(tx, userId);
+      expect(item).toMatchObject({
+        type: onboardingCompletedType,
+        payload: {},
+        sourceRef: `telegram:123456:${String(update.update_id)}`,
+      });
+      const [job] = await jobsFor(tx, userId);
+      expect(job).toMatchObject({
+        type: frontTurnJob.type,
+        dedupeKey: frontTurnJob.dedupeKey(userId),
+      });
+      expect(sent).toEqual([]);
+    });
+  });
+
+  test("a token works once", async () => {
+    await withApp(async ({ tx, userId, post, sent }) => {
+      const token = await issueLinkToken(tx, userId);
+      await post(start(token));
+      await post(start(token, 8_880_002));
+      expect((await linkOf(tx, userId))?.chatId).toBe(newChat);
+      expect(sent).toEqual([{ chatId: 8_880_002, text: badLinkReply }]);
+    });
+  });
+
+  test("an expired, unknown or malformed token gets pointed back to the site and links nothing", async () => {
+    await withApp(async ({ tx, userId, post, sent }) => {
+      const expired = await issueLinkToken(
+        tx,
+        userId,
+        new Date(Date.now() - 16 * 60_000),
+      );
+      for (const token of [expired, "not-a-real-token", "bad!token"])
+        await post(start(token));
+      expect((await linkOf(tx, userId))?.chatId).toBe(chatId);
+      expect(sent).toEqual([
+        { chatId: newChat, text: badLinkReply },
+        { chatId: newChat, text: badLinkReply },
+        { chatId: newChat, text: badLinkReply },
+      ]);
+      expect(await itemsFor(tx, userId)).toEqual([]);
+    });
+  });
+
+  test("a chat linked to another user moves to the one with the token", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      const other = await insertUser(tx);
+      const token = await issueLinkToken(tx, other.id);
+      await post(start(token, chatId));
+      expect(await linkOf(tx, userId)).toBeUndefined();
+      expect((await linkOf(tx, other.id))?.chatId).toBe(chatId);
+      expect(await itemsFor(tx, other.id)).toHaveLength(1);
+    });
+  });
+
+  test("relinking the same chat updates it without another hello", async () => {
+    await withApp(async ({ tx, userId, post, sent }) => {
+      const token = await issueLinkToken(tx, userId);
+      await post(start(token, chatId, "ada_new"));
+      expect(await linkOf(tx, userId)).toEqual({ chatId, username: "ada_new" });
+      expect(await itemsFor(tx, userId)).toEqual([]);
+      expect(sent).toEqual([{ chatId, text: alreadyLinkedReply }]);
+    });
+  });
+
+  test("a plain /start from an unlinked chat gets the usual reply", async () => {
+    await withApp(async ({ post, sent }) => {
+      await post(
+        textUpdate({
+          text: "/start",
+          chat: { id: newChat, type: "private", first_name: "Eve" },
+        }),
+      );
+      expect(sent).toEqual([{ chatId: newChat, text: unlinkedChatReply }]);
     });
   });
 });

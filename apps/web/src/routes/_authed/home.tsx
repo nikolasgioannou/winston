@@ -1,11 +1,10 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "@winston/ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useReloadWhile } from "../../components/use-reload-while";
+import { useTelegramLink } from "../../components/use-telegram-link";
 import { HomePage } from "../../pages/home-page";
 import { getHomeState, retryComputer } from "../../server/home-functions";
-
-/** How often the page checks on a computer that's setting up. */
-const setupPollMs = 3_000;
 
 export const Route = createFileRoute("/_authed/home")({
   loader: () => getHomeState(),
@@ -16,16 +15,9 @@ function Home() {
   const state = Route.useLoaderData();
   const router = useRouter();
   const [retrying, setRetrying] = useState(false);
-
-  // Polling is simple and fine at this scale (docs/design.md §17).
-  const settingUp = state.computer === "setting_up";
-  useEffect(() => {
-    if (!settingUp) return;
-    const timer = setInterval(() => void router.invalidate(), setupPollMs);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [settingUp, router]);
+  const telegramLink = useTelegramLink(!state.telegramLinked);
+  // Stays fresh while the computer sets up or Telegram waits to be linked.
+  useReloadWhile(state.computer === "setting_up" || !state.telegramLinked);
 
   const retry = async () => {
     setRetrying(true);
@@ -40,6 +32,11 @@ function Home() {
   };
 
   return (
-    <HomePage state={state} retrying={retrying} onRetry={() => void retry()} />
+    <HomePage
+      state={state}
+      telegramLink={telegramLink}
+      retrying={retrying}
+      onRetry={() => void retry()}
+    />
   );
 }

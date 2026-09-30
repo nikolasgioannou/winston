@@ -1,19 +1,21 @@
 import type { DbOrTx } from "@winston/db/client";
 import { enqueue } from "@winston/db/queue";
+import { consumeLinkToken } from "@winston/db/telegram-link-tokens";
 import {
   inboundItems,
   outboundMessages,
   telegramLinks,
 } from "@winston/db/schema";
-import type {
-  Attachment,
-  ForwardOrigin,
-  ReactionPayload,
-  UserMessagePayload,
+import {
+  onboardingCompletedType,
+  type Attachment,
+  type ForwardOrigin,
+  type ReactionPayload,
+  type UserMessagePayload,
 } from "@winston/domain/inbound";
 import { frontTurnJob, saveAttachmentJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
-import { and, arrayContains, eq } from "drizzle-orm";
+import { and, arrayContains, eq, ne, sql } from "drizzle-orm";
 import type {
   Message,
   MessageOrigin,
@@ -30,6 +32,11 @@ export const allowedUpdates = ["message", "message_reaction"] as const;
 export const unlinkedChatReply =
   "Sorry, I only work with the people I've been set up for.";
 
+export const badLinkReply =
+  "That link has expired or was already used. Go back to Winston's website and tap Connect Telegram for a new one.";
+
+export const alreadyLinkedReply = "You're already connected. Just message me.";
+
 /** The Telegram calls the webhook makes. grammY's `Api` satisfies it. */
 export interface TelegramSender {
   sendMessage(chatId: number, text: string): Promise<unknown>;
@@ -45,6 +52,8 @@ export interface TelegramDeps {
 
 export type UpdateOutcome =
   | "stored"
+  | "linked"
+  | "bad_link_token"
   | "duplicate"
   | "ignored_update"
   | "ignored_chat"
@@ -77,6 +86,10 @@ async function handleMessage(
 ): Promise<UpdateOutcome> {
   // Winston only talks in private chats; groups and channels are never processed.
   if (message.chat.type !== "private") return "ignored_chat";
+
+  const token = startToken(message);
+  if (token !== undefined)
+    return linkChat({ db, logger, telegram, botId }, update, message, token);
 
   const chatId = message.chat.id;
   const userId = await linkedUser(db, chatId);
@@ -119,6 +132,82 @@ async function handleMessage(
       pending: attachment !== undefined,
     },
   ]);
+}
+
+/** The payload of `/start <payload>`, which the site's deep link sends. */
+function startToken(message: Message) {
+  return /^\/start(?:@\w+)?\s+(\S+)$/.exec(message.text ?? "")?.[1];
+}
+
+/**
+ * Links this chat to the user whose token came in `/start <token>`
+ * (docs/design.md §9): the token must be unused and unexpired. The chat moves
+ * to them if another user had it, and replaces any chat they had before. A
+ * newly linked chat gets the onboarding event, so Winston says hello in a
+ * normal turn; relinking the same chat just says so.
+ */
+async function linkChat(
+  { db, logger, telegram, botId }: TelegramDeps,
+  update: Update,
+  message: Message,
+  token: string,
+): Promise<UpdateOutcome> {
+  const chatId = message.chat.id;
+  const result = await db.transaction(async (tx) => {
+    const userId = await consumeLinkToken(tx, token);
+    if (!userId) return "bad_link_token" as const;
+
+    const [previous] = await tx
+      .select({ chatId: telegramLinks.chatId })
+      .from(telegramLinks)
+      .where(eq(telegramLinks.userId, userId));
+    // A chat belongs to one user: take it from whoever had it.
+    const moved = await tx
+      .delete(telegramLinks)
+      .where(
+        and(eq(telegramLinks.chatId, chatId), ne(telegramLinks.userId, userId)),
+      )
+      .returning({ userId: telegramLinks.userId });
+    for (const from of moved)
+      logger.warn(
+        { chatId, fromUserId: from.userId, toUserId: userId },
+        "moved a Telegram chat to another user",
+      );
+    const link = {
+      chatId,
+      telegramUserId: message.from?.id ?? chatId,
+      username: message.from?.username ?? null,
+      linkedAt: sql`now()`,
+    };
+    await tx
+      .insert(telegramLinks)
+      .values({ userId, ...link })
+      .onConflictDoUpdate({ target: telegramLinks.userId, set: link });
+    logger.info({ userId, chatId }, "linked a Telegram chat");
+
+    if (previous?.chatId === chatId) return "relinked" as const;
+    await storeAndQueueTurn(tx, userId, [
+      {
+        type: onboardingCompletedType,
+        payload: {},
+        sourceRef: `telegram:${botId}:${String(update.update_id)}`,
+        occurredAt: fromUnix(message.date),
+      },
+    ]);
+    return "linked" as const;
+  });
+
+  if (result === "linked") return "linked";
+  // Best effort, as for unlinked chats.
+  await telegram
+    .sendMessage(
+      chatId,
+      result === "relinked" ? alreadyLinkedReply : badLinkReply,
+    )
+    .catch((error: unknown) => {
+      logger.warn({ err: error, chatId }, "replying to /start failed");
+    });
+  return result === "relinked" ? "linked" : "bad_link_token";
 }
 
 /**

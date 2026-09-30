@@ -11,7 +11,7 @@ await $`rm -rf dist`;
 await $`bun --bun vite build`.quiet();
 
 const leaks =
-  await $`grep -rlE "/dev/design|signInFixtures|appShellFixtures|homeFixtures|designPages" dist`
+  await $`grep -rlE "/dev/design|signInFixtures|appShellFixtures|homeFixtures|profileFixtures|designPages" dist`
     .nothrow()
     .text();
 if (leaks.trim()) {

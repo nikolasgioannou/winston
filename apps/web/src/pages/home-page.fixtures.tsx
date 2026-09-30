@@ -5,6 +5,9 @@ import { HomePage } from "./home-page";
 
 const noop = () => undefined;
 
+export const fixtureTelegramLink =
+  "https://t.me/RunWinstonDevBot?start=Fixture_Token_For_The_Design_View_000000000";
+
 const fresh: HomeState = {
   firstName: "Ada",
   computer: "setting_up",
@@ -23,7 +26,12 @@ const home =
   (state: HomeState, retrying = false) =>
   () => (
     <AppShell activePath="/home" drawerOpen={false} onDrawerOpenChange={noop}>
-      <HomePage state={state} retrying={retrying} onRetry={noop} />
+      <HomePage
+        state={state}
+        telegramLink={state.telegramLinked ? null : fixtureTelegramLink}
+        retrying={retrying}
+        onRetry={noop}
+      />
     </AppShell>
   );
 

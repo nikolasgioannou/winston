@@ -85,3 +85,9 @@ export type ForwardOrigin = z.infer<typeof forwardOriginSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
 export type UserMessagePayload = z.infer<typeof userMessagePayloadSchema>;
 export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;
+
+/**
+ * Winston's cue to say a brief hello (§3, always delivered): the user just
+ * linked Telegram from the site. Its payload is empty.
+ */
+export const onboardingCompletedType = "system.onboarding.completed";
