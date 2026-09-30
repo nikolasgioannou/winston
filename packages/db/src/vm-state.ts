@@ -16,7 +16,7 @@ export type VmEvent =
   | "recovered"
   | "update_started"
   | "update_finished"
-  | "timed_out"
+  | "setup_failed"
   | "retry"
   | "replace"
   | "terminate"
@@ -27,12 +27,12 @@ const transitions: Record<VmState, Partial<Record<VmEvent, VmState>>> = {
   requested: { provision: "provisioning", terminate: "terminating" },
   provisioning: {
     provisioned: "registering",
-    timed_out: "failed",
+    setup_failed: "failed",
     terminate: "terminating",
   },
   registering: {
     registered: "ready",
-    timed_out: "failed",
+    setup_failed: "failed",
     terminate: "terminating",
   },
   ready: {
@@ -78,7 +78,12 @@ export async function applyVmEvent(db: DbOrTx, vmId: string, event: VmEvent) {
     const next = transition(vm.state, event);
     await tx
       .update(vms)
-      .set({ state: next, stateChangedAt: sql`now()` })
+      .set({
+        state: next,
+        stateChangedAt: sql`now()`,
+        // Reaching ready starts the count of setup failures over.
+        ...(next === "ready" ? { setupFailures: 0 } : {}),
+      })
       .where(eq(vms.id, vmId));
     return next;
   });

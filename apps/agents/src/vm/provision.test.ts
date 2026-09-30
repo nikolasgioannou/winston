@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
-import { vms } from "@winston/db/schema";
+import type { Job } from "@winston/db/queue";
+import { jobs, vms } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { applyVmEvent } from "@winston/db/vm-state";
-import { createVm } from "@winston/db/vms";
+import { createVm, requestVm } from "@winston/db/vms";
 import { createLogger } from "@winston/shared/logger";
 import { tokenMatches } from "@winston/shared/tokens";
 import { eq } from "drizzle-orm";
 import type { VmProvider } from "./provider.ts";
-import { provisionVm } from "./provision.ts";
+import { provisionVm, provisionVmHandler } from "./provision.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -96,7 +97,7 @@ describe("provisionVm", () => {
       const user = await insertUser(tx);
       const vm = await createVm(tx, user.id, "docker");
       await applyVmEvent(tx, vm.id, "provision");
-      await applyVmEvent(tx, vm.id, "timed_out");
+      await applyVmEvent(tx, vm.id, "setup_failed");
       await provisionVm(
         { db: tx, logger, provider: fakeProvider().provider },
         user.id,
@@ -147,6 +148,68 @@ describe("provisionVm", () => {
       await provisionVm({ db: tx, logger, provider }, user.id);
       await provisionVm({ db: tx, logger, provider }, user.id);
       expect(started).toHaveLength(1);
+    });
+  });
+});
+
+describe("provisionVmHandler", () => {
+  const runJob = (
+    tx: DbOrTx,
+    provider: VmProvider,
+    userId: string,
+    attempt: { attempts: number; maxAttempts: number },
+  ) =>
+    provisionVmHandler(provider)({
+      job: { id: "job_1", userId, payload: {}, ...attempt } as unknown as Job,
+      db: tx as never,
+      logger,
+      extendLease: () => Promise.resolve(true),
+    });
+
+  test("provisions a requested VM, recording its provider", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await requestVm(tx, user.id);
+      await runJob(tx, fakeProvider().provider, user.id, {
+        attempts: 1,
+        maxAttempts: 3,
+      });
+      expect(await vmOf(tx, user.id)).toMatchObject({
+        state: "registering",
+        provider: "docker",
+      });
+    });
+  });
+
+  test("a failed attempt leaves the VM setting up for the job's next one; the last fails its setup and queues an automatic retry", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await requestVm(tx, user.id);
+      await tx.delete(jobs).where(eq(jobs.userId, user.id));
+      const { provider } = fakeProvider({ failCreate: true });
+
+      const early = await runJob(tx, provider, user.id, {
+        attempts: 1,
+        maxAttempts: 3,
+      }).catch((e: unknown) => e);
+      expect(early).toBeInstanceOf(Error);
+      expect((await vmOf(tx, user.id))?.state).toBe("provisioning");
+
+      const last = await runJob(tx, provider, user.id, {
+        attempts: 3,
+        maxAttempts: 3,
+      }).catch((e: unknown) => e);
+      expect(last).toBeInstanceOf(Error);
+      expect(await vmOf(tx, user.id)).toMatchObject({
+        state: "failed",
+        setupFailures: 1,
+      });
+      expect(
+        await tx
+          .select({ type: jobs.type, status: jobs.status })
+          .from(jobs)
+          .where(eq(jobs.userId, user.id)),
+      ).toEqual([{ type: "provision_vm", status: "queued" }]);
     });
   });
 });

@@ -1,7 +1,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { vms } from "@winston/db/schema";
 import { applyVmEvent } from "@winston/db/vm-state";
-import { createVm, issueRegistrationToken } from "@winston/db/vms";
+import { createVm, failVmSetup, issueRegistrationToken } from "@winston/db/vms";
 import type { Logger } from "@winston/shared/logger";
 import { eq } from "drizzle-orm";
 import type { JobHandler } from "../worker.ts";
@@ -9,7 +9,7 @@ import type { VmProvider } from "./provider.ts";
 
 /**
  * Provisions a user's VM (docs/design.md §15, §17): creates the row if
- * needed, issues a fresh registration token (stored hashed), creates and
+ * needed (sign-up normally has), issues a fresh registration token (stored hashed), creates and
  * starts the instance, and leaves the VM `registering` until `winstond`
  * connects. Safe to retry: it resumes from `provisioning` and replaces a
  * half-created instance.
@@ -56,7 +56,7 @@ export async function provisionVm(
   });
   await db
     .update(vms)
-    .set({ instanceId, dataVolumeId })
+    .set({ provider: provider.kind, instanceId, dataVolumeId })
     .where(eq(vms.id, vm.id));
   // Registering before the instance starts, so a fast-booting winstond never
   // finds the VM still provisioning.
@@ -68,12 +68,32 @@ export async function provisionVm(
   );
 }
 
-/** The `provision_vm` job. */
+/**
+ * The `provision_vm` job. When its last attempt fails, the VM's setup has
+ * failed: `failVmSetup` marks it and decides whether to retry automatically.
+ */
 export function provisionVmHandler(provider: VmProvider): JobHandler {
   return async ({ job, db, logger }) => {
-    if (!job.userId) throw new Error("provision_vm job has no user");
+    const userId = job.userId;
+    if (!userId) throw new Error("provision_vm job has no user");
     const replace =
       (job.payload as { replace?: unknown } | null)?.replace === true;
-    await provisionVm({ db, logger, provider }, job.userId, { replace });
+    try {
+      await provisionVm({ db, logger, provider }, userId, { replace });
+    } catch (error) {
+      if (job.attempts >= job.maxAttempts)
+        await markSetupFailed(db, logger, userId);
+      throw error;
+    }
   };
+}
+
+async function markSetupFailed(db: DbOrTx, logger: Logger, userId: string) {
+  const [vm] = await db
+    .select({ id: vms.id, state: vms.state })
+    .from(vms)
+    .where(eq(vms.userId, userId));
+  if (vm?.state !== "provisioning" && vm?.state !== "registering") return;
+  const { failures, retrying } = await failVmSetup(db, vm.id);
+  logger.warn({ vmId: vm.id, failures, retrying }, "VM setup failed");
 }

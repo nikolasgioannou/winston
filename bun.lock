@@ -109,6 +109,7 @@
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
+        "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "postgres": "3.4.9",

@@ -13,14 +13,21 @@ export const frontTurnJob = {
 } as const;
 
 /**
- * Provisioning a user's VM (§10, §15). Queued by account creation (M3); a
- * script for now. Payload `{ replace: true }` rebuilds a VM that's already
- * running: a new instance on the same data volume (§17 `replace`).
+ * Provisioning a user's VM (§10, §15). Queued when a user's VM is requested
+ * (at sign-up), by a setup failure's automatic retry, and by the retry
+ * button. Payload `{ replace: true }` rebuilds a VM that's already running: a
+ * new instance on the same data volume (§17 `replace`).
  */
 export const provisionVmJob = {
   type: "provision_vm",
   /** One provisioning job queued per user at a time. */
   dedupeKey: (userId: string) => `provision_vm:${userId}`,
+  /** Attempts per job; when the last one fails, the VM's setup has failed. */
+  maxAttempts: 3,
+  /** Failed setups retried automatically before the user is asked to retry. */
+  autoRetries: 3,
+  /** The wait before an automatic retry, times the failure count. */
+  autoRetryDelayMs: 30_000,
 } as const;
 
 /**

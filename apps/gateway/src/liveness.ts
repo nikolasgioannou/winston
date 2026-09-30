@@ -1,6 +1,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { vms } from "@winston/db/schema";
-import { applyVmEvent, type VmEvent } from "@winston/db/vm-state";
+import { applyVmEvent } from "@winston/db/vm-state";
+import { failVmSetup } from "@winston/db/vms";
 import type { Logger } from "@winston/shared/logger";
 import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
@@ -23,8 +24,9 @@ const olderThan = (
 
 /**
  * Moves VMs whose time ran out: ready ones that stopped pinging become
- * `unhealthy`, and ones stuck in setup become `failed`. Each move goes
- * through the state machine, so a VM that changed meanwhile is left alone.
+ * `unhealthy`, and ones stuck in setup fail (`failVmSetup`, which retries a
+ * few times on its own). Each move goes through the state machine, so a VM
+ * that changed meanwhile is left alone.
  */
 export async function sweepVms(
   db: DbOrTx,
@@ -56,17 +58,23 @@ export async function sweepVms(
       ),
     );
 
-  const apply = async (vmId: string, event: VmEvent) => {
+  const sweep = async (vmId: string, move: () => Promise<object>) => {
     try {
-      const state = await applyVmEvent(db, vmId, event);
-      logger.warn({ vmId, event, state }, "VM timed out");
+      logger.warn({ vmId, ...(await move()) }, "VM timed out");
     } catch (error) {
       logger.debug(
-        { err: error, vmId, event },
+        { err: error, vmId },
         "VM changed before the sweep reached it",
       );
     }
   };
-  for (const vm of silent) await apply(vm.id, "missed_pings");
-  for (const vm of stuck) await apply(vm.id, "timed_out");
+  for (const vm of silent)
+    await sweep(vm.id, async () => ({
+      state: await applyVmEvent(db, vm.id, "missed_pings"),
+    }));
+  for (const vm of stuck)
+    await sweep(vm.id, async () => ({
+      state: "failed",
+      ...(await failVmSetup(db, vm.id)),
+    }));
 }

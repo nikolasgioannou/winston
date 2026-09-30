@@ -1,18 +1,23 @@
 /**
  * The seeded user's local VM, for development (docs/local-dev.md):
  *
- *   provision  queue provisioning (bun dev runs it)
+ *   provision  request the VM, or retry it if it failed (bun dev runs the job)
  *   reset      queue a replacement: a new container from the current image,
  *              same data volume (§17 `replace`)
  *   shell      a login shell inside the container, as winston
- *   ensure     what bun dev runs at startup: check the image, provision or
- *              replace as needed, and report the VM's state until it's ready
+ *   ensure     what bun dev runs at startup: check the image, request, retry
+ *              or replace the VM as needed, and report its state until it's
+ *              ready
+ *
+ * Other users' VMs come from signing up, like in production; this is for the
+ * seeded one, whose user exists before any sign-in.
  */
 import { stat } from "node:fs/promises";
 import { createDb, type Db } from "@winston/db/client";
 import { dbConfigSchema } from "@winston/db/config";
 import { enqueue } from "@winston/db/queue";
 import { users, vms } from "@winston/db/schema";
+import { requestVm, retryFailedVm } from "@winston/db/vms";
 import { provisionVmJob } from "@winston/domain/jobs";
 import { loadConfig } from "@winston/shared/config";
 import { eq } from "drizzle-orm";
@@ -52,12 +57,17 @@ async function seededUser(db: Db) {
   return user.id;
 }
 
-const queue = (db: Db, userId: string, replace: boolean) =>
+const queueReplacement = (db: Db, userId: string) =>
   enqueue(db, provisionVmJob.type, {
     userId,
     dedupeKey: provisionVmJob.dedupeKey(userId),
-    ...(replace ? { payload: { replace: true } } : {}),
+    maxAttempts: provisionVmJob.maxAttempts,
+    payload: { replace: true },
   });
+
+/** Requests the user's VM if they have none, or retries a failed one. */
+const provision = async (db: Db, userId: string) =>
+  (await requestVm(db, userId)) || (await retryFailedVm(db, userId));
 
 /** The newest change to anything baked into the image (its scripts and the binaries' sources). */
 async function newestSource() {
@@ -112,15 +122,16 @@ async function ensure(db: Db) {
   const running =
     docker("inspect", "--format", "{{.State.Running}}", containerFor(userId))
       .out === "true";
-  if (!vm) {
-    say("No VM yet; provisioning one.");
-    await queue(db, userId, false);
-  } else if (vm.state === "failed") {
-    say(`${vm.id} failed; provisioning it again.`);
-    await queue(db, userId, false);
+  if (!vm || vm.state === "failed") {
+    if (await provision(db, userId))
+      say(
+        vm
+          ? `${vm.id} failed; provisioning it again.`
+          : "No VM yet; provisioning one.",
+      );
   } else if (!running && (vm.state === "ready" || vm.state === "unhealthy")) {
     say(`${vm.id}'s container is gone; replacing it.`);
-    await queue(db, userId, true);
+    await queueReplacement(db, userId);
   }
 
   // Report the VM's state until it's ready (or give up after two minutes).
@@ -165,11 +176,15 @@ const [command] = Bun.argv.slice(2);
 const db = createDb(config.DATABASE_URL);
 try {
   if (command === "ensure") await ensure(db);
-  else if (command === "provision" || command === "reset") {
-    await queue(db, await seededUser(db), command === "reset");
+  else if (command === "provision") {
     say(
-      `Queued ${command === "reset" ? "a replacement" : "provisioning"} for ${config.SEED_EMAIL}'s VM; bun dev runs it.`,
+      (await provision(db, await seededUser(db)))
+        ? `Queued provisioning for ${config.SEED_EMAIL}'s VM; bun dev runs it.`
+        : `${config.SEED_EMAIL}'s VM exists and hasn't failed; use vm:reset to replace it.`,
     );
+  } else if (command === "reset") {
+    await queueReplacement(db, await seededUser(db));
+    say(`Queued a replacement for ${config.SEED_EMAIL}'s VM; bun dev runs it.`);
   } else if (command === "shell") {
     const shell = Bun.spawn(
       [

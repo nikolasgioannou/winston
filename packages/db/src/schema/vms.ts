@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   pgEnum,
   snakeCase,
   text,
@@ -33,13 +34,16 @@ export const vms = snakeCase.table("vms", {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
-  provider: vmProvider().notNull(),
+  /** Where it runs. Set when provisioning starts: the service that provisions decides. */
+  provider: vmProvider(),
   /** The container or instance, once one exists. */
   instanceId: text(),
   dataVolumeId: text(),
   state: vmState().notNull().default("requested"),
   /** When `state` last changed, for timeouts (docs/design.md §17). */
   stateChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /** Setup failures since the VM was last ready, to limit automatic retries (§17). */
+  setupFailures: integer().notNull().default(0),
   /** The long-lived VM token `winstond` holds, hashed (§15). Looked up by hash. */
   tokenHash: text().unique(),
   /** The one-time bootstrap token, hashed, until it's exchanged (§15). */

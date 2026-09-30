@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
-import { allowedEmails, users, vms, webSessions } from "@winston/db/schema";
+import {
+  allowedEmails,
+  jobs,
+  users,
+  vms,
+  webSessions,
+} from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { findSession } from "@winston/db/web-sessions";
 import { count, eq } from "drizzle-orm";
@@ -63,6 +69,27 @@ describe("signInWithGoogle", () => {
     });
   });
 
+  test("sign-up requests exactly one computer and one provisioning job; signing in again adds neither", async () => {
+    await inRollback(db, async (tx) => {
+      await tx.insert(allowedEmails).values({ email: "ada@example.com" });
+      const first = await signInWithGoogle(tx, goodClaims, undefined);
+      if (first.outcome !== "signed_in") throw new Error("expected sign-in");
+      await signInWithGoogle(tx, goodClaims, undefined);
+      const computers = await tx
+        .select({ state: vms.state, provider: vms.provider })
+        .from(vms)
+        .where(eq(vms.userId, first.userId));
+      expect(computers).toEqual([{ state: "requested", provider: null }]);
+      const queued = await tx
+        .select({ type: jobs.type, dedupeKey: jobs.dedupeKey })
+        .from(jobs)
+        .where(eq(jobs.userId, first.userId));
+      expect(queued).toEqual([
+        { type: "provision_vm", dedupeKey: `provision_vm:${first.userId}` },
+      ]);
+    });
+  });
+
   test("an existing user (like the seeded one) gets their Google account attached by email", async () => {
     await inRollback(db, async (tx) => {
       const seeded = await insertUser(tx, { email: "ada@example.com" });
@@ -78,6 +105,9 @@ describe("signInWithGoogle", () => {
         .from(users)
         .where(eq(users.id, seeded.id));
       expect(user?.googleSub).toBe("google-sub-1");
+      expect(
+        await tx.select().from(vms).where(eq(vms.userId, seeded.id)),
+      ).toHaveLength(1);
     });
   });
 
@@ -139,7 +169,7 @@ describe("completeGoogleSignIn", () => {
     });
   });
 
-  test("a state that doesn't match, missing cookies, or Google's error go back to /signin", async () => {
+  test("a state that doesn't match, missing cookies, or Google's error go back to /", async () => {
     await inRollback(db, async (tx) => {
       await tx.insert(allowedEmails).values({ email: "ada@example.com" });
       for (const [params, flow] of [
@@ -164,7 +194,7 @@ describe("completeGoogleSignIn", () => {
     });
   });
 
-  test("an email that isn't allowlisted goes back to /signin with that state", async () => {
+  test("an email that isn't allowlisted goes back to / with that state", async () => {
     await inRollback(db, async (tx) => {
       expect(
         await completeGoogleSignIn(

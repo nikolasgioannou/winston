@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { users, vms } from "@winston/db/schema";
+import { jobs, users, vms } from "@winston/db/schema";
 import { insertUser, testDb } from "@winston/db/testing";
 import { applyVmEvent } from "@winston/db/vm-state";
 import { createVm, issueRegistrationToken } from "@winston/db/vms";
@@ -204,7 +204,7 @@ describe("gateway", () => {
     client.ws.close();
   });
 
-  test("the sweep marks silent VMs unhealthy and stuck ones failed; a ping recovers", async () => {
+  test("the sweep marks silent VMs unhealthy and fails stuck ones, queueing a retry; a ping recovers", async () => {
     const silent = await registeringVm();
     const client = await connect(silent.registrationToken);
     await client.next("registered");
@@ -223,7 +223,15 @@ describe("gateway", () => {
 
     await sweepVms(db, logger);
     expect((await vmRow(silent.vmId))?.state).toBe("unhealthy");
-    expect((await vmRow(stuck.vmId))?.state).toBe("failed");
+    expect(await vmRow(stuck.vmId)).toMatchObject({
+      state: "failed",
+      setupFailures: 1,
+    });
+    const retries = await db
+      .select({ status: jobs.status })
+      .from(jobs)
+      .where(eq(jobs.userId, stuck.userId));
+    expect(retries).toEqual([{ status: "queued" }]);
 
     client.send({ id: "p2", type: "ping" });
     await eventually(async () => (await vmRow(silent.vmId))?.state === "ready");

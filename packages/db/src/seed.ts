@@ -1,12 +1,14 @@
 /**
  * Seeds the local database with the user described by the SEED_* values in
- * .env.local. Refuses to touch non-local databases.
+ * .env.local, and requests their computer the way sign-up does (bun dev's
+ * agents service provisions it). Refuses to touch non-local databases.
  */
 import { loadConfig } from "@winston/shared/config";
 import { z } from "zod";
 import { createDb } from "./client.ts";
 import { assertLocalDatabase, loadDbConfig } from "./config.ts";
 import { seedUser } from "./seed-user.ts";
+import { requestVm } from "./vms.ts";
 
 const blankAsUndefined = (value: unknown) => (value === "" ? undefined : value);
 
@@ -43,7 +45,10 @@ try {
     timezone: seed.SEED_TIMEZONE,
     telegramChatId: seed.SEED_TELEGRAM_CHAT_ID,
   });
-  console.log(`Seeded ${seed.SEED_EMAIL} (${userId}).`);
+  const requested = await requestVm(db, userId);
+  console.log(
+    `Seeded ${seed.SEED_EMAIL} (${userId})${requested ? "; their computer is requested" : ""}.`,
+  );
 } finally {
   await db.$client.end();
 }

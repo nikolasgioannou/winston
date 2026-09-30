@@ -1,10 +1,12 @@
 /**
  * What happens when Google sends someone back (docs/design.md §5, §9): the
  * allowlist is checked before anything is created, then the user is found
- * (by Google account, then by email) or created, and a session starts.
+ * (by Google account, then by email) or created, their computer is
+ * requested if they don't have one yet, and a session starts.
  */
 import type { DbOrTx } from "@winston/db/client";
 import { allowedEmails, users } from "@winston/db/schema";
+import { requestVm } from "@winston/db/vms";
 import { createSession } from "@winston/db/web-sessions";
 import { tokenMatches, hashToken } from "@winston/shared/tokens";
 import { eq, sql } from "drizzle-orm";
@@ -25,9 +27,23 @@ export type SignInResult =
 /**
  * Signs in the Google account in `claims`. Unknown emails are turned away
  * before any user (or computer) exists. An email already tied to a different
- * Google account is refused too, since emails can be reassigned.
+ * Google account is refused too, since emails can be reassigned. A user
+ * without a computer gets one requested in the same transaction (§17), which
+ * covers sign-up and users who existed before it, like the dev seed's.
  */
 export async function signInWithGoogle(
+  db: DbOrTx,
+  claims: GoogleClaims,
+  browserTimezone: string | undefined,
+): Promise<SignInResult> {
+  return db.transaction(async (tx) => {
+    const result = await findOrCreateUser(tx, claims, browserTimezone);
+    if (result.outcome === "signed_in") await requestVm(tx, result.userId);
+    return result;
+  });
+}
+
+async function findOrCreateUser(
   db: DbOrTx,
   claims: GoogleClaims,
   browserTimezone: string | undefined,

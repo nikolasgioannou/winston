@@ -14,6 +14,7 @@ import {
   getCookie,
   setCookie,
 } from "@tanstack/react-start/server";
+import { redirect } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";
 import { webConfig } from "./config.server";
 import { database } from "./db.server";
@@ -52,6 +53,16 @@ export async function currentUser() {
     })
     .from(users)
     .where(eq(users.id, session.userId));
+  return user;
+}
+
+/**
+ * The signed-in user, for private server functions; without a session it
+ * sends the browser to sign in.
+ */
+export async function requireUser() {
+  const user = await currentUser();
+  if (!user) throw redirect({ to: "/" });
   return user;
 }
 

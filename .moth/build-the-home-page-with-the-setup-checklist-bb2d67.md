@@ -14,7 +14,7 @@ blocked_by:
 ---
 
 `/home` is Winston's status page, and it doubles as first-run setup: until everything is connected, it shows a checklist (docs/design.md §20):
-1. **Your computer:** provisioning, ready, or failed with retry.
+1. **Your computer:** provisioning, ready, or failed with retry. `getComputerStatus` and `retryComputer` (`apps/web/src/server/computer-functions.ts`) already exist; poll the status every few seconds while it's `setting_up` (docs/design.md §17, Setting up a computer). It can also be `unreachable`.
 2. **Connect Telegram:** the linking ticket fills this in. Leave a slot that shows "not linked" for now.
 3. **Connect your first account:** links to `/accounts`, filled in by the connections ticket.
 
