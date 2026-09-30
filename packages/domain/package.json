@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./api-errors": "./src/api-errors.ts",
+    "./connections": "./src/connections.ts",
     "./envelope": "./src/envelope.ts",
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",

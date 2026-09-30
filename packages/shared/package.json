@@ -10,7 +10,8 @@
     "./logger": "./src/logger.ts",
     "./signed": "./src/signed.ts",
     "./time": "./src/time.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./token-vault": "./src/token-vault.ts"
   },
   "scripts": {
     "typecheck": "tsc"

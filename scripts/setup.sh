@@ -8,8 +8,9 @@
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
 #   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
-#   7. Generate the Telegram webhook, gateway internal and run token secrets in
-#      .env.local if they're missing, and check that a bot token is set.
+#   7. Generate the Telegram webhook, gateway internal and run token secrets and
+#      the token encryption key in .env.local if they're missing, and check that
+#      a bot token is set.
 #   8. Check that a Docker engine is reachable (starting Colima if it's installed but
 #      stopped). Docker is a machine-level prerequisite, so this script never installs it.
 #   9. Start the local Postgres and wait until it's healthy.
@@ -105,6 +106,7 @@ ensure_secret() {
 ensure_secret TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret"
 ensure_secret GATEWAY_INTERNAL_SECRET "gateway internal secret"
 ensure_secret RUN_TOKEN_SECRET "run token secret"
+ensure_secret TOKEN_ENCRYPTION_KEY "token encryption key"
 if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
   done_ "Telegram bot token set"
 else

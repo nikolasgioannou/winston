@@ -1,4 +1,5 @@
 export * from "./allowed-emails.ts";
+export * from "./connections.ts";
 export * from "./cost-ledger.ts";
 export * from "./front-state.ts";
 export * from "./inbound-items.ts";

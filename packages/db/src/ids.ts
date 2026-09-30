@@ -12,6 +12,7 @@ export const idPrefixes = {
   vm: "vm",
   file: "file",
   webSession: "ses",
+  connection: "acct",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;
