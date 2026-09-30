@@ -1,14 +1,18 @@
 import {
+  aliasPattern,
   defaultAlias,
   defaultCapabilities,
+  isCapabilityOf,
   type ConnectionDomain,
   type ConnectionProvider,
   type ConnectionStatus,
 } from "@winston/domain/connections";
+import { revokeConnectionTokenJob } from "@winston/domain/jobs";
 import type { TokenVault } from "@winston/shared/token-vault";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { newId } from "./ids.ts";
+import { enqueue } from "./queue.ts";
 import { connections } from "./schema/index.ts";
 import { recordSystemEvent } from "./system-events.ts";
 
@@ -92,7 +96,7 @@ export async function saveConnection(
   },
 ) {
   const [existing] = await db
-    .select({ id: connections.id })
+    .select({ id: connections.id, status: connections.status })
     .from(connections)
     .where(
       and(
@@ -114,6 +118,14 @@ export async function saveConnection(
   };
   if (existing) {
     await db.update(connections).set(fresh).where(eq(connections.id, id));
+    // Coming back after a disconnect is news to Winston; a refresh isn't.
+    if (existing.status === "disconnected")
+      await recordConnected(
+        db,
+        grant.userId,
+        id,
+        `reconnected:${String(Date.now())}`,
+      );
     return { connectionId: id, created: false };
   }
 
@@ -141,18 +153,150 @@ export async function saveConnection(
       capabilities: defaultCapabilities[grant.domain],
       ...fresh,
     });
-    await recordSystemEvent(tx, {
-      userId: grant.userId,
-      type: "system.app.connected",
-      payload: {
-        connectionId: id,
-        domain: grant.domain,
-        provider: grant.provider,
-        alias,
-        externalEmail: grant.externalEmail,
-      },
-      sourceRef: `connection:${id}:connected`,
-    });
+    await recordConnected(tx, grant.userId, id, "connected");
     return { connectionId: id, created: true };
+  });
+}
+
+/** What Winston is told about a connection (`system.app.connected` and `…disconnected`). */
+async function connectionFacts(db: DbOrTx, connectionId: string) {
+  const [facts] = await db
+    .select({
+      connectionId: connections.id,
+      domain: connections.domain,
+      provider: connections.provider,
+      alias: connections.alias,
+      externalEmail: connections.externalEmail,
+    })
+    .from(connections)
+    .where(eq(connections.id, connectionId));
+  if (!facts) throw new Error(`No connection ${connectionId}`);
+  return facts;
+}
+
+async function recordConnected(
+  db: DbOrTx,
+  userId: string,
+  connectionId: string,
+  occasion: string,
+) {
+  await recordSystemEvent(db, {
+    userId,
+    type: "system.app.connected",
+    payload: await connectionFacts(db, connectionId),
+    sourceRef: `connection:${connectionId}:${occasion}`,
+  });
+}
+
+const ownedBy = (userId: string, connectionId: string) =>
+  and(eq(connections.id, connectionId), eq(connections.userId, userId));
+
+/**
+ * Turns one capability of a user's connection on or off (the toggles M5
+ * enforces). The stored map always names every capability of the domain.
+ * Returns the new map, or undefined if there's no such connection or the
+ * capability isn't its domain's.
+ */
+export async function setCapability(
+  db: DbOrTx,
+  userId: string,
+  connectionId: string,
+  capability: string,
+  enabled: boolean,
+) {
+  const [connection] = await db
+    .select({ domain: connections.domain })
+    .from(connections)
+    .where(ownedBy(userId, connectionId));
+  if (!connection || !isCapabilityOf(connection.domain, capability))
+    return undefined;
+  const [updated] = await db
+    .update(connections)
+    .set({
+      capabilities: sql`${connections.capabilities} || jsonb_build_object(${capability}::text, ${enabled}::boolean)`,
+    })
+    .where(ownedBy(userId, connectionId))
+    .returning({ capabilities: connections.capabilities });
+  return updated?.capabilities;
+}
+
+export type RenameResult =
+  | { ok: true; alias: string }
+  | { ok: false; problem: "invalid" | "taken" | "not_found" };
+
+/**
+ * Renames a user's connection. An alias is a shell-safe word
+ * (`aliasPattern`), unique among the user's connections in that domain.
+ */
+export async function renameConnection(
+  db: DbOrTx,
+  userId: string,
+  connectionId: string,
+  alias: string,
+): Promise<RenameResult> {
+  if (!aliasPattern.test(alias)) return { ok: false, problem: "invalid" };
+  return db.transaction(async (tx) => {
+    const [connection] = await tx
+      .select({ domain: connections.domain })
+      .from(connections)
+      .where(ownedBy(userId, connectionId));
+    if (!connection) return { ok: false, problem: "not_found" };
+    const [clash] = await tx
+      .select({ id: connections.id })
+      .from(connections)
+      .where(
+        and(
+          eq(connections.userId, userId),
+          eq(connections.domain, connection.domain),
+          eq(connections.alias, alias),
+          ne(connections.id, connectionId),
+        ),
+      );
+    if (clash) return { ok: false, problem: "taken" };
+    await tx
+      .update(connections)
+      .set({ alias })
+      .where(ownedBy(userId, connectionId));
+    return { ok: true, alias };
+  });
+}
+
+/**
+ * Disconnects a user's connection: it's `disconnected` at once, so nothing
+ * uses it again, Winston is told (`system.app.disconnected`), and a job in
+ * `agents` deals with the Google grant. Returns false if there's no such
+ * connection or it's already disconnected.
+ */
+export async function disconnectConnection(
+  db: DbOrTx,
+  userId: string,
+  connectionId: string,
+) {
+  return db.transaction(async (tx) => {
+    const [disconnected] = await tx
+      .update(connections)
+      .set({ status: "disconnected" })
+      .where(
+        and(
+          ownedBy(userId, connectionId),
+          ne(connections.status, "disconnected"),
+        ),
+      )
+      .returning({ id: connections.id });
+    if (!disconnected) return false;
+    // M7: cancel the triggers scoped to this connection here, in the same
+    // transaction (docs/design.md §3, system.app.disconnected).
+    await recordSystemEvent(tx, {
+      userId,
+      type: "system.app.disconnected",
+      payload: await connectionFacts(tx, connectionId),
+      sourceRef: `connection:${connectionId}:disconnected:${String(Date.now())}`,
+    });
+    await enqueue(tx, revokeConnectionTokenJob.type, {
+      userId,
+      payload: { connectionId },
+      dedupeKey: revokeConnectionTokenJob.dedupeKey(connectionId),
+    });
+    return true;
   });
 }

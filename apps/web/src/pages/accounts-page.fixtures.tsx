@@ -20,13 +20,13 @@ const account = (
   ...overrides,
 });
 
-const work = account({ id: "acct_1" });
+export const work = account({ id: "acct_1" });
 const personalMail = account({
   id: "acct_2",
   externalEmail: "ada.lovelace@gmail.com",
   alias: "personal",
 });
-const personalCalendar = account({
+export const personalCalendar = account({
   id: "acct_3",
   domain: "calendar",
   provider: "google_calendar",

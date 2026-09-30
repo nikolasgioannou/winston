@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { connectionDtoColumns, toConnectionDto } from "./connections.ts";
-import { connections } from "./schema/index.ts";
+import {
+  connectionDtoColumns,
+  disconnectConnection,
+  renameConnection,
+  setCapability,
+  toConnectionDto,
+} from "./connections.ts";
+import { connections, inboundItems, jobs } from "./schema/index.ts";
 import { inRollback, insertUser, testDb } from "./testing.ts";
 
 const db = await testDb();
@@ -77,6 +83,137 @@ describe("connections", () => {
         status: "ok",
         createdAt: row.createdAt.toISOString(),
       });
+    });
+  });
+});
+
+describe("managing a connection", () => {
+  const insert = async (
+    tx: Parameters<Parameters<typeof inRollback>[1]>[0],
+    userId: string,
+    overrides = {},
+  ) => {
+    const [row] = await tx
+      .insert(connections)
+      .values(
+        connection(userId, {
+          alias: "work",
+          capabilities: {
+            read: true,
+            draft: true,
+            send: false,
+            modify_labels: false,
+          },
+          ...overrides,
+        }),
+      )
+      .returning();
+    if (!row) throw new Error("expected a row");
+    return row;
+  };
+
+  test("a toggle changes one capability of the user's own connection, and only its domain's", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const other = await insertUser(tx);
+      const row = await insert(tx, user.id);
+      expect(await setCapability(tx, user.id, row.id, "send", true)).toEqual({
+        read: true,
+        draft: true,
+        send: true,
+        modify_labels: false,
+      });
+      expect(
+        await setCapability(tx, user.id, row.id, "rsvp", true),
+      ).toBeUndefined();
+      expect(
+        await setCapability(tx, other.id, row.id, "send", false),
+      ).toBeUndefined();
+      const [after] = await tx
+        .select()
+        .from(connections)
+        .where(eq(connections.id, row.id));
+      expect(after?.capabilities.send).toBe(true);
+    });
+  });
+
+  test("an alias must be a shell-safe word no other connection in the domain uses", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const work = await insert(tx, user.id);
+      await insert(tx, user.id, {
+        externalEmail: "ada@gmail.com",
+        alias: "personal",
+      });
+      const calendar = await insert(tx, user.id, {
+        domain: "calendar",
+        provider: "google_calendar",
+        alias: "cal",
+      });
+
+      expect(await renameConnection(tx, user.id, work.id, "my work")).toEqual({
+        ok: false,
+        problem: "invalid",
+      });
+      expect(await renameConnection(tx, user.id, work.id, "$(rm)")).toEqual({
+        ok: false,
+        problem: "invalid",
+      });
+      expect(await renameConnection(tx, user.id, work.id, "personal")).toEqual({
+        ok: false,
+        problem: "taken",
+      });
+      // Calendar aliases are a separate namespace.
+      expect(
+        await renameConnection(tx, user.id, calendar.id, "personal"),
+      ).toEqual({ ok: true, alias: "personal" });
+      expect(await renameConnection(tx, user.id, work.id, "day-job")).toEqual({
+        ok: true,
+        alias: "day-job",
+      });
+      expect(await renameConnection(tx, user.id, "acct_missing", "x")).toEqual({
+        ok: false,
+        problem: "not_found",
+      });
+    });
+  });
+
+  test("disconnecting marks it at once, tells Winston and queues the grant's revocation, once", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const row = await insert(tx, user.id);
+      expect(await disconnectConnection(tx, user.id, row.id)).toBe(true);
+      expect(await disconnectConnection(tx, user.id, row.id)).toBe(false);
+
+      const [after] = await tx
+        .select()
+        .from(connections)
+        .where(eq(connections.id, row.id));
+      expect(after?.status).toBe("disconnected");
+      const [item] = await tx
+        .select()
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, user.id));
+      expect(item).toMatchObject({
+        type: "system.app.disconnected",
+        payload: {
+          connectionId: row.id,
+          domain: "mail",
+          alias: "work",
+          externalEmail: "ada@work.example",
+        },
+      });
+      expect(
+        (
+          await tx
+            .select({ type: jobs.type, payload: jobs.payload })
+            .from(jobs)
+            .where(eq(jobs.userId, user.id))
+        ).sort((a, b) => a.type.localeCompare(b.type)),
+      ).toEqual([
+        { type: "front_turn", payload: {} },
+        { type: "revoke_connection_token", payload: { connectionId: row.id } },
+      ]);
     });
   });
 });

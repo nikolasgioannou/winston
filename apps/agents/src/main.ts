@@ -6,6 +6,7 @@ import { createDb } from "@winston/db/client";
 import {
   frontTurnJob,
   provisionVmJob,
+  revokeConnectionTokenJob,
   saveAttachmentJob,
   transcribeVoiceJob,
 } from "@winston/domain/jobs";
@@ -26,6 +27,11 @@ import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
+import {
+  googleTokenRevoker,
+  revokeConnectionTokenHandler,
+} from "./connections/revoke.ts";
+import { localTokenVault } from "@winston/shared/token-vault";
 import { provisionVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
 
@@ -59,6 +65,10 @@ const worker = createWorker({
   logger,
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
+    [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
+      vault: localTokenVault(config.TOKEN_ENCRYPTION_KEY),
+      revoke: googleTokenRevoker(),
+    }),
     [saveAttachmentJob.type]: saveAttachmentHandler({
       vm,
       telegram: botApiFiles(telegramApi, config.TELEGRAM_BOT_TOKEN),

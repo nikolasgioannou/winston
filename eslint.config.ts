@@ -59,7 +59,8 @@ export default defineConfig(
     files: ["apps/web/**/*.{ts,tsx}"],
     extends: [tanstackRouter.configs["flat/recommended"]],
     rules: {
-      // TanStack Router's guards throw its redirect() value, which isn't an Error.
+      // TanStack Router's guards and loaders throw its redirect() and notFound()
+      // values, which aren't Errors.
       "@typescript-eslint/only-throw-error": [
         "error",
         {
@@ -68,6 +69,11 @@ export default defineConfig(
               from: "package",
               package: "@tanstack/router-core",
               name: "Redirect",
+            },
+            {
+              from: "package",
+              package: "@tanstack/router-core",
+              name: "NotFoundError",
             },
           ],
         },

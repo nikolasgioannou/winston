@@ -47,6 +47,63 @@ export const defaultCapabilities = {
   },
 } as const satisfies Record<ConnectionDomain, CapabilityMap>;
 
+/**
+ * The Google scope each capability needs, per provider. The connect flow asks
+ * for every scope a domain uses, but the user can untick some on Google's
+ * screen; a capability whose scope is missing is unavailable until they
+ * reconnect.
+ */
+export const capabilityScopes = {
+  gmail: {
+    read: "gmail.modify",
+    draft: "gmail.modify",
+    send: "gmail.modify",
+    modify_labels: "gmail.modify",
+  },
+  google_calendar: {
+    read: "calendar.events",
+    create: "calendar.events",
+    update: "calendar.events",
+    delete: "calendar.events",
+    rsvp: "calendar.events",
+  },
+} as const satisfies {
+  gmail: Record<Capability<"mail">, string>;
+  google_calendar: Record<Capability<"calendar">, string>;
+};
+
+/** The provider that serves each domain today. */
+export const providerOf = {
+  mail: "gmail",
+  calendar: "google_calendar",
+} as const satisfies Record<ConnectionDomain, ConnectionProvider>;
+
+/** Whether `capability` is one of `domain`'s. */
+export function isCapabilityOf<D extends ConnectionDomain>(
+  domain: D,
+  capability: string,
+): capability is Capability<D> {
+  return (capabilitiesByDomain[domain] as readonly string[]).includes(
+    capability,
+  );
+}
+
+/**
+ * An alias is a word Winston types in the shell (`--account work`):
+ * lowercase letters, digits, `.`, `_` and `-`, starting with a letter or
+ * digit, at most 32 characters.
+ */
+export const aliasPattern = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+
+/** The closest valid alias to `text`, or "" if nothing's left. */
+function toAlias(text: string) {
+  return text
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9._-]/g, "")
+    .replace(/^[._-]+/, "")
+    .slice(0, 32);
+}
+
 const personalEmailDomains = new Set(["gmail.com", "googlemail.com"]);
 
 /**
@@ -59,7 +116,10 @@ export function defaultAlias(email: string, taken: ReadonlySet<string>) {
   const [local = "", host = ""] = email.toLowerCase().split("@");
   const personal = personalEmailDomains.has(host);
   const base = personal ? "personal" : "work";
-  const second = personal ? local : (host.split(".")[0] ?? "");
+  // Plus-addressing isn't part of the name.
+  const second = toAlias(
+    personal ? (local.split("+")[0] ?? "") : (host.split(".")[0] ?? ""),
+  );
   for (const alias of [base, second])
     if (alias !== "" && !taken.has(alias)) return alias;
   for (let n = 2; ; n++) {

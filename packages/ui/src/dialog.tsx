@@ -12,16 +12,23 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   onConfirm,
+  defaultOpen,
 }: {
   trigger: ReactNode;
   title: ReactNode;
   description: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
+  /** Starts open, e.g. to show it in the dev design view. */
+  defaultOpen?: boolean;
 }) {
   return (
-    <AlertDialog.Root>
-      <AlertDialog.Trigger render={<span className="contents" />}>
+    <AlertDialog.Root {...(defaultOpen ? { defaultOpen } : {})}>
+      <AlertDialog.Trigger
+        // The trigger is the button passed in; this wrapper only hosts it.
+        nativeButton={false}
+        render={<span className="contents" />}
+      >
         {trigger}
       </AlertDialog.Trigger>
       <AlertDialog.Portal>

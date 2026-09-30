@@ -43,13 +43,16 @@ export const connections = snakeCase.table(
     provider: connectionProvider().notNull(),
     /** The Google account's address. */
     externalEmail: text().notNull(),
-    /** The user's name for it, like `work`, as in `mail:work`. */
+    /** The user's name for it, like `work`, as in `mail:work` (`aliasPattern`). */
     alias: text(),
     /** The OAuth scopes Google granted. */
     scopes: text().array().notNull().default([]),
     capabilities: jsonb().$type<CapabilityMap>().notNull().default({}),
-    /** The refresh token, sealed by the token vault with `{ connectionId }` as context. */
-    tokenCiphertext: text().notNull(),
+    /**
+     * The refresh token, sealed by the token vault with `{ connectionId }` as
+     * context. Deleted once a disconnected connection's grant is dealt with.
+     */
+    tokenCiphertext: text(),
     /** When Google granted the token; testing-mode grants last 7 days (§12a). */
     grantedAt: timestamp({ withTimezone: true }).notNull(),
     status: connectionStatus().notNull().default("ok"),
@@ -62,5 +65,7 @@ export const connections = snakeCase.table(
   (t) => [
     // Also serves lookups by user, since user_id leads.
     unique().on(t.userId, t.domain, t.externalEmail),
+    // Winston picks an account by alias (`--account work`).
+    unique().on(t.userId, t.domain, t.alias),
   ],
 );

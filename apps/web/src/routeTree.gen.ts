@@ -11,9 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
-import { Route as AuthedAccountsRouteImport } from './routes/_authed/accounts'
 import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
+import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
+import { Route as AuthedAccountsAccountIdRouteImport } from './routes/_authed/accounts/$accountId'
 import { Route as AuthedProfileIndexRouteImport } from './routes/_authed/profile/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthGoogleStartRouteImport } from './routes/auth/google/start'
@@ -31,11 +32,6 @@ const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedAccountsRoute = AuthedAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
-  getParentRoute: () => AuthedRoute,
-} as any)
 const AuthedHomeRoute = AuthedHomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -45,6 +41,16 @@ const AuthSignOutRoute = AuthSignOutRouteImport.update({
   id: '/auth/sign-out',
   path: '/auth/sign-out',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedAccountsIndexRoute = AuthedAccountsIndexRouteImport.update({
+  id: '/accounts/',
+  path: '/accounts/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAccountsAccountIdRoute = AuthedAccountsAccountIdRouteImport.update({
+  id: '/accounts/$accountId',
+  path: '/accounts/$accountId',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedProfileIndexRoute = AuthedProfileIndexRouteImport.update({
   id: '/profile/',
@@ -85,12 +91,13 @@ const AuthGoogleConnectCallbackRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/accounts': typeof AuthedAccountsRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
+  '/accounts/': typeof AuthedAccountsIndexRoute
   '/profile/': typeof AuthedProfileIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -98,12 +105,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/accounts': typeof AuthedAccountsRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
+  '/accounts': typeof AuthedAccountsIndexRoute
   '/profile': typeof AuthedProfileIndexRoute
   '/dev/design': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -113,12 +121,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
-  '/_authed/accounts': typeof AuthedAccountsRoute
   '/_authed/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/_authed/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
+  '/_authed/accounts/': typeof AuthedAccountsIndexRoute
   '/_authed/profile/': typeof AuthedProfileIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -128,12 +137,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/accounts'
     | '/home'
     | '/auth/sign-out'
+    | '/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
+    | '/accounts/'
     | '/profile/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
@@ -141,12 +151,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/accounts'
     | '/home'
     | '/auth/sign-out'
+    | '/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
+    | '/accounts'
     | '/profile'
     | '/dev/design'
     | '/auth/google/connect/callback'
@@ -155,12 +166,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
-    | '/_authed/accounts'
     | '/_authed/home'
     | '/auth/sign-out'
+    | '/_authed/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
+    | '/_authed/accounts/'
     | '/_authed/profile/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
@@ -195,13 +207,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authed/accounts': {
-      id: '/_authed/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AuthedAccountsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/home': {
       id: '/_authed/home'
       path: '/home'
@@ -215,6 +220,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/sign-out'
       preLoaderRoute: typeof AuthSignOutRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authed/accounts/': {
+      id: '/_authed/accounts/'
+      path: '/accounts'
+      fullPath: '/accounts/'
+      preLoaderRoute: typeof AuthedAccountsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/accounts/$accountId': {
+      id: '/_authed/accounts/$accountId'
+      path: '/accounts/$accountId'
+      fullPath: '/accounts/$accountId'
+      preLoaderRoute: typeof AuthedAccountsAccountIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/profile/': {
       id: '/_authed/profile/'
@@ -269,14 +288,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedRouteChildren {
-  AuthedAccountsRoute: typeof AuthedAccountsRoute
   AuthedHomeRoute: typeof AuthedHomeRoute
+  AuthedAccountsAccountIdRoute: typeof AuthedAccountsAccountIdRoute
+  AuthedAccountsIndexRoute: typeof AuthedAccountsIndexRoute
   AuthedProfileIndexRoute: typeof AuthedProfileIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
-  AuthedAccountsRoute: AuthedAccountsRoute,
   AuthedHomeRoute: AuthedHomeRoute,
+  AuthedAccountsAccountIdRoute: AuthedAccountsAccountIdRoute,
+  AuthedAccountsIndexRoute: AuthedAccountsIndexRoute,
   AuthedProfileIndexRoute: AuthedProfileIndexRoute,
 }
 

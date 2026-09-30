@@ -1,11 +1,14 @@
 import { dbConfigSchema } from "@winston/db/config";
 import { loadConfig } from "@winston/shared/config";
 import { logConfigSchema } from "@winston/shared/logger";
+import { localVaultConfigSchema } from "@winston/shared/token-vault";
 import { z } from "zod";
 
 const agentsConfigSchema = dbConfigSchema
   .extend({
     ...logConfigSchema.shape,
+    /** Opens connected accounts' tokens (KMS in production, M4). */
+    ...localVaultConfigSchema.shape,
     OPENROUTER_API_KEY: z.string().min(1),
     /** The bot Winston talks through (the same one `api` receives for). */
     TELEGRAM_BOT_TOKEN: z

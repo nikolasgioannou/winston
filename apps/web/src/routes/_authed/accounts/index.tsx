@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "@winston/ui";
 import { useEffect } from "react";
 import { z } from "zod";
-import { AccountsPage } from "../../pages/accounts-page";
-import { getAccounts } from "../../server/accounts-functions";
+import { AccountsPage } from "../../../pages/accounts-page";
+import { getAccounts } from "../../../server/accounts-functions";
 
 const searchSchema = z.object({
   /** Set by the connect callback: the connection just saved, or what went wrong. */
@@ -17,7 +17,7 @@ const problems = {
     "Winston needs every permission on Google's screen to help with that account. Please try again and leave them ticked.",
 };
 
-export const Route = createFileRoute("/_authed/accounts")({
+export const Route = createFileRoute("/_authed/accounts/")({
   validateSearch: searchSchema,
   loader: () => getAccounts(),
   component: Accounts,

@@ -7,7 +7,8 @@ import {
   StatusPill,
   type MenuLink,
 } from "@winston/ui";
-import { Blocks, CalendarDays, Mail } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Blocks, CalendarDays, ChevronRight, Mail } from "lucide-react";
 import type { ReactNode } from "react";
 
 const addLinks: MenuLink[] = [
@@ -75,9 +76,12 @@ export function AccountsPage({
 }
 
 function AccountRow({ connection }: { connection: ConnectionDto }) {
-  const needsReconnect = connection.status !== "ok";
   return (
-    <div className="flex items-center gap-3">
+    <Link
+      to="/accounts/$accountId"
+      params={{ accountId: connection.id }}
+      className="-mx-2 flex items-center gap-3 rounded-lg px-2 outline-none hover:bg-hover focus-visible:shadow-[inset_0_0_0_1px_var(--w-focus)]"
+    >
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-strong text-icon [&>svg]:size-4">
         {domainIcons[connection.domain]}
       </span>
@@ -94,21 +98,9 @@ function AccountRow({ connection }: { connection: ConnectionDto }) {
           {connection.externalEmail}
         </span>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <Status status={connection.status} />
-        {needsReconnect && (
-          <Button
-            size="sm"
-            nativeButton={false}
-            render={
-              <a href={`/auth/google/connect?reconnect=${connection.id}`} />
-            }
-          >
-            Reconnect
-          </Button>
-        )}
-      </div>
-    </div>
+      <Status status={connection.status} />
+      <ChevronRight className="size-4 shrink-0 text-icon" />
+    </Link>
   );
 }
 

@@ -1,0 +1,2 @@
+ALTER TABLE "connections" ALTER COLUMN "token_ciphertext" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "connections" ADD CONSTRAINT "connections_user_id_domain_alias_unique" UNIQUE("user_id","domain","alias");

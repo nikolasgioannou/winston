@@ -68,7 +68,7 @@ describe("completeGoogleConnect", () => {
       });
       expect(row.tokenCiphertext).not.toContain("refresh-one");
       expect(
-        await vault.decrypt(row.tokenCiphertext, tokenContext(row.id)),
+        await vault.decrypt(row.tokenCiphertext ?? "", tokenContext(row.id)),
       ).toBe("1//refresh-one");
       expect(JSON.stringify(toConnectionDto(row))).not.toContain(
         row.tokenCiphertext,
@@ -136,7 +136,10 @@ describe("completeGoogleConnect", () => {
         first.grantedAt.getTime(),
       );
       expect(
-        await vault.decrypt(again.tokenCiphertext, tokenContext(again.id)),
+        await vault.decrypt(
+          again.tokenCiphertext ?? "",
+          tokenContext(again.id),
+        ),
       ).toBe("1//refresh-two");
       expect(
         await tx
@@ -183,17 +186,24 @@ describe("completeGoogleConnect", () => {
         cookies("calendar"),
       );
       const rows = await connectionsOf(tx, user.id);
+      // One transaction gives them all the same created_at, so sort here.
       expect(
-        rows.map((r) => [r.domain, r.externalEmail, r.alias, r.scopes]),
+        rows
+          .map((r) => [r.domain, r.externalEmail, r.alias, r.scopes])
+          .sort((a, b) =>
+            `${String(a[0])}${String(a[1])}`.localeCompare(
+              `${String(b[0])}${String(b[1])}`,
+            ),
+          ),
       ).toEqual([
-        ["mail", "ada@acme.com", "work", ["gmail.modify"]],
-        ["mail", "ada@bigco.com", "bigco", ["gmail.modify"]],
         [
           "calendar",
           "ada@acme.com",
           "work",
           ["calendar.events", "calendar.calendarlist.readonly"],
         ],
+        ["mail", "ada@acme.com", "work", ["gmail.modify"]],
+        ["mail", "ada@bigco.com", "bigco", ["gmail.modify"]],
       ]);
     });
   });

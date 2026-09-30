@@ -49,3 +49,15 @@ export const transcribeVoiceJob = {
   type: "transcribe_voice",
   dedupeKey: (inboundItemId: string) => `transcribe_voice:${inboundItemId}`,
 } as const;
+
+/**
+ * Dealing with a disconnected connection's grant (§12a): revoke it with
+ * Google, unless another of the user's connections uses the same Google
+ * account (revoking one grant revokes them all), then delete the token.
+ * Payload `{ connectionId }`. Runs in `agents`, which can decrypt tokens.
+ */
+export const revokeConnectionTokenJob = {
+  type: "revoke_connection_token",
+  dedupeKey: (connectionId: string) =>
+    `revoke_connection_token:${connectionId}`,
+} as const;
