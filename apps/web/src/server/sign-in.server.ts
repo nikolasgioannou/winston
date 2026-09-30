@@ -8,6 +8,7 @@ import type { DbOrTx } from "@winston/db/client";
 import { allowedEmails, users } from "@winston/db/schema";
 import { requestVm } from "@winston/db/vms";
 import { createSession } from "@winston/db/web-sessions";
+import { canonicalTimeZone } from "@winston/shared/time";
 import { tokenMatches, hashToken } from "@winston/shared/tokens";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -89,15 +90,9 @@ async function findOrCreateUser(
   return { outcome: "signed_in", userId: created.id, created: true };
 }
 
-/** An IANA time zone the runtime knows, or undefined. */
+/** An IANA time zone the runtime knows, canonically named, or undefined. */
 export function validTimezone(timezone: string | undefined) {
-  if (!timezone) return undefined;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: timezone });
-    return timezone;
-  } catch {
-    return undefined;
-  }
+  return timezone === undefined ? undefined : canonicalTimeZone(timezone);
 }
 
 /** The short-lived values the sign-in flow keeps in cookies between the two redirects. */

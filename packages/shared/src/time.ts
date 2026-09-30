@@ -32,3 +32,21 @@ export function formatInTimeZone(date: Date, timeZone: string) {
   const offset = (parts.timeZoneName ?? "GMT").slice(3) || "+00:00";
   return `${parts.year ?? ""}-${parts.month ?? ""}-${parts.day ?? ""}T${parts.hour ?? ""}:${parts.minute ?? ""}:${parts.second ?? ""}${offset}`;
 }
+
+/**
+ * The runtime's canonical name for an IANA time zone (`america/new_york` →
+ * `America/New_York`), or undefined if it doesn't know it.
+ */
+export function canonicalTimeZone(zone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+    }).resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether the runtime knows `zone` as a time zone. */
+export const isTimeZone = (zone: string) =>
+  canonicalTimeZone(zone) !== undefined;

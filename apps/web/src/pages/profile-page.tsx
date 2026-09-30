@@ -1,9 +1,26 @@
-import { Button, Section, SettingRow } from "@winston/ui";
+import type { ProfileUpdateResult } from "@winston/db/profile";
+import {
+  Button,
+  SearchSelect,
+  Section,
+  SettingRow,
+  TextField,
+} from "@winston/ui";
+import { useState } from "react";
 import { TelegramButton, TelegramQr } from "../components/telegram-connect";
 import type { TelegramLinkState } from "../server/telegram-state";
+import { timeZoneOptions } from "../components/time-zones";
 
 export interface ProfilePageProps {
   email: string;
+  firstName: string;
+  lastName: string;
+  timezone: string;
+  onSaveName: (name: {
+    firstName: string;
+    lastName: string;
+  }) => Promise<ProfileUpdateResult>;
+  onTimezoneChange: (timezone: string) => void;
   telegram: TelegramLinkState | null;
   /** The Connect Telegram link while connecting (null until issued). */
   telegramLink: string | null;
@@ -13,18 +30,42 @@ export interface ProfilePageProps {
 }
 
 /**
- * `/profile` (docs/design.md §20): for now, Telegram and signing out. The
- * profile page ticket adds the rest.
+ * `/profile` (docs/design.md §20): the user's name and time zone, the
+ * Telegram link, and account actions.
  */
 export function ProfilePage(props: ProfilePageProps) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-8 sm:px-10">
       <h1 className="text-title font-semibold text-fg">Profile</h1>
+      <Section title="You">
+        <NameForm {...props} />
+        <SettingRow
+          label="Email"
+          description={`${props.email}. It's your Google sign-in, so it can't change here.`}
+          control={null}
+        />
+      </Section>
+      <Section title="Time zone">
+        <div className="flex flex-col gap-1.5">
+          <SearchSelect
+            aria-label="Time zone"
+            options={timeZoneOptions()}
+            value={props.timezone}
+            onValueChange={props.onTimezoneChange}
+            placeholder="Search for a city or region"
+            className="max-w-96"
+          />
+          <p className="text-caption text-fg-muted">
+            Winston uses it for every time he mentions and every schedule. It
+            follows your device automatically when you open this site.
+          </p>
+        </div>
+      </Section>
       <TelegramSection {...props} />
       <Section title="Account">
         <SettingRow
-          label="Signed in"
-          description={props.email}
+          label="Sign out"
+          description="Sign back in with Google any time."
           control={
             <form method="post" action="/auth/sign-out">
               <Button type="submit">Sign out</Button>
@@ -97,5 +138,59 @@ function TelegramSection({
         <TelegramQr url={telegramLink} />
       </div>
     </Section>
+  );
+}
+
+function NameForm({ firstName, lastName, onSaveName }: ProfilePageProps) {
+  const [first, setFirst] = useState(firstName);
+  const [last, setLast] = useState(lastName);
+  const [error, setError] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const changed = first.trim() !== firstName || last.trim() !== lastName;
+
+  const save = async () => {
+    setSaving(true);
+    setError(undefined);
+    const result = await onSaveName({ firstName: first, lastName: last });
+    setSaving(false);
+    if (!result.ok) setError("A first name is needed, up to 100 characters.");
+  };
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <TextField
+          label="First name"
+          value={first}
+          onChange={(event) => {
+            setFirst(event.target.value);
+          }}
+          error={error}
+          className="flex-1"
+        />
+        <TextField
+          label="Last name"
+          value={last}
+          onChange={(event) => {
+            setLast(event.target.value);
+          }}
+          className="flex-1"
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={!changed || saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        <span className="text-caption text-fg-muted">
+          Winston calls you by your first name.
+        </span>
+      </div>
+    </form>
   );
 }

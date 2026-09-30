@@ -173,6 +173,7 @@
       "dependencies": {
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
+        "@winston/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "hono": "4.13.9",
         "zod": "4.6.5",

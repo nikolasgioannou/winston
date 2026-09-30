@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "@winston/ui";
 import type { ReactNode } from "react";
 import appCss from "../styles/app.css?url";
 
@@ -23,6 +24,7 @@ function RootLayout() {
   return (
     <Document>
       <Outlet />
+      <Toaster />
     </Document>
   );
 }

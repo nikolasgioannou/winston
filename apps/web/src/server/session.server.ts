@@ -50,6 +50,7 @@ export async function currentUser() {
       email: users.email,
       firstName: users.firstName,
       lastName: users.lastName,
+      timezone: users.timezone,
     })
     .from(users)
     .where(eq(users.id, session.userId));

@@ -4,6 +4,7 @@
  * agents service provisions it). Refuses to touch non-local databases.
  */
 import { loadConfig } from "@winston/shared/config";
+import { isTimeZone } from "@winston/shared/time";
 import { z } from "zod";
 import { createDb } from "./client.ts";
 import { assertLocalDatabase, loadDbConfig } from "./config.ts";
@@ -22,15 +23,6 @@ const seedConfigSchema = z.object({
     z.coerce.number().int().optional(),
   ),
 });
-
-function isTimeZone(value: string) {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const { DATABASE_URL } = loadDbConfig();
 assertLocalDatabase(DATABASE_URL, "seed");

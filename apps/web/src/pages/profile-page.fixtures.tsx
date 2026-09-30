@@ -11,6 +11,11 @@ const profile = (props: Partial<ProfilePageProps>) => () => (
   <AppShell activePath="/profile" drawerOpen={false} onDrawerOpenChange={noop}>
     <ProfilePage
       email="ada@example.com"
+      firstName="Ada"
+      lastName="Lovelace"
+      timezone="Europe/London"
+      onSaveName={() => Promise.resolve({ ok: true, changed: [] })}
+      onTimezoneChange={noop}
       telegram={null}
       telegramLink={fixtureTelegramLink}
       relinking={false}
@@ -25,12 +30,12 @@ export const profileFixtures: PageFixtures = {
   title: "Profile",
   path: "/profile",
   states: {
+    linked: { label: "Default", render: profile({ telegram: linked }) },
     not_linked: { label: "Telegram not linked", render: profile({}) },
     issuing: {
       label: "Telegram link loading",
       render: profile({ telegramLink: null }),
     },
-    linked: { label: "Telegram linked", render: profile({ telegram: linked }) },
     no_username: {
       label: "Linked, no username",
       render: profile({ telegram: { ...linked, username: null } }),

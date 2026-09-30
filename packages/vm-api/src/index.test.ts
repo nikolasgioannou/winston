@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { users } from "@winston/db/schema";
+import { inboundItems, users } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { mintRunToken } from "@winston/domain/run-token";
 import { eq } from "drizzle-orm";
@@ -95,7 +95,7 @@ describe("VM-facing API", () => {
     });
   });
 
-  test("PATCH /v1/me updates the time zone, and refuses one that isn't IANA", async () => {
+  test("PATCH /v1/me updates the time zone through the shared path, and refuses one that isn't IANA", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx, { timezone: "America/New_York" });
       const app = createVmApi({ db: tx, runTokenSecret: secret });
@@ -111,6 +111,22 @@ describe("VM-facing API", () => {
       expect(await ok.json()).toMatchObject({ timezone: "Europe/London" });
       const [row] = await tx.select().from(users).where(eq(users.id, user.id));
       expect(row?.timezone).toBe("Europe/London");
+      // Winston hears of it the same way as a change on the site.
+      const items = await tx
+        .select({ type: inboundItems.type, payload: inboundItems.payload })
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, user.id));
+      expect(items).toEqual([
+        {
+          type: "system.settings.changed",
+          payload: {
+            field: "timezone",
+            old: "America/New_York",
+            new: "Europe/London",
+            source: "winston",
+          },
+        },
+      ]);
 
       const bad = await call(app, user.id, token, {
         method: "PATCH",

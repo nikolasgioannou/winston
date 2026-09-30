@@ -10,6 +10,8 @@ import type { DbOrTx } from "@winston/db/client";
 import { users } from "@winston/db/schema";
 import { apiError, apiErrors } from "@winston/domain/api-errors";
 import { verifyRunToken, type RunKind } from "@winston/domain/run-token";
+import { updateProfile } from "@winston/db/profile";
+import { isTimeZone } from "@winston/shared/time";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -23,15 +25,6 @@ export interface VmApiEnv {
     run: { userId: string; runId: string; runKind: RunKind };
   };
 }
-
-const isTimeZone = (zone: string) => {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const meUpdate = z.object({
   timezone: z
@@ -123,10 +116,13 @@ export function createVmApi({
           apiErrors.invalid_request.status,
         );
       const userId = c.get("run").userId;
-      await db
-        .update(users)
-        .set({ timezone: body.data.timezone })
-        .where(eq(users.id, userId));
+      // The same path as the site's, so Winston hears of the change either way.
+      await updateProfile(
+        db,
+        userId,
+        { timezone: body.data.timezone },
+        "winston",
+      );
       const [me] = await selectMe(userId);
       return c.json(me);
     });
