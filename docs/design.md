@@ -377,6 +377,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 ### Access control & Google OAuth mode
 
 - **Sign-in allowlist:** an `allowed_emails` table in Postgres, seeded with the founder's email. Sign-in with a Google account whose verified email isn't listed is rejected before any account or VM is created. Friends are added by inserting rows. No admin UI.
+  - **As built:** `bun run allowlist list | add <email> | remove <email>` (`packages/db/src/allowlist-cli.ts`, on `@winston/db/allowlist`) works on whatever `DATABASE_URL` points at and names that database first; production runs go through `bun run prod` (M4). Emails are trimmed, lowercased and validated, and adding or removing twice is harmless. Removing stops future sign-ins but leaves an existing account (only its owner deletes it), and says so. Adding reminds you that connecting mail or calendar also needs the address, and any other account they'll connect, on Google's test-user list; signing in doesn't.
 - **Google OAuth app stays in testing mode** (no verification or CASA audit). Consequences:
   - Up to 100 test users. **Every Google account that's connected** for mail or calendar (including work accounts) must be on the OAuth app's test-user list in the Google Cloud console; accounts that only sign in (`openid email profile`) don't need to be. That list is separate from our allowlist.
   - Setup, scopes and clients are in [runbooks/google-cloud.md](runbooks/google-cloud.md).

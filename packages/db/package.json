@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./account-deletion": "./src/account-deletion.ts",
+    "./allowlist": "./src/allowlist.ts",
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
     "./ids": "./src/ids.ts",

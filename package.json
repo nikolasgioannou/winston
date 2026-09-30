@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "allowlist": "bun --env-file=.env.local packages/db/src/allowlist-cli.ts",
     "check": "moth check && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run --filter @winston/web verify:build",
     "db:down": "docker compose down",
     "db:generate": "bun run --filter @winston/db db:generate",

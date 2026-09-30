@@ -33,6 +33,12 @@ bun run vm:reset
 
 Anyone else who signs in to the local site (with an allowlisted email) gets their own local VM the same way.
 
+To let someone else sign in to your local site, allowlist them (and remove them the same way):
+
+```bash
+bun run allowlist add friend@example.com
+```
+
 For a shell inside the VM as `winston`:
 
 ```bash
