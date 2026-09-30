@@ -1,8 +1,8 @@
 import type { DbOrTx } from "@winston/db/client";
 import { connections, telegramLinks } from "@winston/db/schema";
 import { computerStatus } from "@winston/db/vms";
-import { and, count, eq, ne } from "drizzle-orm";
-import type { HomeState } from "./home-state";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
+import type { AttentionItem, HomeState } from "./home-state";
 
 /** What `/home` shows the user (docs/design.md §20). */
 export async function homeState(
@@ -22,11 +22,46 @@ export async function homeState(
         ne(connections.status, "disconnected"),
       ),
     );
+  const needingReconnect = await db
+    .select({
+      id: connections.id,
+      domain: connections.domain,
+      alias: connections.alias,
+      externalEmail: connections.externalEmail,
+      status: connections.status,
+    })
+    .from(connections)
+    .where(
+      and(
+        eq(connections.userId, user.id),
+        inArray(connections.status, ["expired", "expiring"]),
+      ),
+    )
+    .orderBy(asc(connections.createdAt));
+  const attention = needingReconnect
+    .map((connection): AttentionItem => {
+      const name = `${connection.alias ?? connection.externalEmail} ${connection.domain}`;
+      const expired = connection.status === "expired";
+      return {
+        id: connection.id,
+        tone: expired ? "error" : "attention",
+        title: expired
+          ? `Your ${name} access expired`
+          : `Your ${name} access expires soon`,
+        description: `Reconnect ${connection.externalEmail} so Winston can ${expired ? "help with it again" : "keep helping with it"}.`,
+        action: {
+          label: "Reconnect",
+          href: `/auth/google/connect?reconnect=${connection.id}`,
+        },
+      };
+    })
+    // Expired first: they've already stopped working.
+    .sort((a, b) => (a.tone === b.tone ? 0 : a.tone === "error" ? -1 : 1));
   return {
     firstName: user.firstName,
     computer: await computerStatus(db, user.id),
     telegramLinked: link !== undefined,
     accountsConnected: accounts?.n ?? 0,
-    attention: [],
+    attention,
   };
 }

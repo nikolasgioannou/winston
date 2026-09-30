@@ -69,7 +69,10 @@ export const homeFixtures: PageFixtures = {
             title: "Your work account's access expires tomorrow",
             description:
               "Reconnect ada@work.example so Winston can keep helping with it.",
-            action: { label: "Reconnect", to: "/accounts" },
+            action: {
+              label: "Reconnect",
+              href: "/auth/google/connect?reconnect=acct_1",
+            },
           },
         ],
       }),

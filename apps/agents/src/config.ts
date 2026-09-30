@@ -43,6 +43,8 @@ const agentsConfigSchema = dbConfigSchema
       .string()
       .min(1)
       .default(new URL("../../../.data/blobs", import.meta.url).pathname),
+    /** Where the site is served, for links Winston sends (like reconnecting an account). */
+    WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
     /** How many jobs this process runs at once. */
     WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
     /** How long in-flight jobs get to finish on shutdown before the process exits anyway. */

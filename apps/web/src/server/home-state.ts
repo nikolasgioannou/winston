@@ -12,7 +12,7 @@ export interface HomeState {
   telegramLinked: boolean;
   /** Connected Google accounts, not counting disconnected ones. */
   accountsConnected: number;
-  /** Things that need the user, most urgent first. */
+  /** Things that need the user, most urgent first: expired accounts, then expiring ones. */
   attention: AttentionItem[];
 }
 
@@ -22,5 +22,6 @@ export interface AttentionItem {
   tone: "attention" | "error";
   title: string;
   description: string;
-  action?: { label: string; to: string };
+  /** A full-page link, since some (like reconnecting) are server routes. */
+  action?: { label: string; href: string };
 }

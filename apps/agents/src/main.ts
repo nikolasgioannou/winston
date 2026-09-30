@@ -32,6 +32,10 @@ import {
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
 import { localTokenVault } from "@winston/shared/token-vault";
+import {
+  reconnectUrlFor,
+  sweepConnectionGrants,
+} from "./connections/grants.ts";
 import { provisionVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
 
@@ -107,6 +111,7 @@ async function shutdown(signal: string) {
     );
     process.exit(1);
   }, config.SHUTDOWN_TIMEOUT_MS);
+  clearInterval(grantSweeper);
   await worker.stop();
   await db.$client.end();
   clearTimeout(timeout);
@@ -116,6 +121,19 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+/** How often connections' grants are checked for running out. */
+const grantSweepMs = 5 * 60_000;
+const reconnectUrl = reconnectUrlFor(config.WEB_PUBLIC_URL);
+const sweepGrants = () => {
+  sweepConnectionGrants(db, logger, { reconnectUrl }).catch(
+    (error: unknown) => {
+      logger.error({ err: error }, "sweeping connection grants failed");
+    },
+  );
+};
+const grantSweeper = setInterval(sweepGrants, grantSweepMs);
+sweepGrants();
 
 worker.start();
 logger.info({ concurrency: config.WORKER_CONCURRENCY }, "agents started");

@@ -233,7 +233,7 @@ function Summary({ state }: { state: HomeState }) {
                   <Button
                     size="sm"
                     nativeButton={false}
-                    render={<Link to={item.action.to} />}
+                    render={<a href={item.action.href} />}
                   >
                     {item.action.label}
                   </Button>

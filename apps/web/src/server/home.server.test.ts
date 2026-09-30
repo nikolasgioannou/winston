@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { telegramLinks } from "@winston/db/schema";
+import { connections, telegramLinks } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { requestVm } from "@winston/db/vms";
 import { homeState } from "./home.server";
@@ -28,6 +28,62 @@ describe("homeState", () => {
         .insert(telegramLinks)
         .values({ userId: user.id, chatId: 42, telegramUserId: 42 });
       expect((await homeState(tx, user)).telegramLinked).toBe(true);
+    });
+  });
+
+  test("expired and expiring accounts need attention, expired first, each with its reconnect link", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const account = (
+        id: string,
+        overrides: Partial<typeof connections.$inferInsert>,
+      ) => ({
+        id,
+        userId: user.id,
+        domain: "mail" as const,
+        provider: "gmail" as const,
+        externalEmail: `${id}@acme.com`,
+        tokenCiphertext: "local:v1:x",
+        grantedAt: new Date(),
+        ...overrides,
+      });
+      await tx.insert(connections).values([
+        account("acct_ok", { alias: "fine" }),
+        account("acct_soon", { alias: "work", status: "expiring" }),
+        account("acct_gone", {
+          alias: "personal",
+          domain: "calendar",
+          provider: "google_calendar",
+          status: "expired",
+        }),
+        account("acct_off", { alias: "old", status: "disconnected" }),
+      ]);
+      const state = await homeState(tx, user);
+      expect(state.accountsConnected).toBe(3);
+      expect(state.attention).toEqual([
+        {
+          id: "acct_gone",
+          tone: "error",
+          title: "Your personal calendar access expired",
+          description:
+            "Reconnect acct_gone@acme.com so Winston can help with it again.",
+          action: {
+            label: "Reconnect",
+            href: "/auth/google/connect?reconnect=acct_gone",
+          },
+        },
+        {
+          id: "acct_soon",
+          tone: "attention",
+          title: "Your work mail access expires soon",
+          description:
+            "Reconnect acct_soon@acme.com so Winston can keep helping with it.",
+          action: {
+            label: "Reconnect",
+            href: "/auth/google/connect?reconnect=acct_soon",
+          },
+        },
+      ]);
     });
   });
 });
