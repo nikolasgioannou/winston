@@ -127,7 +127,7 @@ The web app: design system (with the founder), sign-in with the allowlist, the d
 | 61  | `244f55` | Sign in with Google, gated by the email allowlist                       | `801d97`, `ea7ecd`, `ef5b35` |
 | 62  | `7b6af9` | Build the dev design view with the founder 🤝                           | `244f55`                     |
 | 63  | `5e3c6d` | Build the app shell with sidebar navigation                             | `7b6af9`                     |
-| 64  | `b0717f` | Add the public homepage, privacy policy and terms                       | `5e3c6d`                     |
+| 64  | `b0717f` | Make the sign-in page the front door, without public pages              | `5e3c6d`                     |
 | 65  | `0a5f39` | Provision a computer when a user signs up                               | `244f55`, `2dd479`           |
 | 66  | `bb2d67` | Build the home page with the setup checklist                            | `0a5f39`, `5e3c6d`           |
 | 67  | `ee16f5` | Link Telegram from the web app                                          | `bb2d67`, `e47a50`, `ea7ecd` |

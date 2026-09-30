@@ -158,7 +158,7 @@ describe("completeGoogleSignIn", () => {
         expect(
           await completeGoogleSignIn(deps(tx), query(params), flow),
         ).toEqual({
-          redirectTo: "/signin?error=oauth",
+          redirectTo: "/?error=oauth",
         });
       expect(await tx.select().from(webSessions)).toEqual([]);
     });
@@ -172,7 +172,7 @@ describe("completeGoogleSignIn", () => {
           query({ code: "c", state: "st" }),
           cookies,
         ),
-      ).toEqual({ redirectTo: "/signin?error=not_allowlisted" });
+      ).toEqual({ redirectTo: "/?error=not_allowlisted" });
     });
   });
 });

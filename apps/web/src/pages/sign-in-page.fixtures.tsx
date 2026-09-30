@@ -3,10 +3,10 @@ import { SignInPage } from "./sign-in-page";
 
 const noop = () => undefined;
 
-/** /signin's states for the dev design view. */
+/** The sign-in page's states for the dev design view. */
 export const signInFixtures: PageFixtures = {
   title: "Sign in",
-  path: "/signin",
+  path: "/",
   states: {
     default: {
       label: "Default",

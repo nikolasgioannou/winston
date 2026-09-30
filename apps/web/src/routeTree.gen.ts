@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
-import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthedAccountsRouteImport } from './routes/_authed/accounts'
 import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
@@ -28,11 +27,6 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SigninRoute = SigninRouteImport.update({
-  id: '/signin',
-  path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAccountsRoute = AuthedAccountsRouteImport.update({
@@ -78,7 +72,6 @@ const DevDesignFrameRoute = DevDesignFrameRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/signin': typeof SigninRoute
   '/accounts': typeof AuthedAccountsRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
@@ -90,7 +83,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/signin': typeof SigninRoute
   '/accounts': typeof AuthedAccountsRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
@@ -104,7 +96,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
-  '/signin': typeof SigninRoute
   '/_authed/accounts': typeof AuthedAccountsRoute
   '/_authed/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
@@ -118,7 +109,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/signin'
     | '/accounts'
     | '/home'
     | '/auth/sign-out'
@@ -130,7 +120,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/signin'
     | '/accounts'
     | '/home'
     | '/auth/sign-out'
@@ -143,7 +132,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
-    | '/signin'
     | '/_authed/accounts'
     | '/_authed/home'
     | '/auth/sign-out'
@@ -157,7 +145,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
-  SigninRoute: typeof SigninRoute
   AuthSignOutRoute: typeof AuthSignOutRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
   AuthGoogleStartRoute: typeof AuthGoogleStartRoute
@@ -179,13 +166,6 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signin': {
-      id: '/signin'
-      path: '/signin'
-      fullPath: '/signin'
-      preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/accounts': {
@@ -265,7 +245,6 @@ const AuthedRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
-  SigninRoute: SigninRoute,
   AuthSignOutRoute: AuthSignOutRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
   AuthGoogleStartRoute: AuthGoogleStartRoute,

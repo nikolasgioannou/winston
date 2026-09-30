@@ -15,7 +15,7 @@ import {
   type GoogleClient,
 } from "./google.server";
 
-/** Why sign-in didn't work, as the /signin page shows it. */
+/** Why sign-in didn't work, as the sign-in page (/) shows it. */
 export type SignInProblem = "not_allowlisted" | "oauth";
 
 export type SignInResult =
@@ -93,7 +93,7 @@ export interface FlowCookies {
 
 export type CallbackResult =
   | { redirectTo: "/home"; sessionToken: string; userId: string }
-  | { redirectTo: `/signin?error=${SignInProblem}` };
+  | { redirectTo: `/?error=${SignInProblem}` };
 
 /**
  * Handles Google's redirect back: checks the state against the one set when
@@ -105,7 +105,7 @@ export async function completeGoogleSignIn(
   cookies: FlowCookies,
 ): Promise<CallbackResult> {
   const problem = (p: SignInProblem) =>
-    ({ redirectTo: `/signin?error=${p}` }) as const;
+    ({ redirectTo: `/?error=${p}` }) as const;
   const code = query.get("code");
   const state = query.get("state");
   // Google reports a cancelled or failed consent as ?error=…

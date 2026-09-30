@@ -30,7 +30,7 @@ In [console.cloud.google.com](https://console.cloud.google.com), signed in as th
 3. **Consent screen:** Google Auth Platform → Get started.
    - App name `Winston`, user support email: the maintainer's (`ni@nikolas.ai`).
    - Audience: **External**. Contact email: the maintainer's.
-4. **Branding:** leave the homepage, privacy policy and terms links empty until `runwinston.com`, `/privacy` and `/terms` are live (the public-pages ticket), then set them to those URLs and add `runwinston.com` as an authorized domain. Testing mode works without them.
+4. **Branding:** leave the homepage, privacy policy and terms links empty. Testing mode works without them, and Winston has no public pages while it's for friends (docs/design.md §9). **Before submitting for verification**, the site needs a public homepage that describes the app (not only a sign-in page), a privacy policy with Google's Limited Use statement, and terms, all on `runwinston.com` verified in Google Search Console; then fill these links in and add `runwinston.com` as an authorized domain.
 5. **Audience:** keep publishing status **Testing**. Add **test users**: every Google account that will be _connected_ for mail or calendar (to start: `ni@nikolas.ai` and `nikolasgioannou@gmail.com`). Accounts that only sign in don't need to be listed.
 6. **Data access:** add the scopes from the table above and save. `email` and `profile` are listed as `userinfo.email` and `userinfo.profile`. The console classifies them: `gmail.modify` restricted, `calendar.events` sensitive, the rest non-sensitive.
 7. **Clients:** Create client → Web application, twice:

@@ -14,7 +14,12 @@ describe("model gateway", () => {
     });
     expect(requests[0]).toMatchObject({
       model: "anthropic/claude-opus-5.5",
-      provider: { order: ["anthropic"], allow_fallbacks: false },
+      // The privacy policy depends on data_collection: deny.
+      provider: {
+        order: ["anthropic"],
+        allow_fallbacks: false,
+        data_collection: "deny",
+      },
       reasoning: { effort: "high" },
       usage: { include: true },
     });

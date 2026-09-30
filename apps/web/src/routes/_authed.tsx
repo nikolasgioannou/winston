@@ -9,12 +9,12 @@ import { AppShell } from "../components/app-shell";
 import { saveSidebarWidth } from "../components/sidebar-width";
 import { getShellState } from "../server/session-functions";
 
-// Every page under here needs a signed-in user (the rest go to /signin), and
+// Every page under here needs a signed-in user (the rest go to sign in at /), and
 // shares the app shell.
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async () => {
     const { user, sidebarWidth } = await getShellState();
-    if (!user) throw redirect({ to: "/signin" });
+    if (!user) throw redirect({ to: "/" });
     return { user, sidebarWidth };
   },
   component: AuthedLayout,

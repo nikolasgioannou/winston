@@ -101,7 +101,13 @@ export function createModelGateway({
     const { model, effort } = modelProfiles[profile];
     return wrapLanguageModel({
       model: openrouter(model, {
-        provider: { order: ["anthropic"], allow_fallbacks: false },
+        provider: {
+          order: ["anthropic"],
+          allow_fallbacks: false,
+          // Only providers that don't train on or keep prompts, as the privacy
+          // policy promises (Google's Limited Use rules for Gmail data).
+          data_collection: "deny",
+        },
         reasoning: { effort },
         usage: { include: true },
       }),

@@ -1,6 +1,6 @@
 import { Button, Callout, GoogleIcon } from "@winston/ui";
 
-/** The /signin page's states, so the dev design view can render each one. */
+/** The sign-in page's states (at /), so the dev design view can render each one. */
 export type SignInState =
   "default" | "redirecting" | "not_allowlisted" | "oauth_error";
 

@@ -9,7 +9,7 @@ export const Route = createFileRoute("/auth/sign-out")({
         await endSession();
         return new Response(null, {
           status: 303,
-          headers: { Location: "/signin" },
+          headers: { Location: "/" },
         });
       },
     },
