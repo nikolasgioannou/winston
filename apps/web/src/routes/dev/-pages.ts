@@ -1,4 +1,5 @@
 import { appShellFixtures } from "../../components/app-shell.fixtures";
+import { homeFixtures } from "../../pages/home-page.fixtures";
 import { signInFixtures } from "../../pages/sign-in-page.fixtures";
 import type { PageFixtures } from "../../pages/fixtures";
 
@@ -9,6 +10,7 @@ import type { PageFixtures } from "../../pages/fixtures";
 export const designPages: Record<string, PageFixtures> = {
   signin: signInFixtures,
   shell: appShellFixtures,
+  home: homeFixtures,
 };
 
 export const firstPage = Object.keys(designPages)[0] ?? "signin";
