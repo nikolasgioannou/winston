@@ -10,7 +10,7 @@ export interface HomeState {
   /** Null only if the user has no computer, which sign-up prevents. */
   computer: ComputerStatus | null;
   telegramLinked: boolean;
-  /** Connected Google accounts. None until the connections ticket. */
+  /** Connected Google accounts, not counting disconnected ones. */
   accountsConnected: number;
   /** Things that need the user, most urgent first. */
   attention: AttentionItem[];

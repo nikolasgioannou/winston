@@ -14,12 +14,12 @@ How Winston's Google Cloud project is set up by hand. The OAuth consent screen a
 
 Redirect URIs:
 
-| Client     | Sign-in (web)                                 | Connections (api)                                  |
-| ---------- | --------------------------------------------- | -------------------------------------------------- |
-| dev        | `http://localhost:3002/auth/google/callback`  | `http://localhost:3000/oauth/google/callback`      |
-| production | `https://runwinston.com/auth/google/callback` | `https://api.runwinston.com/oauth/google/callback` |
+| Client     | Sign-in (web)                                 | Connections (web)                                     |
+| ---------- | --------------------------------------------- | ----------------------------------------------------- |
+| dev        | `http://localhost:3002/auth/google/callback`  | `http://localhost:3002/auth/google/connect/callback`  |
+| production | `https://runwinston.com/auth/google/callback` | `https://runwinston.com/auth/google/connect/callback` |
 
-Google allows plain `http` only for `localhost`, so the dev client needs no tunnel: the browser does the redirect. Ports are the local defaults (api 3000, web 3002). If a path or port changes in code, change it here and in the client.
+Google allows plain `http` only for `localhost`, so the dev client needs no tunnel: the browser does the redirect. Both callbacks are on the site, since each needs the site's session (docs/design.md §9). Ports are the local defaults (web 3002). If a path or port changes in code, change it here and in the client.
 
 ## Steps
 

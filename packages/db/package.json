@@ -5,10 +5,12 @@
   "exports": {
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
+    "./ids": "./src/ids.ts",
     "./connections": "./src/connections.ts",
     "./testing": "./src/testing.ts",
     "./queue": "./src/queue.ts",
     "./schema": "./src/schema/index.ts",
+    "./system-events": "./src/system-events.ts",
     "./vm-state": "./src/vm-state.ts",
     "./vms": "./src/vms.ts",
     "./telegram-link-tokens": "./src/telegram-link-tokens.ts",

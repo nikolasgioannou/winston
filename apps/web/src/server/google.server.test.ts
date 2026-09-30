@@ -3,7 +3,8 @@ import {
   codeChallenge,
   exchangeGoogleCode,
   googleAuthorizationUrl,
-  GoogleSignInError,
+  googleConnectUrl,
+  GoogleAuthError,
   type GoogleClaims,
 } from "./google.server";
 
@@ -109,7 +110,7 @@ describe("exchangeGoogleCode", () => {
     const error = await exchange({ ...goodClaims, ...change }).result.catch(
       (e: unknown) => e,
     );
-    expect(error).toBeInstanceOf(GoogleSignInError);
+    expect(error).toBeInstanceOf(GoogleAuthError);
   });
 
   test("rejects an error from the token endpoint, and a response without an ID token", async () => {
@@ -118,12 +119,37 @@ describe("exchangeGoogleCode", () => {
       { code: "c", codeVerifier: "v" },
       { fetch: fakeGoogle({ error: "invalid_grant" }, 400).fetch, now },
     ).catch((e: unknown) => e);
-    expect(failed).toBeInstanceOf(GoogleSignInError);
+    expect(failed).toBeInstanceOf(GoogleAuthError);
     const empty = await exchangeGoogleCode(
       client,
       { code: "c", codeVerifier: "v" },
       { fetch: fakeGoogle({ access_token: "x" }).fetch, now },
     ).catch((e: unknown) => e);
-    expect(empty).toBeInstanceOf(GoogleSignInError);
+    expect(empty).toBeInstanceOf(GoogleAuthError);
+  });
+});
+
+describe("googleConnectUrl", () => {
+  test("asks for the domain's scopes offline, with forced consent and the account chooser", () => {
+    const params = Object.fromEntries(
+      new URL(
+        googleConnectUrl(client, {
+          state: "st",
+          codeVerifier: "ver",
+          domain: "calendar",
+          loginHint: "ada@acme.com",
+        }),
+      ).searchParams,
+    );
+    expect(params).toMatchObject({
+      scope:
+        "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.freebusy",
+      access_type: "offline",
+      prompt: "consent select_account",
+      login_hint: "ada@acme.com",
+      state: "st",
+      code_challenge_method: "S256",
+    });
+    expect(params.include_granted_scopes).toBeUndefined();
   });
 });

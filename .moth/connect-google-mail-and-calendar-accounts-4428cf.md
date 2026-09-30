@@ -1,7 +1,7 @@
 ---
 id: "4428cf"
 title: Connect Google mail and calendar accounts
-status: todo
+status: done
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - m3
   - web
 created_at: 2026-09-27T05:34:40.928Z
-updated_at: 2026-09-27T05:34:40.996Z
+updated_at: 2026-09-30T03:51:09.049Z
 blocked_by:
   - "35fdd4"
   - "5e3c6d"
@@ -29,3 +29,15 @@ Build:
 Add `/accounts` states to the dev design view: empty, a few accounts, one expiring, one expired.
 
 Tests: the callback stores encrypted tokens and granted scopes, reconnecting updates rather than duplicates, and the DTO never includes the token.
+
+## Outcome
+
+- **Callback in `web`, not `api`** (the founder's call): only the site can tie the finishing browser to the signed-in user who started, so a forwarded link can't attach someone else's account. The site only encrypts (KMS `GenerateDataKey` without `Decrypt` in production). The connect redirect URI moved to `/auth/google/connect/callback` on the site in the runbook; the dev client needs it added.
+- **Default toggles** (the founder's call, conservative): mail read and draft on, send and labels off; calendar read on, the rest off (`defaultCapabilities`).
+- Flow: `/auth/google/connect?domain=` (or `?reconnect=<acct_id>`, which sends the account as `login_hint`) asks for `openid email` plus the domain's scopes, offline with forced consent. The callback checks the session and state, requires the essential scope (`gmail.modify` / `calendar.events`), records only the domain scopes actually granted, and `saveConnection` refreshes an existing connection (same id, alias and toggles kept) or creates one with a unique default alias ("personal" / "work", then the company or address name, then numbered). A new one records `system.app.connected` through a new `recordSystemEvent` (inbound item plus debounced turn), and the prompt says to acknowledge it briefly.
+- Google helpers now share the token exchange and ID token check between sign-in and connecting; `GoogleSignInError` became `GoogleAuthError`.
+- `/accounts`: connections as DTOs (selected with `connectionDtoColumns`), status pills and Reconnect for anything not `ok`, **Add account** as a new `Menu` component in `packages/ui`, an empty state, and toasts after connecting. `/home` now counts real connections.
+- Dev design view: empty, a few accounts, one expiring, one expired (checked at desktop and mobile widths, menu included).
+- Tests: the stored token decrypts only with its connection's context and never appears in the DTO; granted scopes, defaults and the connected event are recorded; reconnecting updates instead of duplicating (and doesn't announce again); a second account gets its own alias; a partial calendar grant keeps what was granted; a missing essential scope, a bad state, a cancelled consent, an unknown domain or no refresh token save nothing; the connect URL's parameters; default aliases.
+- Not yet checked live against Google: it needs the dev client's new redirect URI and a real consent in the founder's browser.
+

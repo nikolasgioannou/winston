@@ -98,6 +98,42 @@ export function setFlowCookies(values: {
     setCookie(flowCookieNames.timezone, values.timezone, options);
 }
 
+/** The cookies that carry the connect flow between the two redirects. */
+const connectCookieNames = {
+  state: "winston_connect_state",
+  codeVerifier: "winston_connect_verifier",
+  domain: "winston_connect_domain",
+} as const;
+const connectCookiePath = "/auth/google/connect";
+
+export function setConnectCookies(values: {
+  state: string;
+  codeVerifier: string;
+  domain: string;
+}) {
+  const options = {
+    httpOnly: true,
+    secure: secure(),
+    sameSite: "lax" as const,
+    path: connectCookiePath,
+    maxAge: 600,
+  };
+  for (const [key, name] of Object.entries(connectCookieNames))
+    setCookie(name, values[key as keyof typeof values], options);
+}
+
+/** Reads the connect flow's cookies once and clears them. */
+export function takeConnectCookies() {
+  const values = {
+    state: getCookie(connectCookieNames.state),
+    codeVerifier: getCookie(connectCookieNames.codeVerifier),
+    domain: getCookie(connectCookieNames.domain),
+  };
+  for (const name of Object.values(connectCookieNames))
+    deleteCookie(name, { path: connectCookiePath });
+  return values;
+}
+
 /** Reads the flow cookies once and clears them. */
 export function takeFlowCookies() {
   const values = {
@@ -110,15 +146,12 @@ export function takeFlowCookies() {
   return values;
 }
 
-/** The Google client for this environment, redirecting back to the site. */
-export function googleClient() {
+/** The Google client for this environment, redirecting back to `callbackPath` on the site. */
+export function googleClient(callbackPath = "/auth/google/callback") {
   const config = webConfig();
   return {
     clientId: config.GOOGLE_OAUTH_CLIENT_ID,
     clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
-    redirectUri: new URL(
-      "/auth/google/callback",
-      config.WEB_PUBLIC_URL,
-    ).toString(),
+    redirectUri: new URL(callbackPath, config.WEB_PUBLIC_URL).toString(),
   };
 }

@@ -8,6 +8,7 @@ export { controlHeight, type ControlSize } from "./control";
 export { ConfirmDialog } from "./dialog";
 export { EmptyState, ErrorState } from "./empty-state";
 export { Select, type SelectOption, type SelectProps } from "./select";
+export { Menu, type MenuLink } from "./menu";
 export { QrCode } from "./qr-code";
 export { Section, SettingRow } from "./settings";
 export {

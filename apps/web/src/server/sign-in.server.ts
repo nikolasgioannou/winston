@@ -12,7 +12,7 @@ import { tokenMatches, hashToken } from "@winston/shared/tokens";
 import { eq, sql } from "drizzle-orm";
 import {
   exchangeGoogleCode,
-  GoogleSignInError,
+  GoogleAuthError,
   type GoogleClaims,
   type GoogleClient,
 } from "./google.server";
@@ -141,7 +141,7 @@ export async function completeGoogleSignIn(
       deps.fetch ? { fetch: deps.fetch } : {},
     );
   } catch (error) {
-    if (error instanceof GoogleSignInError) return problem("oauth");
+    if (error instanceof GoogleAuthError) return problem("oauth");
     throw error;
   }
 

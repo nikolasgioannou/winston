@@ -1,9 +1,11 @@
 /**
- * Sign in with Google, identity only (docs/design.md §5, §9): OAuth 2.0
- * Authorization Code with PKCE, written by hand following the reference code
- * arctic left when it was deprecated (2026-07). Only `openid email profile`
- * is requested, never Gmail or Calendar.
+ * Google OAuth 2.0 (docs/design.md §5, §9), Authorization Code with PKCE,
+ * written by hand following the reference code arctic left when it was
+ * deprecated (2026-07). Two separate grants on one client: signing in asks for
+ * identity only (`openid email profile`), and connecting an account asks for
+ * one domain's scopes, offline, so a refresh token comes back.
  */
+import type { ConnectionDomain } from "@winston/domain/connections";
 import { z } from "zod";
 
 const authorizeEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -44,6 +46,81 @@ export function googleAuthorizationUrl(
   return url.toString();
 }
 
+const connectScopePrefix = "https://www.googleapis.com/auth/";
+
+/**
+ * What connecting each domain asks Google for (docs/runbooks/google-cloud.md),
+ * and the scope it can't work without. The user can untick scopes on Google's
+ * screen, so the callback checks what was granted.
+ */
+export const connectGrants = {
+  mail: {
+    provider: "gmail",
+    scopes: ["gmail.modify"],
+    required: "gmail.modify",
+  },
+  calendar: {
+    provider: "google_calendar",
+    scopes: [
+      "calendar.events",
+      "calendar.calendarlist.readonly",
+      "calendar.events.freebusy",
+    ],
+    required: "calendar.events",
+  },
+} as const satisfies Record<
+  ConnectionDomain,
+  { provider: string; scopes: readonly string[]; required: string }
+>;
+
+/** Every scope connecting asks for, in any domain. */
+const connectScopes: ReadonlySet<string> = new Set(
+  Object.values(connectGrants).flatMap((grant) => grant.scopes),
+);
+
+/** A scope's full URL, as Google names it. */
+export const scopeUrl = (scope: string) => `${connectScopePrefix}${scope}`;
+
+/**
+ * Where to send the browser to connect an account for `domain`: offline
+ * access and forced consent, so a refresh token is always issued, and the
+ * account chooser (or `loginHint`, to reconnect a known account).
+ */
+export function googleConnectUrl(
+  client: GoogleClient,
+  {
+    state,
+    codeVerifier,
+    domain,
+    loginHint,
+  }: {
+    state: string;
+    codeVerifier: string;
+    domain: ConnectionDomain;
+    loginHint?: string | undefined;
+  },
+) {
+  const url = new URL(authorizeEndpoint);
+  url.search = new URLSearchParams({
+    response_type: "code",
+    client_id: client.clientId,
+    redirect_uri: client.redirectUri,
+    // The ID token's email says which account was connected.
+    scope: [
+      "openid",
+      "email",
+      ...connectGrants[domain].scopes.map(scopeUrl),
+    ].join(" "),
+    state,
+    code_challenge: codeChallenge(codeVerifier),
+    code_challenge_method: "S256",
+    access_type: "offline",
+    prompt: "consent select_account",
+    ...(loginHint ? { login_hint: loginHint } : {}),
+  }).toString();
+  return url.toString();
+}
+
 /** What the ID token says about who signed in. */
 const claimsSchema = z.object({
   iss: z.enum(issuers),
@@ -60,23 +137,24 @@ const claimsSchema = z.object({
 
 export type GoogleClaims = z.infer<typeof claimsSchema>;
 
-/** Signing in with Google failed; `message` says why, for the logs. */
-export class GoogleSignInError extends Error {
-  override name = "GoogleSignInError";
+/** A Google OAuth flow failed; `message` says why, for the logs. */
+export class GoogleAuthError extends Error {
+  override name = "GoogleAuthError";
 }
 
-/**
- * Exchanges the callback's code for the user's identity. The ID token comes
- * straight from Google's token endpoint over TLS, authenticated with our
- * client secret, so Google considers its signature check optional; its
- * issuer, audience, expiry and email verification are still checked.
- */
-export async function exchangeGoogleCode(
+const tokenResponseSchema = z.object({
+  id_token: z.string(),
+  refresh_token: z.string().optional(),
+  /** The scopes granted, space-separated. */
+  scope: z.string().optional(),
+});
+
+/** Trades the callback's code for tokens at Google's token endpoint. */
+async function requestTokens(
   client: GoogleClient,
   { code, codeVerifier }: { code: string; codeVerifier: string },
-  options: { fetch?: typeof fetch; now?: number } = {},
-): Promise<GoogleClaims> {
-  const { fetch: send = fetch, now = Date.now() } = options;
+  send: typeof fetch,
+) {
   const response = await send(tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -90,25 +168,76 @@ export async function exchangeGoogleCode(
     }),
   });
   if (!response.ok)
-    throw new GoogleSignInError(
+    throw new GoogleAuthError(
       `Google's token endpoint answered ${String(response.status)}: ${(await response.text()).slice(0, 200)}`,
     );
-  const body = z
-    .object({ id_token: z.string() })
-    .safeParse(await response.json());
+  const body = tokenResponseSchema.safeParse(await response.json());
   if (!body.success)
-    throw new GoogleSignInError("No ID token in Google's response.");
+    throw new GoogleAuthError("No ID token in Google's response.");
+  return body.data;
+}
 
-  const claims = claimsSchema.safeParse(decodeJwtPayload(body.data.id_token));
+/**
+ * Checks an ID token that came straight from Google's token endpoint over
+ * TLS, authenticated with our client secret, so Google considers its
+ * signature check optional; its issuer, audience, expiry and email
+ * verification are still checked.
+ */
+function verifyIdToken(client: GoogleClient, idToken: string, now: number) {
+  const claims = claimsSchema.safeParse(decodeJwtPayload(idToken));
   if (!claims.success)
-    throw new GoogleSignInError(
+    throw new GoogleAuthError(
       `The ID token didn't check out: ${z.prettifyError(claims.error)}`,
     );
   if (claims.data.aud !== client.clientId)
-    throw new GoogleSignInError("The ID token is for a different client.");
+    throw new GoogleAuthError("The ID token is for a different client.");
   if (claims.data.exp * 1000 <= now)
-    throw new GoogleSignInError("The ID token has expired.");
+    throw new GoogleAuthError("The ID token has expired.");
   return claims.data;
+}
+
+/** Exchanges a sign-in callback's code for the user's identity. */
+export async function exchangeGoogleCode(
+  client: GoogleClient,
+  code: { code: string; codeVerifier: string },
+  options: { fetch?: typeof fetch; now?: number } = {},
+): Promise<GoogleClaims> {
+  const tokens = await requestTokens(client, code, options.fetch ?? fetch);
+  return verifyIdToken(client, tokens.id_token, options.now ?? Date.now());
+}
+
+/** What connecting an account got: whose it is, its refresh token and the scopes granted. */
+export interface GoogleGrant {
+  /** The connected account's address, lowercase. */
+  email: string;
+  refreshToken: string;
+  /** Short names (`gmail.modify`), only the ones connecting asks for (not `openid` or `email`). */
+  grantedScopes: string[];
+}
+
+/** Exchanges a connect callback's code for the grant. */
+export async function exchangeGoogleConnectCode(
+  client: GoogleClient,
+  code: { code: string; codeVerifier: string },
+  options: { fetch?: typeof fetch; now?: number } = {},
+): Promise<GoogleGrant> {
+  const tokens = await requestTokens(client, code, options.fetch ?? fetch);
+  const claims = verifyIdToken(
+    client,
+    tokens.id_token,
+    options.now ?? Date.now(),
+  );
+  if (!tokens.refresh_token)
+    throw new GoogleAuthError("Google didn't issue a refresh token.");
+  return {
+    email: claims.email.toLowerCase(),
+    refreshToken: tokens.refresh_token,
+    grantedScopes: (tokens.scope ?? "")
+      .split(" ")
+      .filter((scope) => scope.startsWith(connectScopePrefix))
+      .map((scope) => scope.slice(connectScopePrefix.length))
+      .filter((scope) => connectScopes.has(scope)),
+  };
 }
 
 function decodeJwtPayload(jwt: string): unknown {
