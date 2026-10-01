@@ -134,8 +134,13 @@ describe("front_turn serialization", () => {
     await enqueue(db, frontTurnJob.type, { userId });
     await enqueue(db, frontTurnJob.type, { userId });
     const workers = startWorkers(2, 100);
-    // Input arriving mid-turn: its job finds the lock busy.
-    await sleep(40);
+    // Input arriving mid-turn (once the turn's model call is in flight, not
+    // after a fixed wait, which a slow CI runner can outlast): its job finds
+    // the lock busy.
+    for (let waited = 0; workers.fake.concurrency.current === 0; waited += 5) {
+      if (waited > 5_000) throw new Error("the turn never called the model");
+      await sleep(5);
+    }
     await say(userId, "second");
     await settle();
     await workers.stop();
