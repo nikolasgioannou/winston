@@ -6,7 +6,9 @@
     "./access-token": "./src/access-token.ts",
     "./calendar": "./src/calendar.ts",
     "./errors": "./src/errors.ts",
+    "./free-slots": "./src/free-slots.ts",
     "./gmail": "./src/gmail.ts",
+    "./google-calendar": "./src/google-calendar.ts",
     "./grants": "./src/grants.ts",
     "./mail": "./src/mail.ts",
     "./mail-compose": "./src/mail-compose.ts"

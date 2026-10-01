@@ -18,7 +18,7 @@ import {
   type ConnectionDomain,
 } from "@winston/domain/connections";
 import { ConnectionUnavailableError } from "@winston/connectors/access-token";
-import type { CalendarProvider } from "@winston/connectors/calendar";
+import type { CalendarReader } from "@winston/connectors/calendar";
 import {
   NotSupportedError,
   ProviderNotFoundError,
@@ -167,7 +167,7 @@ export interface ConnectorDeps {
   webPublicUrl: string;
   mail: (connection: ConnectionRow) => MailProvider;
   /** Absent until Google Calendar is wired (M5). */
-  calendar?: (connection: ConnectionRow) => CalendarProvider;
+  calendar?: (connection: ConnectionRow) => CalendarReader;
 }
 
 /**

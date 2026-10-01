@@ -3,6 +3,11 @@
  * mail provider and a request helper with a run token.
  */
 import type {
+  CalendarEvent,
+  CalendarFilter,
+  CalendarReader,
+} from "@winston/connectors/calendar";
+import type {
   FullMailMessage,
   MailChanges,
   MailFilter,
@@ -122,12 +127,112 @@ export function fakeMail() {
   return { provider, filters, sent, drafted, modified, trashed, draftsSent };
 }
 
+export const fakeEvent = (
+  id: string,
+  overrides: Partial<CalendarEvent> = {},
+): CalendarEvent => ({
+  providerId: `me@example.com/${id}`,
+  calendarId: "me@example.com",
+  title: `Event ${id}`,
+  start: { at: new Date("2026-09-29T19:00:00Z") },
+  end: { at: new Date("2026-09-29T19:30:00Z") },
+  allDay: false,
+  location: null,
+  description: null,
+  organizer: { email: "me@example.com", name: null, self: true },
+  attendees: [],
+  myResponse: null,
+  status: "confirmed",
+  videoLink: null,
+  recurrence: null,
+  seriesId: null,
+  htmlLink: null,
+  updatedAt: null,
+  ...overrides,
+});
+
+/** A calendar reader that records the filters and returns fixed events and busy times. */
+export function fakeCalendar() {
+  const filters: CalendarFilter[] = [];
+  const reader: CalendarReader = {
+    address: "me@example.com",
+    listCalendars: () =>
+      Promise.resolve([
+        {
+          id: "me@example.com",
+          name: "me@example.com",
+          primary: true,
+          writable: true,
+          timeZone: "America/New_York",
+        },
+      ]),
+    list: (filter) => {
+      filters.push(filter);
+      return Promise.resolve({
+        items: [
+          fakeEvent("e1", {
+            attendees: [
+              {
+                email: "dana@other.com",
+                name: "Dana",
+                response: "accepted",
+                optional: false,
+                self: false,
+              },
+            ],
+            videoLink: "https://meet.google.com/x",
+            seriesId: "me@example.com/series",
+          }),
+          fakeEvent("trip", {
+            start: { date: "2026-09-30" },
+            end: { date: "2026-10-01" },
+            allDay: true,
+          }),
+        ],
+        cursor: null,
+      });
+    },
+    get: (id) => Promise.resolve(fakeEvent(id.split("/")[1] ?? id)),
+    freeBusy: ({ attendees }) =>
+      Promise.resolve(
+        new Map([
+          // Tuesday Sep 29, busy 10–11 local (EDT).
+          [
+            "me@example.com",
+            [
+              {
+                start: new Date("2026-09-29T14:00:00Z"),
+                end: new Date("2026-09-29T15:00:00Z"),
+              },
+            ],
+          ],
+          ...attendees.map(
+            (a) =>
+              [
+                a,
+                a === "hidden@x.com"
+                  ? ("unknown" as const)
+                  : [
+                      {
+                        start: new Date("2026-09-29T19:00:00Z"),
+                        end: new Date("2026-09-29T20:00:00Z"),
+                      },
+                    ],
+              ] as const,
+          ),
+        ]),
+      ),
+  };
+  return { reader, filters };
+}
+
 /** The API over `tx` with the fake provider and VM files; `as(userId)` makes calls. */
 export function setupApi(
   tx: DbOrTx,
   vmFileContents: Record<string, string> = {},
 ) {
   const mail = fakeMail();
+  const calendar = fakeCalendar();
   const written: { userId: string; path: string; bytes: Uint8Array }[] = [];
   const app = createVmApi({
     db: tx,
@@ -135,6 +240,7 @@ export function setupApi(
     connectors: {
       webPublicUrl: "https://runwinston.com",
       mail: () => mail.provider,
+      calendar: () => calendar.reader,
     },
     vmFiles: {
       read: (_userId, path) => {
@@ -171,5 +277,5 @@ export function setupApi(
         { vmUserId: userId },
       );
   };
-  return { as, mail, written };
+  return { as, mail, calendar, written };
 }

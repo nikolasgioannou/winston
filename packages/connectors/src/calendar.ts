@@ -95,7 +95,9 @@ export interface BusyBlock {
   end: Date;
 }
 
-export interface CalendarProvider {
+/** Reading calendars: what the `read` capability allows. */
+export interface CalendarReader {
+  readonly address: string;
   listCalendars(): Promise<CalendarInfo[]>;
   /** Events in the range, earliest first, recurring series expanded. */
   list(
@@ -109,6 +111,10 @@ export interface CalendarProvider {
     until: Date;
     attendees: string[];
   }): Promise<Map<string, BusyBlock[] | "unknown">>;
+}
+
+/** Reading and changing calendars. */
+export interface CalendarProvider extends CalendarReader {
   create(event: NewEvent, options: { notify: boolean }): Promise<CalendarEvent>;
   update(
     eventId: string,
@@ -124,5 +130,4 @@ export interface CalendarProvider {
     response: Exclude<AttendeeResponse, "needs_action">,
     options: { note?: string | undefined; scope: "this" | "all" },
   ): Promise<CalendarEvent>;
-  readonly address: string;
 }

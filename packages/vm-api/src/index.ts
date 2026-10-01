@@ -17,6 +17,7 @@ import { Hono } from "hono";
 import { toApiFailure, type ConnectorDeps } from "./connections.ts";
 import type { VmApiEnv } from "./env.ts";
 import type { VmFiles } from "./files.ts";
+import { calendarRoutes } from "./calendar.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
 import { z } from "zod";
@@ -130,7 +131,8 @@ export function createVmApi({
       return c.json(me);
     })
     .route("/v1/mail", mailRoutes({ db, connectors, vmFiles }))
-    .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }));
+    .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }))
+    .route("/v1/calendar", calendarRoutes({ db, connectors }));
 }
 
 export type { VmApiEnv } from "./env.ts";

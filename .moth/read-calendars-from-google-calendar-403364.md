@@ -1,13 +1,13 @@
 ---
 id: "403364"
 title: Read calendars from Google Calendar
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - m5
 created_at: 2026-09-27T05:37:39.353Z
-updated_at: 2026-09-27T05:37:39.388Z
+updated_at: 2026-10-01T16:37:57.438Z
 blocked_by:
   - "480aff"
 ---
@@ -25,3 +25,5 @@ Behaviour:
 Everything is returned in normalized shapes with times in the user's zone.
 
 Tests with recorded responses: recurring event expansion, all-day events across zones, `--external` classification, and free-slot computation (a pure function, so test it heavily, including DST days).
+
+**Done (2026-10-01):** lists default to the calendars selected in Google (else the primary). `free` uses weekdays 9–18 in the user's zone by default, adjustable per call (`hours`, `weekends`). Fixtures are synthetic.
