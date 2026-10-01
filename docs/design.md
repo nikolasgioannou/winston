@@ -531,14 +531,11 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - Provider adapters and sync against recorded API responses.
   - The Postgres queue (leasing, lease timeouts, `SKIP LOCKED`).
 - **Not tested automatically:** LLM judgment. It's evaluated through real use and the database log.
-- **Trunk-based: every push to `main` on GitHub deploys to production** through GitHub Actions:
-  1. `bun run check`, the same checks the pre-commit hook runs (hooks can be skipped with `--no-verify`, so CI is the backstop). A failure stops the deploy. Today the workflow (`.github/workflows/ci.yml`) is only this step: checkout, `jdx/mise-action` (installs the versions pinned in `mise.toml`), `bun install --frozen-lockfile`, `bun run check`, on pushes to `main`, with read-only permissions.
-  2. Build container images for `api`, `agents`, `gateway`, `web` and push them to ECR.
-  3. Run migrations as a one-off ECS task. A failure stops the deploy.
-  4. Rolling ECS deploys with health checks and automatic rollback.
-  5. Build, sign and upload the CLI and `winstond` binaries to S3, then bump the version. VMs self-update.
-  6. `cdk deploy` when infrastructure changed.
-- **AWS credentials:** GitHub OIDC → a scoped IAM role in `winston-prod`. No long-lived keys in GitHub.
+- **Trunk-based: every push to `main` on GitHub deploys to production** through GitHub Actions (`.github/workflows/ci.yml`; how to watch and roll back: [runbooks/deploys.md](runbooks/deploys.md)):
+  1. **`check`:** `bun run check`, the same checks the pre-commit hook runs (hooks can be skipped with `--no-verify`, so CI is the backstop): checkout, `jdx/mise-action` (installs the versions pinned in `mise.toml`), `bun install --frozen-lockfile`, `bun run check`. A failure stops everything.
+  2. **`images`:** a matrix job builds `api`, `agents`, `gateway`, `web` and `ops` on **native ARM64 runners** (`ubuntu-24.04-arm`, free for public repositories; emulating ARM on x86 would run Bun under QEMU) with `docker/build-push-action`, each with its own layer cache in GitHub's cache (`type=gha`), and pushes `winston/<image>:<commit SHA>`. An image already pushed for the commit is skipped, since tags are immutable.
+  3. **`deploy`** runs `bun run deploy` (`scripts/deploy.ts`) in the `production` concurrency group, so a newer push waits instead of interleaving: check the images exist; `cdk deploy --all` (infrastructure first, while the services stay on the old tag); **migrations on the new `ops` image** (`prod.ts --image`, which registers an ops task revision with that tag; a failure stops the deploy with the old version running); set `/winston/image-tag` and force a Services deploy, which rolls every service with the circuit breaker (on failure, the parameter goes back to the previous tag); then publish the VM binaries (§10), which VMs pick up within a minute. Running `cdk deploy --all` every time, rather than only when `infra/` changed, costs little (unchanged stacks are skipped) and never forgets an infrastructure change.
+- **AWS credentials:** GitHub OIDC → a scoped IAM role in `winston-prod` (`winston-github-deploy`, §19 Ci). No long-lived keys in GitHub.
 - **AMI builds:** a separate workflow, triggered manually.
 - **Deploys never lose agent work:**
   - `agents` handles SIGTERM by finishing the current step, checkpointing and exiting.

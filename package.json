@@ -15,6 +15,7 @@
     "db:migrate": "bun run --filter @winston/db db:migrate",
     "db:seed": "bun run --filter @winston/db db:seed",
     "db:up": "docker compose up --detach --wait postgres",
+    "deploy": "bun scripts/deploy.ts",
     "dev": "bun scripts/dev.ts",
     "docker:build": "bun scripts/docker-build.ts",
     "format": "prettier --write . && packer fmt -recursive image",

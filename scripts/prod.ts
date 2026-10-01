@@ -9,11 +9,23 @@
  *   bun run prod migrate
  *
  * Anything that writes asks for confirmation first; `--yes` skips it (deploys).
+ * `--image <tag>` runs on that image tag instead of the current one.
  * Uses the `winston-prod` profile unless AWS credentials are already set.
  */
 import { $ } from "bun";
 
-const args = Bun.argv.slice(2).filter((arg) => arg !== "--yes");
+// --image <tag>: run on that image instead of production's current one
+// (deploys migrate with the new image before the services move to it).
+const imageFlag = Bun.argv.indexOf("--image");
+const imageTag = imageFlag === -1 ? undefined : Bun.argv[imageFlag + 1];
+const args = Bun.argv
+  .slice(2)
+  .filter(
+    (arg, index) =>
+      arg !== "--yes" &&
+      arg !== "--image" &&
+      (imageFlag === -1 || index !== imageFlag - 1),
+  );
 const confirmed = Bun.argv.includes("--yes");
 const [command, subcommand] = args;
 
@@ -74,13 +86,56 @@ const overrides = JSON.stringify({
   containerOverrides: [{ name: "ops", command: args }],
 });
 
+/** The ops task definition, re-registered with another image tag if asked. */
+async function taskDefinitionToRun() {
+  const family = outputs.OpsTaskDefinition ?? "";
+  if (!imageTag) return family;
+  const { taskDefinition: current } = (await aws(
+    "ecs",
+    "describe-task-definition",
+    "--task-definition",
+    family,
+  )) as {
+    taskDefinition: Record<string, unknown> & {
+      containerDefinitions: { image: string }[];
+    };
+  };
+  const containerDefinitions = current.containerDefinitions.map(
+    (container) => ({
+      ...container,
+      image: container.image.replace(/:[^:/]+$/, `:${imageTag}`),
+    }),
+  );
+  const copy = Object.fromEntries(
+    [
+      "family",
+      "taskRoleArn",
+      "executionRoleArn",
+      "networkMode",
+      "requiresCompatibilities",
+      "cpu",
+      "memory",
+      "runtimePlatform",
+    ]
+      .filter((key) => current[key] !== undefined)
+      .map((key) => [key, current[key]]),
+  );
+  const { taskDefinition } = (await aws(
+    "ecs",
+    "register-task-definition",
+    "--cli-input-json",
+    JSON.stringify({ ...copy, containerDefinitions }),
+  )) as { taskDefinition: { taskDefinitionArn: string } };
+  return taskDefinition.taskDefinitionArn;
+}
+
 const { tasks } = (await aws(
   "ecs",
   "run-task",
   "--cluster",
   cluster,
   "--task-definition",
-  outputs.OpsTaskDefinition ?? "",
+  await taskDefinitionToRun(),
   "--launch-type",
   "FARGATE",
   "--network-configuration",

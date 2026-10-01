@@ -103,8 +103,11 @@ export class CiStack extends Stack {
         resources: ["*"],
       }),
     );
-    for (const repository of Object.values(this.repositories))
+    for (const repository of Object.values(this.repositories)) {
       repository.grantPullPush(this.deployRole);
+      // Whether a commit's image is already pushed (tags are immutable).
+      repository.grant(this.deployRole, "ecr:DescribeImages");
+    }
     deploy(
       new PolicyStatement({
         sid: "SetTheImageTag",
@@ -134,6 +137,16 @@ export class CiStack extends Stack {
         resources: [
           `arn:aws:ecs:${region}:${account}:task-definition/winston-ops:*`,
         ],
+      }),
+    );
+    // Migrations run on the new image before the services move to it, so
+    // the ops task is re-registered with that tag (scripts/prod.ts --image).
+    deploy(
+      new PolicyStatement({
+        sid: "RegisterOpsRevisions",
+        // RegisterTaskDefinition has no resource-level permissions.
+        actions: ["ecs:RegisterTaskDefinition"],
+        resources: ["*"],
       }),
     );
     deploy(

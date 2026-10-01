@@ -28,5 +28,5 @@ ECS Exec into a running service would need the SSM agent and an exec-enabled tas
 
 The script prints ECS's `stoppedReason`. The usual causes:
 
-- **`CannotPullContainerError`:** the `ops` image for the current tag wasn't pushed. Deploys push it along with the services; push it by hand with `bun run docker:build ops` and the commands in docs/runbooks/deploys.md.
+- **`CannotPullContainerError`:** the `ops` image for the current tag wasn't pushed. Deploys push it along with the services; push it with the commands in docs/runbooks/deploys.md (Deploying from a laptop).
 - **`ResourceInitializationError` reading the secret:** the task role lost access to the database secret; redeploy the Services stack.

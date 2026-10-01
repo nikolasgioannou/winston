@@ -50,7 +50,7 @@ describe("ci stack", () => {
     }
   });
 
-  test("the deploy role has no wildcard actions, and its * resources are only for describes and login", () => {
+  test("the deploy role has no wildcard actions, and its * resources are only for describes, login and registering ops revisions", () => {
     const statements = statementsFor("deployRole");
     expect(statements.length).toBeGreaterThan(5);
     for (const statement of statements) {
@@ -63,6 +63,7 @@ describe("ci stack", () => {
           actions.every(
             (action) =>
               action === "ecr:GetAuthorizationToken" ||
+              action === "ecs:RegisterTaskDefinition" ||
               action.startsWith("ecs:Describe"),
           ),
         ).toBe(true);

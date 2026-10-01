@@ -37,18 +37,75 @@ jobs:
       # The same checks the pre-commit hook runs.
       - run: bun run check
 
-  # Production deploys, after the checks pass (docs/design.md §8b). GitHub's
-  # OIDC token is exchanged for the deploy role (infra/src/ci.ts); no AWS keys
-  # are stored in GitHub.
-  deploy:
+  # The images for this commit, tagged with its SHA, on native ARM64 runners
+  # (free for public repositories; the services run on Graviton). Each image
+  # keeps its own layer cache in GitHub's cache. Tags are immutable, so an
+  # image that's already pushed (a re-run) is skipped.
+  images:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        image: [api, agents, gateway, web, ops]
     permissions:
       contents: read
       id-token: write
+    env:
+      REPOSITORY: 766577085959.dkr.ecr.us-east-1.amazonaws.com/winston/${{ matrix.image }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::766577085959:role/winston-github-deploy
           aws-region: us-east-1
-      - run: aws sts get-caller-identity
+      - id: pushed
+        run: |
+          if aws ecr describe-images --repository-name "winston/${{ matrix.image }}" --image-ids "imageTag=${{ github.sha }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.pushed.outputs.exists != 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+      - if: steps.pushed.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v4
+      - if: steps.pushed.outputs.exists != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/${{ contains(fromJSON('["web","ops"]'), matrix.image) && matrix.image || 'service' }}.Dockerfile
+          build-args: SERVICE=${{ matrix.image }}
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Production, after the checks pass and the images are pushed
+  # (docs/runbooks/deploys.md). GitHub's OIDC token is exchanged for the
+  # deploy role (infra/src/ci.ts); no AWS keys are stored in GitHub. A newer
+  # push waits for the running deploy rather than interleaving with it.
+  deploy:
+    needs: images
+    runs-on: ubuntu-24.04-arm
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # The VM binaries' version counts commits on main.
+          fetch-depth: 0
+      - uses: jdx/mise-action@v4
+      - run: bun install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::766577085959:role/winston-github-deploy
+          aws-region: us-east-1
+          # cdk deploy and the rollouts can outlast the default hour.
+          role-duration-seconds: 3600
+      - run: bun run deploy

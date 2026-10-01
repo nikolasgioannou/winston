@@ -1,14 +1,14 @@
 ---
 id: "e1a361"
 title: Deploy to production on every push to main
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - tooling
 created_at: 2026-09-27T05:36:33.170Z
-updated_at: 2026-09-27T05:36:33.277Z
+updated_at: 2026-10-01T08:12:23.821Z
 blocked_by:
   - "021c52"
   - "071e49"
@@ -28,3 +28,5 @@ From here on, every push to `main` ships to production (docs/design.md §8b). Ex
 Handle concurrency: two quick pushes must not deploy interleaved. Use GitHub's `concurrency` group so a newer run waits, or cancels the older one before its deploy phase.
 
 Write `docs/runbooks/deploys.md`: how to watch a deploy, how to roll back (redeploy a previous SHA), and what to do if migrations fail halfway. Verify with a harmless change that flows all the way to production.
+
+**Done (2026-10-01):** `cdk deploy --all` runs on every deploy rather than behind a path filter (unchanged stacks are skipped, and an infrastructure change can't be forgotten). Images build on native ARM64 runners. Migrations run on the new ops image through a re-registered task revision.
