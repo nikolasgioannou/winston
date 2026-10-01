@@ -1180,6 +1180,13 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 | `Budget`   | AWS Budgets alerts (see §8)                                                                                                                                                      |
 
 - GCP resources live separately in `infra/gcp` (Terraform).
+- **The app (`infra/`, workspace `@winston/infra`):** CDK v2 in TypeScript, run directly by Bun (`cdk.json` `app: "bun bin/app.ts"`, no build step). The CLI (`aws-cdk`) is a dev dependency that runs under Node, and the app under Bun. Both are pinned exactly and bumped together: the CLI is versioned separately from `aws-cdk-lib`, and an older CLI can't read a newer library's output.
+  - `src/app.ts` defines every stack with an explicit environment (`production`: account `766577085959`, `us-east-1`, `runwinston.com`), named `winston-<stack>`. A stack stays empty until its ticket fills it; CDK skips deploying empty stacks.
+  - **Stateful resources can't be deleted by accident:** the `Data` stack has termination protection, and its resources get explicit retain policies and deletion protection as they're added.
+  - **Cross-stack references are weak** (`@aws-cdk/core:defaultCrossStackReferences: weak`, recommended since CDK 2.254): consumers read a producer's outputs with `Fn::GetStackOutput` instead of CloudFormation exports, so removing a reference never gets stuck on an export still in use.
+  - `cdk.json` sets every recommended feature flag, so behaviour doesn't drift when CDK adds new defaults, and turns off the CLI's telemetry (`cli-telemetry: false`). It keeps CDK's version reporting, the `CDKMetadata` resource that also keeps empty stacks valid. `cdk.context.json` is committed if lookups ever create it; `cdk.out/` is ignored.
+  - **Synth includes CloudFormation validation** (`@aws-cdk/core:validateAgainstDefaultRules`), and `infra/src/app.test.ts` synthesizes the whole app with `cdk.json`'s flags inside the normal test suite, so broken infrastructure fails the pre-commit hook.
+  - Root scripts `infra:synth`, `infra:diff` and `infra:deploy` (diff and deploy cover all stacks) need AWS credentials for diff and deploy: `AWS_PROFILE=winston-prod` locally (docs/runbooks/aws-access.md). The account is bootstrapped once with `cdk bootstrap`.
 
 ## 20. Website pages & states
 
@@ -1228,10 +1235,10 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 ## 21. Repo bootstrap
 
-- **Workspace:** Bun workspaces (`apps/*`, `packages/*`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,domain,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
+- **Workspace:** Bun workspaces (`apps/*`, `packages/*`, `infra`) that will hold `apps/{api,agents,gateway,web,cli,winstond}` and `packages/{db,domain,shared,prompts,ui}`, plus `infra/` and `image/`. Package scope `@winston/*`. **Packages and directories are created by the ticket that first needs them**, never stubbed ahead of time.
 - **Pins via `mise.toml`** (project-local): Bun, Node, Moth, `cloudflared`, Packer and the AWS CLI. Terraform gets added by the ticket that introduces it.
 - **`./scripts/setup.sh`**: one idempotent command from fresh clone to working repo (check first, then act). It never installs global tools. The numbered list at the top of the script is the source of truth for its steps, and tickets that add a setup requirement extend it.
-- **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`.
+- **Root scripts:** `dev` (all services + tunnel), `lint`, `format`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, `image:build`, `infra:synth`, `infra:diff`, `infra:deploy`.
 - **Local services:** `docker-compose.yml` (Postgres, and the VM container via the `VmProvider`).
 - **`packages/ui`:** the design system (Tailwind + Base UI primitives, tokens, components). The web app consumes only this.
 - **Moth:** `moth.config.yml` + `.moth/` at the root.

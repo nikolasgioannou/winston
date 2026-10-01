@@ -46,6 +46,23 @@ aws sts get-caller-identity --profile winston-prod   # account 766577085959
 
 The `sso-session` form refreshes role credentials for as long as the portal session lasts (8 hours by default), and `aws sso logout` ends it. The AWS SDK and CDK take the profile from `--profile` or `AWS_PROFILE`, never from the login alone, so set `AWS_PROFILE=winston-prod` when running scripts against production.
 
+## CDK
+
+The CDK app in `infra/` deploys to this account (docs/design.md §19). From the repo root, with the profile logged in:
+
+```sh
+AWS_PROFILE=winston-prod bun run infra:diff     # what would change
+AWS_PROFILE=winston-prod bun run infra:deploy   # deploy every stack
+```
+
+The account was bootstrapped once for CDK, which created the `CDKToolkit` stack (an assets bucket, an image repository, the deploy roles and a version parameter):
+
+```sh
+cd infra && bunx cdk bootstrap aws://766577085959/us-east-1 --termination-protection --profile winston-prod
+```
+
+Running it again upgrades the bootstrap stack in place; never delete it. GitHub's deploy role gets trusted later (the `Ci` stack).
+
 ## How it was set up
 
 The Organization, Identity Center, the user and the permission set already existed for the maintainer's other projects, so Winston reused them. In the management account's console:

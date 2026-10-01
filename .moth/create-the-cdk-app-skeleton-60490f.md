@@ -1,14 +1,14 @@
 ---
 id: "60490f"
 title: Create the CDK app skeleton
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - tooling
 created_at: 2026-09-27T05:36:32.279Z
-updated_at: 2026-09-27T05:36:32.329Z
+updated_at: 2026-10-01T03:20:27.179Z
 blocked_by:
   - "2c0dbe"
   - "51d785"

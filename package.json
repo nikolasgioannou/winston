@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "infra"
   ],
   "scripts": {
     "allowlist": "bun --env-file=.env.local packages/db/src/allowlist-cli.ts",
@@ -18,6 +19,9 @@
     "format": "prettier --write . && packer fmt -recursive image",
     "format:check": "prettier --check . && packer fmt -check -recursive image",
     "image:build:local": "bun scripts/image-build-local.ts",
+    "infra:deploy": "bun run --filter @winston/infra deploy",
+    "infra:diff": "bun run --filter @winston/infra diff",
+    "infra:synth": "bun run --filter @winston/infra synth",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "model:smoke": "bun run --filter @winston/agents model:smoke",
