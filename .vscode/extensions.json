@@ -9,6 +9,8 @@
     // Tailwind class completion and hovers in apps/web.
     "bradlc.vscode-tailwindcss",
     // Syntax highlighting for the Packer template in image/ (packer fmt formats it).
-    "hashicorp.hcl"
+    "hashicorp.hcl",
+    // Terraform for infra/gcp: highlighting, validation and terraform fmt.
+    "hashicorp.terraform"
   ]
 }

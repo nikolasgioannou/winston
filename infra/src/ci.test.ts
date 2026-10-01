@@ -36,6 +36,21 @@ describe("ci stack", () => {
       .flatMap((policy) => policy.PolicyDocument.Statement);
   };
 
+  test("Terraform's state bucket is private, versioned and kept", () => {
+    template.hasResource("AWS::S3::Bucket", {
+      Properties: {
+        VersioningConfiguration: { Status: "Enabled" },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      },
+      DeletionPolicy: "Retain",
+    });
+  });
+
   test("GitHub's roles trust only main in this repository", () => {
     for (const name of ["winston-github-deploy", "winston-github-ami"]) {
       const [statement] = roleProps(name).AssumeRolePolicyDocument.Statement;

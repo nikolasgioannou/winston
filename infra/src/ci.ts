@@ -7,7 +7,12 @@ import {
   Role,
 } from "aws-cdk-lib/aws-iam";
 import type { IKey } from "aws-cdk-lib/aws-kms";
-import type { IBucket } from "aws-cdk-lib/aws-s3";
+import {
+  BlockPublicAccess,
+  Bucket,
+  BucketEncryption,
+  type IBucket,
+} from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 import type { Service } from "./secrets.ts";
 
@@ -40,6 +45,7 @@ export class CiStack extends Stack {
   readonly repositories: Record<Image, Repository>;
   readonly deployRole: Role;
   readonly amiRole: Role;
+  readonly terraformState: Bucket;
 
   constructor(scope: Construct, id: string, props: CiStackProps) {
     super(scope, id, props);
@@ -242,5 +248,16 @@ export class CiStack extends Stack {
         ],
       }),
     );
+
+    // Terraform's state for the small GCP footprint (infra/gcp), with S3's
+    // native locking; applied by hand (docs/runbooks/gcp-terraform.md).
+    this.terraformState = new Bucket(this, "TerraformState", {
+      bucketName: `winston-terraform-state-${this.account}`,
+      versioned: true,
+      encryption: BucketEncryption.S3_MANAGED,
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
   }
 }

@@ -194,6 +194,7 @@ Two classes of event:
 - **Calendar → `events.watch` channels → our `api`** (`/webhooks/calendar`, no Pub/Sub needed). One channel per watched calendar per connection, each with a secret channel token that we verify. Renewed before expiry. A notification triggers an incremental `events.list` with the stored `syncToken`.
 - **Reconciliation backstop:** a slow sync (~every 10 min) per connection catches any missed notification. Checkpoints (`historyId`, `syncToken`) live in Postgres, so sync is idempotent.
 - **GCP infrastructure as code:** CDK can't manage GCP, so the small GCP footprint (project APIs, Pub/Sub topic, IAM binding, push subscription) is a **Terraform** module in `infra/gcp`. The OAuth consent screen and client are configured manually (Google offers limited API support for them).
+  - **As built:** a `gmail-push` module (the Pub/Sub API, the topic, `gmail-api-push@system.gserviceaccount.com` as publisher, a push subscription with an OIDC token from a dedicated service account and the endpoint as audience, backoff 10–600 s, 10 delivery attempts then a dead-letter topic kept a week) used by two roots: `infra/gcp/prod` (`gmail-push` → `https://api.runwinston.com/webhooks/gmail`) and `infra/gcp/dev` (`gmail-push-dev` → the `dev.runwinston.com` tunnel). Terraform 1.16 pinned in `mise.toml`, google provider 8.x, credentials from gcloud's application-default login (no key files), state in S3 (`winston-terraform-state-<account>` from the Ci stack, with the native lock file). Applied by hand; not run in CI ([runbooks/gcp-terraform.md](runbooks/gcp-terraform.md)).
 
 Mail filter: structured fields (`from`, `to`, `subject_contains`, `category`, `has_attachment`, `is_reply_to_user`) matched in our code, and/or a Gmail-native query, checked per message by running `messages.list` with `q = "<native> rfc822msgid:<id>"` so we don't reimplement Gmail's query language.
 
@@ -1265,7 +1266,7 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 | `Services` | ECS cluster, 4 Fargate services (`api`, `web`, `agents`, `gateway`), ALB with host-based routing (`api.`, `gateway.`), Secrets Manager secrets, per-service IAM roles     |
 | `Edge`     | The ACM certificate (validated through Cloudflare DNS). DNS records live in Cloudflare, not CDK                                                                           |
 | `Vm`       | Launch template, instance profile (SSM only), Data Lifecycle Manager snapshot policy, the backend's EC2 policy                                                            |
-| `Ci`       | ECR repositories, GitHub OIDC provider + deploy role                                                                                                                      |
+| `Ci`       | ECR repositories, GitHub OIDC provider + deploy role, the Terraform state bucket for `infra/gcp`                                                                          |
 | `Budget`   | AWS Budgets alerts (see §8)                                                                                                                                               |
 
 - GCP resources live separately in `infra/gcp` (Terraform).

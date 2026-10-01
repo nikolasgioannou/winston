@@ -8,3 +8,5 @@ cloudflared = "2026.9.3"
 packer = "1.16.1"
 # Reaches the winston-prod account through IAM Identity Center (docs/runbooks/aws-access.md).
 aws-cli = "2.37.7"
+# Manages the GCP footprint, Gmail push (infra/gcp; docs/runbooks/gcp-terraform.md).
+terraform = "1.16.4"

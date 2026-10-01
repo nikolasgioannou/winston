@@ -14,3 +14,8 @@ apps/web/src/routeTree.prod.gen.ts
 # CDK's synthesized templates and asset staging (bun run infra:synth).
 infra/cdk.out*/
 infra/.cdk.staging/
+
+# Terraform (infra/gcp): providers and local state caches; state itself is in S3.
+.terraform/
+*.tfstate
+*.tfstate.backup
