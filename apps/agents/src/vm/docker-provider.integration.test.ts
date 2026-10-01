@@ -32,9 +32,9 @@ describe.skipIf(!imageReady)("dockerVmProvider against Docker", () => {
     } finally {
       await provider.destroy(instanceId);
       expect(await provider.status(instanceId)).toBe("gone");
-      await provider.destroyDataVolume(dataVolumeId);
+      await provider.destroyDataVolume(dataVolumeId, userId);
       // Already gone is fine.
-      await provider.destroyDataVolume(dataVolumeId);
+      await provider.destroyDataVolume(dataVolumeId, userId);
     }
   }, 60_000);
 });

@@ -1,14 +1,14 @@
 ---
 id: "f2ce33"
 title: Restore a user's VM from a snapshot
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - vm
 created_at: 2026-09-27T05:36:33.484Z
-updated_at: 2026-09-27T05:36:33.536Z
+updated_at: 2026-10-01T15:58:15.340Z
 blocked_by:
   - "550446"
   - "b9062e"
@@ -28,3 +28,5 @@ The VM goes through the normal state machine.
 Also document when to use this versus letting EC2 auto-recovery handle it, in `docs/runbooks/vm-recovery.md`. Include how to migrate a VM to a new AMI, which is the same mechanism: new instance, existing data volume (§10).
 
 Test the job's orchestration against mocked EC2. The real exercise happens once in production, restoring the founder's VM deliberately after cutover. Note the date when that's done.
+
+**Done (2026-10-01):** built and tested against a fake EC2 and the database; the deliberate production restore of the founder's VM waits for go-live (docs/runbooks/vm-recovery.md has a line to record it).

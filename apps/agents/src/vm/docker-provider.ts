@@ -107,6 +107,16 @@ export function dockerVmProvider({
       await call("DELETE", `/volumes/${dataVolumeId}?force=true`, [204, 404]);
     },
 
+    restoreDataVolume() {
+      return Promise.reject(
+        new Error("Restoring needs EC2 snapshots; local VMs have none."),
+      );
+    },
+
+    async retireDataVolume(dataVolumeId) {
+      await call("DELETE", `/volumes/${dataVolumeId}?force=true`, [204, 404]);
+    },
+
     async status(instanceId): Promise<VmInstanceStatus> {
       const response = await call(
         "GET",

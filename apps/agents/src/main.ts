@@ -7,6 +7,7 @@ import {
   deleteUserJob,
   frontTurnJob,
   provisionVmJob,
+  restoreVmJob,
   revokeConnectionTokenJob,
   saveAttachmentJob,
   transcribeVoiceJob,
@@ -39,7 +40,7 @@ import {
   reconnectUrlFor,
   sweepConnectionGrants,
 } from "./connections/grants.ts";
-import { provisionVmHandler } from "./vm/provision.ts";
+import { provisionVmHandler, restoreVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
@@ -83,6 +84,7 @@ const worker = createWorker({
   logger,
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
+    [restoreVmJob.type]: restoreVmHandler(vmProvider),
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
       revoke: googleTokenRevoker(),

@@ -31,6 +31,18 @@ export const provisionVmJob = {
 } as const;
 
 /**
+ * Restoring a user's VM from its latest data-volume snapshot (§10, Backups;
+ * docs/runbooks/vm-recovery.md). Queued by hand with `bun run prod
+ * vm:restore <email>`. One attempt: a half-done restore needs a look, not a
+ * blind retry.
+ */
+export const restoreVmJob = {
+  type: "restore_vm",
+  dedupeKey: (userId: string) => `restore_vm:${userId}`,
+  maxAttempts: 1,
+} as const;
+
+/**
  * Saving a file the user sent to their VM (§4, Media). Payload
  * `{ inboundItemId }`. The item stays `pending`, holding back the turn,
  * until this finishes; then it queues the turn.

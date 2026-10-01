@@ -8,8 +8,13 @@ export interface VmProvider {
   /**
    * Creates the instance and its data volume (or reuses the volume, so
    * recreating an instance keeps the user's files). Doesn't start it.
+   * `dataVolumeId` names the volume to attach (a replacement or a restore).
    */
-  create(input: { userId: string; registrationToken: string }): Promise<{
+  create(input: {
+    userId: string;
+    registrationToken: string;
+    dataVolumeId?: string | undefined;
+  }): Promise<{
     instanceId: string;
     dataVolumeId: string;
   }>;
@@ -18,10 +23,22 @@ export interface VmProvider {
   /** Removes the instance. The data volume stays; account deletion removes it. */
   destroy(instanceId: string): Promise<void>;
   /**
-   * Deletes a data volume, and in production its snapshots (account
-   * deletion). One that's already gone is fine, so a retry can repeat it.
+   * Deletes a data volume, and in production every snapshot of the user's
+   * data (account deletion). One that's already gone is fine, so a retry
+   * can repeat it.
    */
-  destroyDataVolume(dataVolumeId: string): Promise<void>;
+  destroyDataVolume(dataVolumeId: string, userId: string): Promise<void>;
+  /**
+   * A new data volume from the user's latest snapshot (restoring a VM,
+   * docs/runbooks/vm-recovery.md). EC2 only.
+   */
+  restoreDataVolume(userId: string): Promise<{
+    dataVolumeId: string;
+    snapshotId: string;
+    snapshotTakenAt: Date;
+  }>;
+  /** Deletes a volume a restore replaced, keeping its snapshots. */
+  retireDataVolume(dataVolumeId: string): Promise<void>;
   status(instanceId: string): Promise<VmInstanceStatus>;
 }
 

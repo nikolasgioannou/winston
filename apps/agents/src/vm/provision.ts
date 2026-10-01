@@ -50,9 +50,16 @@ export async function provisionVm(
   }
 
   const registrationToken = await issueRegistrationToken(db, vm.id);
+  // The VM's known data volume, if it has one, so a replacement or a restore
+  // attaches exactly that volume.
+  const [current] = await db
+    .select({ dataVolumeId: vms.dataVolumeId })
+    .from(vms)
+    .where(eq(vms.id, vm.id));
   const { instanceId, dataVolumeId } = await provider.create({
     userId,
     registrationToken,
+    dataVolumeId: current?.dataVolumeId ?? undefined,
   });
   await db
     .update(vms)
@@ -66,6 +73,55 @@ export async function provisionVm(
     { vmId: vm.id, instanceId },
     "VM started; waiting for winstond to register",
   );
+}
+
+/** VM states a restore may start from: anything else is mid-setup or going away. */
+const restorable = new Set(["ready", "unhealthy", "failed"]);
+
+/**
+ * Restores a user's VM from its latest data-volume snapshot
+ * (docs/runbooks/vm-recovery.md): a new volume from the snapshot, then the
+ * usual replacement (a new instance and registration token, the old instance
+ * and VM token gone) on that volume. The volume it replaces is deleted once
+ * free; its snapshots stay until the snapshot policy expires them.
+ */
+export async function restoreVm(
+  deps: { db: DbOrTx; logger: Logger; provider: VmProvider },
+  userId: string,
+) {
+  const { db, logger, provider } = deps;
+  const [vm] = await db.select().from(vms).where(eq(vms.userId, userId));
+  if (!vm) throw new Error(`${userId} has no VM to restore.`);
+  if (!restorable.has(vm.state))
+    throw new Error(
+      `${userId}'s VM is ${vm.state}; restore only a ready, unhealthy or failed VM.`,
+    );
+  const restored = await provider.restoreDataVolume(userId);
+  logger.info(
+    {
+      vmId: vm.id,
+      snapshotId: restored.snapshotId,
+      snapshotTakenAt: restored.snapshotTakenAt,
+      dataVolumeId: restored.dataVolumeId,
+    },
+    "restoring the VM from its latest snapshot",
+  );
+  await db
+    .update(vms)
+    .set({ dataVolumeId: restored.dataVolumeId })
+    .where(eq(vms.id, vm.id));
+  await provisionVm(deps, userId, { replace: true });
+  if (vm.dataVolumeId && vm.dataVolumeId !== restored.dataVolumeId)
+    await provider.retireDataVolume(vm.dataVolumeId);
+}
+
+/** The `restore_vm` job (`bun run prod vm:restore <email>`). */
+export function restoreVmHandler(provider: VmProvider): JobHandler {
+  return async ({ job, db, logger }) => {
+    const userId = job.userId;
+    if (!userId) throw new Error("restore_vm job has no user");
+    await restoreVm({ db, logger, provider }, userId);
+  };
 }
 
 /**

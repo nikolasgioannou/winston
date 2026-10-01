@@ -182,6 +182,14 @@ export class VmStack extends Stack {
           },
         }),
         new PolicyStatement({
+          // Restoring a VM creates its volume from a data snapshot, which is
+          // authorized against the snapshot too.
+          sid: "RestoreFromDataSnapshots",
+          actions: ["ec2:CreateVolume"],
+          resources: [`arn:aws:ec2:${region}::snapshot/*`],
+          conditions: tagged("data"),
+        }),
+        new PolicyStatement({
           sid: "TagWhatItCreates",
           actions: ["ec2:CreateTags"],
           resources: [

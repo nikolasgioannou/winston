@@ -6,6 +6,7 @@ interface FakeVolume {
   AvailabilityZone: string;
   State: string;
   Tags: { Key: string; Value: string }[];
+  FromSnapshot?: string;
 }
 
 /**
@@ -18,7 +19,10 @@ function fakeEc2() {
   const calls: string[] = [];
   const volumes = new Map<string, FakeVolume>();
   const instances = new Map<string, { state: string; describes: number }>();
-  const snapshots = new Map<string, string>(); // snapshot → volume
+  const snapshots = new Map<
+    string,
+    { volumeId: string; user?: string; startTime?: Date; status?: string }
+  >();
   const launches: Record<string, unknown>[] = [];
   let next = 0;
   const id = (prefix: string) => `${prefix}-${String(++next)}`;
@@ -65,6 +69,9 @@ function fakeEc2() {
           AvailabilityZone: input.AvailabilityZone as string,
           State: "creating",
           Tags: spec?.Tags ?? [],
+          ...(input.SnapshotId
+            ? { FromSnapshot: input.SnapshotId as string }
+            : {}),
         };
         volumes.set(volume.VolumeId, volume);
         return { ...volume };
@@ -109,12 +116,24 @@ function fakeEc2() {
       StartInstancesCommand: () => ({}),
       StopInstancesCommand: () => ({}),
       DescribeSnapshotsCommand: (input) => {
-        const volumeId = (input.Filters as { Values: string[] }[])[0]
-          ?.Values[0];
+        const filters = input.Filters as { Name: string; Values: string[] }[];
+        const value = (name: string) =>
+          filters.find((filter) => filter.Name === name)?.Values[0];
         return {
           Snapshots: [...snapshots]
-            .filter(([, volume]) => volume === volumeId)
-            .map(([SnapshotId]) => ({ SnapshotId })),
+            .filter(
+              ([, snapshot]) =>
+                (value("volume-id") === undefined ||
+                  snapshot.volumeId === value("volume-id")) &&
+                (value("tag:winston:user") === undefined ||
+                  snapshot.user === value("tag:winston:user")) &&
+                (value("status") === undefined ||
+                  (snapshot.status ?? "completed") === value("status")),
+            )
+            .map(([SnapshotId, snapshot]) => ({
+              SnapshotId,
+              StartTime: snapshot.startTime,
+            })),
         };
       },
       DeleteSnapshotCommand: (input) => {
@@ -223,23 +242,67 @@ describe("ec2VmProvider", () => {
     expect(ec2.calls.filter((call) => call === "CreateVolume")).toHaveLength(1);
   });
 
-  test("destroyDataVolume deletes the volume's snapshots and the volume, and repeating it is fine", async () => {
+  test("destroyDataVolume deletes the volume, its snapshots and the user's earlier ones, and repeating it is fine", async () => {
     const ec2 = fakeEc2();
     const vms = provider(ec2);
     const { instanceId, dataVolumeId } = await vms.create({
       userId: "usr_1",
       registrationToken: "a",
     });
-    ec2.snapshots.set("snap-1", dataVolumeId);
-    ec2.snapshots.set("snap-2", dataVolumeId);
-    ec2.snapshots.set("snap-other", "vol-other");
+    ec2.snapshots.set("snap-1", { volumeId: dataVolumeId, user: "usr_1" });
+    ec2.snapshots.set("snap-2", { volumeId: dataVolumeId, user: "usr_1" });
+    // From the user's volume before a restore: same user, other volume.
+    ec2.snapshots.set("snap-earlier", { volumeId: "vol-gone", user: "usr_1" });
+    ec2.snapshots.set("snap-other", { volumeId: "vol-other", user: "usr_2" });
 
     await vms.destroy(instanceId);
-    await vms.destroyDataVolume(dataVolumeId);
-    await vms.destroyDataVolume(dataVolumeId);
+    await vms.destroyDataVolume(dataVolumeId, "usr_1");
+    await vms.destroyDataVolume(dataVolumeId, "usr_1");
 
     expect(ec2.volumes.size).toBe(0);
     expect([...ec2.snapshots.keys()]).toEqual(["snap-other"]);
+  });
+
+  test("restoreDataVolume makes a tagged volume from the user's latest completed snapshot; retireDataVolume deletes only the volume", async () => {
+    const ec2 = fakeEc2();
+    const vms = provider(ec2);
+    ec2.snapshots.set("snap-old", {
+      volumeId: "vol-a",
+      user: "usr_1",
+      startTime: new Date("2026-09-29T07:00:00Z"),
+    });
+    ec2.snapshots.set("snap-new", {
+      volumeId: "vol-a",
+      user: "usr_1",
+      startTime: new Date("2026-09-30T07:00:00Z"),
+    });
+    ec2.snapshots.set("snap-pending", {
+      volumeId: "vol-a",
+      user: "usr_1",
+      startTime: new Date("2026-10-01T07:00:00Z"),
+      status: "pending",
+    });
+    ec2.snapshots.set("snap-someone-else", {
+      volumeId: "vol-b",
+      user: "usr_2",
+      startTime: new Date("2026-10-01T08:00:00Z"),
+    });
+
+    const restored = await vms.restoreDataVolume("usr_1");
+    expect(restored.snapshotId).toBe("snap-new");
+    expect(ec2.volumes.get(restored.dataVolumeId)).toMatchObject({
+      FromSnapshot: "snap-new",
+      State: "available",
+    });
+
+    await vms.retireDataVolume(restored.dataVolumeId);
+    await vms.retireDataVolume(restored.dataVolumeId);
+    expect(ec2.volumes.size).toBe(0);
+    expect(ec2.snapshots.size).toBe(4);
+
+    expect(vms.restoreDataVolume("usr_nobody")).rejects.toThrow(
+      /No completed snapshot/,
+    );
   });
 
   test("status maps EC2's states onto ours, and a vanished instance is gone", async () => {

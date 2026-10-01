@@ -96,7 +96,8 @@ async function terminateVm(db: DbOrTx, provider: VmProvider, userId: string) {
   if (!vm || vm.state === "terminated") return;
   if (vm.state !== "terminating") await applyVmEvent(db, vm.id, "terminate");
   if (vm.instanceId) await provider.destroy(vm.instanceId);
-  if (vm.dataVolumeId) await provider.destroyDataVolume(vm.dataVolumeId);
+  if (vm.dataVolumeId)
+    await provider.destroyDataVolume(vm.dataVolumeId, vm.userId);
   await applyVmEvent(db, vm.id, "terminated");
 }
 

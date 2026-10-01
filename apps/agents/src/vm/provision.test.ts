@@ -9,7 +9,7 @@ import { createLogger } from "@winston/shared/logger";
 import { tokenMatches } from "@winston/shared/tokens";
 import { eq } from "drizzle-orm";
 import type { VmProvider } from "./provider.ts";
-import { provisionVm, provisionVmHandler } from "./provision.ts";
+import { provisionVm, provisionVmHandler, restoreVm } from "./provision.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -21,15 +21,19 @@ const logger = createLogger("agents-test", {
 function fakeProvider(options: { failCreate?: boolean } = {}) {
   const tokens: string[] = [];
   const started: string[] = [];
+  const destroyed: string[] = [];
+  const volumesAsked: (string | undefined)[] = [];
+  const retired: string[] = [];
   const provider: VmProvider = {
     kind: "docker",
-    create: ({ registrationToken }) => {
+    create: ({ registrationToken, dataVolumeId }) => {
       if (options.failCreate)
         return Promise.reject(new Error("docker is down"));
       tokens.push(registrationToken);
+      volumesAsked.push(dataVolumeId);
       return Promise.resolve({
         instanceId: `inst-${String(tokens.length)}`,
-        dataVolumeId: "vol-1",
+        dataVolumeId: dataVolumeId ?? "vol-1",
       });
     },
     start: (instanceId) => {
@@ -37,11 +41,24 @@ function fakeProvider(options: { failCreate?: boolean } = {}) {
       return Promise.resolve();
     },
     stop: () => Promise.resolve(),
-    destroy: () => Promise.resolve(),
+    destroy: (instanceId) => {
+      destroyed.push(instanceId);
+      return Promise.resolve();
+    },
     destroyDataVolume: () => Promise.resolve(),
+    restoreDataVolume: () =>
+      Promise.resolve({
+        dataVolumeId: "vol-restored",
+        snapshotId: "snap-1",
+        snapshotTakenAt: new Date("2026-10-01T07:00:00Z"),
+      }),
+    retireDataVolume: (dataVolumeId) => {
+      retired.push(dataVolumeId);
+      return Promise.resolve();
+    },
     status: () => Promise.resolve("running"),
   };
-  return { provider, tokens, started };
+  return { provider, tokens, started, destroyed, volumesAsked, retired };
 }
 
 const vmOf = async (tx: DbOrTx, userId: string) =>
@@ -149,6 +166,51 @@ describe("provisionVm", () => {
       await provisionVm({ db: tx, logger, provider }, user.id);
       await provisionVm({ db: tx, logger, provider }, user.id);
       expect(started).toHaveLength(1);
+    });
+  });
+});
+
+describe("restoreVm", () => {
+  test("puts an unhealthy VM on a volume from its latest snapshot, with a new instance and token, and retires the old volume", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const { provider, tokens, destroyed, volumesAsked, retired } =
+        fakeProvider();
+      await provisionVm({ db: tx, logger, provider }, user.id);
+      await tx
+        .update(vms)
+        .set({ state: "unhealthy", tokenHash: "old-token-hash" })
+        .where(eq(vms.userId, user.id));
+
+      await restoreVm({ db: tx, logger, provider }, user.id);
+      const vm = await vmOf(tx, user.id);
+      expect(vm).toMatchObject({
+        state: "registering",
+        instanceId: "inst-2",
+        dataVolumeId: "vol-restored",
+        tokenHash: null,
+      });
+      expect(destroyed).toEqual(["inst-1"]);
+      // The new instance was asked for the restored volume.
+      expect(volumesAsked.at(-1)).toBe("vol-restored");
+      expect(retired).toEqual(["vol-1"]);
+      expect(
+        tokenMatches(tokens[1] ?? "", vm?.registrationTokenHash ?? ""),
+      ).toBe(true);
+    });
+  });
+
+  test("refuses a VM that's still being set up, touching nothing", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const { provider, destroyed, retired } = fakeProvider();
+      await provisionVm({ db: tx, logger, provider }, user.id);
+      expect(restoreVm({ db: tx, logger, provider }, user.id)).rejects.toThrow(
+        /registering/,
+      );
+      expect(destroyed).toEqual([]);
+      expect(retired).toEqual([]);
+      expect((await vmOf(tx, user.id))?.dataVolumeId).toBe("vol-1");
     });
   });
 });

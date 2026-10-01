@@ -75,6 +75,7 @@ describe("vm stack", () => {
       "ManageTaggedVms",
       "ManageTaggedDataVolumes",
       "DeleteTaggedSnapshots",
+      "RestoreFromDataSnapshots",
     ])
       expect(Object.keys(bySid[sid]?.Condition?.StringEquals ?? {})).toEqual([
         "aws:ResourceTag/winston:role",

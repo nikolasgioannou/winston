@@ -6,12 +6,17 @@
  *   migrate                          apply pending migrations
  *   allowlist list|add|remove …      who may sign in
  *   sql "<query>"                    a read-only query, rows printed as JSON
+ *   vm:restore <email>               restore a user's VM from its latest snapshot
  */
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { restoreVmJob } from "@winston/domain/jobs";
+import { eq } from "drizzle-orm";
 import { allowlistCommand } from "./allowlist-cli.ts";
 import { createDb, type Db } from "./client.ts";
 import { loadDbConfig } from "./config.ts";
+import { enqueue } from "./queue.ts";
+import { users } from "./schema/index.ts";
 
 /** Runs a query in a read-only transaction, so it can't change anything. */
 export async function readOnlyQuery(db: Db, query: string) {
@@ -33,6 +38,28 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
     }
     case "allowlist":
       return allowlistCommand(db, args);
+    case "vm:restore": {
+      const [email] = args;
+      const [user] = email
+        ? await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, email.trim().toLowerCase()))
+        : [];
+      if (!user) {
+        console.log(`usage: vm:restore <email of an existing user>`);
+        return 1;
+      }
+      await enqueue(db, restoreVmJob.type, {
+        userId: user.id,
+        dedupeKey: restoreVmJob.dedupeKey(user.id),
+        maxAttempts: restoreVmJob.maxAttempts,
+      });
+      console.log(
+        `Queued a restore of ${email ?? ""}'s VM from its latest snapshot; agents runs it (docs/runbooks/vm-recovery.md).`,
+      );
+      return 0;
+    }
     case "sql": {
       const [query] = args;
       if (!query) {
@@ -44,7 +71,9 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
       return 0;
     }
     default:
-      console.log("usage: migrate | allowlist list|add|remove … | sql <query>");
+      console.log(
+        "usage: migrate | allowlist list|add|remove … | sql <query> | vm:restore <email>",
+      );
       return 1;
   }
 }

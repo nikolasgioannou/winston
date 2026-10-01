@@ -7,6 +7,7 @@
  *   bun run prod allowlist add someone@example.com
  *   bun run prod sql "select count(*) from users"
  *   bun run prod migrate
+ *   bun run prod vm:restore someone@example.com
  *
  * Anything that writes asks for confirmation first; `--yes` skips it (deploys).
  * `--image <tag>` runs on that image tag instead of the current one.
@@ -29,13 +30,14 @@ const args = Bun.argv
 const confirmed = Bun.argv.includes("--yes");
 const [command, subcommand] = args;
 
-const commands = ["migrate", "allowlist", "sql"];
+const commands = ["migrate", "allowlist", "sql", "vm:restore"];
 if (!command || !commands.includes(command)) {
   console.error(`usage: bun run prod ${commands.join(" | ")} …`);
   process.exit(1);
 }
 const writes =
   command === "migrate" ||
+  command === "vm:restore" ||
   (command === "allowlist" &&
     (subcommand === "add" || subcommand === "remove"));
 

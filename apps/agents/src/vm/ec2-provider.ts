@@ -134,7 +134,7 @@ export function ec2VmProvider({
     );
   };
 
-  const newVolume = async (userId: string) => {
+  const newVolume = async (userId: string, snapshotId?: string) => {
     // The first subnet's zone; the instance follows the volume.
     const [firstSubnet] = subnetIds;
     if (!firstSubnet) throw new Error("No subnets for VMs.");
@@ -146,7 +146,8 @@ export function ec2VmProvider({
     return client.send(
       new CreateVolumeCommand({
         AvailabilityZone: zone,
-        Size: dataVolumeGiB,
+        // A restored volume takes the snapshot's size.
+        ...(snapshotId ? { SnapshotId: snapshotId } : { Size: dataVolumeGiB }),
         VolumeType: "gp3",
         Encrypted: true,
         TagSpecifications: [
@@ -166,9 +167,12 @@ export function ec2VmProvider({
   return {
     kind: "ec2",
 
-    async create({ userId, registrationToken }) {
-      const volume =
-        (await existingVolume(userId)) ?? (await newVolume(userId));
+    async create({ userId, registrationToken, dataVolumeId }) {
+      const volume = dataVolumeId
+        ? await describeVolume(dataVolumeId)
+        : ((await existingVolume(userId)) ?? (await newVolume(userId)));
+      if (!volume)
+        throw new Error(`Volume ${dataVolumeId ?? ""} doesn't exist.`);
       const volumeId = volume.VolumeId;
       const zone = volume.AvailabilityZone;
       if (!volumeId || !zone) throw new Error("EC2 returned no volume.");
@@ -252,17 +256,25 @@ export function ec2VmProvider({
       }
     },
 
-    async destroyDataVolume(dataVolumeId) {
-      // Snapshots first: they name the volume, which may be gone already.
-      const { Snapshots = [] } = await client.send(
-        new DescribeSnapshotsCommand({
-          OwnerIds: ["self"],
-          Filters: [{ Name: "volume-id", Values: [dataVolumeId] }],
-        }),
-      );
-      for (const { SnapshotId } of Snapshots)
-        if (SnapshotId)
-          await client.send(new DeleteSnapshotCommand({ SnapshotId }));
+    async destroyDataVolume(dataVolumeId, userId) {
+      // Snapshots first: this volume's, and any of the user's earlier volumes
+      // (a restore replaces the volume; its snapshots stay until retention).
+      const snapshots = new Set<string>();
+      for (const Filters of [
+        [{ Name: "volume-id", Values: [dataVolumeId] }],
+        [
+          { Name: `tag:${roleTag}`, Values: ["data"] },
+          { Name: `tag:${userTag}`, Values: [userId] },
+        ],
+      ]) {
+        const { Snapshots = [] } = await client.send(
+          new DescribeSnapshotsCommand({ OwnerIds: ["self"], Filters }),
+        );
+        for (const { SnapshotId } of Snapshots)
+          if (SnapshotId) snapshots.add(SnapshotId);
+      }
+      for (const SnapshotId of snapshots)
+        await client.send(new DeleteSnapshotCommand({ SnapshotId }));
 
       // A terminating instance releases the volume shortly.
       const gone = await waitFor(
@@ -279,6 +291,63 @@ export function ec2VmProvider({
         },
       );
       if (gone === "gone") return;
+      try {
+        await client.send(new DeleteVolumeCommand({ VolumeId: dataVolumeId }));
+      } catch (error) {
+        if (!notFound(error)) throw error;
+      }
+    },
+
+    async restoreDataVolume(userId) {
+      const { Snapshots = [] } = await client.send(
+        new DescribeSnapshotsCommand({
+          OwnerIds: ["self"],
+          Filters: [
+            { Name: `tag:${roleTag}`, Values: ["data"] },
+            { Name: `tag:${userTag}`, Values: [userId] },
+            { Name: "status", Values: ["completed"] },
+          ],
+        }),
+      );
+      const latest = Snapshots.filter((snapshot) => snapshot.StartTime)
+        .sort(
+          (a, b) =>
+            (b.StartTime?.getTime() ?? 0) - (a.StartTime?.getTime() ?? 0),
+        )
+        .at(0);
+      if (!latest?.SnapshotId || !latest.StartTime)
+        throw new Error(
+          `No completed snapshot of ${userId}'s data to restore.`,
+        );
+      const { VolumeId } = await newVolume(userId, latest.SnapshotId);
+      if (!VolumeId) throw new Error("EC2 returned no volume.");
+      await waitFor(`volume ${VolumeId} to be available`, async () =>
+        (await describeVolume(VolumeId))?.State === "available"
+          ? true
+          : undefined,
+      );
+      return {
+        dataVolumeId: VolumeId,
+        snapshotId: latest.SnapshotId,
+        snapshotTakenAt: latest.StartTime,
+      };
+    },
+
+    async retireDataVolume(dataVolumeId) {
+      const state = await waitFor(
+        `volume ${dataVolumeId} to detach`,
+        async () => {
+          const volume = await describeVolume(dataVolumeId).catch(
+            (error: unknown) => {
+              if (notFound(error)) return null;
+              throw error;
+            },
+          );
+          if (volume === null || volume?.State === "deleted") return "gone";
+          return volume?.State === "available" ? "available" : undefined;
+        },
+      );
+      if (state === "gone") return;
       try {
         await client.send(new DeleteVolumeCommand({ VolumeId: dataVolumeId }));
       } catch (error) {
