@@ -11,6 +11,7 @@ import {
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { runStepJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
+import type { ExecResult } from "@winston/domain/frames";
 import type { ModelMessage } from "ai";
 import { and, asc, eq } from "drizzle-orm";
 import { localBlobStore } from "../blobs.ts";
@@ -681,6 +682,51 @@ describe("background runs", () => {
         { effort: "low" },
         { effort: "xhigh" },
       ]);
+    });
+  });
+
+  test("a crash after a send but before the checkpoint: resume reuses the VM's result, so the mail goes out once", async () => {
+    await inRollback(db, async (tx) => {
+      const controller = new AbortController();
+      // Stands in for Gmail behind `winston mail send`, and winstond's buffer.
+      const gmail = { sent: 0 };
+      const buffered = new Map<string, ExecResult>();
+      const vm: VmClient = {
+        ...fakeVmClient().client,
+        exec: (_userId, request) => {
+          const cached = request.id ? buffered.get(request.id) : undefined;
+          if (cached) return Promise.resolve(cached);
+          gmail.sent += 1;
+          const result: ExecResult = {
+            stdout: "Sent msg_01sent in thr_01dana from me@example.com.\n",
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            truncated: false,
+          };
+          if (request.id) buffered.set(request.id, result);
+          // The worker dies after the command ran, before it hears back.
+          controller.abort(new Error("worker stopped"));
+          return Promise.reject(new Error("connection lost"));
+        },
+        fetchExec: (_userId, execId) => Promise.resolve(buffered.get(execId)),
+      };
+      const { deps, runId } = await setup(
+        tx,
+        [
+          toolCallReply("bash", { command: "winston mail send --to dana" }),
+          textReply("Sent the reply to Dana (msg_01sent)."),
+        ],
+        vm,
+      );
+      expect(
+        await failure(runBackgroundStep(deps, runId, controller.signal)),
+      ).toBe("worker stopped");
+      expect(await drive(deps, runId)).toEqual(["finished"]);
+      expect(gmail.sent).toBe(1);
+      const messages = await messagesOf(tx, runId);
+      expect(JSON.stringify(messages.at(-2))).toContain("Sent msg_01sent");
+      expect(JSON.stringify(messages)).not.toContain(interruptedNote);
     });
   });
 });

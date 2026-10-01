@@ -36,7 +36,12 @@ import { asc, desc, eq, sql } from "drizzle-orm";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
 import type { Effort, ModelGateway } from "../model/gateway.ts";
-import { bashDefinition, bashTool } from "../tools/bash.ts";
+import {
+  bashDefinition,
+  bashOutput,
+  bashTool,
+  execIdFor,
+} from "../tools/bash.ts";
 import {
   backgroundHandoffTool,
   browserHandoffDefinition,
@@ -254,34 +259,6 @@ export async function runBackgroundStep(
     messages = contextOf(log);
   };
 
-  // A step that died after the model asked for tools: their fate is unknown.
-  const lastEntry = log.at(-1);
-  const unanswered =
-    lastEntry?.kind === "message"
-      ? unansweredToolCalls([lastEntry.message])
-      : [];
-  if (unanswered.length > 0) {
-    logger.warn(
-      { calls: unanswered.length },
-      "resuming after an interrupted step; its tool calls get an unknown result",
-    );
-    await store(
-      toolMessage(
-        unanswered.map((call) => ({
-          call,
-          output: { type: "text", value: interruptedNote },
-        })),
-      ),
-    );
-  }
-
-  // The last call: cancelled, or at the step cap. No tools, just the report.
-  const cancelling = run.cancelRequestedAt !== null;
-  const capped = !cancelling && run.stepCount >= maxStepsPerRun - 1;
-  const last = cancelling || capped;
-  if (cancelling) await store({ role: "user", content: cancelNote });
-  else if (capped) await store({ role: "user", content: capNote });
-
   const tools = {
     bash: bashTool({
       vm: deps.vm,
@@ -297,6 +274,66 @@ export async function runBackgroundStep(
     view_image: withoutExecute(tools.view_image),
     [handoffTool]: backgroundHandoffTool,
   };
+
+  /**
+   * What an interrupted tool call returns: a command's real result if the VM
+   * still has it (it never runs an exec id twice), a fresh look for
+   * `view_image` (it only reads), and otherwise "unknown".
+   */
+  const recover = async (
+    call: ToolCallPart,
+  ): Promise<ToolResultPart["output"]> => {
+    if (call.toolName === "bash") {
+      const result = await deps.vm
+        .fetchExec(run.userId, execIdFor(runId, call.toolCallId))
+        .catch(() => undefined);
+      if (result)
+        return {
+          type: "text",
+          value: await bashOutput(
+            {
+              vm: deps.vm,
+              logger,
+              run: { runId, userId: run.userId, kind: "background" },
+            },
+            result,
+            call.toolCallId,
+          ),
+        };
+    }
+    if (call.toolName === "view_image")
+      return runTool(tools, call, messages, false, signal);
+    return { type: "text", value: interruptedNote };
+  };
+
+  // A step that died after the model asked for tools (§9, crash safety).
+  const lastEntry = log.at(-1);
+  const unanswered =
+    lastEntry?.kind === "message"
+      ? unansweredToolCalls([lastEntry.message])
+      : [];
+  if (unanswered.length > 0) {
+    logger.warn(
+      { calls: unanswered.length },
+      "resuming after an interrupted step",
+    );
+    const handoff = unanswered.find((call) => call.toolName === handoffTool);
+    if (handoff) {
+      await parkTask(db, runId, reasonOf(handoff), run.stepCount);
+      return "parked";
+    }
+    const recovered = [];
+    for (const call of unanswered)
+      recovered.push({ call, output: await recover(call) });
+    await store(toolMessage(recovered));
+  }
+
+  // The last call: cancelled, or at the step cap. No tools, just the report.
+  const cancelling = run.cancelRequestedAt !== null;
+  const capped = !cancelling && run.stepCount >= maxStepsPerRun - 1;
+  const last = cancelling || capped;
+  if (cancelling) await store({ role: "user", content: cancelNote });
+  else if (capped) await store({ role: "user", content: capNote });
 
   /** One model call with quick retries on transient errors. */
   const generate = async (options: {
@@ -433,15 +470,7 @@ export async function runBackgroundStep(
   // Handed over to the user: park, with the call unanswered until resumed.
   const handoff = calls.find((call) => call.toolName === handoffTool);
   if (handoff) {
-    const { reason } = handoff.input as { reason?: unknown };
-    await parkTask(
-      db,
-      runId,
-      typeof reason === "string" && reason.trim()
-        ? reason.trim()
-        : "The task needs the user to take over.",
-      run.stepCount + 1,
-    );
+    await parkTask(db, runId, reasonOf(handoff), run.stepCount + 1);
     logger.info("handed over to the user; parked");
     return "parked";
   }
@@ -487,6 +516,14 @@ async function contextTokens(db: DbOrTx, runId: string) {
     .limit(1);
   if (!latest || latest.promptHash === compactionPrompt.hash) return 0;
   return latest.input + latest.output;
+}
+
+/** The handoff's reason, as the model gave it. */
+function reasonOf(call: ToolCallPart) {
+  const { reason } = call.input as { reason?: unknown };
+  return typeof reason === "string" && reason.trim()
+    ? reason.trim()
+    : "The task needs the user to take over.";
 }
 
 /** A tool with its `execute` removed, so the model's call comes back unrun. */

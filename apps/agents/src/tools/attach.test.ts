@@ -51,6 +51,7 @@ const disk: Record<string, [number, number, number]> = {
 function fakeVm(options: { down?: boolean } = {}) {
   const reads: string[] = [];
   const vm: VmClient = {
+    fetchExec: () => Promise.resolve(undefined),
     exec: (_userId, request) => {
       if (options.down)
         return Promise.reject(new GatewayError("vm_unavailable", "down"));

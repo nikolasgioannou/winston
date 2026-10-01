@@ -102,6 +102,7 @@ function fakeVm(
     return "";
   };
   const vm: VmClient = {
+    fetchExec: () => Promise.resolve(undefined),
     exec: (_userId, request) => {
       if (options.down)
         return Promise.reject(new GatewayError("vm_unavailable", "down"));

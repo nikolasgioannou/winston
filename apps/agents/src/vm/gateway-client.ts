@@ -15,12 +15,16 @@ export interface VmClient {
   exec(
     userId: string,
     request: {
+      /** Makes the command idempotent: the same id never runs twice. */
+      id?: string;
       cmd: string;
       cwd?: string;
       env: Record<string, string>;
       timeoutMs: number;
     },
   ): Promise<ExecResult>;
+  /** A command's result by id without running it, or undefined if the VM has no record of it. */
+  fetchExec(userId: string, execId: string): Promise<ExecResult | undefined>;
   writeFile(userId: string, path: string, bytes: Uint8Array): Promise<void>;
   readFile(userId: string, path: string): Promise<Uint8Array>;
 }
@@ -57,6 +61,20 @@ export function gatewayClient({
           "The gateway isn't reachable.",
         );
       });
+      if (!response.ok) throw await failure(response);
+      return (await response.json()) as ExecResult;
+    },
+    async fetchExec(userId, execId) {
+      const response = await fetch(
+        url(`/internal/vms/${userId}/execs/${encodeURIComponent(execId)}`),
+        { headers },
+      ).catch(() => {
+        throw new GatewayError(
+          "gateway_unreachable",
+          "The gateway isn't reachable.",
+        );
+      });
+      if (response.status === 404) return undefined;
       if (!response.ok) throw await failure(response);
       return (await response.json()) as ExecResult;
     },

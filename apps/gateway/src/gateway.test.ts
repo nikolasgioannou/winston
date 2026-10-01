@@ -405,6 +405,77 @@ describe("gateway exec", () => {
     again.ws.close();
   });
 
+  test("a caller-chosen id is the command's id, and a retry with it joins the command in flight", async () => {
+    const { userId, client } = await readyVm();
+    const body = { id: "xretry1", cmd: "winston mail send", timeoutMs: 5_000 };
+    const first = postExec(userId, body);
+    const exec = await client.next("exec");
+    expect(exec.id).toBe("xretry1");
+    const second = postExec(userId, body);
+    await Bun.sleep(50);
+    expect(client.frames.filter((frame) => frame.type === "exec")).toHaveLength(
+      1,
+    );
+    client.send({
+      id: "x1",
+      type: "exec.exit",
+      execId: "xretry1",
+      exitCode: 0,
+      timedOut: false,
+      truncated: false,
+    });
+    for (const response of [await first, await second])
+      expect(await response.json()).toMatchObject({ exitCode: 0 });
+    client.ws.close();
+  });
+
+  test("fetching a command's result never runs it: the VM's buffered copy, or 404 if it has none", async () => {
+    const { userId, client } = await readyVm();
+    const fetchUrl = (execId: string) =>
+      `http://localhost:${String(server.port)}/internal/vms/${userId}/execs/${execId}`;
+    const headers = { Authorization: `Bearer ${internalSecret}` };
+    const found = fetch(fetchUrl("xold1"), { headers });
+    const ask = await client.next("exec.fetch");
+    expect(ask).toMatchObject({ execId: "xold1" });
+    client.send({
+      id: "r1",
+      type: "exec.result",
+      execId: "xold1",
+      found: true,
+      stdout: "Sent msg_01\n",
+      stderr: "",
+      exitCode: 0,
+      timedOut: false,
+      truncated: false,
+    });
+    const response = await found;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ stdout: "Sent msg_01\n" });
+
+    const missing = fetch(fetchUrl("xgone1"), { headers });
+    // `next` returns frames already seen, so wait for this one in particular.
+    while (
+      !client.frames.some(
+        (frame) => frame.type === "exec.fetch" && frame.execId === "xgone1",
+      )
+    )
+      await Bun.sleep(10);
+    client.send({
+      id: "r2",
+      type: "exec.result",
+      execId: "xgone1",
+      found: false,
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      timedOut: false,
+      truncated: false,
+    });
+    expect((await missing).status).toBe(404);
+    expect(client.frames.some((frame) => frame.type === "exec")).toBe(false);
+    client.ws.close();
+  });
+
   test("the exec endpoint rejects bad requests and needs the secret", async () => {
     const { userId, client } = await readyVm();
     expect((await postExec(userId, { cmd: "", timeoutMs: 5_000 })).status).toBe(

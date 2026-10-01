@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { serviceSecrets, type Service } from "./secrets.ts";
+import { agentsStopSeconds } from "./services.ts";
 import { testApp } from "./testing.ts";
 
 describe("services stack", () => {
@@ -19,6 +20,7 @@ describe("services stack", () => {
         ContainerDefinitions: {
           Secrets?: { Name: string; ValueFrom: unknown }[];
           Environment?: { Name: string; Value: unknown }[];
+          StopTimeout?: number;
         }[];
       };
     };
@@ -43,6 +45,16 @@ describe("services stack", () => {
       expect(JSON.stringify(url?.Value)).toContain("postgres://postgres@");
       expect(JSON.stringify(url?.Value)).not.toContain("postgres:postgres@");
     }
+  });
+
+  test("agents gets the longest stop timeout, and most of it to finish in-flight steps", () => {
+    const agents = container("agents");
+    expect(agents.StopTimeout).toBe(agentsStopSeconds);
+    expect(
+      agents.Environment?.find(({ Name }) => Name === "SHUTDOWN_TIMEOUT_MS")
+        ?.Value,
+    ).toBe("110000");
+    expect(container("api").StopTimeout).toBe(30);
   });
 
   test("every service rolls back a failing deployment", () => {

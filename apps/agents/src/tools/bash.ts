@@ -72,21 +72,64 @@ function unavailable(error: GatewayError) {
   return "Your computer isn't reachable right now, so the command didn't run. Tell the user if it matters.";
 }
 
-export function bashTool(context: {
+/** Who's running commands: what `bash` needs to run them and report. */
+interface BashContext {
   vm: VmClient;
   logger: Logger;
   runTokenSecret: string;
   run: { runId: string; userId: string; kind: RunKind };
-}) {
+}
+
+/**
+ * The command's id on the VM for a tool call: the same call always maps to
+ * the same command, which the VM never runs twice (§9, crash safety).
+ */
+export function execIdFor(runId: string, toolCallId: string) {
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(`${runId}:${toolCallId}`)
+    .digest("hex");
+  return `x${hash.slice(0, 40)}`;
+}
+
+/**
+ * A command's result as the model reads it: whole when short, otherwise a
+ * head and tail with the full output saved on the VM.
+ */
+export async function bashOutput(
+  context: Pick<BashContext, "vm" | "logger" | "run">,
+  result: ExecResult,
+  toolCallId: string,
+) {
+  const { vm, run } = context;
+  const full = render(result, bashTimeoutMs[run.kind]);
+  if (full.length <= modelOutputChars) return full;
+  const name = toolCallId.replace(/[^\w-]/g, "_");
+  const path = `.winston/outputs/${run.runId}/${name}.txt`;
+  const saved = await vm
+    .writeFile(run.userId, path, new TextEncoder().encode(full))
+    .then(() => true)
+    .catch((error: unknown) => {
+      context.logger.warn(
+        { err: error, path },
+        "saving full bash output failed",
+      );
+      return false;
+    });
+  return `${cut(full)}\n${
+    saved
+      ? `(Full output, ${String(full.length)} characters, saved to ~/${path})`
+      : "(The full output couldn't be saved.)"
+  }`;
+}
+
+export function bashTool(context: BashContext) {
   const { vm, run } = context;
   const timeoutMs = bashTimeoutMs[run.kind];
-  let step = 0;
 
   return tool({
     description: description(run.kind),
     inputSchema,
-    execute: async ({ command }) => {
-      step += 1;
+    execute: async ({ command }, { toolCallId }) => {
       const token = mintRunToken(
         context.runTokenSecret,
         run,
@@ -95,6 +138,7 @@ export function bashTool(context: {
       let result: ExecResult;
       try {
         result = await vm.exec(run.userId, {
+          id: execIdFor(run.runId, toolCallId),
           cmd: command,
           env: { WINSTON_RUN_TOKEN: token },
           timeoutMs,
@@ -107,27 +151,7 @@ export function bashTool(context: {
         );
         return unavailable(error);
       }
-
-      const full = render(result, timeoutMs);
-      if (full.length <= modelOutputChars) return full;
-
-      // Too long for the context: keep a head and tail, and save the rest on the VM.
-      const path = `.winston/outputs/${run.runId}/${String(step)}.txt`;
-      const saved = await vm
-        .writeFile(run.userId, path, new TextEncoder().encode(full))
-        .then(() => true)
-        .catch((error: unknown) => {
-          context.logger.warn(
-            { err: error, path },
-            "saving full bash output failed",
-          );
-          return false;
-        });
-      return `${cut(full)}\n${
-        saved
-          ? `(Full output, ${String(full.length)} characters, saved to ~/${path})`
-          : "(The full output couldn't be saved.)"
-      }`;
+      return bashOutput(context, result, toolCallId);
     },
   });
 }

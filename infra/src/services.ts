@@ -67,6 +67,9 @@ const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
   agents: { cpu: 512, memoryMiB: 1024 },
 };
 
+/** How long agents gets after SIGTERM before it's killed: Fargate's maximum. */
+export const agentsStopSeconds = 120;
+
 export interface ServicesStackProps extends StackProps {
   domain: string;
   /** How many tasks each service runs; 0 keeps a service defined but stopped. */
@@ -151,6 +154,8 @@ export class ServicesStack extends Stack {
         VM_PROVIDER: "ec2",
         EC2_LAUNCH_TEMPLATE: props.vm.launchTemplateName,
         EC2_SUBNET_IDS: props.vm.subnetIds.join(","),
+        // In-flight steps get most of the stop timeout to finish and checkpoint (§8b).
+        SHUTDOWN_TIMEOUT_MS: String((agentsStopSeconds - 10) * 1000),
       },
     };
 
@@ -185,8 +190,11 @@ export class ServicesStack extends Stack {
             retention: RetentionDays.ONE_MONTH,
           }),
         }),
-        // agents has no port; ECS replaces it if the process exits.
-        stopTimeout: Duration.seconds(30),
+        // agents has no port; ECS replaces it if the process exits. Its
+        // steps (model calls, commands) get Fargate's longest stop timeout.
+        stopTimeout: Duration.seconds(
+          service === "agents" ? agentsStopSeconds : 30,
+        ),
       });
       // Each new connection reads the current password (§12a).
       databaseSecret.grantRead(taskDefinition.taskRole);

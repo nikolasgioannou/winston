@@ -57,6 +57,21 @@ export function createExecutor(
   >();
 
   function run(request: ExecRequest, events: ExecEvents) {
+    // An id it has seen is the same command asked for again (a retry after a
+    // lost connection): report that command's result, never run it twice.
+    if (results.has(request.id)) {
+      void fetch(request.id).then((result) => {
+        if (!result) return;
+        if (result.stdout) events.output("stdout", result.stdout);
+        if (result.stderr) events.output("stderr", result.stderr);
+        events.exit({
+          exitCode: result.exitCode ?? -1,
+          timedOut: result.timedOut,
+          truncated: result.truncated,
+        });
+      });
+      return;
+    }
     const record = {
       stdout: "",
       stderr: "",

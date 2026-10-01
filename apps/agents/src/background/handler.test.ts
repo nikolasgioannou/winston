@@ -3,11 +3,12 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { jobs, runs } from "@winston/db/schema";
 import { insertUser, testDb, truncateAll } from "@winston/db/testing";
 import { createLogger } from "@winston/shared/logger";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { localBlobStore } from "../blobs.ts";
 import { lockSpaces, withAdvisoryLock } from "../lock.ts";
 import { fakeGateway, httpError, textReply } from "../model/testing.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
+import { createWorker } from "../worker.ts";
 import { runStepHandler } from "./handler.ts";
 import { startBackgroundRun } from "./run.ts";
 
@@ -81,5 +82,49 @@ describe("the run_step job", () => {
     const failed = await status();
     expect(failed?.status).toBe("failed");
     expect(failed?.result).toStartWith("The task failed:");
+  });
+
+  test("stopping the worker lets the in-flight step finish and checkpoint", async () => {
+    const user = await insertUser(db);
+    const runId = await startBackgroundRun(db, {
+      userId: user.id,
+      brief: "Do it.",
+    });
+    let started: () => void = () => undefined;
+    const inFlight = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const fake = fakeGateway({
+      replies: [textReply("Done.")],
+      delayMs: 300,
+      onRequest: () => {
+        started();
+        return Promise.resolve();
+      },
+    });
+    const worker = createWorker({
+      db,
+      logger,
+      handlers: {
+        run_step: runStepHandler({
+          gateway: fake.gateway,
+          vm: fakeVmClient().client,
+          runTokenSecret: testRunTokenSecret,
+          blobs: localBlobStore(`${tmpdir()}/winston-test-blobs`),
+        }),
+      },
+      concurrency: 2,
+      idleMs: 20,
+    });
+    worker.start();
+    await inFlight;
+    await worker.stop();
+    const [run] = await db.select().from(runs).where(eq(runs.id, runId));
+    expect(run).toMatchObject({ status: "completed", result: "Done." });
+    const [step] = await db
+      .select({ status: jobs.status })
+      .from(jobs)
+      .where(and(eq(jobs.userId, user.id), eq(jobs.type, "run_step")));
+    expect(step?.status).toBe("done");
   });
 });

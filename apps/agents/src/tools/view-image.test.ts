@@ -54,6 +54,7 @@ function fakeVm(
 ) {
   const commands: { cmd: string; env: Record<string, string> }[] = [];
   const vm: VmClient = {
+    fetchExec: () => Promise.resolve(undefined),
     exec: (_userId, request) => {
       if (options.down)
         return Promise.reject(new GatewayError("vm_unavailable", "down"));

@@ -88,4 +88,25 @@ describe.skipIf(!linux)("executor", () => {
     expect(await executor.fetch("e2")).toMatchObject({ stdout: "finished\n" });
     expect(await executor.fetch("nope")).toBeUndefined();
   });
+
+  test("an id it has seen is never run again: the earlier command's result is reported", async () => {
+    const counter = `/tmp/winstond-once-${String(Date.now())}`;
+    const first = run({ id: "dup", cmd: `echo ran >> ${counter}; echo sent` });
+    await first.done;
+    const output: string[] = [];
+    const again = await new Promise<{ exitCode: number }>((resolve) => {
+      first.executor.run(
+        {
+          id: "dup",
+          cmd: `echo ran >> ${counter}; echo sent`,
+          env: {},
+          timeoutMs: 10_000,
+        },
+        { output: (_stream, data) => output.push(data), exit: resolve },
+      );
+    });
+    expect(again.exitCode).toBe(0);
+    expect(output.join("")).toBe("sent\n");
+    expect(await Bun.file(counter).text()).toBe("ran\n");
+  });
 });

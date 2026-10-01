@@ -24,9 +24,13 @@ interface Pending {
   vmId: string;
   stdout: string[];
   stderr: string[];
-  resolve: (result: ExecResult) => void;
+  /** Everyone waiting on it: the first caller, and any retry with the same id. */
+  promise: Promise<ExecResult | undefined>;
+  resolve: (result: ExecResult | undefined) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** Only asking for a result: the VM not knowing the id means "not found". */
+  fetchOnly: boolean;
 }
 
 /**
@@ -39,7 +43,7 @@ export function createExecs(
 ) {
   const pending = new Map<string, Pending>();
 
-  const settle = (execId: string, outcome: ExecResult | Error) => {
+  const settle = (execId: string, outcome: ExecResult | Error | undefined) => {
     const exec = pending.get(execId);
     if (!exec) return;
     pending.delete(execId);
@@ -48,42 +52,81 @@ export function createExecs(
     else exec.resolve(outcome);
   };
 
+  /** Sends `frame` and waits on `execId`, joining anyone already waiting on it. */
+  function track(
+    vmId: string,
+    execId: string,
+    frame: GatewayToVmFrame,
+    timeoutMs: number,
+    fetchOnly: boolean,
+  ): Promise<ExecResult | undefined> {
+    const existing = pending.get(execId);
+    if (existing?.vmId === vmId) return existing.promise;
+    if (!send(vmId, frame)) return Promise.reject(new VmUnavailableError());
+    let resolve: Pending["resolve"] = () => undefined;
+    let reject: Pending["reject"] = () => undefined;
+    const promise = new Promise<ExecResult | undefined>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    pending.set(execId, {
+      vmId,
+      stdout: [],
+      stderr: [],
+      promise,
+      resolve,
+      reject,
+      fetchOnly,
+      timer: setTimeout(() => {
+        settle(execId, new VmUnreachableError());
+      }, timeoutMs + execGraceMs),
+    });
+    return promise;
+  }
+
   return {
-    /** Runs a command on a connected VM. Throws `VmUnavailableError` if it isn't connected. */
-    run(
+    /**
+     * Runs a command on a connected VM. Throws `VmUnavailableError` if it
+     * isn't connected. A caller-chosen `id` makes it idempotent: the same id
+     * again joins the command in flight, and the VM never runs an id twice.
+     */
+    async run(
       vmId: string,
       request: {
+        id?: string | undefined;
         cmd: string;
         cwd?: string | undefined;
         env: Record<string, string>;
         timeoutMs: number;
       },
-    ) {
-      const id = newFrameId();
-      return new Promise<ExecResult>((resolve, reject) => {
-        const frame: GatewayToVmFrame = {
-          id,
-          type: "exec",
-          cmd: request.cmd,
-          env: request.env,
-          timeoutMs: request.timeoutMs,
-          ...(request.cwd ? { cwd: request.cwd } : {}),
-        };
-        if (!send(vmId, frame)) {
-          reject(new VmUnavailableError());
-          return;
-        }
-        pending.set(id, {
-          vmId,
-          stdout: [],
-          stderr: [],
-          resolve,
-          reject,
-          timer: setTimeout(() => {
-            settle(id, new VmUnreachableError());
-          }, request.timeoutMs + execGraceMs),
-        });
-      });
+    ): Promise<ExecResult> {
+      const id = request.id ?? newFrameId();
+      const frame: GatewayToVmFrame = {
+        id,
+        type: "exec",
+        cmd: request.cmd,
+        env: request.env,
+        timeoutMs: request.timeoutMs,
+        ...(request.cwd ? { cwd: request.cwd } : {}),
+      };
+      const result = await track(vmId, id, frame, request.timeoutMs, false);
+      if (!result) throw new VmUnreachableError();
+      return result;
+    },
+
+    /**
+     * A command's result by id, without running anything: the one in flight,
+     * or the VM's buffered copy (kept 5 minutes), or undefined if the VM has
+     * no record of it.
+     */
+    fetch(vmId: string, execId: string, timeoutMs = 10 * 60_000) {
+      return track(
+        vmId,
+        execId,
+        { id: newFrameId(), type: "exec.fetch", execId },
+        timeoutMs,
+        true,
+      );
     },
 
     /** Feeds a frame from a VM. Returns true if it was about a command. */
@@ -109,7 +152,11 @@ export function createExecs(
       else if (frame.found) {
         const { stdout, stderr, exitCode, timedOut, truncated } = frame;
         settle(frame.execId, { stdout, stderr, exitCode, timedOut, truncated });
-      } else settle(frame.execId, new VmUnreachableError());
+      } else
+        settle(
+          frame.execId,
+          exec.fetchOnly ? undefined : new VmUnreachableError(),
+        );
       return true;
     },
 

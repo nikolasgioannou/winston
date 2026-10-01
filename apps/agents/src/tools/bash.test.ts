@@ -16,6 +16,7 @@ function fakeVm(answer: Partial<ExecResult> | GatewayError) {
   const execs: Parameters<VmClient["exec"]>[1][] = [];
   const files: { path: string; text: string }[] = [];
   const vm: VmClient = {
+    fetchExec: () => Promise.resolve(undefined),
     exec: (_userId, request) => {
       execs.push(request);
       if (answer instanceof GatewayError) return Promise.reject(answer);
@@ -105,8 +106,8 @@ describe("bash", () => {
     expect(output).toContain("line 0");
     expect(output).toContain("line 2999");
     expect(output).toContain("characters omitted");
-    expect(output).toContain("saved to ~/.winston/outputs/run_1/1.txt");
-    expect(files[0]?.path).toBe(".winston/outputs/run_1/1.txt");
+    expect(output).toContain("saved to ~/.winston/outputs/run_1/c1.txt");
+    expect(files[0]?.path).toBe(".winston/outputs/run_1/c1.txt");
     expect(files[0]?.text).toContain("line 1500");
   });
 
