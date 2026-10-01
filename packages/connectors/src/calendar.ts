@@ -80,7 +80,10 @@ export interface NewEvent {
   timeZone?: string | undefined;
 }
 
-export interface EventChanges extends Partial<
+/** A partial NewEvent whose fields may be passed as undefined (left alone). */
+type Optional<T> = { [K in keyof T]?: T[K] | undefined };
+
+export interface EventChanges extends Optional<
   Omit<NewEvent, "attendees" | "calendarId">
 > {
   addAttendees?: string[] | undefined;

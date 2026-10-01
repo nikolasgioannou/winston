@@ -5,7 +5,10 @@
 import type {
   CalendarEvent,
   CalendarFilter,
-  CalendarReader,
+  CalendarProvider,
+  EventChanges,
+  NewEvent,
+  SeriesScope,
 } from "@winston/connectors/calendar";
 import type {
   FullMailMessage,
@@ -151,10 +154,60 @@ export const fakeEvent = (
   ...overrides,
 });
 
-/** A calendar reader that records the filters and returns fixed events and busy times. */
+const dana = {
+  email: "dana@other.com",
+  name: "Dana",
+  response: "accepted",
+  optional: false,
+  self: false,
+} as const;
+
+/** What `get` returns beyond fakeEvent's defaults: a meeting with Dana, and an invitation. */
+const gotten: Record<string, Partial<CalendarEvent>> = {
+  e1: {
+    attendees: [
+      dana,
+      {
+        email: "me@example.com",
+        name: null,
+        response: "accepted",
+        optional: false,
+        self: true,
+      },
+    ],
+  },
+  invite: {
+    organizer: { email: "boss@other.com", name: null, self: false },
+    attendees: [
+      {
+        email: "me@example.com",
+        name: null,
+        response: "needs_action",
+        optional: false,
+        self: true,
+      },
+    ],
+  },
+};
+
+/** A calendar provider that records filters and writes, and returns fixed events and busy times. */
 export function fakeCalendar() {
   const filters: CalendarFilter[] = [];
-  const reader: CalendarReader = {
+  const created: { event: NewEvent; notify: boolean }[] = [];
+  const updated: {
+    id: string;
+    changes: EventChanges;
+    scope: SeriesScope;
+    notify: boolean;
+  }[] = [];
+  const deleted: { id: string; scope: SeriesScope; notify: boolean }[] = [];
+  const answered: {
+    id: string;
+    response: string;
+    note?: string | undefined;
+    scope: string;
+  }[] = [];
+  const reader: CalendarProvider = {
     address: "me@example.com",
     listCalendars: () =>
       Promise.resolve([
@@ -171,15 +224,7 @@ export function fakeCalendar() {
       return Promise.resolve({
         items: [
           fakeEvent("e1", {
-            attendees: [
-              {
-                email: "dana@other.com",
-                name: "Dana",
-                response: "accepted",
-                optional: false,
-                self: false,
-              },
-            ],
+            attendees: [dana],
             videoLink: "https://meet.google.com/x",
             seriesId: "me@example.com/series",
           }),
@@ -192,7 +237,10 @@ export function fakeCalendar() {
         cursor: null,
       });
     },
-    get: (id) => Promise.resolve(fakeEvent(id.split("/")[1] ?? id)),
+    get: (id) => {
+      const key = id.split("/")[1] ?? id;
+      return Promise.resolve(fakeEvent(key, gotten[key] ?? {}));
+    },
     freeBusy: ({ attendees }) =>
       Promise.resolve(
         new Map([
@@ -222,8 +270,34 @@ export function fakeCalendar() {
           ),
         ]),
       ),
+    create: (event, { notify }) => {
+      created.push({ event, notify });
+      return Promise.resolve(
+        fakeEvent("new", {
+          title: event.title,
+          start: event.start,
+          end: event.end,
+        }),
+      );
+    },
+    update: (id, changes, { scope, notify }) => {
+      updated.push({ id, changes, scope, notify });
+      return Promise.resolve(
+        fakeEvent(id.split("/")[1] ?? id, { title: changes.title ?? "Moved" }),
+      );
+    },
+    delete: (id, { scope, notify }) => {
+      deleted.push({ id, scope, notify });
+      return Promise.resolve();
+    },
+    rsvp: (id, response, { note, scope }) => {
+      answered.push({ id, response, note, scope });
+      return Promise.resolve(
+        fakeEvent(id.split("/")[1] ?? id, { myResponse: response }),
+      );
+    },
   };
-  return { reader, filters };
+  return { reader, filters, created, updated, deleted, answered };
 }
 
 /** The API over `tx` with the fake provider and VM files; `as(userId)` makes calls. */

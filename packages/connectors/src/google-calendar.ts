@@ -21,10 +21,16 @@ import type {
   BusyBlock,
   CalendarEvent,
   CalendarInfo,
-  CalendarReader,
+  CalendarProvider,
+  EventChanges,
   EventTime,
+  NewEvent,
 } from "./calendar.ts";
-import { ProviderNotFoundError, ProviderUnavailableError } from "./errors.ts";
+import {
+  NotSupportedError,
+  ProviderNotFoundError,
+  ProviderUnavailableError,
+} from "./errors.ts";
 
 const api = "https://www.googleapis.com/calendar/v3";
 
@@ -70,7 +76,7 @@ export interface GoogleEvent {
   conferenceData?: {
     entryPoints?: { entryPointType?: string; uri?: string }[];
   };
-  recurrence?: string[];
+  recurrence?: string[] | undefined;
   recurringEventId?: string;
   htmlLink?: string;
   updated?: string;
@@ -166,6 +172,142 @@ export function splitEventId(id: string) {
   return { calendarId: id.slice(0, at), eventId: id.slice(at + 1) };
 }
 
+/** An event time as Google takes it. */
+const googleTime = (time: EventTime, timeZone: string | undefined) =>
+  "date" in time
+    ? { date: time.date }
+    : { dateTime: time.at.toISOString(), ...(timeZone ? { timeZone } : {}) };
+
+/** A new event as Google's JSON. */
+export function googleBody(event: NewEvent): Record<string, unknown> {
+  return {
+    summary: event.title,
+    ...(event.location ? { location: event.location } : {}),
+    ...(event.description ? { description: event.description } : {}),
+    start: googleTime(event.start, event.timeZone),
+    end: googleTime(event.end, event.timeZone),
+    ...(event.attendees?.length
+      ? { attendees: event.attendees.map((email) => ({ email })) }
+      : {}),
+    ...(event.recurrence?.length ? { recurrence: event.recurrence } : {}),
+    ...(event.video
+      ? {
+          conferenceData: {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: "hangoutsMeet" },
+            },
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * The PATCH body for `changes` to `current`. Attendees are rewritten from the
+ * current list, so everyone else keeps their answer.
+ */
+export function patchBody(
+  current: GoogleEvent,
+  changes: EventChanges,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (changes.title !== undefined) body.summary = changes.title;
+  if (changes.location !== undefined) body.location = changes.location;
+  if (changes.description !== undefined) body.description = changes.description;
+  if (changes.start) body.start = googleTime(changes.start, changes.timeZone);
+  if (changes.end) body.end = googleTime(changes.end, changes.timeZone);
+  if (changes.recurrence) body.recurrence = changes.recurrence;
+  if (changes.video)
+    body.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    };
+  if (changes.addAttendees?.length || changes.removeAttendees?.length) {
+    const removing = new Set(
+      (changes.removeAttendees ?? []).map((e) => e.toLowerCase()),
+    );
+    const kept = (current.attendees ?? []).filter(
+      (a) => !removing.has(a.email.toLowerCase()),
+    );
+    const known = new Set(kept.map((a) => a.email.toLowerCase()));
+    body.attendees = [
+      ...kept,
+      ...(changes.addAttendees ?? [])
+        .filter((e) => !known.has(e.toLowerCase()))
+        .map((email) => ({ email })),
+    ];
+  }
+  return body;
+}
+
+/**
+ * `changes` for a whole series, given that they move one `occurrence` of it:
+ * the series moves by as much as the occurrence does, rather than to its date.
+ */
+export function shiftSeries(
+  changes: EventChanges,
+  occurrence: GoogleEvent,
+  series: GoogleEvent,
+): EventChanges {
+  const instant = (time: GoogleEvent["start"]) =>
+    time?.dateTime ? new Date(time.dateTime).getTime() : undefined;
+  const [from, to, seriesFrom, seriesTo] = [
+    instant(occurrence.start),
+    instant(occurrence.end),
+    instant(series.start),
+    instant(series.end),
+  ];
+  if (
+    !changes.start ||
+    !changes.end ||
+    !("at" in changes.start) ||
+    !("at" in changes.end) ||
+    from === undefined ||
+    to === undefined ||
+    seriesFrom === undefined ||
+    seriesTo === undefined
+  )
+    return changes;
+  return {
+    ...changes,
+    start: { at: new Date(seriesFrom + changes.start.at.getTime() - from) },
+    end: { at: new Date(seriesTo + changes.end.at.getTime() - to) },
+  };
+}
+
+/** The fields a split-off series keeps from the original. */
+const copyOf = (series: GoogleEvent) => ({
+  summary: series.summary,
+  ...(series.description ? { description: series.description } : {}),
+  ...(series.location ? { location: series.location } : {}),
+  ...(series.attendees
+    ? {
+        attendees: series.attendees.map((a) => ({
+          email: a.email,
+          ...(a.optional ? { optional: true } : {}),
+        })),
+      }
+    : {}),
+});
+
+/** RRULE lines without an end (UNTIL or COUNT). */
+export const withoutEnd = (recurrence: string[]) =>
+  recurrence.map((line) =>
+    line.startsWith("RRULE:")
+      ? line.replace(/;(UNTIL|COUNT)=[^;]*/g, "")
+      : line,
+  );
+
+/** RRULE's UNTIL in UTC: 20260929T135959Z. */
+const untilStamp = (date: Date) =>
+  date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
+
 interface CalendarEntry extends CalendarInfo {
   /** Shown in Google Calendar: what the user thinks of as their calendar. */
   selected: boolean;
@@ -180,11 +322,11 @@ interface Cursor {
   shown: string[];
 }
 
-export function googleCalendarReader({
+export function googleCalendarProvider({
   address,
   accessToken,
   fetch: send = fetch,
-}: GoogleCalendarOptions): CalendarReader {
+}: GoogleCalendarOptions): CalendarProvider {
   async function call<T>(
     path: string,
     init: {
@@ -224,6 +366,43 @@ export function googleCalendarReader({
     }
     const text = await response.text();
     return (text ? JSON.parse(text) : {}) as T;
+  }
+
+  const getRaw = (calendarId: string, eventId: string) =>
+    call<GoogleEvent>(
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    );
+
+  /** Ends a series just before `occurrence` (how "this and following" splits it). */
+  async function endSeriesBefore(
+    calendarId: string,
+    series: GoogleEvent,
+    occurrence: CalendarEvent,
+    sendUpdates: string,
+  ) {
+    const rules = series.recurrence ?? [];
+    if (rules.some((line) => line.includes(";COUNT=")))
+      throw new NotSupportedError(
+        "This series is set to repeat a number of times, so it can't be split at one occurrence.",
+        "Change the whole series (--scope all) or just this occurrence (--scope this).",
+      );
+    const until = untilStamp(
+      new Date(startInstant(occurrence).getTime() - 1000),
+    );
+    await call(
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(series.id)}`,
+      {
+        method: "PATCH",
+        query: { sendUpdates },
+        body: {
+          recurrence: rules.map((line) =>
+            line.startsWith("RRULE:")
+              ? `${withoutEnd([line])[0] ?? line};UNTIL=${until}`
+              : line,
+          ),
+        },
+      },
+    );
   }
 
   /** The account's calendars, with what decides which ones a list covers. */
@@ -397,6 +576,148 @@ export function googleCalendarReader({
       const out = new Map<string, BusyBlock[] | "unknown">([[address, mine]]);
       for (const attendee of attendees) out.set(attendee, blocks(attendee));
       return out;
+    },
+
+    async create(event, { notify }) {
+      const calendarId = event.calendarId ?? "primary";
+      const created = await call<GoogleEvent>(
+        `/calendars/${encodeURIComponent(calendarId)}/events`,
+        {
+          method: "POST",
+          query: {
+            sendUpdates: notify ? "all" : "none",
+            conferenceDataVersion: "1",
+          },
+          body: googleBody(event),
+        },
+      );
+      return toCalendarEvent(calendarId, created, address);
+    },
+
+    async update(id, changes, { scope, notify }) {
+      const { calendarId, eventId } = splitEventId(id);
+      const current = await getRaw(calendarId, eventId);
+      const sendUpdates = notify ? "all" : "none";
+      if (scope === "following") {
+        if (!current.recurringEventId)
+          throw new NotSupportedError(
+            "--scope following needs one occurrence of a recurring event.",
+            "Use --scope this for a single event.",
+          );
+        const series = await getRaw(calendarId, current.recurringEventId);
+        const occurrence = toCalendarEvent(calendarId, current, address);
+        await endSeriesBefore(calendarId, series, occurrence, sendUpdates);
+        // The rest of the series, from this occurrence, with the changes.
+        const rest = await call<GoogleEvent>(
+          `/calendars/${encodeURIComponent(calendarId)}/events`,
+          {
+            method: "POST",
+            query: { sendUpdates, conferenceDataVersion: "1" },
+            body: {
+              ...copyOf(series),
+              start: current.start,
+              end: current.end,
+              recurrence: withoutEnd(series.recurrence ?? []),
+              ...patchBody(series, changes),
+            },
+          },
+        );
+        return toCalendarEvent(calendarId, rest, address);
+      }
+      const target =
+        scope === "all" && current.recurringEventId
+          ? await getRaw(calendarId, current.recurringEventId)
+          : current;
+      const patched = await call<GoogleEvent>(
+        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(target.id)}`,
+        {
+          method: "PATCH",
+          query: { sendUpdates, conferenceDataVersion: "1" },
+          body: patchBody(
+            target,
+            target === current
+              ? changes
+              : shiftSeries(changes, current, target),
+          ),
+        },
+      );
+      return toCalendarEvent(calendarId, patched, address);
+    },
+
+    async delete(id, { scope, notify }) {
+      const { calendarId, eventId } = splitEventId(id);
+      const current = await getRaw(calendarId, eventId);
+      const sendUpdates = notify ? "all" : "none";
+      if (scope === "following") {
+        if (!current.recurringEventId)
+          throw new NotSupportedError(
+            "--scope following needs one occurrence of a recurring event.",
+            "Use --scope this for a single event.",
+          );
+        const series = await getRaw(calendarId, current.recurringEventId);
+        await endSeriesBefore(
+          calendarId,
+          series,
+          toCalendarEvent(calendarId, current, address),
+          sendUpdates,
+        );
+        return;
+      }
+      const target =
+        scope === "all" && current.recurringEventId
+          ? current.recurringEventId
+          : current.id;
+      await call(
+        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(target)}`,
+        {
+          method: "DELETE",
+          query: { sendUpdates },
+        },
+      );
+    },
+
+    async rsvp(id, response, { note, scope }) {
+      const { calendarId, eventId } = splitEventId(id);
+      const current = await getRaw(calendarId, eventId);
+      const target =
+        scope === "all" && current.recurringEventId
+          ? await getRaw(calendarId, current.recurringEventId)
+          : current;
+      const attendees = target.attendees ?? [];
+      const me = attendees.find(
+        (a) =>
+          a.self === true || a.email.toLowerCase() === address.toLowerCase(),
+      );
+      if (!me)
+        throw new NotSupportedError(
+          "This account isn't invited to that event, so there's nothing to answer.",
+          "Check the event with winston calendar get.",
+        );
+      const answer = {
+        accepted: "accepted",
+        declined: "declined",
+        tentative: "tentative",
+      }[response];
+      const updated = await call<GoogleEvent>(
+        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(target.id)}`,
+        {
+          method: "PATCH",
+          // The organizer hears the answer.
+          query: { sendUpdates: "all" },
+          body: {
+            attendees: attendees.map((a) =>
+              a === me
+                ? {
+                    ...a,
+                    responseStatus: answer,
+                    ...(note === undefined ? {} : { comment: note }),
+                  }
+                : a,
+            ),
+          },
+        },
+      );
+      return toCalendarEvent(calendarId, updated, address);
     },
   };
 }

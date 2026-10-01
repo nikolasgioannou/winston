@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { CalendarEvent } from "./calendar.ts";
-import { ProviderNotFoundError } from "./errors.ts";
+import { NotSupportedError, ProviderNotFoundError } from "./errors.ts";
 import {
-  googleCalendarReader,
+  googleCalendarProvider,
   isExternal,
   splitEventId,
   startInstant,
@@ -151,7 +151,7 @@ function fakeCalendar() {
     Promise.resolve(respond(input, init))) as unknown as typeof fetch;
   return {
     requests,
-    calendar: googleCalendarReader({
+    calendar: googleCalendarProvider({
       address: "me@acme.com",
       accessToken: () => Promise.resolve("t"),
       fetch: fetchImpl,
@@ -226,7 +226,7 @@ describe("Google Calendar events", () => {
   });
 });
 
-describe("googleCalendarReader", () => {
+describe("googleCalendarProvider", () => {
   test("lists the selected calendars merged by start, occurrences expanded, cancellations left out", async () => {
     const { calendar, requests } = fakeCalendar();
     const page = await calendar.list(range, { limit: 10 });
@@ -289,5 +289,219 @@ describe("googleCalendarReader", () => {
     expect(busy.get("me@acme.com")).toHaveLength(2);
     expect(busy.get("dana@example.com")).toHaveLength(1);
     expect(busy.get("stranger@other.com")).toBe("unknown");
+  });
+});
+
+/** A calendar that records writes, with a weekly series and one of its occurrences. */
+function fakeCalendarWrites(seriesRule = "RRULE:FREQ=WEEKLY;BYDAY=TU") {
+  const writes: {
+    method: string;
+    path: string;
+    query: string;
+    body: Record<string, unknown>;
+  }[] = [];
+  const series: GoogleEvent = {
+    id: "oneonone",
+    summary: "1:1 with Sam",
+    start: {
+      dateTime: "2026-09-01T15:00:00-04:00",
+      timeZone: "America/New_York",
+    },
+    end: {
+      dateTime: "2026-09-01T15:30:00-04:00",
+      timeZone: "America/New_York",
+    },
+    recurrence: [seriesRule],
+    attendees: [
+      { email: "me@acme.com", self: true, responseStatus: "accepted" },
+      { email: "sam@acme.com", responseStatus: "tentative" },
+    ],
+  };
+  const occurrence: GoogleEvent = {
+    ...series,
+    id: "oneonone_20260929T190000Z",
+    recurrence: undefined,
+    recurringEventId: "oneonone",
+    start: { dateTime: "2026-09-29T15:00:00-04:00" },
+    end: { dateTime: "2026-09-29T15:30:00-04:00" },
+  };
+  const respond = (input: string, init?: RequestInit) => {
+    const url = new URL(input);
+    const path = url.pathname.replace(
+      "/calendar/v3/calendars/me%40acme.com/events",
+      "",
+    );
+    const method = init?.method ?? "GET";
+    const body = init?.body
+      ? (JSON.parse(init.body as string) as Record<string, unknown>)
+      : {};
+    if (method !== "GET")
+      writes.push({ method, path, query: url.search, body });
+    if (method === "GET" && path === "/oneonone") return Response.json(series);
+    if (method === "GET" && path === "/oneonone_20260929T190000Z")
+      return Response.json(occurrence);
+    if (method === "DELETE") return new Response(null, { status: 204 });
+    return Response.json({
+      ...series,
+      ...body,
+      id: method === "POST" ? "created" : path.slice(1),
+    });
+  };
+  return {
+    writes,
+    calendar: googleCalendarProvider({
+      address: "me@acme.com",
+      accessToken: () => Promise.resolve("t"),
+      fetch: ((input: string, init?: RequestInit) =>
+        Promise.resolve(respond(input, init))) as unknown as typeof fetch,
+    }),
+  };
+}
+
+const occurrenceId = "me@acme.com/oneonone_20260929T190000Z";
+
+describe("googleCalendarProvider writes", () => {
+  test("create: timed or all-day, attendees, a Meet link on request, and notifications as asked", async () => {
+    const { calendar, writes } = fakeCalendarWrites();
+    await calendar.create(
+      {
+        calendarId: "me@acme.com",
+        title: "Sync",
+        start: { at: new Date("2026-10-01T19:00:00Z") },
+        end: { at: new Date("2026-10-01T19:30:00Z") },
+        attendees: ["dana@example.com"],
+        video: true,
+        timeZone: "America/New_York",
+      },
+      { notify: true },
+    );
+    expect(writes[0]?.query).toContain("sendUpdates=all");
+    expect(writes[0]?.query).toContain("conferenceDataVersion=1");
+    expect(writes[0]?.body).toMatchObject({
+      summary: "Sync",
+      start: {
+        dateTime: "2026-10-01T19:00:00.000Z",
+        timeZone: "America/New_York",
+      },
+      attendees: [{ email: "dana@example.com" }],
+      conferenceData: {
+        createRequest: { conferenceSolutionKey: { type: "hangoutsMeet" } },
+      },
+    });
+    await calendar.create(
+      {
+        calendarId: "me@acme.com",
+        title: "Off",
+        start: { date: "2026-10-09" },
+        end: { date: "2026-10-10" },
+      },
+      { notify: false },
+    );
+    expect(writes[1]?.body).toMatchObject({
+      start: { date: "2026-10-09" },
+      end: { date: "2026-10-10" },
+    });
+    expect(writes[1]?.query).toContain("sendUpdates=none");
+  });
+
+  test("update: this occurrence, or the whole series, keeping everyone else's answers when attendees change", async () => {
+    const { calendar, writes } = fakeCalendarWrites();
+    await calendar.update(
+      occurrenceId,
+      { title: "Moved" },
+      { scope: "this", notify: true },
+    );
+    expect(writes[0]).toMatchObject({
+      method: "PATCH",
+      path: "/oneonone_20260929T190000Z",
+      body: { summary: "Moved" },
+    });
+    await calendar.update(
+      occurrenceId,
+      { addAttendees: ["bo@acme.com"], removeAttendees: [] },
+      { scope: "all", notify: false },
+    );
+    expect(writes[1]?.path).toBe("/oneonone");
+    expect(writes[1]?.body.attendees).toEqual([
+      { email: "me@acme.com", self: true, responseStatus: "accepted" },
+      { email: "sam@acme.com", responseStatus: "tentative" },
+      { email: "bo@acme.com" },
+    ]);
+    // Moving one occurrence an hour later moves the whole series an hour, not to that day.
+    await calendar.update(
+      occurrenceId,
+      {
+        start: { at: new Date("2026-09-29T20:00:00Z") },
+        end: { at: new Date("2026-09-29T20:30:00Z") },
+        timeZone: "America/New_York",
+      },
+      { scope: "all", notify: true },
+    );
+    expect(writes[2]?.body).toMatchObject({
+      start: { dateTime: "2026-09-01T20:00:00.000Z" },
+      end: { dateTime: "2026-09-01T20:30:00.000Z" },
+    });
+  });
+
+  test("update following splits the series: the old one ends just before, a new one starts here with the change", async () => {
+    const { calendar, writes } = fakeCalendarWrites();
+    await calendar.update(
+      occurrenceId,
+      { title: "1:1 (new time)" },
+      { scope: "following", notify: true },
+    );
+    expect(writes[0]).toMatchObject({
+      method: "PATCH",
+      path: "/oneonone",
+      body: {
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20260929T185959Z"],
+      },
+    });
+    expect(writes[1]).toMatchObject({
+      method: "POST",
+      body: {
+        summary: "1:1 (new time)",
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=TU"],
+        start: { dateTime: "2026-09-29T15:00:00-04:00" },
+      },
+    });
+    const counted = fakeCalendarWrites("RRULE:FREQ=WEEKLY;COUNT=10");
+    expect(
+      counted.calendar.update(
+        occurrenceId,
+        { title: "x" },
+        { scope: "following", notify: true },
+      ),
+    ).rejects.toBeInstanceOf(NotSupportedError);
+  });
+
+  test("delete: this, all (the series), or following (ending the series)", async () => {
+    const { calendar, writes } = fakeCalendarWrites();
+    await calendar.delete(occurrenceId, { scope: "this", notify: true });
+    await calendar.delete(occurrenceId, { scope: "all", notify: false });
+    await calendar.delete(occurrenceId, { scope: "following", notify: true });
+    expect(writes.map((w) => `${w.method} ${w.path}`)).toEqual([
+      "DELETE /oneonone_20260929T190000Z",
+      "DELETE /oneonone",
+      "PATCH /oneonone",
+    ]);
+  });
+
+  test("rsvp answers only for the user, with a note, and tells the organizer", async () => {
+    const { calendar, writes } = fakeCalendarWrites();
+    await calendar.rsvp(occurrenceId, "declined", {
+      note: "Out that day",
+      scope: "this",
+    });
+    expect(writes[0]?.query).toContain("sendUpdates=all");
+    expect(writes[0]?.body.attendees).toEqual([
+      {
+        email: "me@acme.com",
+        self: true,
+        responseStatus: "declined",
+        comment: "Out that day",
+      },
+      { email: "sam@acme.com", responseStatus: "tentative" },
+    ]);
   });
 });

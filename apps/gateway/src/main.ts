@@ -4,7 +4,7 @@
  */
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
-import { googleCalendarReader } from "@winston/connectors/google-calendar";
+import { googleCalendarProvider } from "@winston/connectors/google-calendar";
 import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
@@ -49,7 +49,7 @@ const gateway = createGateway({
         accessToken: () => accessToken(connection.id),
       }),
     calendar: (connection) =>
-      googleCalendarReader({
+      googleCalendarProvider({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),
       }),
