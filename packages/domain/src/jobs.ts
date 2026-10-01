@@ -58,6 +58,9 @@ export const refreshTimersJob = {
   dedupeKey: (triggerId: string) => `refresh_timers:${triggerId}`,
 } as const;
 
+/** Stored events to match against subscriptions, when they weren't stored by `agents` (system events from the site). */
+export const matchEventsJob = { type: "match_events" } as const;
+
 /** A materialized `calendar.event.starting` timer came due (§3, abstractions). */
 export const fireDerivedTimerJob = {
   type: "fire_derived_timer",

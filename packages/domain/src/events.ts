@@ -344,7 +344,10 @@ export const eventCatalog = define([
     description:
       "The user disconnected an account; its subscriptions end with it.",
     delivery: "subscribable",
-    payload: connectionFacts,
+    payload: connectionFacts.extend({
+      /** The subscriptions that ended with it, so notes can be updated. */
+      cancelledTriggers: z.array(z.string()).optional(),
+    }),
     filters: [],
   },
   {

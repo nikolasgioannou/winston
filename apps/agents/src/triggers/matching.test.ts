@@ -16,9 +16,21 @@ import {
   testDb,
 } from "@winston/db/testing";
 import { asc, eq } from "drizzle-orm";
-import { fireBatch, matchEvents, passesFilter } from "./matching.ts";
+import type { Job } from "@winston/db/queue";
+import { recordSystemEvent } from "@winston/db/system-events";
+import { createLogger } from "@winston/shared/logger";
+import {
+  fireBatch,
+  matchEvents,
+  matchEventsHandler,
+  passesFilter,
+} from "./matching.ts";
 
 const db = await testDb();
+const logger = createLogger("agents-test", {
+  pretty: false,
+  destination: { write: () => undefined },
+});
 
 const received = (overrides: Record<string, unknown> = {}) => ({
   messageId: "msg_x",
@@ -261,6 +273,40 @@ describe("matching events to subscriptions", () => {
         .from(triggers)
         .where(eq(triggers.id, trigger.id));
       expect(after).toMatchObject({ status: "exhausted", fireCount: 1 });
+    });
+  });
+
+  test("a system event from the site matches its subscriptions through the match job", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const calendar = await insertConnection(tx, user.id, {
+        domain: "calendar",
+      });
+      const trigger = await subscribe(tx, user.id, {
+        eventType: "system.app.connected",
+      });
+      await recordSystemEvent(tx, {
+        userId: user.id,
+        type: "system.app.connected",
+        payload: {
+          connectionId: calendar.id,
+          domain: "calendar",
+          provider: "google_calendar",
+          externalEmail: "me@example.com",
+        },
+        sourceRef: `test:${crypto.randomUUID()}`,
+      });
+      const [job] = await tx
+        .select()
+        .from(jobs)
+        .where(eq(jobs.type, "match_events"));
+      await matchEventsHandler({
+        job: job as Job,
+        db: tx as never,
+        logger,
+        extendLease: () => Promise.resolve(true),
+      });
+      expect(await batchesOf(tx, trigger.id)).toHaveLength(1);
     });
   });
 });

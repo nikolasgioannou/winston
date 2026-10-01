@@ -16,7 +16,6 @@ import {
   users,
   vms,
 } from "@winston/db/schema";
-import { recordSystemEvent } from "@winston/db/system-events";
 import { issueLinkToken } from "@winston/db/telegram-link-tokens";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { applyVmEvent } from "@winston/db/vm-state";
@@ -70,11 +69,15 @@ async function fullAccount(tx: DbOrTx, blobKey: string) {
     scopes: ["gmail.modify"],
     refreshToken: "refresh-mail",
   });
-  await recordSystemEvent(tx, {
+  await tx.insert(inboundItems).values({
     userId: user.id,
-    type: "system.settings.changed",
-    payload: { attachment: { shown: { blobKey } } },
-    sourceRef: `test:${user.id}`,
+    type: "user_message",
+    payload: {
+      text: "",
+      telegramMessageId: 1,
+      attachment: { shown: { blobKey } },
+    },
+    occurredAt: new Date(),
   });
   const [run] = await tx.insert(runs).values({ userId: user.id }).returning();
   if (!run) throw new Error("expected a run");
@@ -192,11 +195,15 @@ describe("deleteUserHandler", () => {
       const shared = await blobs.put(new TextEncoder().encode("the same file"));
       const { user } = await fullAccount(tx, shared);
       const other = await insertUser(tx);
-      await recordSystemEvent(tx, {
+      await tx.insert(inboundItems).values({
         userId: other.id,
-        type: "system.settings.changed",
-        payload: { attachment: { shown: { blobKey: shared } } },
-        sourceRef: `test:${other.id}`,
+        type: "user_message",
+        payload: {
+          text: "",
+          telegramMessageId: 2,
+          attachment: { shown: { blobKey: shared } },
+        },
+        occurredAt: new Date(),
       });
       await run(tx, { ...fakes().deps, blobs }, user.id);
       expect(await blobs.get(shared)).toEqual(

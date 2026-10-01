@@ -86,7 +86,8 @@ describe("completeGoogleConnect", () => {
           externalEmail: "ada@acme.com",
         },
       });
-      // Winston hears of it, and Gmail starts telling us about changes.
+      // Winston hears of it (and any subscription to it), and Gmail starts
+      // telling us about changes.
       expect(
         (
           await tx
@@ -96,7 +97,7 @@ describe("completeGoogleConnect", () => {
         )
           .map((job) => job.type)
           .sort(),
-      ).toEqual(["front_turn", "watch_connection"]);
+      ).toEqual(["front_turn", "match_events", "watch_connection"]);
     });
   });
 

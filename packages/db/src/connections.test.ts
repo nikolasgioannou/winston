@@ -8,7 +8,14 @@ import {
   setCapability,
   toConnectionDto,
 } from "./connections.ts";
-import { connections, inboundItems, jobs } from "./schema/index.ts";
+import {
+  connections,
+  derivedTimers,
+  events,
+  inboundItems,
+  jobs,
+  triggers,
+} from "./schema/index.ts";
 import { inRollback, insertUser, testDb } from "./testing.ts";
 
 const db = await testDb();
@@ -197,8 +204,58 @@ describe("managing a connection", () => {
         ).sort((a, b) => a.type.localeCompare(b.type)),
       ).toEqual([
         { type: "front_turn", payload: {} },
+        // It's a catalog event too, for any subscription to it.
+        { type: "match_events", payload: { eventIds: [expect.any(String)] } },
         { type: "revoke_connection_token", payload: { connectionId: row.id } },
       ]);
+    });
+  });
+
+  test("disconnecting ends exactly the subscriptions tied to the account, with their timers, and says which", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const [work] = await tx
+        .insert(connections)
+        .values(connection(user.id))
+        .returning();
+      const [home] = await tx
+        .insert(connections)
+        .values(connection(user.id, { externalEmail: "ada@home.example" }))
+        .returning();
+      const subscribe = async (connectionId: string | null) => {
+        const [row] = await tx
+          .insert(triggers)
+          .values({
+            userId: user.id,
+            kind: "subscription",
+            eventType: "mail.message.received",
+            connectionId,
+            note: "x",
+          })
+          .returning();
+        return row?.id ?? "";
+      };
+      const tied = await subscribe(work?.id ?? "");
+      const other = await subscribe(home?.id ?? "");
+      const everyAccount = await subscribe(null);
+      await tx
+        .insert(derivedTimers)
+        .values({ triggerId: tied, ref: "evt_1", fireAt: new Date() });
+      await disconnectConnection(tx, user.id, work?.id ?? "");
+      const statuses = Object.fromEntries(
+        (await tx.select().from(triggers)).map((t) => [t.id, t.status]),
+      );
+      expect(statuses).toEqual({
+        [tied]: "deleted",
+        [other]: "active",
+        [everyAccount]: "active",
+      });
+      expect(await tx.select().from(derivedTimers)).toEqual([]);
+      const [event] = await tx
+        .select()
+        .from(events)
+        .where(eq(events.type, "system.app.disconnected"));
+      expect(event?.payload).toMatchObject({ cancelledTriggers: [tied] });
     });
   });
 });

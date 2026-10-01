@@ -9,6 +9,7 @@ import {
   fireDerivedTimerJob,
   fireScheduleJob,
   fireTriggerBatchJob,
+  matchEventsJob,
   refreshTimersJob,
   frontTurnJob,
   provisionVmJob,
@@ -53,6 +54,7 @@ import { syncConnectionHandler } from "./connections/sync.ts";
 import {
   fireTriggerBatchHandler,
   gmailNativeCheck,
+  matchEventsHandler,
 } from "./triggers/matching.ts";
 import {
   fireDerivedTimerHandler,
@@ -142,6 +144,7 @@ const worker = createWorker({
       stopWatch: watchStopper(db, googleClient),
     }),
     [fireTriggerBatchJob.type]: fireTriggerBatchHandler,
+    [matchEventsJob.type]: matchEventsHandler,
     [refreshTimersJob.type]: refreshTimersHandler(calendarFor),
     [fireDerivedTimerJob.type]: fireDerivedTimerHandler(calendarFor),
     [syncConnectionJob.type]: syncConnectionHandler({

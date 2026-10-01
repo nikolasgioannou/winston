@@ -244,6 +244,19 @@ export async function fireBatch(db: DbOrTx, batchId: number) {
   });
 }
 
+/** `match_events`: matches events stored elsewhere (system events from the site). */
+export const matchEventsHandler: JobHandler = async ({ job, db, logger }) => {
+  const { eventIds } = z
+    .object({ eventIds: z.array(z.string()) })
+    .parse(job.payload);
+  const rows = await db
+    .select()
+    .from(events)
+    .where(inArray(events.id, eventIds));
+  const matched = await matchEvents(db, rows, { logger });
+  logger.info({ events: rows.length, matched }, "matched events");
+};
+
 /** `fire_trigger_batch`: fires a batch at its time. */
 export const fireTriggerBatchHandler: JobHandler = async ({
   job,

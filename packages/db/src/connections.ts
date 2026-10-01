@@ -10,11 +10,11 @@ import {
   watchConnectionJob,
 } from "@winston/domain/jobs";
 import type { TokenVault } from "@winston/shared/token-vault";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { newId } from "./ids.ts";
 import { enqueue } from "./queue.ts";
-import { connections } from "./schema/index.ts";
+import { connections, derivedTimers, triggers } from "./schema/index.ts";
 import { recordSystemEvent } from "./system-events.ts";
 
 type ConnectionRow = typeof connections.$inferSelect;
@@ -238,12 +238,31 @@ export async function disconnectConnection(
       )
       .returning({ id: connections.id });
     if (!disconnected) return false;
-    // M7: cancel the triggers scoped to this connection here, in the same
-    // transaction (docs/design.md §3, system.app.disconnected).
+    // Subscriptions tied to the account end with it (docs/design.md §3).
+    const cancelled = await tx
+      .update(triggers)
+      .set({ status: "deleted", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(triggers.connectionId, connectionId),
+          eq(triggers.status, "active"),
+        ),
+      )
+      .returning({ id: triggers.id });
+    if (cancelled.length > 0)
+      await tx.delete(derivedTimers).where(
+        inArray(
+          derivedTimers.triggerId,
+          cancelled.map((t) => t.id),
+        ),
+      );
     await recordSystemEvent(tx, {
       userId,
       type: "system.app.disconnected",
-      payload: await connectionFacts(tx, connectionId),
+      payload: {
+        ...(await connectionFacts(tx, connectionId)),
+        cancelledTriggers: cancelled.map((t) => t.id),
+      },
       sourceRef: `connection:${connectionId}:disconnected:${String(Date.now())}`,
     });
     await enqueue(tx, revokeConnectionTokenJob.type, {
