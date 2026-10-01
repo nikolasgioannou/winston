@@ -5,6 +5,7 @@ import { CliError } from "../errors.ts";
 import {
   either,
   listFlag,
+  minutes,
   resolveText,
   standardFlags,
   textFlag,
@@ -212,20 +213,6 @@ function showFree(free: Free, flags: FlagValues) {
   ]
     .filter((line) => line !== undefined)
     .join("\n");
-}
-
-/** Minutes from `30m`, `45min`, `1h`, `1h30m` or a bare number of minutes. */
-export function minutes(value: string) {
-  const text = value.trim().toLowerCase();
-  if (/^\d+$/.test(text)) return Number(text);
-  const match = /^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?$/.exec(text);
-  const total = match ? Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0) : 0;
-  if (!match || total === 0)
-    throw CliError.usage(
-      `"${value}" isn't a duration.`,
-      "For example 30m, 1h or 1h30m.",
-    );
-  return total;
 }
 
 const filterFlags: FlagSpec[] = [

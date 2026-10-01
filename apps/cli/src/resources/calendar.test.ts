@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cli } from "../testing.ts";
-import { minutes, span } from "./calendar.ts";
+import { minutes } from "../flags.ts";
+import { span } from "./calendar.ts";
 
 const person = (email: string, overrides: Record<string, unknown> = {}) => ({
   email,

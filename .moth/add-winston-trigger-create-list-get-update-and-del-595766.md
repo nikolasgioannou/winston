@@ -1,14 +1,14 @@
 ---
 id: "595766"
 title: Add winston trigger create, list, get, update and delete
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - events
   - m7
 created_at: 2026-09-27T05:40:24.109Z
-updated_at: 2026-09-27T05:40:24.164Z
+updated_at: 2026-10-01T18:40:51.453Z
 blocked_by:
   - "253db2"
   - "88f5ee"
@@ -31,3 +31,10 @@ Also:
 `--help` examples: a one-off reminder, a weekday cron, a filtered mail subscription, a meeting heads-up with `--lead`, and the full "tell me when Dana replies, or nudge me Friday" example from §11.
 
 Tests: validation of each rule, time parsing in the user's zone, `next_fire_at` shown correctly, and snapshots of list and get output.
+
+## As built
+
+- API in `packages/vm-api/src/triggers.ts`, CLI in `apps/cli/src/resources/trigger.ts` (filter flags generated from the catalog; `--lead` takes the same durations as `calendar create --duration`, now in `flags.ts`). The rules and messages are listed in docs/design.md §11.
+- `calendar.event.starting` requires `--lead` rather than guessing one.
+- Triggers are stored and listed, but nothing fires them yet: the scheduler (e79d1c) and matching (463072) come next.
+

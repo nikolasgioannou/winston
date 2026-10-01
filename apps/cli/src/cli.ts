@@ -17,6 +17,7 @@ import { events } from "./resources/events.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { task } from "./resources/task.ts";
+import { trigger } from "./resources/trigger.ts";
 import { suggest } from "./suggest.ts";
 import { version } from "./version.ts";
 
@@ -26,6 +27,7 @@ export const resources: Resource[] = [
   calendar,
   accounts,
   task,
+  trigger,
   events,
 ];
 

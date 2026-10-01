@@ -24,6 +24,7 @@ import { eventRoutes } from "./events.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
 import { taskRoutes } from "./tasks.ts";
+import { triggerRoutes } from "./triggers.ts";
 import { z } from "zod";
 
 const meUpdate = z.object({
@@ -140,7 +141,8 @@ export function createVmApi({
     .route("/v1/calendar", calendarRoutes({ db, connectors }))
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
     .route("/v1/tasks", taskRoutes({ db }))
-    .route("/v1/events", eventRoutes());
+    .route("/v1/events", eventRoutes())
+    .route("/v1/triggers", triggerRoutes({ db }));
 }
 
 export type { VmApiEnv } from "./env.ts";
