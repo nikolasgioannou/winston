@@ -102,7 +102,7 @@ function ComputerStep({
       <Step
         {...step}
         progress="done"
-        description="Winston's own computer is ready for its work and your files."
+        description="Winston's own computer is ready for his work and your files."
       />
     );
   if (state.computer === "failed")
@@ -122,7 +122,7 @@ function ComputerStep({
     <Step
       {...step}
       progress="working"
-      description="Winston is setting up its own computer, for its work and your files. This takes a minute or two."
+      description="Winston is setting up his own computer, for his work and your files. This takes a minute or two."
     />
   );
 }
@@ -236,8 +236,8 @@ function Summary({ state }: { state: HomeState }) {
           label="Computer"
           description={
             state.computer === "unreachable"
-              ? "Winston can't reach its computer right now. It usually comes back on its own."
-              : "Winston's own computer, for its work and your files."
+              ? "Winston can't reach his computer right now. It usually comes back on its own."
+              : "Winston's own computer, for his work and your files."
           }
           control={
             state.computer === "unreachable" ? (
