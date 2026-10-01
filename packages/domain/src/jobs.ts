@@ -42,6 +42,12 @@ export const expireTriggerJob = {
   dedupeKey: (triggerId: string) => `expire_trigger:${triggerId}`,
 } as const;
 
+/** A subscription's batch of events is due to fire (§3: 30 s after its first event). */
+export const fireTriggerBatchJob = {
+  type: "fire_trigger_batch",
+  dedupeKey: (batchId: number) => `fire_trigger_batch:${String(batchId)}`,
+} as const;
+
 /** A materialized `calendar.event.starting` timer came due (§3, abstractions). */
 export const fireDerivedTimerJob = {
   type: "fire_derived_timer",

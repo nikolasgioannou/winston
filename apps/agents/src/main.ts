@@ -7,6 +7,7 @@ import {
   deleteUserJob,
   expireTriggerJob,
   fireScheduleJob,
+  fireTriggerBatchJob,
   frontTurnJob,
   provisionVmJob,
   restoreVmJob,
@@ -47,6 +48,12 @@ import { gmailProvider } from "@winston/connectors/gmail";
 import { gmailSync } from "@winston/connectors/gmail-sync";
 import { googleCalendarSync } from "@winston/connectors/google-calendar-sync";
 import { syncConnectionHandler } from "./connections/sync.ts";
+import {
+  fireTriggerBatchHandler,
+  gmailNativeCheck,
+} from "./triggers/matching.ts";
+import { connections } from "@winston/db/schema";
+import { eq } from "drizzle-orm";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
@@ -119,7 +126,18 @@ const worker = createWorker({
       revoke: googleTokenRevoker(),
       stopWatch: watchStopper(db, googleClient),
     }),
+    [fireTriggerBatchJob.type]: fireTriggerBatchHandler,
     [syncConnectionJob.type]: syncConnectionHandler({
+      native: gmailNativeCheck(async (connectionId) => {
+        const [connection] = await db
+          .select({ email: connections.externalEmail })
+          .from(connections)
+          .where(eq(connections.id, connectionId));
+        return gmailProvider({
+          address: connection?.email ?? "",
+          accessToken: () => accessToken(connectionId),
+        });
+      }),
       calendar: (connection) => ({
         sync: googleCalendarSync({
           accessToken: () => accessToken(connection.id),

@@ -8,6 +8,7 @@ import { connections } from "@winston/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { JobHandler } from "../worker.ts";
+import { matchEvents, type NativeQueryCheck } from "../triggers/matching.ts";
 import { syncCalendar, type CalendarSyncDeps } from "./sync-calendar.ts";
 import { syncMail, type MailSyncDeps } from "./sync-mail.ts";
 
@@ -18,6 +19,8 @@ export function syncConnectionHandler(deps: {
   mail: (connection: Connection) => MailSyncDeps;
   /** The calendar change feed for a connection. */
   calendar: (connection: Connection) => CalendarSyncDeps;
+  /** Checks subscriptions' provider-native queries (Gmail search). */
+  native?: NativeQueryCheck;
 }): JobHandler {
   return async ({ job, db, logger }) => {
     const { connectionId } = z
@@ -38,8 +41,17 @@ export function syncConnectionHandler(deps: {
         connection.domain === "mail"
           ? await syncMail(db, connection, deps.mail(connection))
           : await syncCalendar(db, connection, deps.calendar(connection));
+      const matched = await matchEvents(db, stored, {
+        ...(deps.native ? { native: deps.native } : {}),
+        logger,
+      });
       logger.info(
-        { connectionId, domain: connection.domain, events: stored.length },
+        {
+          connectionId,
+          domain: connection.domain,
+          events: stored.length,
+          matched,
+        },
         "synced",
       );
     } catch (error) {
