@@ -1,0 +1,31 @@
+name: AMI
+
+# Builds and registers the production VM AMI (docs/design.md §18), then
+# records it in /winston/vm-ami. Run by hand from the Actions tab; new VMs
+# launch from it, existing ones keep theirs and update in place.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # GitHub's OIDC token, exchanged for the deploy role (docs/runbooks/deploys.md).
+  id-token: write
+
+concurrency:
+  group: ami
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+      - run: bun install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::766577085959:role/winston-github-deploy
+          aws-region: us-east-1
+      - run: bun run image:build:ami

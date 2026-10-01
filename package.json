@@ -19,6 +19,7 @@
     "docker:build": "bun scripts/docker-build.ts",
     "format": "prettier --write . && packer fmt -recursive image",
     "format:check": "prettier --check . && packer fmt -check -recursive image",
+    "image:build:ami": "bun scripts/image-build-ami.ts",
     "image:build:local": "bun scripts/image-build-local.ts",
     "infra:deploy": "bun run --filter @winston/infra deploy",
     "infra:diff": "bun run --filter @winston/infra diff",

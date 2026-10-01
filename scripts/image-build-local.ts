@@ -5,42 +5,15 @@
  * image/winston.pkr.hcl with it baked in. Packer's plugins install into
  * .packer/ in this checkout, not the global ~/.config/packer.
  */
-const env = {
-  ...process.env,
-  PACKER_PLUGIN_PATH: `${process.cwd()}/.packer/plugins`,
-};
+import {
+  buildVersion,
+  compileVmBinaries,
+  packerEnv,
+  run,
+} from "./vm-binaries.ts";
 
-async function run(cmd: string[]) {
-  const proc = Bun.spawn(cmd, {
-    env,
-    stdio: ["inherit", "inherit", "inherit"],
-  });
-  const code = await proc.exited;
-  if (code !== 0) process.exit(code);
-}
-
-// 0.1.<commits on main>+<short sha>, and .dirty for uncommitted changes.
-const git = (...args: string[]) =>
-  Bun.spawnSync(["git", ...args])
-    .stdout.toString()
-    .trim();
-const dirty = git("status", "--porcelain") !== "";
-const version = `0.1.${git("rev-list", "--count", "HEAD")}+${git("rev-parse", "--short", "HEAD")}${dirty ? ".dirty" : ""}`;
+const version = buildVersion();
 console.log(`Building winston and winstond ${version} for linux-arm64`);
-
-for (const [app, binary] of [
-  ["cli", "winston"],
-  ["winstond", "winstond"],
-] as const)
-  await run([
-    "bun",
-    "build",
-    "--compile",
-    "--target=bun-linux-arm64",
-    `--define=WINSTON_BUILD_VERSION=${JSON.stringify(version)}`,
-    `apps/${app}/src/main.ts`,
-    "--outfile",
-    `image/build/${binary}-linux-arm64`,
-  ]);
-await run(["packer", "init", "image"]);
-await run(["packer", "build", "-only=docker.local", "image"]);
+await compileVmBinaries("arm64", version);
+await run(["packer", "init", "image"], packerEnv);
+await run(["packer", "build", "-only=docker.local", "image"], packerEnv);

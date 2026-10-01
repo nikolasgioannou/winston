@@ -1,14 +1,14 @@
 ---
 id: "ce9145"
 title: Build the production AMI with Packer
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - vm
 created_at: 2026-09-27T05:36:32.846Z
-updated_at: 2026-09-27T05:36:32.898Z
+updated_at: 2026-10-01T07:29:40.566Z
 blocked_by:
   - "245cbb"
   - "f25d3b"
@@ -28,3 +28,5 @@ Add a manually triggered GitHub Actions workflow `ami.yml` that builds and regis
 Done when an AMI exists, and an instance launched from it by hand boots with the data volume mounted and `winstond` installed.
 
 From the local image ticket: add the **EC2-only** provisioning here, guarded by `WINSTON_TARGET=ec2` so the Docker build skips it: the 2 GB swap file and unattended-upgrades (docs/design.md §18). They weren't written earlier because nothing could test them before the EC2 build existed.
+
+**Done (2026-10-01):** `ami-013f86a6b434507fd`, recorded in `/winston/vm-ami` (data type `aws:ec2:image`). Checked by launching from it through the Vm stack's launch template and the EC2 provider: the data volume formatted, labelled and mounted at `/home/winston` with the home layout, swap on, security updates scheduled, the SSM agent online, both binaries installed, root reaching the metadata service and `winston` blocked; and after replacing the instance, a file on the volume was still there. The workflow (`ami.yml`) runs once the deploy role exists (45b4ce).
