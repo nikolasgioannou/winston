@@ -78,7 +78,10 @@ export interface GoogleEvent {
   };
   recurrence?: string[] | undefined;
   recurringEventId?: string;
+  /** For an instance of a series: when it was meant to start. */
+  originalStartTime?: { dateTime?: string; date?: string };
   htmlLink?: string;
+  created?: string;
   updated?: string;
 }
 

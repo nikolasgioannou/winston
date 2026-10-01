@@ -8,6 +8,7 @@ import { connections } from "@winston/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { JobHandler } from "../worker.ts";
+import { syncCalendar, type CalendarSyncDeps } from "./sync-calendar.ts";
 import { syncMail, type MailSyncDeps } from "./sync-mail.ts";
 
 type Connection = typeof connections.$inferSelect;
@@ -15,6 +16,8 @@ type Connection = typeof connections.$inferSelect;
 export function syncConnectionHandler(deps: {
   /** The mail provider and change feed for a connection. */
   mail: (connection: Connection) => MailSyncDeps;
+  /** The calendar change feed for a connection. */
+  calendar: (connection: Connection) => CalendarSyncDeps;
 }): JobHandler {
   return async ({ job, db, logger }) => {
     const { connectionId } = z
@@ -31,10 +34,14 @@ export function syncConnectionHandler(deps: {
     )
       return;
     try {
-      if (connection.domain === "mail") {
-        const stored = await syncMail(db, connection, deps.mail(connection));
-        logger.info({ connectionId, events: stored.length }, "synced mail");
-      }
+      const stored =
+        connection.domain === "mail"
+          ? await syncMail(db, connection, deps.mail(connection))
+          : await syncCalendar(db, connection, deps.calendar(connection));
+      logger.info(
+        { connectionId, domain: connection.domain, events: stored.length },
+        "synced",
+      );
     } catch (error) {
       // The account needs the user first; the grant sweep has told Winston.
       if (error instanceof ConnectionUnavailableError) return;

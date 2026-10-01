@@ -3,11 +3,16 @@
  * arrive): an `events.watch` channel per watched calendar pushes "something
  * changed" straight to our webhook, with a token we check.
  */
-import { listedCalendars } from "./google-calendar.ts";
+import { listedCalendars, type GoogleEvent } from "./google-calendar.ts";
 import { ProviderNotFoundError, ProviderUnavailableError } from "./errors.ts";
 import { WatchRefusedError } from "./gmail-sync.ts";
 
 const api = "https://www.googleapis.com/calendar/v3";
+
+/** Google no longer accepts the stored sync token (410): a full resync is needed. */
+export class SyncTokenExpiredError extends Error {
+  override name = "SyncTokenExpiredError";
+}
 
 export function googleCalendarSync({
   accessToken,
@@ -44,6 +49,7 @@ export function googleCalendarSync({
         error?: { message?: string };
       };
       const message = `Google Calendar said ${String(response.status)}: ${error.error?.message ?? "no details"}`;
+      if (response.status === 410) throw new SyncTokenExpiredError(message);
       if (response.status === 404) throw new ProviderNotFoundError(message);
       if (response.status === 400 || response.status === 403)
         throw new WatchRefusedError(message);
@@ -104,6 +110,44 @@ export function googleCalendarSync({
         resourceId: result.resourceId,
         expiresAt: new Date(Number(result.expiration)),
       };
+    },
+    /**
+     * A calendar's changes: since `syncToken` (deleted events come back
+     * `cancelled`), or, for a first or full sync, every event ending after
+     * `since`. Series come as one event and changed instances separately
+     * (no expansion). Returns the token for next time, from the last page.
+     * Throws `SyncTokenExpiredError` when Google refuses the token.
+     */
+    async changes(
+      calendarId: string,
+      from: { syncToken: string } | { since: Date },
+    ) {
+      const events: GoogleEvent[] = [];
+      let pageToken: string | undefined;
+      let nextSyncToken: string | undefined;
+      do {
+        const page = await request<{
+          items?: GoogleEvent[];
+          nextPageToken?: string;
+          nextSyncToken?: string;
+        }>(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+          query: {
+            maxResults: "2500",
+            ...("syncToken" in from
+              ? { syncToken: from.syncToken }
+              : { timeMin: from.since.toISOString() }),
+            ...(pageToken ? { pageToken } : {}),
+          },
+        });
+        events.push(...(page.items ?? []));
+        pageToken = page.nextPageToken;
+        nextSyncToken = page.nextSyncToken;
+      } while (pageToken);
+      if (!nextSyncToken)
+        throw new Error(
+          `Google Calendar gave no sync token for ${calendarId}.`,
+        );
+      return { events, nextSyncToken };
     },
     /** Stops a channel; one that's already gone is fine. */
     async stopChannel(id: string, resourceId: string) {

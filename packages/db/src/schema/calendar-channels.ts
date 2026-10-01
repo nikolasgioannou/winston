@@ -1,4 +1,11 @@
-import { index, snakeCase, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  index,
+  jsonb,
+  primaryKey,
+  snakeCase,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { connections } from "./connections.ts";
 
 /**
@@ -23,4 +30,24 @@ export const calendarChannels = snakeCase.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index().on(t.connectionId)],
+);
+
+/**
+ * The last seen state of each calendar event a connection syncs (docs/design.md
+ * §3, §14): what `calendar.event.updated` diffs against, and what a
+ * cancellation (which arrives with almost nothing) is reported from.
+ */
+export const calendarEventSnapshots = snakeCase.table(
+  "calendar_event_snapshots",
+  {
+    connectionId: text()
+      .notNull()
+      .references(() => connections.id, { onDelete: "cascade" }),
+    /** `<calendar id>/<event id>`, as the provider names it. */
+    providerId: text().notNull(),
+    /** The diffed fields: title, times, place, description, attendees and answers, video link, organizer. */
+    snapshot: jsonb().notNull(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.connectionId, t.providerId] })],
 );

@@ -48,6 +48,7 @@ import {
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { gmailSync } from "@winston/connectors/gmail-sync";
+import { googleCalendarSync } from "@winston/connectors/google-calendar-sync";
 import { syncConnectionHandler } from "./connections/sync.ts";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
@@ -122,6 +123,11 @@ const worker = createWorker({
       stopWatch: watchStopper(db, googleClient),
     }),
     [syncConnectionJob.type]: syncConnectionHandler({
+      calendar: (connection) => ({
+        sync: googleCalendarSync({
+          accessToken: () => accessToken(connection.id),
+        }),
+      }),
       mail: (connection) => ({
         sync: gmailSync({ accessToken: () => accessToken(connection.id) }),
         mail: gmailProvider({

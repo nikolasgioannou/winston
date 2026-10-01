@@ -1,14 +1,14 @@
 ---
 id: "6a3656"
 title: Turn calendar changes into calendar events
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - events
   - m7
 created_at: 2026-09-27T05:40:24.585Z
-updated_at: 2026-09-27T05:40:24.620Z
+updated_at: 2026-10-01T19:26:30.214Z
 blocked_by:
   - "a2d498"
 ---
@@ -29,3 +29,11 @@ Events to emit:
 Use dedupe keys and advance sync tokens only after events are stored. When an event's time changes, notify the derived-timers logic (next tickets) so `calendar.event.starting` timers follow it.
 
 Tests with recorded fixtures: each event kind, diff contents, 410 recovery, recurring instances, and dedupe on re-run.
+
+## As built
+
+- `syncCalendar` in `apps/agents/src/connections/sync-calendar.ts`; the incremental listing and 410 handling in `@winston/connectors/google-calendar-sync`; snapshots in `calendar_event_snapshots` (§14). Details in docs/design.md §3 (Calendar sync as built).
+- Recurrences aren't expanded in sync: a series is one event, and instances that move or are cancelled come separately and are described from the series. `calendar.event.starting` timers expand upcoming instances themselves (4da088).
+- Derived timers follow time changes through the stored `calendar.event.updated` / `cancelled` events, which matching (463072) and timers (4da088) consume; nothing extra is needed here.
+- Tested on fixture events rather than recorded responses, so no real calendar data is in the repository.
+
