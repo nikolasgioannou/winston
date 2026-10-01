@@ -97,6 +97,12 @@ describe("calendar routes", () => {
       expect(narrow.slots).toEqual([
         { start: "2026-09-29T20:00:00.000Z", end: "2026-09-29T22:00:00.000Z" },
       ]);
+      const twelveHour = (await (
+        await call(
+          "/v1/calendar/free?since=2026-09-29T00:00&until=2026-09-30T00:00&duration=60&hours=4pm-6pm",
+        )
+      ).json()) as Json;
+      expect(twelveHour.slots).toEqual(narrow.slots);
     });
   });
 

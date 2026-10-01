@@ -34,6 +34,9 @@ import type { VmApiEnv } from "./env.ts";
 
 const flag = z.enum(["true", "false"]).transform((v) => v === "true");
 
+/** A time of day: `9`, `9:30`, `18`, `6pm`, `9:30am`. */
+const clock = /\d{1,2}(?::\d{2})?\s*(?:am|pm)?/;
+
 const listQuery = z.object({
   account: z.string().optional(),
   calendar: z.string().optional(),
@@ -59,10 +62,10 @@ const freeQuery = z.object({
     .max(24 * 60)
     .default(30),
   attendee: z.union([z.string(), z.array(z.string())]).optional(),
-  /** Working hours as `9-18` or `9:30-17:30`. */
+  /** Working hours as `9-18`, `9:30-17:30` or `10am-6pm`. */
   hours: z
     .string()
-    .regex(/^\d{1,2}(:\d{2})?-\d{1,2}(:\d{2})?$/)
+    .regex(new RegExp(`^${clock.source}-${clock.source}$`, "i"))
     .optional(),
   weekends: flag.optional(),
 });
@@ -92,10 +95,14 @@ export interface EventDto {
 const timeDto = (time: EventTime) =>
   "at" in time ? { at: time.at.toISOString() } : { date: time.date };
 
-/** Minutes after midnight from `9` or `9:30`. */
+/** Minutes after midnight from `9`, `9:30`, `6pm` or `12am`. */
 const minuteOf = (text: string) => {
-  const [hours = "0", minutes = "0"] = text.split(":");
-  return Number(hours) * 60 + Number(minutes);
+  const [, h = "0", m = "0", half] =
+    /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i.exec(text.trim()) ?? [];
+  const hour = half
+    ? (Number(h) % 12) + (half.toLowerCase() === "pm" ? 12 : 0)
+    : Number(h);
+  return hour * 60 + Number(m);
 };
 
 export function calendarRoutes({

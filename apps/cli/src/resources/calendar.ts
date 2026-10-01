@@ -488,7 +488,7 @@ export const calendar: Resource = {
           name: "hours",
           value: "<from-to>",
           description:
-            "Working hours in the user's zone (default 9-18; 9:30-17:30)",
+            "Working hours in the user's zone (default 9-18; also 9:30-17:30 or 10am-6pm)",
         },
         { name: "weekends", description: "Include Saturdays and Sundays" },
         standardFlags.account,

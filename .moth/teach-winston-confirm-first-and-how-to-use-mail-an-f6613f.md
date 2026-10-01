@@ -1,13 +1,13 @@
 ---
 id: "f6613f"
 title: Teach Winston confirm-first and how to use mail and calendar
-status: todo
+status: done
 priority: none
 labels:
   - m5
   - prompts
 created_at: 2026-09-27T05:37:39.574Z
-updated_at: 2026-09-27T05:37:39.645Z
+updated_at: 2026-10-01T17:14:00.066Z
 blocked_by:
   - "837a29"
   - "c7b3fa"
@@ -28,3 +28,10 @@ Check by hand in production (or locally):
 - Ask Winston to reply to an email. He shows a preview and waits.
 - Ask him to archive something. He just does it.
 - Disable `send` and ask again. He explains that sending is disabled.
+
+## As built
+
+- New sections in `packages/prompts/src/front-of-house.md`: "Mail and calendar" (the CLI, accounts, habits, outside content, the time zone) and "Acting for the user" (confirm-first with `--dry-run`, what's fine without asking, signing as Winston on the user's behalf, permission errors). "What you can't do yet" no longer lists mail and calendars, and says he only sees changes when he looks.
+- The hand checks were done as a scripted eval instead of in the founder's real accounts: the real `winston` CLI in real bash against a fake VM-facing API on a unix socket, Sonnet 5 at `low`. Results are in docs/design.md §5 ("The soft layer as built in the prompt").
+- The eval showed Winston passing `--hours 10am-6pm`, so `calendar free` now accepts 12-hour times too.
+
