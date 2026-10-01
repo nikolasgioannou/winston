@@ -165,9 +165,16 @@ export async function startBackgroundRun(
     userId: string;
     brief: string;
     effort?: Effort;
-    /** What started it, and the front-of-house turn that did. */
-    triggerType?: "delegate";
+    /** What started it: the front of house delegating, or a trigger. */
+    triggerType?: "delegate" | "schedule" | "event" | "expire";
+    triggerId?: string;
+    /** The front-of-house turn that delegated it. */
     parentRunId?: string;
+    /**
+     * The first message's content instead of the brief in a `<task>` element
+     * (a trigger's note, events and the conversation tail). Gets the start time.
+     */
+    message?: (startedAt: string) => string;
   },
 ) {
   return db.transaction(async (tx) => {
@@ -185,11 +192,15 @@ export async function startBackgroundRun(
       brief: options.brief,
       effort: options.effort,
       triggerType: options.triggerType,
+      triggerId: options.triggerId,
       parentRunId: options.parentRunId,
     });
+    const startedAt = formatInTimeZone(new Date(), user.timeZone);
     const message: ModelMessage = {
       role: "user",
-      content: `<task started_at="${formatInTimeZone(new Date(), user.timeZone)}">\n${options.brief}\n</task>`,
+      content: options.message
+        ? options.message(startedAt)
+        : `<task started_at="${startedAt}">\n${options.brief}\n</task>`,
     };
     await tx
       .insert(runMessages)

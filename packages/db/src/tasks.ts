@@ -42,10 +42,15 @@ export async function finishTask(
     const status = await applyRunEvent(tx, runId, event, { result });
     if (!status) return undefined;
     const [run] = await tx
-      .select({ userId: runs.userId, brief: runs.brief })
+      .select({
+        userId: runs.userId,
+        brief: runs.brief,
+        triggerType: runs.triggerType,
+      })
       .from(runs)
       .where(eq(runs.id, runId));
     if (!run) throw new Error(`No run ${runId}`);
+    const trigger = run.triggerType === "delegate" ? null : run.triggerType;
     await recordSystemEvent(tx, {
       userId: run.userId,
       type: event === "fail" ? "task.failed" : "task.completed",
@@ -55,6 +60,7 @@ export async function finishTask(
         report: result,
         ...(event === "cap" ? { capped: true } : {}),
         ...(event === "cancel" ? { cancelled: true } : {}),
+        ...(trigger ? { trigger } : {}),
       },
       sourceRef: `task:${runId}:finished`,
     });

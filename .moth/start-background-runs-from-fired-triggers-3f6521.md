@@ -1,14 +1,14 @@
 ---
 id: "3f6521"
 title: Start background runs from fired triggers
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - events
   - m7
 created_at: 2026-09-27T05:40:24.180Z
-updated_at: 2026-09-27T05:40:24.234Z
+updated_at: 2026-10-01T18:45:37.457Z
 blocked_by:
   - "1fd02f"
   - "88f5ee"
@@ -30,3 +30,10 @@ Also increment `fire_count` and apply the lifecycle rules atomically with run cr
 Results flow back like any background run (`task.completed` → front of house), and the front of house often stays silent. Double-check that path reads well for event runs: the report should say "nothing needed" crisply.
 
 Tests with the fake model: the first message's structure for each trigger kind, the tail rendering, fire counting being atomic with run creation, and an exhausted trigger not firing again.
+
+## As built
+
+- `startTriggerRun(db, { triggerId, reason, events?, now? })` in `apps/agents/src/background/trigger-run.ts`; `startBackgroundRun` takes a custom first message. `runs.trigger_type` gained `schedule`, `event` and `expire`, and `runs.trigger_id` links the trigger. Details in docs/design.md §3 (Handling, as built).
+- Derived timers (`calendar.event.starting`) fire as `event` runs with the event envelope (4da088).
+- Atomicity is by construction (one transaction with the trigger row locked); the tests check that a spent trigger never fires twice and that count and run appear together.
+

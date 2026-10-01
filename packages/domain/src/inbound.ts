@@ -107,6 +107,8 @@ export const taskResultPayloadSchema = z.object({
   capped: z.boolean().optional(),
   /** Stopped because it was cancelled (`winston task cancel`). */
   cancelled: z.boolean().optional(),
+  /** Started by one of Winston's own triggers rather than asked for. */
+  trigger: z.enum(["schedule", "event", "expire"]).optional(),
 });
 export type TaskResultPayload = z.infer<typeof taskResultPayloadSchema>;
 

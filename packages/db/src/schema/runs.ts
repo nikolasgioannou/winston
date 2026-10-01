@@ -7,6 +7,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { newId } from "../ids.ts";
+import { triggers } from "./triggers.ts";
 import { users } from "./users.ts";
 
 /** Run lifecycle (docs/design.md §17); `@winston/db/run-state` moves runs through it. */
@@ -23,8 +24,16 @@ export const runStatus = pgEnum("run_status", [
 /** A front-of-house turn, or a background agent's task (§1). */
 export const runKind = pgEnum("run_kind", ["front", "background"]);
 
-/** What started a background run: the front of house delegating, so far (§1). */
-export const runTrigger = pgEnum("run_trigger", ["delegate"]);
+/**
+ * What started a background run (§1, §3): the front of house delegating, or
+ * one of Winston's triggers (a schedule, events, or an expiry).
+ */
+export const runTrigger = pgEnum("run_trigger", [
+  "delegate",
+  "schedule",
+  "event",
+  "expire",
+]);
 
 /** Reasoning effort for a run's model calls (§6). */
 export const runEffort = pgEnum("run_effort", [
@@ -49,6 +58,10 @@ export const runs = snakeCase.table("runs", {
   status: runStatus().notNull().default("running"),
   /** Background: what started it; unset when started by hand (`bun run task:start`). */
   triggerType: runTrigger(),
+  /** Background: the trigger that fired it. */
+  triggerId: text().references((): AnyPgColumn => triggers.id, {
+    onDelete: "set null",
+  }),
   /** Background: the front-of-house turn that delegated it. */
   parentRunId: text().references((): AnyPgColumn => runs.id, {
     onDelete: "set null",
