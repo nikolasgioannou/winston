@@ -25,15 +25,15 @@ This is the order in which Winston gets built. The tickets themselves live in `.
 | M0 Foundations             | 1–10    | Toolchain, ids + tests, pre-commit gate, setup script, local Postgres, CI checks                    |
 | M1 Talk to Winston (local) | 11–35   | Database foundation, then chat with the dev bot: steering, typing, rolling window, failure handling |
 | M2 His computer (local)    | 36–55   | Local VM, `winstond`, gateway, bash/CLI, attachments, voice                                         |
-| M3 Accounts & website      | 56–81   | Design system, sign-in, dev design view, sidebar app, Telegram linking, accounts, deletion          |
-| M4 Production              | 82–102  | AWS, CI/CD, EC2 VMs, self-update, **go-live**                                                       |
-| M5 Mail & calendar         | 103–113 | `winston mail` / `calendar` / `accounts`, permissions, audit log                                    |
-| M6 Background agents       | 114–123 | Delegation, durable runs, parking, compaction, crash safety                                         |
-| M7 Triggers & events       | 124–138 | Proactivity: triggers, push + sync, matching, scheduler                                             |
-| M8 Browser                 | 139–151 | Chrome, `winston browser`, locks, handoffs, Jev autopilot                                           |
-| M9 Rounding out            | 152–156 | History search, costs, prompt polish, docs sync                                                     |
+| M3 Accounts & website      | 56–83   | Design system, sign-in, dev design view, sidebar app, Telegram linking, accounts, deletion          |
+| M4 Production              | 84–104  | AWS, CI/CD, EC2 VMs, self-update, **go-live**                                                       |
+| M5 Mail & calendar         | 105–115 | `winston mail` / `calendar` / `accounts`, permissions, audit log                                    |
+| M6 Background agents       | 116–125 | Delegation, durable runs, parking, compaction, crash safety                                         |
+| M7 Triggers & events       | 126–140 | Proactivity: triggers, push + sync, matching, scheduler                                             |
+| M8 Browser                 | 141–153 | Chrome, `winston browser`, locks, handoffs, Jev autopilot                                           |
+| M9 Rounding out            | 154–158 | History search, costs, prompt polish, docs sync                                                     |
 
-**156 tickets, 14 collaborative.**
+**158 tickets, 14 collaborative.**
 
 ## The sequence
 
@@ -145,6 +145,8 @@ The web app: design system (with the founder), sign-in with the allowlist, the d
 | 79  | `6341c5` | Rework the profile page into cards                                      | `22f09d`, `856256`, `8fffdd` |
 | 80  | `463528` | Refer to Winston as he everywhere                                       | `6341c5`                     |
 | 81  | `465392` | Add a not-found page                                                    | `5e3c6d`                     |
+| 82  | `72b869` | Lay out profile fields as setting rows                                  | `6341c5`                     |
+| 83  | `4bd5a3` | Divide dialog headers and give the account dialog tabs                  | `8fffdd`                     |
 
 ### M4 — Production
 
@@ -152,27 +154,27 @@ Everything runs in AWS and every push to `main` deploys. It ends with go-live, a
 
 | #   | Ticket   | Title                                                                          | Blocked by                                                                                                                                                     |
 | --- | -------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 82  | `2c0dbe` | Set up the AWS Organization and the winston-prod account (with the founder) 🤝 | `0fa82e`                                                                                                                                                       |
-| 83  | `60490f` | Create the CDK app skeleton                                                    | `2c0dbe`, `51d785`                                                                                                                                             |
-| 84  | `2a17a6` | Build the network stack                                                        | `60490f`                                                                                                                                                       |
-| 85  | `f25d3b` | Build the data stack: RDS, KMS keys and S3 buckets                             | `2a17a6`                                                                                                                                                       |
-| 86  | `f92c63` | Set up DNS and certificates for runwinston.com (with the founder) 🤝           | `16c290`, `60490f`                                                                                                                                             |
-| 87  | `78c130` | Write production Dockerfiles for the four services                             | `4e6f9b`, `5cbe5b`, `6b393b`, `76c143`                                                                                                                         |
-| 88  | `2ca5a6` | Wire production secrets and the KMS token vault                                | `35fdd4`, `f25d3b`                                                                                                                                             |
-| 89  | `a4de0d` | Store screenshots and attachments in S3 in production                          | `68e9cc`, `f25d3b`                                                                                                                                             |
-| 90  | `071e49` | Build the services stack on ECS Fargate                                        | `2a17a6`, `2ca5a6`, `78c130`, `f25d3b`, `f92c63`                                                                                                               |
-| 91  | `8203ff` | Serve the web app through CloudFront                                           | `071e49`                                                                                                                                                       |
-| 92  | `ce9145` | Build the production AMI with Packer                                           | `245cbb`, `f25d3b`                                                                                                                                             |
-| 93  | `b9062e` | Build the VM stack: launch template, security and snapshots                    | `2a17a6`, `ce9145`                                                                                                                                             |
-| 94  | `550446` | Implement the EC2 VmProvider                                                   | `2dd479`, `b9062e`                                                                                                                                             |
-| 95  | `9f2e3f` | Sign VM binaries and let winstond update itself                                | `245cbb`, `f25d3b`                                                                                                                                             |
-| 96  | `45b4ce` | Let GitHub Actions deploy via OIDC                                             | `60490f`                                                                                                                                                       |
-| 97  | `e1a361` | Deploy to production on every push to main                                     | `021c52`, `071e49`, `45b4ce`, `8203ff`, `9f2e3f`                                                                                                               |
-| 98  | `dd8241` | Add budget alerts and model spend limits                                       | `60490f`                                                                                                                                                       |
-| 99  | `1e6482` | Configure production Telegram, Google and API keys (with the founder) 🤝       | `071e49`, `2ca5a6`, `ef5b35`                                                                                                                                   |
-| 100 | `1867ba` | Run one-off admin commands in production                                       | `071e49`                                                                                                                                                       |
-| 101 | `f2ce33` | Restore a user's VM from a snapshot                                            | `550446`, `b9062e`                                                                                                                                             |
-| 102 | `c0cba0` | Go live: first production deploy and end-to-end check (with the founder) 🤝    | `0e0c6c`, `1867ba`, `1e6482`, `22f09d`, `3f95f4`, `550446`, `6882fb`, `68fe0c`, `8d94b2`, `a4de0d`, `bbfa17`, `d4bb0d`, `e1a361`, `ebd998`, `ee16f5`, `f661c5` |
+| 84  | `2c0dbe` | Set up the AWS Organization and the winston-prod account (with the founder) 🤝 | `0fa82e`                                                                                                                                                       |
+| 85  | `60490f` | Create the CDK app skeleton                                                    | `2c0dbe`, `51d785`                                                                                                                                             |
+| 86  | `2a17a6` | Build the network stack                                                        | `60490f`                                                                                                                                                       |
+| 87  | `f25d3b` | Build the data stack: RDS, KMS keys and S3 buckets                             | `2a17a6`                                                                                                                                                       |
+| 88  | `f92c63` | Set up DNS and certificates for runwinston.com (with the founder) 🤝           | `16c290`, `60490f`                                                                                                                                             |
+| 89  | `78c130` | Write production Dockerfiles for the four services                             | `4e6f9b`, `5cbe5b`, `6b393b`, `76c143`                                                                                                                         |
+| 90  | `2ca5a6` | Wire production secrets and the KMS token vault                                | `35fdd4`, `f25d3b`                                                                                                                                             |
+| 91  | `a4de0d` | Store screenshots and attachments in S3 in production                          | `68e9cc`, `f25d3b`                                                                                                                                             |
+| 92  | `071e49` | Build the services stack on ECS Fargate                                        | `2a17a6`, `2ca5a6`, `78c130`, `f25d3b`, `f92c63`                                                                                                               |
+| 93  | `8203ff` | Serve the web app through CloudFront                                           | `071e49`                                                                                                                                                       |
+| 94  | `ce9145` | Build the production AMI with Packer                                           | `245cbb`, `f25d3b`                                                                                                                                             |
+| 95  | `b9062e` | Build the VM stack: launch template, security and snapshots                    | `2a17a6`, `ce9145`                                                                                                                                             |
+| 96  | `550446` | Implement the EC2 VmProvider                                                   | `2dd479`, `b9062e`                                                                                                                                             |
+| 97  | `9f2e3f` | Sign VM binaries and let winstond update itself                                | `245cbb`, `f25d3b`                                                                                                                                             |
+| 98  | `45b4ce` | Let GitHub Actions deploy via OIDC                                             | `60490f`                                                                                                                                                       |
+| 99  | `e1a361` | Deploy to production on every push to main                                     | `021c52`, `071e49`, `45b4ce`, `8203ff`, `9f2e3f`                                                                                                               |
+| 100 | `dd8241` | Add budget alerts and model spend limits                                       | `60490f`                                                                                                                                                       |
+| 101 | `1e6482` | Configure production Telegram, Google and API keys (with the founder) 🤝       | `071e49`, `2ca5a6`, `ef5b35`                                                                                                                                   |
+| 102 | `1867ba` | Run one-off admin commands in production                                       | `071e49`                                                                                                                                                       |
+| 103 | `f2ce33` | Restore a user's VM from a snapshot                                            | `550446`, `b9062e`                                                                                                                                             |
+| 104 | `c0cba0` | Go live: first production deploy and end-to-end check (with the founder) 🤝    | `0e0c6c`, `1867ba`, `1e6482`, `22f09d`, `3f95f4`, `550446`, `6882fb`, `68fe0c`, `8d94b2`, `a4de0d`, `bbfa17`, `d4bb0d`, `e1a361`, `ebd998`, `ee16f5`, `f661c5` |
 
 ### M5 — Mail & calendar
 
@@ -180,17 +182,17 @@ Winston reads and acts on mail and calendars through `winston mail`, `winston ca
 
 | #   | Ticket   | Title                                                                    | Blocked by                   |
 | --- | -------- | ------------------------------------------------------------------------ | ---------------------------- |
-| 103 | `480aff` | Build the connector framework: providers, permission enforcement and the | `6882fb`, `8251fd`, `89a2b0` |
-| 104 | `6af84b` | Read mail from Gmail                                                     | `480aff`                     |
-| 105 | `fc5532` | Add winston mail list, search, get and download                          | `253db2`, `6af84b`           |
-| 106 | `d66d10` | Send, reply, forward and organize mail via Gmail                         | `6af84b`                     |
-| 107 | `837a29` | Add winston mail send, reply, forward, update and delete                 | `d66d10`, `fc5532`           |
-| 108 | `403364` | Read calendars from Google Calendar                                      | `480aff`                     |
-| 109 | `cfff20` | Create, update, delete and RSVP to calendar events                       | `403364`                     |
-| 110 | `c7b3fa` | Add the winston calendar commands                                        | `253db2`, `cfff20`           |
-| 111 | `fe870e` | Add winston accounts and the generic winston get                         | `480aff`                     |
-| 112 | `cca55d` | Decide which account settings Winston can change through the CLI 🤝      | `988f4d`, `fe870e`           |
-| 113 | `f6613f` | Teach Winston confirm-first and how to use mail and calendar             | `837a29`, `c7b3fa`, `fe870e` |
+| 105 | `480aff` | Build the connector framework: providers, permission enforcement and the | `6882fb`, `8251fd`, `89a2b0` |
+| 106 | `6af84b` | Read mail from Gmail                                                     | `480aff`                     |
+| 107 | `fc5532` | Add winston mail list, search, get and download                          | `253db2`, `6af84b`           |
+| 108 | `d66d10` | Send, reply, forward and organize mail via Gmail                         | `6af84b`                     |
+| 109 | `837a29` | Add winston mail send, reply, forward, update and delete                 | `d66d10`, `fc5532`           |
+| 110 | `403364` | Read calendars from Google Calendar                                      | `480aff`                     |
+| 111 | `cfff20` | Create, update, delete and RSVP to calendar events                       | `403364`                     |
+| 112 | `c7b3fa` | Add the winston calendar commands                                        | `253db2`, `cfff20`           |
+| 113 | `fe870e` | Add winston accounts and the generic winston get                         | `480aff`                     |
+| 114 | `cca55d` | Decide which account settings Winston can change through the CLI 🤝      | `988f4d`, `fe870e`           |
+| 115 | `f6613f` | Teach Winston confirm-first and how to use mail and calendar             | `837a29`, `c7b3fa`, `fe870e` |
 
 ### M6 — Background agents
 
@@ -198,16 +200,16 @@ Durable background agents: delegation, results through the front of house, `wins
 
 | #   | Ticket   | Title                                                            | Blocked by                   |
 | --- | -------- | ---------------------------------------------------------------- | ---------------------------- |
-| 114 | `64a47f` | Build the durable background-run engine                          | `36a9c9`, `68e9cc`, `737b8c` |
-| 115 | `ea88cd` | Write the background agent's system prompt                       | `64a47f`                     |
-| 116 | `438b86` | Let the front of house delegate work                             | `64a47f`, `ea88cd`           |
-| 117 | `1fd02f` | Report background results back through the front of house        | `438b86`                     |
-| 118 | `6abd88` | Add winston task list, get, cancel and resume                    | `1fd02f`, `fe870e`           |
-| 119 | `ac0f5f` | Park runs on handoff and resume them                             | `6abd88`                     |
-| 120 | `5714b6` | Compact long background runs by summarization                    | `64a47f`                     |
-| 121 | `5cd9eb` | Cap front-of-house turns and hand the rest to a background agent | `438b86`                     |
-| 122 | `12c38a` | Let runs raise their own effort                                  | `6abd88`                     |
-| 123 | `77ebe8` | Make background runs safe across crashes and deploys             | `64a47f`, `d66d10`           |
+| 116 | `64a47f` | Build the durable background-run engine                          | `36a9c9`, `68e9cc`, `737b8c` |
+| 117 | `ea88cd` | Write the background agent's system prompt                       | `64a47f`                     |
+| 118 | `438b86` | Let the front of house delegate work                             | `64a47f`, `ea88cd`           |
+| 119 | `1fd02f` | Report background results back through the front of house        | `438b86`                     |
+| 120 | `6abd88` | Add winston task list, get, cancel and resume                    | `1fd02f`, `fe870e`           |
+| 121 | `ac0f5f` | Park runs on handoff and resume them                             | `6abd88`                     |
+| 122 | `5714b6` | Compact long background runs by summarization                    | `64a47f`                     |
+| 123 | `5cd9eb` | Cap front-of-house turns and hand the rest to a background agent | `438b86`                     |
+| 124 | `12c38a` | Let runs raise their own effort                                  | `6abd88`                     |
+| 125 | `77ebe8` | Make background runs safe across crashes and deploys             | `64a47f`, `d66d10`           |
 
 ### M7 — Triggers & events
 
@@ -215,21 +217,21 @@ Proactivity: the event catalog, triggers (schedules and subscriptions), push not
 
 | #   | Ticket   | Title                                                       | Blocked by                   |
 | --- | -------- | ----------------------------------------------------------- | ---------------------------- |
-| 124 | `9c407f` | Define the event catalog and events table                   | `480aff`                     |
-| 125 | `88f5ee` | Add trigger tables and encode the trigger lifecycle         | `9c407f`                     |
-| 126 | `595766` | Add winston trigger create, list, get, update and delete    | `253db2`, `88f5ee`           |
-| 127 | `3f6521` | Start background runs from fired triggers                   | `1fd02f`, `88f5ee`           |
-| 128 | `e79d1c` | Run the trigger scheduler                                   | `3f6521`                     |
-| 129 | `9751a9` | Manage the GCP Pub/Sub setup with Terraform                 | `e1a361`, `ef5b35`           |
-| 130 | `70194e` | Receive Gmail push notifications and keep watches alive     | `9751a9`, `9c407f`           |
-| 131 | `f81278` | Turn Gmail history into mail events                         | `6af84b`, `70194e`           |
-| 132 | `a2d498` | Receive Calendar push notifications and keep channels alive | `403364`, `9c407f`           |
-| 133 | `6a3656` | Turn calendar changes into calendar events                  | `a2d498`                     |
-| 134 | `16b185` | Reconcile connections periodically                          | `6a3656`, `f81278`           |
-| 135 | `463072` | Match events to subscriptions and fire them in batches      | `3f6521`, `6a3656`, `f81278` |
-| 136 | `4da088` | Fire calendar.event.starting from derived timers            | `463072`, `e79d1c`           |
-| 137 | `0512b5` | Wire the system events into subscriptions                   | `463072`, `89a2b0`, `988f4d` |
-| 138 | `fa537d` | Teach Winston to use triggers well                          | `0512b5`, `4da088`, `595766` |
+| 126 | `9c407f` | Define the event catalog and events table                   | `480aff`                     |
+| 127 | `88f5ee` | Add trigger tables and encode the trigger lifecycle         | `9c407f`                     |
+| 128 | `595766` | Add winston trigger create, list, get, update and delete    | `253db2`, `88f5ee`           |
+| 129 | `3f6521` | Start background runs from fired triggers                   | `1fd02f`, `88f5ee`           |
+| 130 | `e79d1c` | Run the trigger scheduler                                   | `3f6521`                     |
+| 131 | `9751a9` | Manage the GCP Pub/Sub setup with Terraform                 | `e1a361`, `ef5b35`           |
+| 132 | `70194e` | Receive Gmail push notifications and keep watches alive     | `9751a9`, `9c407f`           |
+| 133 | `f81278` | Turn Gmail history into mail events                         | `6af84b`, `70194e`           |
+| 134 | `a2d498` | Receive Calendar push notifications and keep channels alive | `403364`, `9c407f`           |
+| 135 | `6a3656` | Turn calendar changes into calendar events                  | `a2d498`                     |
+| 136 | `16b185` | Reconcile connections periodically                          | `6a3656`, `f81278`           |
+| 137 | `463072` | Match events to subscriptions and fire them in batches      | `3f6521`, `6a3656`, `f81278` |
+| 138 | `4da088` | Fire calendar.event.starting from derived timers            | `463072`, `e79d1c`           |
+| 139 | `0512b5` | Wire the system events into subscriptions                   | `463072`, `89a2b0`, `988f4d` |
+| 140 | `fa537d` | Teach Winston to use triggers well                          | `0512b5`, `4da088`, `595766` |
 
 ### M8 — Browser
 
@@ -237,19 +239,19 @@ The browser: Chrome on the VM, `winston browser`, domain locks, handoff links wi
 
 | #   | Ticket   | Title                                                                        | Blocked by                             |
 | --- | -------- | ---------------------------------------------------------------------------- | -------------------------------------- |
-| 139 | `63475d` | Run Chrome on the VM under systemd                                           | `961613`, `ce9145`                     |
-| 140 | `6b73c4` | Connect the CLI to Chrome and manage agent windows                           | `63475d`, `fe870e`                     |
-| 141 | `5f5b39` | Snapshot pages as compact element lists with refs                            | `6b73c4`                               |
-| 142 | `0451df` | Act on pages: click, type, select, press, scroll, wait                       | `5f5b39`                               |
-| 143 | `1d60a8` | Add browser screenshot and eval                                              | `6b73c4`                               |
-| 144 | `17f478` | Lock websites per agent to avoid collisions                                  | `0451df`                               |
-| 145 | `f0507c` | Create handoff links and stream a tab's screencast                           | `6b73c4`, `ac0f5f`                     |
-| 146 | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
-| 147 | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
-| 148 | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |
-| 149 | `91faf5` | Add browser autopilot, the Jev fast path                                     | `0451df`, `17f478`, `b782bc`           |
-| 150 | `3d5f3d` | Teach Winston to browse well                                                 | `1d60a8`, `732b45`, `91faf5`, `ff4636` |
-| 151 | `26dfa2` | Exercise real browser tasks end to end (with the founder) 🤝                 | `3d5f3d`, `63475d`                     |
+| 141 | `63475d` | Run Chrome on the VM under systemd                                           | `961613`, `ce9145`                     |
+| 142 | `6b73c4` | Connect the CLI to Chrome and manage agent windows                           | `63475d`, `fe870e`                     |
+| 143 | `5f5b39` | Snapshot pages as compact element lists with refs                            | `6b73c4`                               |
+| 144 | `0451df` | Act on pages: click, type, select, press, scroll, wait                       | `5f5b39`                               |
+| 145 | `1d60a8` | Add browser screenshot and eval                                              | `6b73c4`                               |
+| 146 | `17f478` | Lock websites per agent to avoid collisions                                  | `0451df`                               |
+| 147 | `f0507c` | Create handoff links and stream a tab's screencast                           | `6b73c4`, `ac0f5f`                     |
+| 148 | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
+| 149 | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
+| 150 | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |
+| 151 | `91faf5` | Add browser autopilot, the Jev fast path                                     | `0451df`, `17f478`, `b782bc`           |
+| 152 | `3d5f3d` | Teach Winston to browse well                                                 | `1d60a8`, `732b45`, `91faf5`, `ff4636` |
+| 153 | `26dfa2` | Exercise real browser tasks end to end (with the founder) 🤝                 | `3d5f3d`, `63475d`                     |
 
 ### M9 — Rounding out
 
@@ -257,8 +259,8 @@ History search, cost reporting, prompt polish from real use (with the founder), 
 
 | #   | Ticket   | Title                                                                  | Blocked by                   |
 | --- | -------- | ---------------------------------------------------------------------- | ---------------------------- |
-| 152 | `35c1ed` | Add winston history search and get                                     | `1fd02f`, `d66d10`, `fe870e` |
-| 153 | `46ee9b` | Report per-user spend                                                  | `0e0c6c`, `1867ba`, `b782bc` |
-| 154 | `62e3d2` | Review and refine the prompts from real use (with the founder) 🤝      | `26dfa2`, `35c1ed`, `fa537d` |
-| 155 | `1796c0` | Stream replies with Telegram rich message drafts (with the founder) 🤝 | `d3a1a9`                     |
-| 156 | `503aaa` | Bring the docs in line with what was built                             | `46ee9b`, `62e3d2`           |
+| 154 | `35c1ed` | Add winston history search and get                                     | `1fd02f`, `d66d10`, `fe870e` |
+| 155 | `46ee9b` | Report per-user spend                                                  | `0e0c6c`, `1867ba`, `b782bc` |
+| 156 | `62e3d2` | Review and refine the prompts from real use (with the founder) 🤝      | `26dfa2`, `35c1ed`, `fa537d` |
+| 157 | `1796c0` | Stream replies with Telegram rich message drafts (with the founder) 🤝 | `d3a1a9`                     |
+| 158 | `503aaa` | Bring the docs in line with what was built                             | `46ee9b`, `62e3d2`           |
