@@ -43,6 +43,9 @@ export const serviceSecrets = {
   gateway: {
     GATEWAY_INTERNAL_SECRET: "gateway-internal-secret",
     RUN_TOKEN_SECRET: "run-token-secret",
+    // Trading connected accounts' refresh tokens for access tokens (mail, calendar).
+    GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
+    GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
   },
   web: {
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],

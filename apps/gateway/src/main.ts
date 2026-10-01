@@ -2,7 +2,11 @@
  * The gateway service: holds every VM's websocket, registers new VMs, and
  * serves the internal API (docs/design.md §9, §15).
  */
+import { googleAccessTokens } from "@winston/connectors/access-token";
+import { gmailReader } from "@winston/connectors/gmail";
+import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
+import { createTokenVault } from "@winston/shared/token-vault";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
 import { loadGatewayConfig } from "./config.ts";
@@ -18,6 +22,16 @@ const logger = createLogger("gateway", {
 const db = createDb(config.DATABASE_URL, {
   rdsSecretArn: config.DATABASE_SECRET_ARN,
 });
+// Connected accounts' access tokens, for mail and calendar calls (§12a).
+const accessToken = googleAccessTokens({
+  db,
+  vault: createTokenVault(config),
+  client: {
+    clientId: config.GOOGLE_OAUTH_CLIENT_ID,
+    clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
+  },
+  reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
+});
 const gateway = createGateway({
   db,
   logger,
@@ -26,6 +40,14 @@ const gateway = createGateway({
   ...(config.ARTIFACTS_BUCKET
     ? { artifacts: s3Artifacts(config.ARTIFACTS_BUCKET) }
     : {}),
+  connectors: {
+    webPublicUrl: config.WEB_PUBLIC_URL,
+    mail: (connection) =>
+      gmailReader({
+        address: connection.externalEmail,
+        accessToken: () => accessToken(connection.id),
+      }),
+  },
 });
 // New VM binaries reach connected VMs within a minute of being published.
 const refreshUpdates = () => {

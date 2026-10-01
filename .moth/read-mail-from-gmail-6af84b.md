@@ -1,13 +1,13 @@
 ---
 id: "6af84b"
 title: Read mail from Gmail
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - m5
 created_at: 2026-09-27T05:37:39.115Z
-updated_at: 2026-09-27T05:37:39.149Z
+updated_at: 2026-10-01T16:16:30.648Z
 blocked_by:
   - "480aff"
 ---
@@ -33,3 +33,5 @@ Behaviour:
 - **download:** fetch attachments and write them to the VM (`~/downloads` by default) through the file API. Return the paths.
 
 Tests against **recorded Gmail API responses** (fixtures you capture once from a real account, with personal data scrubbed): filter-to-query translation, MIME parsing on tricky real messages, HTML-to-text, and pagination.
+
+**Done (2026-10-01):** fixtures are synthetic, shaped exactly like Gmail's responses, rather than captured from a real account (no one's mail in the repository). Metadata is fetched in parallel instead of through the batch endpoint. Attachments save onto the VM through the gateway's file transfer (frames cap at 1 MiB). The gateway now decrypts tokens (it hosts the VM-facing API).

@@ -36,10 +36,11 @@ describe("secrets", () => {
     expect(namesFor("gateway").has("openrouter-api-key")).toBe(false);
     expect([...namesFor("gateway")].sort()).toEqual([
       "gateway-internal-secret",
+      "google-oauth",
       "run-token-secret",
     ]);
-    // Only the site signs people in with Google today.
-    for (const service of ["api", "agents", "gateway"] as const)
+    // The site signs people in; the gateway refreshes connected accounts' tokens.
+    for (const service of ["api", "agents"] as const)
       expect(namesFor(service).has("google-oauth")).toBe(false);
   });
 

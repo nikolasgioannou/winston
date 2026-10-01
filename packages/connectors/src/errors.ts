@@ -17,3 +17,8 @@ export class NotSupportedError extends Error {
 export class ProviderNotFoundError extends Error {
   override name = "ProviderNotFoundError";
 }
+
+/** The provider is rate-limiting or down; trying again later is safe (exit 5). */
+export class ProviderUnavailableError extends Error {
+  override name = "ProviderUnavailableError";
+}

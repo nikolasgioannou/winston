@@ -1,6 +1,7 @@
 import { dbConfigSchema } from "@winston/db/config";
 import { loadConfig } from "@winston/shared/config";
 import { logConfigSchema } from "@winston/shared/logger";
+import { tokenVaultConfigSchema } from "@winston/shared/token-vault";
 import { z } from "zod";
 
 const gatewayConfigSchema = dbConfigSchema.extend({
@@ -13,6 +14,13 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   RUN_TOKEN_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+  /** Opens connected accounts' tokens for mail and calendar calls (KMS in production). */
+  ...tokenVaultConfigSchema.shape,
+  /** The Google OAuth client, for trading refresh tokens for access tokens. */
+  GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
+  /** The site, for links in errors (permission toggles, reconnecting). */
+  WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
   /** Production: the bucket VM binaries are published to (self-update). */
   ARTIFACTS_BUCKET: z.string().min(1).optional(),
   GATEWAY_INTERNAL_SECRET: z

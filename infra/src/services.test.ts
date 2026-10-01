@@ -107,7 +107,7 @@ describe("services stack", () => {
     expect(all).not.toContain("/internal");
   });
 
-  test("only api and agents may decrypt tokens; web may only seal them", () => {
+  test("api, agents and the gateway may decrypt tokens; web may only seal them", () => {
     const policies = template.findResources("AWS::IAM::Policy");
     const actionsFor = (service: Service) => {
       const role = services.resolve(
@@ -134,7 +134,9 @@ describe("services stack", () => {
       expect(actionsFor(service)).toContain("kms:Decrypt");
     expect(actionsFor("web")).toContain("kms:GenerateDataKey");
     expect(actionsFor("web")).not.toContain("kms:Decrypt");
-    expect(actionsFor("gateway").some((a) => a.startsWith("kms:"))).toBe(false);
+    // The gateway opens tokens for mail and calendar calls, but never seals.
+    expect(actionsFor("gateway")).toContain("kms:Decrypt");
+    expect(actionsFor("gateway")).not.toContain("kms:GenerateDataKey");
     for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
     expect(actionsFor("agents")).toContain("s3:PutObject");

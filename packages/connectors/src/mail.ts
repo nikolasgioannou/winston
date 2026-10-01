@@ -47,6 +47,8 @@ export interface FullMailMessage extends MailMessage {
   body: string;
   references: string[];
   replyTo: MailAddress[];
+  /** Quoted earlier messages were left out of `body`. */
+  quotedTextHidden: boolean;
 }
 
 export interface MailThread {
@@ -113,7 +115,10 @@ export interface MailChanges {
   removeLabels?: string[] | undefined;
 }
 
-export interface MailProvider {
+/** Reading mail: what every provider can do with the `read` capability. */
+export interface MailReader {
+  /** The account's own address, for "from" and for telling self from others. */
+  readonly address: string;
   /** Messages matching the filters, newest first (`list` and `search`). */
   list(
     filter: MailFilter,
@@ -121,14 +126,17 @@ export interface MailProvider {
   ): Promise<Page<MailMessage>>;
   getMessage(messageId: string): Promise<FullMailMessage>;
   getThread(threadId: string): Promise<MailThread>;
+  /** An attachment by its `MailAttachment.providerId`. */
   getAttachment(
-    messageId: string,
     attachmentId: string,
   ): Promise<{ filename: string; mimeType: string; data: Uint8Array }>;
+}
+
+/** Reading and writing mail. */
+export interface MailProvider extends MailReader {
   send(mail: OutgoingMail): Promise<SentMail>;
   createDraft(mail: OutgoingMail): Promise<MailDraft>;
   sendDraft(draftId: string): Promise<SentMail>;
-  /** The draft a message id belongs to, if it's a draft. */
   getDraft(draftId: string): Promise<FullMailMessage>;
   modify(
     target: { messages?: string[]; threads?: string[] },
@@ -140,6 +148,4 @@ export interface MailProvider {
     threads?: string[];
     drafts?: string[];
   }): Promise<void>;
-  /** The account's own address, for "from" and for telling self from others. */
-  readonly address: string;
 }

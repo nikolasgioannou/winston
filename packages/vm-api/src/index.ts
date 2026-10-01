@@ -9,23 +9,15 @@
 import type { DbOrTx } from "@winston/db/client";
 import { users } from "@winston/db/schema";
 import { apiError, apiErrors } from "@winston/domain/api-errors";
-import { verifyRunToken, type RunKind } from "@winston/domain/run-token";
+import { verifyRunToken } from "@winston/domain/run-token";
 import { updateProfile } from "@winston/db/profile";
 import { isTimeZone } from "@winston/shared/time";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { toApiFailure, type ConnectorDeps } from "./connections.ts";
+import type { VmApiEnv } from "./env.ts";
+import { mailRoutes, type VmFiles } from "./mail.ts";
 import { z } from "zod";
-
-export interface VmApiEnv {
-  Bindings: {
-    /** The user whose VM's websocket carried this request. Set by the gateway, never by the caller. */
-    vmUserId: string;
-  };
-  Variables: {
-    run: { userId: string; runId: string; runKind: RunKind };
-  };
-}
 
 const meUpdate = z.object({
   timezone: z
@@ -37,9 +29,12 @@ export function createVmApi({
   db,
   runTokenSecret,
   connectors,
+  vmFiles,
 }: {
   db: DbOrTx;
   runTokenSecret: string;
+  /** Writing files onto the user's VM (attachments): the gateway's file transfer. */
+  vmFiles?: VmFiles;
   /** Mail and calendar (docs/design.md §5); absent where nothing is connected, as in some tests. */
   connectors?: ConnectorDeps;
 }) {
@@ -131,8 +126,11 @@ export function createVmApi({
       );
       const [me] = await selectMe(userId);
       return c.json(me);
-    });
+    })
+    .route("/v1/mail", mailRoutes({ db, connectors, vmFiles }));
 }
+
+export type { VmApiEnv } from "./env.ts";
 
 /** The API's type, for the CLI's typed client (Hono RPC). */
 export type VmApi = ReturnType<typeof createVmApi>;

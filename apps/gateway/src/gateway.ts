@@ -2,10 +2,12 @@ import type { DbOrTx } from "@winston/db/client";
 import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
-import { sql } from "drizzle-orm";
+import { vms } from "@winston/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
-import { createExecs } from "./execs.ts";
+import type { ConnectorDeps } from "@winston/vm-api/connections";
+import { createExecs, VmUnavailableError } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
 import { internalRoutes } from "./internal.ts";
 import { createUpdates, type UpdatesOptions } from "./updates.ts";
@@ -33,6 +35,7 @@ export function createGateway({
   internalSecret,
   runTokenSecret,
   artifacts,
+  connectors,
 }: {
   db: DbOrTx;
   logger: Logger;
@@ -41,8 +44,9 @@ export function createGateway({
   runTokenSecret: string;
   /** Where published VM binaries come from (production); none locally. */
   artifacts?: Pick<UpdatesOptions, "loadManifest" | "presign">;
+  /** Mail and calendar providers for the VM-facing API. */
+  connectors?: ConnectorDeps;
 }) {
-  const vmApi = createVmApi({ db, runTokenSecret });
   const connections = new Connections<VmSocket>();
   /** Sends a frame to a VM's live connection; returns that socket, or undefined if it isn't connected. */
   const sendTo = (vmId: string, frame: GatewayToVmFrame) => {
@@ -59,6 +63,22 @@ export function createGateway({
     logger,
   });
   const files = createFileTransfers(sendTo);
+  const vmApi = createVmApi({
+    db,
+    runTokenSecret,
+    ...(connectors ? { connectors } : {}),
+    vmFiles: {
+      // Attachments land on the user's VM through the file transfer.
+      async write(userId, path, bytes) {
+        const [vm] = await db
+          .select({ id: vms.id })
+          .from(vms)
+          .where(eq(vms.userId, userId));
+        if (!vm) throw new VmUnavailableError();
+        return files.write(vm.id, path, bytes);
+      },
+    },
+  });
   const internal = internalRoutes({
     db,
     secret: internalSecret,

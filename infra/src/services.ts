@@ -132,6 +132,8 @@ export class ServicesStack extends Stack {
         GATEWAY_HOST: "0.0.0.0",
         GATEWAY_PORT: String(servicePorts.gateway),
         ARTIFACTS_BUCKET: props.artifacts.bucketName,
+        TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
+        WEB_PUBLIC_URL: publicUrl,
       },
       web: {
         WEB_HOST: "0.0.0.0",
@@ -237,13 +239,15 @@ export class ServicesStack extends Stack {
     });
     databaseSecret.grantRead(this.opsTaskDefinition.taskRole);
 
-    // Tokens: api and agents read and write them; web only seals new ones.
+    // Tokens: api and agents read and write them, the gateway reads them for
+    // mail and calendar calls, and web only seals new ones.
     for (const service of ["api", "agents"] as const)
       props.tokensKey.grant(
         taskDefinitions[service].taskRole,
         "kms:Decrypt",
         "kms:GenerateDataKey",
       );
+    props.tokensKey.grant(taskDefinitions.gateway.taskRole, "kms:Decrypt");
     props.tokensKey.grant(taskDefinitions.web.taskRole, "kms:GenerateDataKey");
     // agents runs users' VMs (the EC2 VmProvider).
     taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);

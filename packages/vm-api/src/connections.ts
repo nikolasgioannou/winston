@@ -22,8 +22,10 @@ import type { CalendarProvider } from "@winston/connectors/calendar";
 import {
   NotSupportedError,
   ProviderNotFoundError,
+  ProviderUnavailableError,
 } from "@winston/connectors/errors";
-import type { MailProvider } from "@winston/connectors/mail";
+import type { MailReader } from "@winston/connectors/mail";
+import { TimeParseError } from "@winston/shared/human-time";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 export type ConnectionRow = typeof connections.$inferSelect;
@@ -163,8 +165,9 @@ const capitalize = (text: string) =>
 /** What the connector routes need: providers per connection, and the site's address for links. */
 export interface ConnectorDeps {
   webPublicUrl: string;
-  mail: (connection: ConnectionRow) => MailProvider;
-  calendar: (connection: ConnectionRow) => CalendarProvider;
+  mail: (connection: ConnectionRow) => MailReader;
+  /** Absent until Google Calendar is wired (M5). */
+  calendar?: (connection: ConnectionRow) => CalendarProvider;
 }
 
 /**
@@ -185,6 +188,14 @@ export function toApiFailure(
       "not_found",
       error.message,
       "Check the id: list or search to find it again.",
+    );
+  if (error instanceof TimeParseError)
+    return new ApiFailure("invalid_request", error.message, error.hint);
+  if (error instanceof ProviderUnavailableError)
+    return new ApiFailure(
+      "unavailable",
+      error.message,
+      "Try again in a minute.",
     );
   if (error instanceof ConnectionUnavailableError)
     return new ApiFailure(
