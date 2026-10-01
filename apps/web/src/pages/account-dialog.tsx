@@ -8,7 +8,6 @@ import {
   Button,
   Callout,
   Card,
-  ConfirmDialog,
   Dialog,
   SettingRow,
   Switch,
@@ -27,13 +26,8 @@ export interface AccountDialogProps {
   /** Toggles as they show, including ones still saving. */
   capabilities: ConnectionDto["capabilities"];
   onToggle: (capability: Capability, enabled: boolean) => void;
-  onDisconnect: () => void;
-  /** Opens the disconnect confirmation, for the dev design view. */
-  confirmingDisconnect?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The tab shown first, for the dev design view. */
-  defaultTab?: "permissions" | "connection";
 }
 
 const capabilityCopy: Record<
@@ -69,9 +63,9 @@ const readCopy: Record<ConnectionDto["domain"], string> = {
 };
 
 /**
- * One connected account, in a dialog over `/accounts` (docs/design.md §20),
- * in two tabs: Permissions (the toggles the server enforces) and Connection
- * (reconnect, disconnect).
+ * One connected account's permissions, in a dialog over `/accounts`
+ * (docs/design.md §20): the toggles the server enforces. Reconnecting and
+ * disconnecting are in the account's ⋯ menu.
  */
 export function AccountDialog(props: AccountDialogProps) {
   const { account, open, onOpenChange } = props;
@@ -89,47 +83,7 @@ export function AccountDialog(props: AccountDialogProps) {
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      {...(props.defaultTab ? { defaultTab: props.defaultTab } : {})}
-      tabs={[
-        {
-          value: "permissions",
-          label: "Permissions",
-          content: (
-            <Card>
-              {capabilitiesByDomain[account.domain].map((capability) => (
-                <CapabilityRow
-                  key={capability}
-                  capability={capability}
-                  domain={account.domain}
-                  {...props}
-                  disabled={disconnected}
-                  reconnect={reconnect}
-                />
-              ))}
-            </Card>
-          ),
-        },
-        {
-          value: "connection",
-          label: "Connection",
-          content: (
-            <Card>
-              <SettingRow
-                label="Reconnect"
-                description="Sign in to Google again, for example to grant a permission you left out."
-                control={reconnect}
-              />
-              {!disconnected && (
-                <SettingRow
-                  label="Disconnect"
-                  description="Winston stops using this account, and its access is revoked with Google."
-                  control={<DisconnectButton {...props} />}
-                />
-              )}
-            </Card>
-          ),
-        },
-      ]}
+
       title={account.externalEmail}
       icon={<ProviderIcon provider={account.provider} />}
       description={
@@ -140,6 +94,18 @@ export function AccountDialog(props: AccountDialogProps) {
       }
     >
       <StatusCallout status={account.status} action={reconnect} />
+      <Card>
+        {capabilitiesByDomain[account.domain].map((capability) => (
+          <CapabilityRow
+            key={capability}
+            capability={capability}
+            domain={account.domain}
+            {...props}
+            disabled={disconnected}
+            reconnect={reconnect}
+          />
+        ))}
+      </Card>
     </Dialog>
   );
 }
@@ -214,23 +180,6 @@ function CapabilityRow({
           }}
         />
       }
-    />
-  );
-}
-
-function DisconnectButton({
-  account,
-  onDisconnect,
-  confirmingDisconnect,
-}: AccountDialogProps) {
-  return (
-    <ConfirmDialog
-      {...(confirmingDisconnect ? { defaultOpen: true } : {})}
-      trigger={<Button variant="danger">Disconnect</Button>}
-      title={`Disconnect ${account.externalEmail}?`}
-      description={`Winston stops using ${account.externalEmail}, and its access is revoked with Google. You can connect it again any time.`}
-      confirmLabel="Disconnect"
-      onConfirm={onDisconnect}
     />
   );
 }

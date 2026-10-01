@@ -14,6 +14,8 @@ export { ConfirmDialog } from "./dialog";
 export { Dialog, type DialogTab } from "./dialog-panel";
 export { EmptyState, ErrorState } from "./empty-state";
 export { Select, type SelectOption, type SelectProps } from "./select";
+export { IconButton } from "./icon-button";
+export { Menu, type MenuAction } from "./menu";
 export { IconTile, Page, PageHeader } from "./page";
 export { QrCode } from "./qr-code";
 export { Section, SettingRow } from "./settings";

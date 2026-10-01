@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { hashToken } from "@winston/shared/tokens";
-import { telegramLinkTokens } from "./schema/index.ts";
+import { telegramLinks, telegramLinkTokens } from "./schema/index.ts";
 import {
   consumeLinkToken,
   isLinkTokenFormat,
   issueLinkToken,
   linkTokenLifetimeMs,
+  unlinkTelegram,
 } from "./telegram-link-tokens.ts";
 import { inRollback, insertUser, testDb } from "./testing.ts";
 
@@ -79,6 +80,19 @@ describe("Telegram link tokens", () => {
       await issueLinkToken(tx, user.id, now);
       await issueLinkToken(tx, user.id, later(linkTokenLifetimeMs + 1));
       expect(await tx.select().from(telegramLinkTokens)).toHaveLength(1);
+    });
+  });
+});
+
+describe("unlinkTelegram", () => {
+  test("removes the user's chat, once", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await tx
+        .insert(telegramLinks)
+        .values({ userId: user.id, chatId: 4242, telegramUserId: 4242 });
+      expect(await unlinkTelegram(tx, user.id)).toBe(true);
+      expect(await unlinkTelegram(tx, user.id)).toBe(false);
     });
   });
 });

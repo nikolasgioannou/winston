@@ -33,11 +33,16 @@ export async function telegramLinkOf(
   const [link] = await db
     .select({
       username: telegramLinks.username,
+      displayName: telegramLinks.displayName,
       linkedAt: telegramLinks.linkedAt,
     })
     .from(telegramLinks)
     .where(eq(telegramLinks.userId, userId));
   return link
-    ? { username: link.username, linkedAt: link.linkedAt.toISOString() }
+    ? {
+        username: link.username,
+        displayName: link.displayName,
+        linkedAt: link.linkedAt.toISOString(),
+      }
     : null;
 }

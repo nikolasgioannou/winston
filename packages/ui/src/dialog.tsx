@@ -17,8 +17,11 @@ export function ConfirmDialog({
   onConfirm,
   defaultOpen,
   confirmText,
+  open,
+  onOpenChange,
 }: {
-  trigger: ReactNode;
+  /** The button that opens it; leave it out to control it with `open`. */
+  trigger?: ReactNode;
   title: ReactNode;
   description: ReactNode;
   confirmLabel: string;
@@ -27,6 +30,8 @@ export function ConfirmDialog({
   defaultOpen?: boolean;
   /** What the user must type to confirm, e.g. "delete". */
   confirmText?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [typed, setTyped] = useState("");
   const confirmed =
@@ -35,17 +40,21 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root
       {...(defaultOpen ? { defaultOpen } : {})}
-      onOpenChange={() => {
+      {...(open !== undefined ? { open } : {})}
+      onOpenChange={(next) => {
         setTyped("");
+        onOpenChange?.(next);
       }}
     >
-      <AlertDialog.Trigger
-        // The trigger is the button passed in; this wrapper only hosts it.
-        nativeButton={false}
-        render={<span className="contents" />}
-      >
-        {trigger}
-      </AlertDialog.Trigger>
+      {trigger !== undefined && (
+        <AlertDialog.Trigger
+          // The trigger is the button passed in; this wrapper only hosts it.
+          nativeButton={false}
+          render={<span className="contents" />}
+        >
+          {trigger}
+        </AlertDialog.Trigger>
+      )}
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 bg-backdrop transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <AlertDialog.Popup className="fixed top-1/2 left-1/2 flex w-[min(400px,calc(100vw-32px))] -translate-1/2 flex-col gap-4 rounded-xl bg-surface-raised p-6 text-fg shadow-dialog transition-[opacity,scale] duration-200 outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">

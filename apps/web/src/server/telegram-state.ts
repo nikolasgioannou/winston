@@ -2,6 +2,8 @@
 export interface TelegramLinkState {
   /** The Telegram @username, if the user has one. */
   username: string | null;
+  /** The account's display name (first and last name). */
+  displayName: string | null;
   /** When it was linked; a relink changes it. */
   linkedAt: string;
 }

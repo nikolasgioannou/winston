@@ -60,8 +60,34 @@ function Accounts() {
     void navigate({ to: "/accounts", search: {}, replace: true });
   }, [connected, error, connections, navigate]);
 
+  const disconnect = (connectionId: string) => {
+    const connection = connections.find((c) => c.id === connectionId);
+    void disconnectAccount({ data: { id: connectionId } })
+      .then(async () => {
+        await router.invalidate();
+        toast.success(
+          `Disconnected ${connection?.externalEmail ?? "the account"}`,
+        );
+      })
+      .catch(() => {
+        toast.error("Couldn't disconnect. Please try again.");
+      });
+  };
+
   return (
-    <AccountsPage connections={connections}>
+    <AccountsPage
+      connections={connections}
+      onManage={(connectionId) => {
+        void navigate({ to: "/accounts", search: { account: connectionId } });
+      }}
+      onReconnect={(connectionId) => {
+        // Connecting starts on the server, so this is a full page load.
+        window.location.assign(
+          `/auth/google/connect?reconnect=${connectionId}`,
+        );
+      }}
+      onDisconnect={disconnect}
+    >
       {open && (
         <AccountDialog
           key={open.account.id}
@@ -71,16 +97,6 @@ function Accounts() {
           onToggle={(capability, enabled) =>
             void editing.toggle(capability, enabled)
           }
-          onDisconnect={() => {
-            void disconnectAccount({ data: { id: open.account.id } })
-              .then(async () => {
-                await router.invalidate();
-                toast.success(`Disconnected ${open.account.externalEmail}`);
-              })
-              .catch(() => {
-                toast.error("Couldn't disconnect. Please try again.");
-              });
-          }}
           open
           onOpenChange={(next) => {
             if (!next) void navigate({ to: "/accounts", search: {} });

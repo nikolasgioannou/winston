@@ -1,0 +1,1 @@
+ALTER TABLE "telegram_links" ADD COLUMN "display_name" text;

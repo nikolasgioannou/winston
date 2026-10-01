@@ -2,15 +2,19 @@ import type { ProfileUpdateResult } from "@winston/db/profile";
 import {
   Button,
   ConfirmDialog,
+  IconButton,
+  Menu,
   Page,
   PageHeader,
   Section,
   SettingRow,
+  StatusPill,
   TelegramIcon,
   TextField,
 } from "@winston/ui";
+import { MoreHorizontal } from "lucide-react";
 import { useRef, useState } from "react";
-import { TelegramButton, TelegramQr } from "../components/telegram-connect";
+import { TelegramConnectDialog } from "../components/telegram-connect";
 import type { TelegramLinkState } from "../server/telegram-state";
 
 export interface ProfilePageProps {
@@ -27,9 +31,12 @@ export interface ProfilePageProps {
   telegram: TelegramLinkState | null;
   /** The Connect Telegram link while connecting (null until issued). */
   telegramLink: string | null;
-  /** Linking a different Telegram account, which replaces the current one. */
-  relinking: boolean;
-  onRelinkingChange: (relinking: boolean) => void;
+  /** The connect dialog is open (connecting, or changing the account). */
+  connecting: boolean;
+  onConnectingChange: (connecting: boolean) => void;
+  onDisconnectTelegram: () => void;
+  /** Opens the disconnect confirmation, for the dev design view. */
+  confirmingTelegramDisconnect?: boolean;
 }
 
 /** Fields beside their labels share one width. */
@@ -150,68 +157,101 @@ function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
   );
 }
 
+/**
+ * Channels: the ways the user reaches Winston, laid out like connected
+ * accounts. Just Telegram for now; an email address for Winston would join it.
+ */
 function TelegramCard({
   telegram,
   telegramLink,
-  relinking,
-  onRelinkingChange,
+  connecting,
+  onConnectingChange,
+  onDisconnectTelegram,
+  confirmingTelegramDisconnect,
 }: ProfilePageProps) {
+  const [confirming, setConfirming] = useState(
+    confirmingTelegramDisconnect ?? false,
+  );
   const icon = <TelegramIcon />;
+  const dialog = (
+    <TelegramConnectDialog
+      url={telegramLink}
+      changing={telegram !== null}
+      open={connecting}
+      onOpenChange={onConnectingChange}
+    />
+  );
+
   if (!telegram)
     return (
-      <Section title="Telegram" card>
+      <Section title="Channels" card>
         <SettingRow
           icon={icon}
-          label="Not linked"
-          description="Telegram is where you talk to Winston."
-          control={<TelegramButton url={telegramLink} />}
-        />
-        <TelegramQr url={telegramLink} />
-      </Section>
-    );
-
-  const linkedAs = telegram.username ? `@${telegram.username}` : "Linked";
-  if (!relinking)
-    return (
-      <Section title="Telegram" card>
-        <SettingRow
-          icon={icon}
-          label={linkedAs}
-          description="Where you talk to Winston."
+          label="Telegram"
           control={
-            <Button
-              onClick={() => {
-                onRelinkingChange(true);
-              }}
-            >
-              Link another account
-            </Button>
+            <span className="flex items-center gap-3">
+              <StatusPill tone="neutral">Not connected</StatusPill>
+              <Button
+                onClick={() => {
+                  onConnectingChange(true);
+                }}
+              >
+                Connect
+              </Button>
+            </span>
           }
         />
+        {dialog}
       </Section>
     );
 
+  // Like a connected account: the service, then which account it is.
+  const account =
+    telegram.displayName ??
+    (telegram.username ? `@${telegram.username}` : undefined);
   return (
-    <Section title="Telegram" card>
+    <Section title="Channels" card>
       <SettingRow
         icon={icon}
-        label={linkedAs}
-        description="Open the link in the Telegram account you want instead. It replaces this one."
+        label="Telegram"
+        {...(account !== undefined ? { description: account } : {})}
         control={
-          <Button
-            variant="ghost"
-            onClick={() => {
-              onRelinkingChange(false);
-            }}
-          >
-            Cancel
-          </Button>
+          <span className="flex items-center gap-2">
+            <StatusPill tone="ok">Connected</StatusPill>
+            <Menu
+              trigger={
+                <IconButton label="Telegram options">
+                  <MoreHorizontal />
+                </IconButton>
+              }
+              actions={[
+                {
+                  label: "Change account",
+                  onSelect: () => {
+                    onConnectingChange(true);
+                  },
+                },
+                {
+                  label: "Disconnect",
+                  danger: true,
+                  onSelect: () => {
+                    setConfirming(true);
+                  },
+                },
+              ]}
+            />
+          </span>
         }
       />
-      <div className="flex flex-col items-start gap-4">
-        <TelegramButton url={telegramLink} label="Open Telegram" />
-        <TelegramQr url={telegramLink} />
-      </div>
+      {dialog}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Disconnect Telegram?"
+        description="Winston won't be able to message you until you connect Telegram again."
+        confirmLabel="Disconnect"
+        onConfirm={onDisconnectTelegram}
+      />
     </Section>
   );
 }

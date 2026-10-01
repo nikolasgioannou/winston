@@ -92,7 +92,7 @@ async function handleMessage(
     return linkChat({ db, logger, telegram, botId }, update, message, token);
 
   const chatId = message.chat.id;
-  const userId = await linkedUser(db, chatId);
+  const userId = await linkedUser(db, chatId, message);
   if (!userId) {
     logger.info({ chatId }, "message from an unlinked chat");
     // Best effort: failing here would make Telegram redeliver the update.
@@ -176,7 +176,7 @@ async function linkChat(
     const link = {
       chatId,
       telegramUserId: message.from?.id ?? chatId,
-      username: message.from?.username ?? null,
+      ...telegramProfile(message),
       linkedAt: sql`now()`,
     };
     await tx
@@ -341,11 +341,43 @@ async function handleReaction(
   );
 }
 
-async function linkedUser(db: DbOrTx, chatId: number) {
+/** The account's @username and display name, as the site shows them. */
+function telegramProfile(message: Message) {
+  const from = message.from;
+  const displayName = [from?.first_name, from?.last_name]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    username: from?.username ?? null,
+    displayName: displayName === "" ? null : displayName,
+  };
+}
+
+/**
+ * The user this chat is linked to. When a message comes with it, the linked
+ * account's @username and display name are refreshed if they've changed in
+ * Telegram.
+ */
+async function linkedUser(db: DbOrTx, chatId: number, message?: Message) {
   const [link] = await db
-    .select({ userId: telegramLinks.userId })
+    .select({
+      userId: telegramLinks.userId,
+      username: telegramLinks.username,
+      displayName: telegramLinks.displayName,
+    })
     .from(telegramLinks)
     .where(eq(telegramLinks.chatId, chatId));
+  if (link && message?.from) {
+    const profile = telegramProfile(message);
+    if (
+      profile.username !== link.username ||
+      profile.displayName !== link.displayName
+    )
+      await db
+        .update(telegramLinks)
+        .set(profile)
+        .where(eq(telegramLinks.chatId, chatId));
+  }
   return link?.userId;
 }
 

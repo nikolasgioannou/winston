@@ -33,14 +33,25 @@ export const personalCalendar = account({
 });
 
 const accounts =
-  (connections: ConnectionDto[], addingAccount = false) =>
+  (
+    connections: ConnectionDto[],
+    addingAccount = false,
+    confirmingDisconnect?: string,
+  ) =>
   () => (
     <AppShell
       activePath="/accounts"
       drawerOpen={false}
       onDrawerOpenChange={noop}
     >
-      <AccountsPage connections={connections} addingAccount={addingAccount} />
+      <AccountsPage
+        connections={connections}
+        onManage={noop}
+        onReconnect={noop}
+        onDisconnect={noop}
+        addingAccount={addingAccount}
+        {...(confirmingDisconnect ? { confirmingDisconnect } : {})}
+      />
     </AppShell>
   );
 
@@ -53,6 +64,10 @@ export const accountsFixtures: PageFixtures = {
     few: {
       label: "A few accounts",
       render: accounts([work, personalMail, personalCalendar]),
+    },
+    disconnecting: {
+      label: "Disconnect confirmation",
+      render: accounts([work, personalMail, personalCalendar], false, work.id),
     },
     adding: {
       label: "Add account",

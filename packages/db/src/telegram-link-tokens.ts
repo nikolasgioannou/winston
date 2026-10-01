@@ -1,7 +1,7 @@
 import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
-import { telegramLinkTokens } from "./schema/index.ts";
+import { telegramLinks, telegramLinkTokens } from "./schema/index.ts";
 
 /** How long a link token works (docs/design.md, decision #2). */
 export const linkTokenLifetimeMs = 15 * 60 * 1000;
@@ -64,4 +64,16 @@ export async function consumeLinkToken(
     )
     .returning({ userId: telegramLinkTokens.userId });
   return used?.userId;
+}
+
+/**
+ * Unlinks the user's Telegram chat: Winston can't reach them there until
+ * they link one again. Returns whether there was one.
+ */
+export async function unlinkTelegram(db: DbOrTx, userId: string) {
+  const removed = await db
+    .delete(telegramLinks)
+    .where(eq(telegramLinks.userId, userId))
+    .returning({ chatId: telegramLinks.chatId });
+  return removed.length > 0;
 }

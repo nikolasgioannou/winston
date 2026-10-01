@@ -14,13 +14,17 @@ const page = (props: Partial<AccountDialogProps>) => () => {
       drawerOpen={false}
       onDrawerOpenChange={noop}
     >
-      <AccountsPage connections={[work, personalMail, personalCalendar]}>
+      <AccountsPage
+        connections={[work, personalMail, personalCalendar]}
+        onManage={noop}
+        onReconnect={noop}
+        onDisconnect={noop}
+      >
         <AccountDialog
           account={account}
           unavailable={[]}
           capabilities={account.capabilities}
           onToggle={noop}
-          onDisconnect={noop}
           open
           onOpenChange={noop}
           {...props}
@@ -48,14 +52,6 @@ export const accountFixtures: PageFixtures = {
       render: page({
         account: { ...personalCalendar, status: "expired" },
       }),
-    },
-    confirming: {
-      label: "Disconnect confirmation",
-      render: page({ confirmingDisconnect: true, defaultTab: "connection" }),
-    },
-    connection: {
-      label: "Connection tab",
-      render: page({ defaultTab: "connection" }),
     },
     disconnected: {
       label: "Disconnected",

@@ -110,12 +110,10 @@ export function Dialog({
     <div className="flex min-h-0 flex-col gap-6 overflow-y-auto px-6 py-5">
       {children}
       {tabs?.map((tab) => (
-        <Tabs.Panel
-          key={tab.value}
-          value={tab.value}
-          className="flex flex-col gap-6 outline-none"
-        >
-          {tab.content}
+        // No display class on the panel itself: it would override the
+        // `hidden` attribute that hides inactive panels.
+        <Tabs.Panel key={tab.value} value={tab.value} className="outline-none">
+          <div className="flex flex-col gap-6">{tab.content}</div>
         </Tabs.Panel>
       ))}
     </div>

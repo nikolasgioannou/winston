@@ -5,7 +5,11 @@ import { ProfilePage, type ProfilePageProps } from "./profile-page";
 
 const noop = () => undefined;
 
-const linked = { username: "ada_l", linkedAt: "2026-09-29T12:00:00.000Z" };
+const linked = {
+  username: "ada_l",
+  displayName: "Ada Lovelace",
+  linkedAt: "2026-09-29T12:00:00.000Z",
+};
 
 const profile = (props: Partial<ProfilePageProps>) => () => (
   <AppShell activePath="/profile" drawerOpen={false} onDrawerOpenChange={noop}>
@@ -17,8 +21,9 @@ const profile = (props: Partial<ProfilePageProps>) => () => (
       onDeleteAccount={noop}
       telegram={null}
       telegramLink={fixtureTelegramLink}
-      relinking={false}
-      onRelinkingChange={noop}
+      connecting={false}
+      onConnectingChange={noop}
+      onDisconnectTelegram={noop}
       {...props}
     />
   </AppShell>
@@ -31,21 +36,35 @@ export const profileFixtures: PageFixtures = {
   states: {
     linked: { label: "Default", render: profile({ telegram: linked }) },
     not_linked: { label: "Telegram not linked", render: profile({}) },
+    connecting: {
+      label: "Connecting Telegram",
+      render: profile({ connecting: true }),
+    },
     issuing: {
       label: "Telegram link loading",
-      render: profile({ telegramLink: null }),
+      render: profile({ connecting: true, telegramLink: null }),
     },
     no_username: {
       label: "Linked, no username",
       render: profile({ telegram: { ...linked, username: null } }),
     },
+    no_name: {
+      label: "Linked, name not known yet",
+      render: profile({
+        telegram: { ...linked, username: null, displayName: null },
+      }),
+    },
     deleting: {
       label: "Delete confirmation",
       render: profile({ telegram: linked, confirmingDelete: true }),
     },
-    relinking: {
-      label: "Linking another account",
-      render: profile({ telegram: linked, relinking: true }),
+    changing: {
+      label: "Changing account",
+      render: profile({ telegram: linked, connecting: true }),
+    },
+    disconnecting: {
+      label: "Disconnect Telegram confirmation",
+      render: profile({ telegram: linked, confirmingTelegramDisconnect: true }),
     },
   },
 };

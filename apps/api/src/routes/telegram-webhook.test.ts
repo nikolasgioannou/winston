@@ -603,4 +603,53 @@ describe("linking a chat with /start <token>", () => {
       expect(sent).toEqual([{ chatId: newChat, text: unlinkedChatReply }]);
     });
   });
+
+  test("the link keeps the account's display name, and messages refresh it and the username when they change", async () => {
+    await withApp(async ({ tx, userId, post }) => {
+      const profileOf = async () =>
+        (
+          await tx
+            .select({
+              username: telegramLinks.username,
+              displayName: telegramLinks.displayName,
+            })
+            .from(telegramLinks)
+            .where(eq(telegramLinks.userId, userId))
+        )[0];
+      const token = await issueLinkToken(tx, userId);
+      await post(
+        textUpdate({
+          text: `/start ${token}`,
+          chat: { id: newChat, type: "private", first_name: "Ada" },
+          from: {
+            id: newChat,
+            is_bot: false,
+            first_name: "Ada",
+            last_name: "Lovelace",
+          },
+        }),
+      );
+      expect(await profileOf()).toEqual({
+        username: null,
+        displayName: "Ada Lovelace",
+      });
+
+      await post(
+        textUpdate({
+          chat: { id: newChat, type: "private", first_name: "Ada" },
+          from: {
+            id: newChat,
+            is_bot: false,
+            first_name: "Ada",
+            last_name: "King",
+            username: "countess",
+          },
+        }),
+      );
+      expect(await profileOf()).toEqual({
+        username: "countess",
+        displayName: "Ada King",
+      });
+    });
+  });
 });

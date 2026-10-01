@@ -10,5 +10,7 @@ export const telegramLinks = snakeCase.table("telegram_links", {
   chatId: bigint({ mode: "number" }).notNull().unique(),
   telegramUserId: bigint({ mode: "number" }).notNull(),
   username: text(),
+  /** The account's display name (first and last name), which every account has. */
+  displayName: text(),
   linkedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
