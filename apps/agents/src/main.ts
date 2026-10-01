@@ -6,8 +6,10 @@ import { createDb } from "@winston/db/client";
 import {
   deleteUserJob,
   expireTriggerJob,
+  fireDerivedTimerJob,
   fireScheduleJob,
   fireTriggerBatchJob,
+  refreshTimersJob,
   frontTurnJob,
   provisionVmJob,
   restoreVmJob,
@@ -52,6 +54,12 @@ import {
   fireTriggerBatchHandler,
   gmailNativeCheck,
 } from "./triggers/matching.ts";
+import {
+  fireDerivedTimerHandler,
+  refreshTimersHandler,
+  type CalendarFor,
+} from "./triggers/timers.ts";
+import { googleCalendarProvider } from "@winston/connectors/google-calendar";
 import { connections } from "@winston/db/schema";
 import { eq } from "drizzle-orm";
 import { createTokenVault } from "@winston/shared/token-vault";
@@ -115,6 +123,13 @@ const accessToken = googleAccessTokens({
   reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
 });
 
+// A calendar account's provider, for heads-up timers.
+const calendarFor: CalendarFor = (connection) =>
+  googleCalendarProvider({
+    address: connection.externalEmail,
+    accessToken: () => accessToken(connection.id),
+  });
+
 const worker = createWorker({
   db,
   logger,
@@ -127,6 +142,8 @@ const worker = createWorker({
       stopWatch: watchStopper(db, googleClient),
     }),
     [fireTriggerBatchJob.type]: fireTriggerBatchHandler,
+    [refreshTimersJob.type]: refreshTimersHandler(calendarFor),
+    [fireDerivedTimerJob.type]: fireDerivedTimerHandler(calendarFor),
     [syncConnectionJob.type]: syncConnectionHandler({
       native: gmailNativeCheck(async (connectionId) => {
         const [connection] = await db

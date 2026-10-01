@@ -1,14 +1,14 @@
 ---
 id: "4da088"
 title: Fire calendar.event.starting from derived timers
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - events
   - m7
 created_at: 2026-09-27T05:40:24.796Z
-updated_at: 2026-09-27T05:40:24.852Z
+updated_at: 2026-10-01T19:39:40.871Z
 blocked_by:
   - "463072"
   - "e79d1c"
@@ -24,3 +24,10 @@ Build `derived_timers`:
 - Deleting the subscription deletes its timers.
 
 Tests: materialization with filters, a moved meeting moving its timer, cancellation deleting it, the horizon extension, and firing producing a correctly shaped event.
+
+## As built
+
+- `apps/agents/src/triggers/timers.ts` (`refreshTimers`, `fireTimer`, their jobs), with refreshes queued from the trigger routes, calendar syncs and reconciliation. Details in docs/design.md §3.
+- Recomputing a subscription's timers from the provider (rather than patching single timers from each sync event) is what follows moves and cancellations; it's a calendar list per subscription per refresh, fine at this scale.
+- All-day events don't get heads-ups (they have no start time to lead).
+

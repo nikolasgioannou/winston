@@ -48,6 +48,16 @@ export const fireTriggerBatchJob = {
   dedupeKey: (batchId: number) => `fire_trigger_batch:${String(batchId)}`,
 } as const;
 
+/**
+ * Recomputing a `calendar.event.starting` subscription's timers from the
+ * upcoming week of events (§3, abstractions): on create or update, after a
+ * calendar sync, and on reconciliation (which extends the horizon).
+ */
+export const refreshTimersJob = {
+  type: "refresh_timers",
+  dedupeKey: (triggerId: string) => `refresh_timers:${triggerId}`,
+} as const;
+
 /** A materialized `calendar.event.starting` timer came due (§3, abstractions). */
 export const fireDerivedTimerJob = {
   type: "fire_derived_timer",

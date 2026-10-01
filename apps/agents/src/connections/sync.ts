@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { JobHandler } from "../worker.ts";
 import { matchEvents, type NativeQueryCheck } from "../triggers/matching.ts";
+import { queueTimerRefreshes } from "../triggers/timers.ts";
 import { syncCalendar, type CalendarSyncDeps } from "./sync-calendar.ts";
 import { syncMail, type MailSyncDeps } from "./sync-mail.ts";
 
@@ -41,6 +42,9 @@ export function syncConnectionHandler(deps: {
         connection.domain === "mail"
           ? await syncMail(db, connection, deps.mail(connection))
           : await syncCalendar(db, connection, deps.calendar(connection));
+      // Meetings moved, added or cancelled: heads-up timers follow them.
+      if (connection.domain === "calendar" && stored.length > 0)
+        await queueTimerRefreshes(db, connection.userId);
       const matched = await matchEvents(db, stored, {
         ...(deps.native ? { native: deps.native } : {}),
         logger,

@@ -121,6 +121,13 @@ function asInstance(
   };
 }
 
+/** A provider event in the catalog's shape, with the CLI's id. */
+export const catalogEvent = (
+  event: CalendarEvent,
+  eventId: string,
+  account: string,
+) => payloadEvent(snapshotOf(event, account), eventId, account);
+
 /** The catalog's event shape, with the CLI's id. */
 const payloadEvent = (s: Snapshot, eventId: string, account: string) => ({
   eventId,

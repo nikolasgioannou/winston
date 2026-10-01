@@ -6,7 +6,14 @@
  */
 import type { DbOrTx } from "@winston/db/client";
 import { resolveRef } from "@winston/db/external-refs";
-import { connections, triggers, users } from "@winston/db/schema";
+import { enqueue } from "@winston/db/queue";
+import {
+  connections,
+  derivedTimers,
+  triggers,
+  users,
+} from "@winston/db/schema";
+import { refreshTimersJob } from "@winston/domain/jobs";
 import {
   eventDefinition,
   filterFields,
@@ -278,6 +285,16 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
     };
   }
 
+  /** A meeting heads-up subscription's timers are worked out in the background (agents). */
+  async function queueTimers(row: Row) {
+    if (row.eventType !== "calendar.event.starting") return;
+    await enqueue(db, refreshTimersJob.type, {
+      userId: row.userId,
+      payload: { triggerId: row.id },
+      dedupeKey: refreshTimersJob.dedupeKey(row.id),
+    });
+  }
+
   async function owned(userId: string, id: string) {
     const [row] = await db
       .select()
@@ -311,6 +328,7 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
           .values({ userId, ...values })
           .returning();
         if (!row) throw new Error("Creating a trigger returned no row.");
+        await queueTimers(row);
         return c.json({ timeZone, trigger: await dto(row) });
       },
     )
@@ -384,6 +402,7 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
           .where(eq(triggers.id, current.id))
           .returning();
         if (!row) throw new Error("Updating a trigger returned no row.");
+        await queueTimers(row);
         return c.json({ timeZone, trigger: await dto(row) });
       },
     )
@@ -394,6 +413,7 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
         .update(triggers)
         .set({ status: "deleted", updatedAt: sql`now()` })
         .where(eq(triggers.id, row.id));
+      await db.delete(derivedTimers).where(eq(derivedTimers.triggerId, row.id));
       return c.json({ id: row.id, deleted: true as const });
     });
 }

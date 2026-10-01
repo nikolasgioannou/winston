@@ -177,7 +177,11 @@ export async function matchEvents(
  * job, due in 30 s) if there's none. One statement, so concurrent matches
  * land in the same batch.
  */
-async function addToBatch(db: DbOrTx, trigger: Trigger, eventId: string) {
+export async function addToBatch(
+  db: DbOrTx,
+  trigger: Pick<Trigger, "id" | "userId">,
+  eventId: string,
+) {
   const [batch] = await db
     .insert(triggerBatches)
     .values({

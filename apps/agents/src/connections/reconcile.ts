@@ -11,6 +11,7 @@ import { connections } from "@winston/db/schema";
 import { syncConnectionJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { inArray } from "drizzle-orm";
+import { queueTimerRefreshes } from "../triggers/timers.ts";
 import { renewWatches } from "./watch.ts";
 
 /** How often every connection is reconciled. */
@@ -43,6 +44,8 @@ export async function reconcileConnections(db: DbOrTx, now = new Date()) {
       delayMs: offsetOf(connection.id),
     });
   await renewWatches(db, now);
+  // Heads-up timers roll forward with the week ahead.
+  await queueTimerRefreshes(db);
   return healthy.length;
 }
 
