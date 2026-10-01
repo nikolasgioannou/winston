@@ -1,5 +1,5 @@
 import { canonicalTimeZone } from "@winston/shared/time";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { users } from "./schema/index.ts";
 import { recordSystemEvent } from "./system-events.ts";
@@ -88,4 +88,33 @@ export async function updateProfile(
       });
     return { ok: true, changed };
   });
+}
+
+/**
+ * Follows the device: adopts the browser's zone only when it differs from the
+ * one the browser last reported, so a zone Winston set ("I'm in Tokyo this
+ * week") isn't undone by a laptop still on home time, yet travelling with the
+ * device still moves it (docs/design.md §20). Returns whether the user's zone
+ * changed.
+ */
+export async function followBrowserTimezone(
+  db: DbOrTx,
+  userId: string,
+  browserTimezone: string,
+): Promise<{ updated: boolean }> {
+  const zone = canonicalTimeZone(browserTimezone);
+  if (!zone) return { updated: false };
+  const [moved] = await db
+    .update(users)
+    .set({ browserTimezone: zone })
+    .where(
+      and(
+        eq(users.id, userId),
+        or(isNull(users.browserTimezone), ne(users.browserTimezone, zone)),
+      ),
+    )
+    .returning({ id: users.id });
+  if (!moved) return { updated: false };
+  const result = await updateProfile(db, userId, { timezone: zone }, "browser");
+  return { updated: result.ok && result.changed.length > 0 };
 }

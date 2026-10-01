@@ -90,6 +90,7 @@ async function findOrCreateUser(
       firstName: claims.given_name ?? claims.name ?? email.split("@")[0] ?? "",
       lastName: claims.family_name ?? "",
       timezone: validTimezone(browserTimezone) ?? "UTC",
+      browserTimezone: validTimezone(browserTimezone) ?? null,
     })
     .returning({ id: users.id });
   if (!created) throw new Error("Creating a user returned no row.");

@@ -19,7 +19,8 @@ Winston can now act on the user's behalf, so the prompt must carry the soft laye
 Update the front-of-house prompt, best effort, staying static and generic:
 - **Confirm-first:** before sending mail, inviting people, or changing or declining a shared meeting, show the user what will happen and wait for a yes. Use `--dry-run` to produce an exact preview. Private, easily undone actions (drafting, archiving, labeling, creating a hold on one's own calendar) don't need confirmation.
 - **Assistant voice** when writing on the user's behalf, from their own account (product.md §6 Identity).
-- **Accounts:** check `winston accounts list` when unsure which account applies, and respect the aliases.
+- **Accounts:** check `winston accounts list` when unsure which account applies (accounts are named by type and address; there are no aliases since 75bfa7).
+- **Time zone (cca55d):** when the user says they're somewhere else, change it with `winston me update --timezone` and say so; it's the only account setting he changes.
 - **Permission errors:** tell the user plainly what's disabled and where to enable it, and never try to work around a disabled capability, for example through the browser later.
 - Brief reminders of the high-value habits: `winston calendar free` for scheduling, and reading a thread fully before replying.
 

@@ -51,6 +51,7 @@ export async function currentUser() {
       firstName: users.firstName,
       lastName: users.lastName,
       timezone: users.timezone,
+      browserTimezone: users.browserTimezone,
     })
     .from(users)
     .where(eq(users.id, session.userId));

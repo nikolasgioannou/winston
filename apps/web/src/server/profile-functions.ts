@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requestAccountDeletion } from "@winston/db/account-deletion";
-import { updateProfile } from "@winston/db/profile";
+import { followBrowserTimezone, updateProfile } from "@winston/db/profile";
 import { z } from "zod";
 import { database } from "./db.server";
 import { endSession, requireUser } from "./session.server";
@@ -41,19 +41,13 @@ export const saveProfile = createServerFn({ method: "POST" })
 
 /**
  * Follows the browser's time zone (docs/design.md §20): the shell calls it
- * once per app load when the browser's zone differs from the saved one.
+ * once per app load when the browser's zone isn't the one it last reported.
  */
 export const syncBrowserTimezone = createServerFn({ method: "POST" })
   .validator(z.object({ timezone: z.string() }))
-  .handler(async ({ data }) => {
-    const result = await updateProfile(
-      database(),
-      (await requireUser()).id,
-      { timezone: data.timezone },
-      "browser",
-    );
-    return { updated: result.ok && result.changed.length > 0 };
-  });
+  .handler(async ({ data }) =>
+    followBrowserTimezone(database(), (await requireUser()).id, data.timezone),
+  );
 
 /**
  * Deletes the signed-in user's account (docs/design.md §13): the typed

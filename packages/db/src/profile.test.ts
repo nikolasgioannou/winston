@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
-import { updateProfile } from "./profile.ts";
+import { followBrowserTimezone, updateProfile } from "./profile.ts";
 import { inboundItems, users } from "./schema/index.ts";
 import { inRollback, insertUser, testDb } from "./testing.ts";
 
@@ -83,6 +83,66 @@ describe("updateProfile", () => {
       const [row] = await tx.select().from(users).where(eq(users.id, user.id));
       expect(row?.timezone).toBe("America/New_York");
       expect(await changesOf(tx, user.id)).toEqual([]);
+    });
+  });
+});
+
+describe("followBrowserTimezone", () => {
+  test("adopts the browser's zone when the device moves, but not over a zone Winston set while it stays put", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx, {
+        timezone: "America/New_York",
+        browserTimezone: "America/New_York",
+      });
+      const zoneOf = async () =>
+        (
+          await tx
+            .select({
+              timezone: users.timezone,
+              browser: users.browserTimezone,
+            })
+            .from(users)
+            .where(eq(users.id, user.id))
+        )[0];
+
+      // "I'm in Tokyo this week": Winston sets it; the laptop still says New York.
+      await updateProfile(tx, user.id, { timezone: "Asia/Tokyo" }, "winston");
+      expect(
+        await followBrowserTimezone(tx, user.id, "America/New_York"),
+      ).toEqual({ updated: false });
+      expect(await zoneOf()).toEqual({
+        timezone: "Asia/Tokyo",
+        browser: "America/New_York",
+      });
+
+      // The laptop lands in Tokyo too: nothing to change, but it's remembered…
+      expect(await followBrowserTimezone(tx, user.id, "Asia/Tokyo")).toEqual({
+        updated: false,
+      });
+      // …so coming home moves the zone back.
+      expect(
+        await followBrowserTimezone(tx, user.id, "America/New_York"),
+      ).toEqual({ updated: true });
+      expect(await zoneOf()).toEqual({
+        timezone: "America/New_York",
+        browser: "America/New_York",
+      });
+      const sources = (await changesOf(tx, user.id)).map(
+        (p) => (p as { source: string }).source,
+      );
+      expect(sources).toEqual(["winston", "browser"]);
+    });
+  });
+
+  test("a first report adopts the browser's zone; an unknown zone is ignored", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx, { timezone: "UTC" });
+      expect(await followBrowserTimezone(tx, user.id, "Europe/London")).toEqual(
+        { updated: true },
+      );
+      expect(await followBrowserTimezone(tx, user.id, "Mars/Olympus")).toEqual({
+        updated: false,
+      });
     });
   });
 });

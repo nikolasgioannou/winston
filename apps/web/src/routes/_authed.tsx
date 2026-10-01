@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authed")({
 
 function AuthedLayout() {
   const { user, sidebarWidth } = Route.useRouteContext();
-  useFollowBrowserTimezone(user.timezone);
+  useFollowBrowserTimezone(user.browserTimezone);
   const { pathname } = useLocation();
   // The phone drawer is open only on the page it was opened on, so any
   // navigation (a link, the back button, a redirect) closes it.
@@ -46,26 +46,27 @@ function AuthedLayout() {
 }
 
 /**
- * Once per app load, adopts the browser's time zone when it differs from the
- * saved one (someone who travels keeps getting local times), with a quiet
- * notice (docs/design.md §20).
+ * Once per app load, reports the browser's time zone when it isn't the one
+ * last reported. The server adopts it then (someone who travels keeps getting
+ * local times), but a zone Winston set stays until the device moves, and a
+ * quiet notice says when it changed (docs/design.md §20).
  */
-function useFollowBrowserTimezone(saved: string) {
+function useFollowBrowserTimezone(lastReported: string | null) {
   const router = useRouter();
   const checked = useRef(false);
   useEffect(() => {
     if (checked.current) return;
     checked.current = true;
     const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (browser === saved) return;
+    if (browser === lastReported) return;
     void syncBrowserTimezone({ data: { timezone: browser } })
       .then(({ updated }) => {
         if (!updated) return;
         void router.invalidate();
         toast(`Time zone updated to ${browser.replaceAll("_", " ")}`, {
-          description: "It follows this device. Change it on your profile.",
+          description: "It follows this device.",
         });
       })
       .catch(() => undefined);
-  }, [saved, router]);
+  }, [lastReported, router]);
 }

@@ -15,6 +15,12 @@ export const users = snakeCase.table("users", {
   lastName: text().notNull(),
   /** IANA time zone, e.g. `America/New_York`. */
   timezone: text().notNull(),
+  /**
+   * The zone the user's browser last reported. The site adopts the browser's
+   * zone only when this changes, so a zone Winston set sticks until the
+   * device actually moves (docs/design.md §20).
+   */
+  browserTimezone: text(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   /**
    * Set when the user asks to delete their account; the `delete_user` job
