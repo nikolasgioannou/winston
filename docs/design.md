@@ -1203,10 +1203,11 @@ Ids are TypeID strings (`<prefix>_<26-char UUIDv7 base32>`, see §11), stored as
 
 **Public**
 
-| Route        | Purpose                                                                            | Notable states                                            |
-| ------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `/`          | Sign in with Google (no public homepage for now). Signed-in visitors go to `/home` | not allowlisted, OAuth error                              |
-| `/t/<token>` | Handoff live view (mobile-first, no sidebar)                                       | connecting, live, reconnecting, expired/invalid, resolved |
+| Route         | Purpose                                                                                                                                                              | Notable states                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `/`           | Sign in with Google (no public homepage for now). Signed-in visitors go to `/home`                                                                                   | not allowlisted, OAuth error                              |
+| `/t/<token>`  | Handoff live view (mobile-first, no sidebar)                                                                                                                         | connecting, live, reconnecting, expired/invalid, resolved |
+| anything else | Not found (`src/pages/not-found-page.tsx`, the router's `defaultNotFoundComponent`): "Page not found" and **Go to Winston** (to `/`, which leads home or to sign-in) | —                                                         |
 
 **App (sidebar)**
 

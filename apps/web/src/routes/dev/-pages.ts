@@ -2,6 +2,7 @@ import { appShellFixtures } from "../../components/app-shell.fixtures";
 import { accountFixtures } from "../../pages/account-dialog.fixtures";
 import { accountsFixtures } from "../../pages/accounts-page.fixtures";
 import { homeFixtures } from "../../pages/home-page.fixtures";
+import { notFoundFixtures } from "../../pages/not-found-page.fixtures";
 import { profileFixtures } from "../../pages/profile-page.fixtures";
 import { signInFixtures } from "../../pages/sign-in-page.fixtures";
 import type { PageFixtures } from "../../pages/fixtures";
@@ -17,6 +18,7 @@ export const designPages: Record<string, PageFixtures> = {
   profile: profileFixtures,
   accounts: accountsFixtures,
   account: accountFixtures,
+  notFound: notFoundFixtures,
 };
 
 export const firstPage = Object.keys(designPages)[0] ?? "signin";
