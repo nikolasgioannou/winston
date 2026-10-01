@@ -215,23 +215,24 @@ Durable background agents: delegation, results through the front of house, `wins
 
 Proactivity: the event catalog, triggers (schedules and subscriptions), push notifications and sync for Gmail and Calendar, matching and batching, the scheduler, derived timers.
 
-| #   | Ticket   | Title                                                       | Blocked by                   |
-| --- | -------- | ----------------------------------------------------------- | ---------------------------- |
-| 126 | `9c407f` | Define the event catalog and events table                   | `480aff`                     |
-| 127 | `88f5ee` | Add trigger tables and encode the trigger lifecycle         | `9c407f`                     |
-| 128 | `595766` | Add winston trigger create, list, get, update and delete    | `253db2`, `88f5ee`           |
-| 129 | `3f6521` | Start background runs from fired triggers                   | `1fd02f`, `88f5ee`           |
-| 130 | `e79d1c` | Run the trigger scheduler                                   | `3f6521`                     |
-| 131 | `9751a9` | Manage the GCP Pub/Sub setup with Terraform                 | `e1a361`, `ef5b35`           |
-| 132 | `70194e` | Receive Gmail push notifications and keep watches alive     | `9751a9`, `9c407f`           |
-| 133 | `f81278` | Turn Gmail history into mail events                         | `6af84b`, `70194e`           |
-| 134 | `a2d498` | Receive Calendar push notifications and keep channels alive | `403364`, `9c407f`           |
-| 135 | `6a3656` | Turn calendar changes into calendar events                  | `a2d498`                     |
-| 136 | `16b185` | Reconcile connections periodically                          | `6a3656`, `f81278`           |
-| 137 | `463072` | Match events to subscriptions and fire them in batches      | `3f6521`, `6a3656`, `f81278` |
-| 138 | `4da088` | Fire calendar.event.starting from derived timers            | `463072`, `e79d1c`           |
-| 139 | `0512b5` | Wire the system events into subscriptions                   | `463072`, `89a2b0`, `988f4d` |
-| 140 | `fa537d` | Teach Winston to use triggers well                          | `0512b5`, `4da088`, `595766` |
+| #    | Ticket   | Title                                                       | Blocked by                   |
+| ---- | -------- | ----------------------------------------------------------- | ---------------------------- |
+| 126  | `9c407f` | Define the event catalog and events table                   | `480aff`                     |
+| 127  | `88f5ee` | Add trigger tables and encode the trigger lifecycle         | `9c407f`                     |
+| 128  | `595766` | Add winston trigger create, list, get, update and delete    | `253db2`, `88f5ee`           |
+| 129  | `3f6521` | Start background runs from fired triggers                   | `1fd02f`, `88f5ee`           |
+| 130  | `e79d1c` | Run the trigger scheduler                                   | `3f6521`                     |
+| 131  | `9751a9` | Manage the GCP Pub/Sub setup with Terraform                 | `e1a361`, `ef5b35`           |
+| 132  | `70194e` | Receive Gmail push notifications and keep watches alive     | `9751a9`, `9c407f`           |
+| 133  | `f81278` | Turn Gmail history into mail events                         | `6af84b`, `70194e`           |
+| 134  | `a2d498` | Receive Calendar push notifications and keep channels alive | `403364`, `9c407f`           |
+| 135  | `6a3656` | Turn calendar changes into calendar events                  | `a2d498`                     |
+| 136  | `16b185` | Reconcile connections periodically                          | `6a3656`, `f81278`           |
+| 137  | `463072` | Match events to subscriptions and fire them in batches      | `3f6521`, `6a3656`, `f81278` |
+| 138  | `4da088` | Fire calendar.event.starting from derived timers            | `463072`, `e79d1c`           |
+| 139  | `0512b5` | Wire the system events into subscriptions                   | `463072`, `89a2b0`, `988f4d` |
+| 140  | `fa537d` | Teach Winston to use triggers well                          | `0512b5`, `4da088`, `595766` |
+| 140a | `75846c` | Give Winston direct links for connecting accounts           | `fa537d`                     |
 
 ### M8 — Browser
 
