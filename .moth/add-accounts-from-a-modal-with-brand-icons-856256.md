@@ -7,9 +7,10 @@ labels:
   - m3
   - web
 created_at: 2026-09-30T22:21:08.201Z
-updated_at: 2026-09-30T22:21:21.407Z
+updated_at: 2026-10-01T00:11:34.214Z
 blocked_by:
   - "75bfa7"
+  - "bf0135"
   - "ee16f5"
 ---
 
@@ -21,4 +22,4 @@ The founder's feedback after M3: a dropdown won't scale to the providers Winston
 - Delete the `Menu` component, which nothing else uses.
 - Dev design view: the modal open.
 
-Pause for the founder's review before committing.
+Done autonomously with the rest of this batch; the founder reviews it all at the end.

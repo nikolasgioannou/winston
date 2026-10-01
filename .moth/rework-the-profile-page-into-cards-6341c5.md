@@ -7,10 +7,11 @@ labels:
   - m3
   - web
 created_at: 2026-09-30T22:21:08.239Z
-updated_at: 2026-09-30T22:21:21.444Z
+updated_at: 2026-10-01T00:11:34.287Z
 blocked_by:
   - "22f09d"
   - "856256"
+  - "8fffdd"
 ---
 
 The founder's feedback after M3 on `/profile`:
@@ -22,4 +23,4 @@ The founder's feedback after M3 on `/profile`:
 - **No time zone on the page.** It's still set automatically from the browser when it differs (the shell's check stays). Delete `SearchSelect` and the time zone options module, which nothing else uses.
 - Update the dev design view's Profile states and design.md §20.
 
-Pause for the founder's review before committing.
+Done autonomously with the rest of this batch; the founder reviews it all at the end.

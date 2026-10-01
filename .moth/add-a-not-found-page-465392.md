@@ -14,4 +14,4 @@ blocked_by:
 
 A page that doesn't exist shows TanStack Router's bare `<p>Not Found</p>`, and the dev server warns on every one that no `notFoundComponent` is configured. Add a not-found page in the design system's style (a short message and a way home: `/home` when signed in, `/` otherwise) as the router's default, and use it for loaders that throw `notFound()` too (like an account that isn't the user's). Add it to the dev design view.
 
-Pause for the founder's review before committing.
+Done autonomously with the rest of this batch; the founder reviews it all at the end.
