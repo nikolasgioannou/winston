@@ -22,3 +22,10 @@ The model call should use **per-message effort** (the Opus beta that avoids a ca
 Update the background prompt: start light, and escalate when the task turns out to involve real work, such as multi-step replies or a browser flow.
 
 Tests: update the current run by default, reject invalid levels, and the next model call carries the new effort. Use the fake transport to assert the request.
+
+## As built
+
+- This conflicted with decision #67 (effort fixed per profile, never changed mid-run). Inferred per the founder's instruction to keep going: the ticket's own fallback applies (per-message effort doesn't survive OpenRouter, so change top-level effort and accept one cache miss), and #67 is superseded by #71 in docs/design.md.
+- `PATCH /v1/tasks/:id` (`current` = the calling background run; a front-of-house turn gets `not_supported`, an ended task `conflict`), `winston task update [<task_id>] --effort low|medium|high|xhigh`, and the `run_effort` enum gained `xhigh` (valid for Claude through OpenRouter per its docs).
+- The engine already reads the run's effort every step, so the next call carries the new level (tested through the fake transport).
+
