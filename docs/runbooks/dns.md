@@ -17,13 +17,19 @@ The validation records stay forever: ACM renews the certificate automatically on
 
 **To add when the stacks exist** (each stack outputs its target):
 
-| Name      | Type  | Target                                        | Added by              |
-| --------- | ----- | --------------------------------------------- | --------------------- |
-| `@`       | CNAME | the CloudFront distribution's domain (`Edge`) | the CloudFront ticket |
-| `api`     | CNAME | the load balancer's DNS name (`Services`)     | the Fargate ticket    |
-| `gateway` | CNAME | the load balancer's DNS name (`Services`)     | the Fargate ticket    |
+| Name      | Type  | Target                                                                                             | Added by              |
+| --------- | ----- | -------------------------------------------------------------------------------------------------- | --------------------- |
+| `@`       | CNAME | the CloudFront distribution's domain (`Edge`)                                                      | the CloudFront ticket |
+| `api`     | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
+| `gateway` | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
 
 Cloudflare flattens a CNAME at the apex, so `@` can point at CloudFront. When a record is added, move it into the table above.
+
+Until a record exists, check an endpoint through the load balancer directly, with the right name for TLS and routing:
+
+```sh
+curl --resolve gateway.runwinston.com:443:$(dig +short winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com | head -1) https://gateway.runwinston.com/vm/connect   # 401: routed to the gateway
+```
 
 ## Certificate
 

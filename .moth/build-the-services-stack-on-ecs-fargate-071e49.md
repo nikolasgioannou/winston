@@ -37,3 +37,5 @@ Build:
 Record the chosen sizes and expected monthly cost in §19. Stack tests: each task definition references only the secrets `serviceSecrets` gives its service (moved here from the secrets ticket, since task definitions start here), no service is publicly reachable except through the ALB, the gateway internal API isn't exposed on the ALB, and the circuit breaker is enabled.
 
 - Output the load balancer's DNS name, and have the founder add the `api` and `gateway` CNAMEs in Cloudflare (DNS only), following docs/runbooks/dns.md. Use the Edge stack's certificate.
+
+**Done (2026-10-01):** deployed; the gateway runs and is healthy through the load balancer (its health check reads Postgres over TLS with the RDS-managed secret). `api` and `web` stay at 0 tasks until production keys (1e6482), `agents` until the EC2 provider (550446). The `api` and `gateway` CNAMEs are listed in docs/runbooks/dns.md for the founder to add. ECR repositories moved to the Ci stack.
