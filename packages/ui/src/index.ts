@@ -1,14 +1,14 @@
 export { Badge } from "./badge";
-export { GoogleIcon } from "./brand-icons";
+export { GoogleIcon, TelegramIcon } from "./brand-icons";
 export { Button, type ButtonProps } from "./button";
 export { Callout } from "./callout";
 export { Card, LinkCard, linkCardRow } from "./card";
 export { cn } from "./cn";
 export { controlHeight, type ControlSize } from "./control";
 export { ConfirmDialog } from "./dialog";
+export { Dialog } from "./dialog-panel";
 export { EmptyState, ErrorState } from "./empty-state";
 export { Select, type SelectOption, type SelectProps } from "./select";
-export { Menu, type MenuLink } from "./menu";
 export { IconTile, Page, PageHeader } from "./page";
 export { QrCode } from "./qr-code";
 export { SearchSelect } from "./search-select";

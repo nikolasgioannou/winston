@@ -1,46 +1,22 @@
 import type { ConnectionDto } from "@winston/db/connections";
 import {
   Badge,
-  Button,
   EmptyState,
   IconTile,
   LinkCard,
   linkCardRow,
-  Menu,
-  type MenuLink,
   Page,
   PageHeader,
   StatusPill,
 } from "@winston/ui";
 import { Link } from "@tanstack/react-router";
-import { Blocks, CalendarDays, ChevronRight, Mail } from "lucide-react";
-import type { ReactNode } from "react";
-
-const addLinks: MenuLink[] = [
-  {
-    label: "Gmail",
-    href: "/auth/google/connect?domain=mail",
-    icon: <Mail />,
-  },
-  {
-    label: "Google Calendar",
-    href: "/auth/google/connect?domain=calendar",
-    icon: <CalendarDays />,
-  },
-];
-
-const domainNames: Record<ConnectionDto["domain"], string> = {
-  mail: "Mail",
-  calendar: "Calendar",
-};
-const providerNames: Record<ConnectionDto["provider"], string> = {
-  gmail: "Gmail",
-  google_calendar: "Google Calendar",
-};
-const domainIcons: Record<ConnectionDto["domain"], ReactNode> = {
-  mail: <Mail />,
-  calendar: <CalendarDays />,
-};
+import { Blocks, ChevronRight } from "lucide-react";
+import { AddAccountDialog } from "../components/add-account-dialog";
+import {
+  domainNames,
+  ProviderIcon,
+  providerNames,
+} from "../components/providers";
 
 /**
  * `/accounts` (docs/design.md §20): the user's connected Google accounts,
@@ -48,10 +24,15 @@ const domainIcons: Record<ConnectionDto["domain"], ReactNode> = {
  */
 export function AccountsPage({
   connections,
+  addingAccount,
 }: {
   connections: readonly ConnectionDto[];
+  /** Opens Add account, for the dev design view. */
+  addingAccount?: boolean;
 }) {
-  const add = <Menu trigger={<Button>Add account</Button>} links={addLinks} />;
+  const add = (
+    <AddAccountDialog {...(addingAccount ? { defaultOpen: true } : {})} />
+  );
   return (
     <Page>
       <PageHeader
@@ -83,7 +64,9 @@ function AccountRow({ connection }: { connection: ConnectionDto }) {
       params={{ accountId: connection.id }}
       className={linkCardRow}
     >
-      <IconTile>{domainIcons[connection.domain]}</IconTile>
+      <IconTile>
+        <ProviderIcon provider={connection.provider} />
+      </IconTile>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-2">
           <span className="text-sm font-medium text-fg">

@@ -1,13 +1,13 @@
 ---
 id: "856256"
 title: Add accounts from a modal, with brand icons
-status: backlog
+status: done
 priority: none
 labels:
   - m3
   - web
 created_at: 2026-09-30T22:21:08.201Z
-updated_at: 2026-10-01T00:11:34.214Z
+updated_at: 2026-10-01T00:19:20.150Z
 blocked_by:
   - "75bfa7"
   - "bf0135"
@@ -23,3 +23,13 @@ The founder's feedback after M3: a dropdown won't scale to the providers Winston
 - Dev design view: the modal open.
 
 Done autonomously with the rest of this batch; the founder reviews it all at the end.
+
+## Outcome
+
+- Add account opens a new `Dialog` (`packages/ui`, on Base UI's Dialog: title, close button, scrolling body; trigger-opened or controlled, which the account dialog will use) listing what can be connected, grouped by type, from one catalog (`connectableProviders` in `src/components/providers.tsx`). Each option is a `LinkCard` row that starts its connect flow. The empty state offers the same dialog. `Menu` is deleted.
+- Brand research (2026-09-30):
+  - **Telegram** lets anyone use its logo for buttons as long as it's clear we aren't Telegram, so `TelegramIcon` is its mark in Telegram's blue (a CC0 path from Simple Icons). It goes on the Telegram card in the profile rework.
+  - **Google** requires permission (via its Partner Marketing Hub) before third parties show product icons like Gmail's and Calendar's. So `ProviderIcon`, the one place they're drawn, shows neutral icons for now. **Needs the founder:** request permission, or decide otherwise.
+- Account rows use `ProviderIcon` in an `IconTile`.
+- Dev design view: Connected accounts gains "Add account" (the dialog open). Checked it renders.
+

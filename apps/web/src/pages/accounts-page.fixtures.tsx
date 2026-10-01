@@ -32,11 +32,17 @@ export const personalCalendar = account({
   scopes: ["calendar.events"],
 });
 
-const accounts = (connections: ConnectionDto[]) => () => (
-  <AppShell activePath="/accounts" drawerOpen={false} onDrawerOpenChange={noop}>
-    <AccountsPage connections={connections} />
-  </AppShell>
-);
+const accounts =
+  (connections: ConnectionDto[], addingAccount = false) =>
+  () => (
+    <AppShell
+      activePath="/accounts"
+      drawerOpen={false}
+      onDrawerOpenChange={noop}
+    >
+      <AccountsPage connections={connections} addingAccount={addingAccount} />
+    </AppShell>
+  );
 
 /** The accounts page's states for the dev design view. */
 export const accountsFixtures: PageFixtures = {
@@ -47,6 +53,10 @@ export const accountsFixtures: PageFixtures = {
     few: {
       label: "A few accounts",
       render: accounts([work, personalMail, personalCalendar]),
+    },
+    adding: {
+      label: "Add account",
+      render: accounts([work, personalMail], true),
     },
     expiring: {
       label: "One expiring",
