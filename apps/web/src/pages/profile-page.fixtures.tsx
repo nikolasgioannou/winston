@@ -13,9 +13,7 @@ const profile = (props: Partial<ProfilePageProps>) => () => (
       email="ada@example.com"
       firstName="Ada"
       lastName="Lovelace"
-      timezone="Europe/London"
       onSaveName={() => Promise.resolve({ ok: true, changed: [] })}
-      onTimezoneChange={noop}
       onDeleteAccount={noop}
       telegram={null}
       telegramLink={fixtureTelegramLink}

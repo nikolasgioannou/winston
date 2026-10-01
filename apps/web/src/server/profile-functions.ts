@@ -14,19 +14,17 @@ export const getProfileState = createServerFn({ method: "GET" }).handler(
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      timezone: user.timezone,
       telegram: await telegramLinkOf(database(), user.id),
     };
   },
 );
 
-/** Saves the profile form: names and time zone, through the one shared path. */
+/** Saves the user's name, through the one shared profile path. */
 export const saveProfile = createServerFn({ method: "POST" })
   .validator(
     z.object({
       firstName: z.string().optional(),
       lastName: z.string().optional(),
-      timezone: z.string().optional(),
     }),
   )
   .handler(async ({ data }) =>
@@ -36,7 +34,6 @@ export const saveProfile = createServerFn({ method: "POST" })
       {
         ...(data.firstName !== undefined ? { firstName: data.firstName } : {}),
         ...(data.lastName !== undefined ? { lastName: data.lastName } : {}),
-        ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
       },
       "site",
     ),

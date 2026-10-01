@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Card } from "./card";
 import { cn } from "./cn";
+import { IconTile } from "./page";
 
 /**
  * A titled group of settings: by default a heading with Notion's hairline
@@ -34,21 +35,28 @@ export function Section({
   );
 }
 
-/** One setting: a label and description on the left, its control on the right. */
+/**
+ * One setting: a label and description on the left (after an optional icon,
+ * e.g. a brand mark), its control on the right.
+ */
 export function SettingRow({
   label,
   description,
   control,
+  icon,
   className,
 }: {
   label: ReactNode;
   description?: ReactNode;
   control: ReactNode;
+  /** A 16px icon, shown in an `IconTile`. */
+  icon?: ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("flex items-center justify-between gap-6", className)}>
-      <div className="flex min-w-0 flex-col gap-0.5">
+      {icon !== undefined && <IconTile className="-mr-3">{icon}</IconTile>}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm font-medium text-fg">{label}</span>
         {description !== undefined && (
           <span className="text-caption text-fg-muted">{description}</span>

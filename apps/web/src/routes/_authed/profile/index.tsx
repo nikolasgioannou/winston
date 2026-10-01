@@ -16,8 +16,7 @@ export const Route = createFileRoute("/_authed/profile/")({
 });
 
 function Profile() {
-  const { email, firstName, lastName, timezone, telegram } =
-    Route.useLoaderData();
+  const { email, firstName, lastName, telegram } = Route.useLoaderData();
   const router = useRouter();
   // Relinking lasts until the link changes (or it's cancelled).
   const [relinkingFrom, setRelinkingFrom] = useState<string | null>(null);
@@ -29,17 +28,13 @@ function Profile() {
 
   return (
     <ProfilePage
-      key={`${firstName} ${lastName}`}
       email={email}
       firstName={firstName}
       lastName={lastName}
-      timezone={timezone}
       onSaveName={async (name) => {
         const result = await saveProfile({ data: name });
-        if (result.ok) {
-          await router.invalidate();
-          toast.success("Saved");
-        }
+        // Home greets by first name; keep the loaders current.
+        if (result.ok) await router.invalidate();
         return result;
       }}
       onDeleteAccount={() => {
@@ -50,17 +45,6 @@ function Profile() {
           })
           .catch(() => {
             toast.error("Couldn't delete your account. Please try again.");
-          });
-      }}
-      onTimezoneChange={(zone) => {
-        void saveProfile({ data: { timezone: zone } })
-          .then(async (result) => {
-            if (!result.ok) throw new Error(result.problem);
-            await router.invalidate();
-            toast.success(`Time zone set to ${zone.replaceAll("_", " ")}`);
-          })
-          .catch(() => {
-            toast.error("Couldn't change the time zone. Please try again.");
           });
       }}
       telegram={telegram}
