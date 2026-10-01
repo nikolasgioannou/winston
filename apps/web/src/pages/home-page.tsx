@@ -4,6 +4,8 @@ import {
   Callout,
   Card,
   cn,
+  Page,
+  PageHeader,
   Section,
   SettingRow,
   StatusPill,
@@ -35,18 +37,14 @@ export function HomePage(props: HomePageProps) {
   const setUp =
     computerDone && state.telegramLinked && state.accountsConnected > 0;
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8 sm:px-10">
-      {setUp ? <Summary state={state} /> : <Checklist {...props} />}
-    </div>
+    <Page>{setUp ? <Summary state={state} /> : <Checklist {...props} />}</Page>
   );
 }
 
 function Checklist({ state, telegramLink, retrying, onRetry }: HomePageProps) {
   return (
     <>
-      <h1 className="text-title font-semibold text-fg">
-        Welcome, {state.firstName}
-      </h1>
+      <PageHeader title={`Welcome, ${state.firstName}`} />
       <Card>
         <ComputerStep state={state} retrying={retrying} onRetry={onRetry} />
         <Step
@@ -205,9 +203,7 @@ function Marker({ number, progress }: { number: number; progress: Progress }) {
 function Summary({ state }: { state: HomeState }) {
   return (
     <>
-      <h1 className="text-title font-semibold text-fg">
-        Hi, {state.firstName}
-      </h1>
+      <PageHeader title={`Hi, ${state.firstName}`} />
       {state.attention.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-medium text-fg">

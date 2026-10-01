@@ -5,14 +5,16 @@ import {
   type Capability,
 } from "@winston/domain/connections";
 import {
+  Badge,
   Button,
   Callout,
   ConfirmDialog,
+  Page,
+  PageHeader,
   Section,
   SettingRow,
   Switch,
 } from "@winston/ui";
-import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** Where a toggle's save stands, as the row shows it. */
@@ -81,29 +83,17 @@ export function AccountPage(props: AccountPageProps) {
     </Button>
   );
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-8 sm:px-10">
-      <header className="flex flex-col gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/accounts" />}
-          // Lines the chevron up with the title below.
-          className="-ml-2 w-fit"
-        >
-          <ChevronLeft className="size-4" />
-          Connected accounts
-        </Button>
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-title font-semibold break-all text-fg">
-            {account.externalEmail}
-          </h1>
-          <p className="text-sm text-fg-muted">
+    <Page>
+      <PageHeader
+        back={{ label: "Connected accounts", link: <Link to="/accounts" /> }}
+        title={account.externalEmail}
+        action={
+          <Badge>
             {account.domain === "mail" ? "Gmail" : "Google Calendar"}
-          </p>
-        </div>
-        <StatusCallout status={account.status} action={reconnect} />
-      </header>
+          </Badge>
+        }
+      />
+      <StatusCallout status={account.status} action={reconnect} />
 
       <Section title="What Winston can do">
         {capabilitiesByDomain[account.domain].map((capability) => (
@@ -132,7 +122,7 @@ export function AccountPage(props: AccountPageProps) {
           />
         )}
       </Section>
-    </div>
+    </Page>
   );
 }
 

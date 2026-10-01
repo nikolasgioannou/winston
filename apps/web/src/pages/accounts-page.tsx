@@ -3,11 +3,14 @@ import {
   Badge,
   Button,
   EmptyState,
+  IconTile,
   LinkCard,
   linkCardRow,
   Menu,
-  StatusPill,
   type MenuLink,
+  Page,
+  PageHeader,
+  StatusPill,
 } from "@winston/ui";
 import { Link } from "@tanstack/react-router";
 import { Blocks, CalendarDays, ChevronRight, Mail } from "lucide-react";
@@ -50,11 +53,11 @@ export function AccountsPage({
 }) {
   const add = <Menu trigger={<Button>Add account</Button>} links={addLinks} />;
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8 sm:px-10">
-      <header className="flex items-center justify-between gap-6">
-        <h1 className="text-title font-semibold text-fg">Connected accounts</h1>
-        {connections.length > 0 && add}
-      </header>
+    <Page>
+      <PageHeader
+        title="Connected accounts"
+        {...(connections.length > 0 ? { action: add } : {})}
+      />
       {connections.length === 0 ? (
         <EmptyState
           icon={<Blocks />}
@@ -69,7 +72,7 @@ export function AccountsPage({
           ))}
         </LinkCard>
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -80,9 +83,7 @@ function AccountRow({ connection }: { connection: ConnectionDto }) {
       params={{ accountId: connection.id }}
       className={linkCardRow}
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-strong text-icon [&>svg]:size-4">
-        {domainIcons[connection.domain]}
-      </span>
+      <IconTile>{domainIcons[connection.domain]}</IconTile>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-2">
           <span className="text-sm font-medium text-fg">

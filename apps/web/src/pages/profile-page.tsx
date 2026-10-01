@@ -2,6 +2,8 @@ import type { ProfileUpdateResult } from "@winston/db/profile";
 import {
   Button,
   ConfirmDialog,
+  Page,
+  PageHeader,
   SearchSelect,
   Section,
   SettingRow,
@@ -39,8 +41,8 @@ export interface ProfilePageProps {
  */
 export function ProfilePage(props: ProfilePageProps) {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-8 sm:px-10">
-      <h1 className="text-title font-semibold text-fg">Profile</h1>
+    <Page>
+      <PageHeader title="Profile" />
       <Section title="You">
         <NameForm {...props} />
         <SettingRow
@@ -94,7 +96,7 @@ export function ProfilePage(props: ProfilePageProps) {
           }
         />
       </Section>
-    </div>
+    </Page>
   );
 }
 

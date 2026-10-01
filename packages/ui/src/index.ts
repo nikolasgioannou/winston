@@ -9,6 +9,7 @@ export { ConfirmDialog } from "./dialog";
 export { EmptyState, ErrorState } from "./empty-state";
 export { Select, type SelectOption, type SelectProps } from "./select";
 export { Menu, type MenuLink } from "./menu";
+export { IconTile, Page, PageHeader } from "./page";
 export { QrCode } from "./qr-code";
 export { SearchSelect } from "./search-select";
 export { Section, SettingRow } from "./settings";
