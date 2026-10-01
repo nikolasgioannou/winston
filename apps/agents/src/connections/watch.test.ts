@@ -46,6 +46,7 @@ const watchJob = (
   watchConnectionHandler({
     accessToken: () => Promise.resolve("access"),
     gmailTopic: gmailTopic ?? undefined,
+    calendarAddress: undefined,
     fetch,
   })({
     job: { payload: { connectionId } } as unknown as Job,
@@ -101,7 +102,7 @@ describe("mail watches", () => {
     });
   });
 
-  test("renewal picks usable mail connections whose watch is missing or ends within two days", async () => {
+  test("renewal picks usable connections, mail or calendar, whose watch is missing or ends within two days", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
       const now = new Date("2026-10-01T12:00:00Z");
@@ -113,8 +114,11 @@ describe("mail watches", () => {
         watchExpiresAt: new Date(now.getTime() + 5 * day),
       });
       await insertConnection(tx, user.id, { status: "expired" });
-      await insertConnection(tx, user.id, { domain: "calendar" });
-      expect(await renewWatches(tx, now)).toBe(2);
+      const calendar = await insertConnection(tx, user.id, {
+        domain: "calendar",
+        watchExpiresAt: new Date(now.getTime() + day),
+      });
+      expect(await renewWatches(tx, now)).toBe(3);
       const queued = await tx
         .select({ payload: jobs.payload })
         .from(jobs)
@@ -123,7 +127,7 @@ describe("mail watches", () => {
         queued
           .map((j) => (j.payload as { connectionId: string }).connectionId)
           .sort(),
-      ).toEqual([missing.id, soon.id].sort());
+      ).toEqual([missing.id, soon.id, calendar.id].sort());
     });
   });
 });

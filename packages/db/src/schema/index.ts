@@ -1,5 +1,6 @@
 export * from "./allowed-emails.ts";
 export * from "./audit-log.ts";
+export * from "./calendar-channels.ts";
 export * from "./connections.ts";
 export * from "./cost-ledger.ts";
 export * from "./events.ts";

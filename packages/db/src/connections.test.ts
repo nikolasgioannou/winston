@@ -24,7 +24,7 @@ const connection = (userId: string, overrides = {}) => ({
 });
 
 describe("connections", () => {
-  test("connecting or reconnecting a mail account asks for a watch on its changes; a calendar doesn't yet", async () => {
+  test("connecting or reconnecting an account asks for a watch on its changes, once while queued", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
       const vault = localTokenVault("ab".repeat(32));
@@ -47,7 +47,8 @@ describe("connections", () => {
         .select({ payload: jobs.payload })
         .from(jobs)
         .where(eq(jobs.type, "watch_connection"));
-      expect(watches.map((j) => j.payload)).toEqual([{ connectionId }]);
+      expect(watches).toHaveLength(2);
+      expect(watches[0]?.payload).toEqual({ connectionId });
     });
   });
 

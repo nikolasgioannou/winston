@@ -164,6 +164,7 @@ export class ServicesStack extends Stack {
         EC2_LAUNCH_TEMPLATE: props.vm.launchTemplateName,
         EC2_SUBNET_IDS: props.vm.subnetIds.join(","),
         GMAIL_PUSH_TOPIC: `projects/${gcpProject}/topics/gmail-push`,
+        CALENDAR_PUSH_URL: `https://api.${domain}/webhooks/calendar`,
         // In-flight steps get most of the stop timeout to finish and checkpoint (§8b).
         SHUTDOWN_TIMEOUT_MS: String((agentsStopSeconds - 10) * 1000),
       },

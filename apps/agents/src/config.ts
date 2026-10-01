@@ -58,6 +58,8 @@ const agentsConfigSchema = dbConfigSchema
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
     /** Where Gmail publishes changes (`projects/<id>/topics/gmail-push`); mail isn't watched without it. */
     GMAIL_PUSH_TOPIC: z.string().min(1).optional(),
+    /** Our calendar webhook, where Google Calendar channels push (HTTPS with a valid certificate); calendars aren't watched without it. */
+    CALENDAR_PUSH_URL: z.url().optional(),
     /** Where the site is served, for links Winston sends (like reconnecting an account). */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
     /** How many jobs this process runs at once, besides background steps. */

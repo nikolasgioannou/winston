@@ -3,6 +3,7 @@ import type { Logger } from "@winston/shared/logger";
 import { Hono } from "hono";
 import { requestId, type RequestIdVariables } from "hono/request-id";
 import type { PushIdentity } from "./google-oidc.ts";
+import { calendarWebhookRoutes } from "./routes/calendar-webhook.ts";
 import { gmailWebhookRoutes } from "./routes/gmail-webhook.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { telegramWebhookRoutes } from "./routes/telegram-webhook.ts";
@@ -56,6 +57,7 @@ export function createApp(deps: ApiDeps) {
 
   app.route("/health", healthRoutes(deps));
   app.route("/webhooks/telegram", telegramWebhookRoutes(deps));
+  app.route("/webhooks/calendar", calendarWebhookRoutes(deps));
   app.route(
     "/webhooks/gmail",
     gmailWebhookRoutes({ db: deps.db, push: deps.gmailPush }),

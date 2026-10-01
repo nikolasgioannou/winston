@@ -10,6 +10,7 @@
     "./gmail": "./src/gmail.ts",
     "./gmail-sync": "./src/gmail-sync.ts",
     "./google-calendar": "./src/google-calendar.ts",
+    "./google-calendar-sync": "./src/google-calendar-sync.ts",
     "./grants": "./src/grants.ts",
     "./mail": "./src/mail.ts",
     "./mail-compose": "./src/mail-compose.ts"

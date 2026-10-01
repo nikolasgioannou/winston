@@ -1,5 +1,3 @@
-import { refreshGoogleToken } from "@winston/connectors/access-token";
-import { gmailSync } from "@winston/connectors/gmail-sync";
 import { tokenContext } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
 import type { TokenVault } from "@winston/shared/token-vault";
@@ -48,8 +46,11 @@ export function revokeConnectionTokenHandler({
 }: {
   vault: TokenVault;
   revoke: RevokeGoogleToken;
-  /** Ends a mail account's watch with its refresh token, before the token goes (§3). */
-  stopWatch?: (refreshToken: string) => Promise<void>;
+  /** Ends an account's watches with its refresh token, before the token goes (§3). */
+  stopWatch?: (
+    connection: { id: string; domain: string },
+    refreshToken: string,
+  ) => Promise<void>;
 }): JobHandler {
   return async ({ job, db, logger }) => {
     const { connectionId } = z
@@ -80,15 +81,11 @@ export function revokeConnectionTokenHandler({
         tokenContext(connectionId),
       );
       // Best effort: notifications for a disconnected account are ignored anyway.
-      if (
-        connection.domain === "mail" &&
-        connection.watchExpiresAt &&
-        stopWatch
-      )
-        await stopWatch(refreshToken).catch((error: unknown) => {
+      if (connection.watchExpiresAt && stopWatch)
+        await stopWatch(connection, refreshToken).catch((error: unknown) => {
           logger.warn(
             { err: error, connectionId },
-            "stopping the mail watch failed",
+            "stopping the watch failed",
           );
         });
       if (sibling)
@@ -107,21 +104,5 @@ export function revokeConnectionTokenHandler({
         "disconnected connection's token dealt with",
       );
     });
-  };
-}
-
-/** Stops a mail account's watch, given its refresh token. */
-export function gmailWatchStopper(
-  client: { clientId: string; clientSecret: string },
-  send: typeof fetch = fetch,
-) {
-  return async (refreshToken: string) => {
-    const token = await refreshGoogleToken(refreshToken, client, send);
-    // A grant that's already gone has no watch left to stop.
-    if (token === "invalid_grant") return;
-    await gmailSync({
-      accessToken: () => Promise.resolve(token.access_token),
-      fetch: send,
-    }).stop();
   };
 }

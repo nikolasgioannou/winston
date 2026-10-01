@@ -1,14 +1,14 @@
 ---
 id: "a2d498"
 title: Receive Calendar push notifications and keep channels alive
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - events
   - m7
 created_at: 2026-09-27T05:40:24.514Z
-updated_at: 2026-09-27T05:40:24.568Z
+updated_at: 2026-10-01T19:20:05.973Z
 blocked_by:
   - "403364"
   - "9c407f"
@@ -24,3 +24,11 @@ Build:
 - Locally, the tunnel URL makes this work. Google requires HTTPS with a valid certificate, so note whether the chosen tunnel satisfies that.
 
 Tests: token verification, sync-message ignoring, renewal overlap logic, and stop on disconnect with a mocked API.
+
+## As built
+
+- Channels in a new `calendar_channels` table (only the token's hash is stored); watching, renewal with overlap and stopping in `apps/agents/src/connections/watch.ts`; the webhook in `apps/api/src/routes/calendar-webhook.ts`. Details in docs/design.md §3.
+- Lifetime: Google's push guide doesn't state a maximum, so channels request 7 days and the expiry Google returns is what's stored and renewed against.
+- The renewal sweep and stop-on-disconnect are shared with Gmail (`watch_expires_at` is the soonest channel end). The Cloudflare tunnel's certificate satisfies Google's HTTPS requirement for local work.
+- Calendar changes are queued as syncs; turning them into events is 6a3656.
+

@@ -315,6 +315,18 @@ interface CalendarEntry extends CalendarInfo {
   readable: boolean;
 }
 
+/**
+ * The calendars a list covers, and push channels watch: the readable ones
+ * the user shows in Google Calendar, or the primary when none is shown.
+ */
+export function listedCalendars<
+  T extends { selected: boolean; readable: boolean; primary: boolean },
+>(all: readonly T[]): T[] {
+  const readable = all.filter((c) => c.readable);
+  const shown = readable.filter((c) => c.selected);
+  return shown.length > 0 ? shown : readable.filter((c) => c.primary);
+}
+
 interface Cursor {
   /** The start of the next event to show. */
   after: string;
@@ -453,7 +465,7 @@ export function googleCalendarProvider({
               c.id === filter.calendarId ||
               c.name.toLowerCase() === filter.calendarId?.toLowerCase(),
           )
-        : readable.filter((c) => c.selected);
+        : listedCalendars(all);
       const targets =
         chosen.length > 0 ? chosen : readable.filter((c) => c.primary);
       if (filter.calendarId && chosen.length === 0)

@@ -81,14 +81,8 @@ export const tokenContext = (connectionId: string) => ({ connectionId });
  * The refresh token is sealed with the connection's id as context. A new
  * connection also tells Winston (`system.app.connected`).
  */
-/** Asks for a watch on the account's change feed, for the domains that have one (§3). */
-async function queueWatch(
-  db: DbOrTx,
-  userId: string,
-  connectionId: string,
-  domain: ConnectionDomain,
-) {
-  if (domain !== "mail") return;
+/** Asks for a watch on the account's change feed (§3). */
+async function queueWatch(db: DbOrTx, userId: string, connectionId: string) {
   await enqueue(db, watchConnectionJob.type, {
     userId,
     payload: { connectionId },
@@ -132,7 +126,7 @@ export async function saveConnection(
   if (existing) {
     await db.update(connections).set(fresh).where(eq(connections.id, id));
     // A new grant means a new watch (the old one may be gone with it).
-    await queueWatch(db, grant.userId, id, grant.domain);
+    await queueWatch(db, grant.userId, id);
     // Coming back after a disconnect is news to Winston; a refresh isn't.
     if (existing.status === "disconnected")
       await recordConnected(
@@ -155,7 +149,7 @@ export async function saveConnection(
       ...fresh,
     });
     await recordConnected(tx, grant.userId, id, "connected");
-    await queueWatch(tx, grant.userId, id, grant.domain);
+    await queueWatch(tx, grant.userId, id);
     return { connectionId: id, created: true };
   });
 }

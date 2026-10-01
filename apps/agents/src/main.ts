@@ -37,13 +37,13 @@ import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
 import { ec2VmProvider } from "./vm/ec2-provider.ts";
 import {
-  gmailWatchStopper,
   googleTokenRevoker,
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
 import {
   startWatchRenewal,
   watchConnectionHandler,
+  watchStopper,
 } from "./connections/watch.ts";
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
@@ -119,7 +119,7 @@ const worker = createWorker({
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
       revoke: googleTokenRevoker(),
-      stopWatch: gmailWatchStopper(googleClient),
+      stopWatch: watchStopper(db, googleClient),
     }),
     [syncConnectionJob.type]: syncConnectionHandler({
       mail: (connection) => ({
@@ -133,6 +133,7 @@ const worker = createWorker({
     [watchConnectionJob.type]: watchConnectionHandler({
       accessToken,
       gmailTopic: config.GMAIL_PUSH_TOPIC,
+      calendarAddress: config.CALENDAR_PUSH_URL,
     }),
     [deleteUserJob.type]: deleteUserHandler({
       provider: vmProvider,
