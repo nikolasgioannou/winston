@@ -1,13 +1,13 @@
 ---
 id: "5cd9eb"
 title: Cap front-of-house turns and hand the rest to a background agent
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m6
 created_at: 2026-09-27T05:38:50.112Z
-updated_at: 2026-09-27T05:38:50.147Z
+updated_at: 2026-10-01T18:08:46.828Z
 blocked_by:
   - "438b86"
 ---
@@ -20,3 +20,9 @@ Implement:
 - **Image pruning in the front-of-house window:** screenshots older than the current turn become text stubs (`[screenshot of opentable.com, pruned]`), keeping the rolling window mostly conversation (§1, §16).
 
 Tests with the fake model: the budget boundary produces a delegated run with a coherent brief and a user note, turns under budget are unaffected, and old images are stubbed while the current turn's stay.
+
+## As built
+
+- The model hands over on its last allowed step (a note before the 15th call asks it to `delegate`), with a server-side safety net (a brief-writing call and a fixed note) when it doesn't. Reasons and the live check in docs/design.md §1 ("Per-turn step budget").
+- Image pruning in the front window was already in place: stored messages keep image stubs and only the current turn keeps images in memory. A test now checks the next turn sees the stub.
+

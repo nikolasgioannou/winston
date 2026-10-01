@@ -19,7 +19,15 @@ import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { keepLineBreaks } from "../telegram/line-breaks.ts";
 import type { OutgoingFile } from "../telegram/sender.ts";
-import { emptyReplyNudge, messageDroppedNote, runFrontTurn } from "./turn.ts";
+import {
+  budgetFallbackNote,
+  budgetNote,
+  briefRequest,
+  emptyReplyNudge,
+  frontStepBudget,
+  messageDroppedNote,
+  runFrontTurn,
+} from "./turn.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import { localBlobStore } from "../blobs.ts";
 
@@ -269,6 +277,82 @@ describe("runFrontTurn", () => {
         expect(all.map((r) => [r.id, r.kind, r.status])).toEqual([
           [runId ?? "", "front", "completed"],
         ]);
+      },
+    );
+  });
+
+  test("at the step budget it hands the rest over itself on its last step", async () => {
+    const work = Array.from({ length: frontStepBudget - 1 }, (_, i) =>
+      toolCallReply("bash", { command: `step ${String(i)}` }),
+    );
+    await scenario(
+      [
+        [
+          ...work,
+          toolCallReply(
+            "delegate",
+            {
+              brief:
+                "Finish comparing the lease offers: two of three are read; read the third and report the cheapest.",
+            },
+            "This is taking a while; I'll finish it in the background and get back to you.",
+          ),
+        ],
+      ],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        await say("which lease offer is cheapest?");
+        await turn();
+        expect(requests[0]).toHaveLength(frontStepBudget);
+        expect(JSON.stringify(requests[0]?.at(-1))).toContain(budgetNote);
+        expect(JSON.stringify(requests[0]?.at(-2))).not.toContain(budgetNote);
+        expect(sent.map((m) => m.text)).toEqual([
+          "This is taking a while; I'll finish it in the background and get back to you.",
+        ]);
+        const tasks = await tx
+          .select()
+          .from(runs)
+          .where(and(eq(runs.userId, userId), eq(runs.kind, "background")));
+        expect(tasks.map((t) => t.brief)).toEqual([
+          "Finish comparing the lease offers: two of three are read; read the third and report the cheapest.",
+        ]);
+      },
+    );
+  });
+
+  test("if the last step doesn't hand over, the server does, with a brief the model writes", async () => {
+    const work = Array.from({ length: frontStepBudget }, (_, i) =>
+      toolCallReply("bash", { command: `step ${String(i)}` }),
+    );
+    await scenario(
+      [[...work, textReply("Goal: compare lease offers. Done: two of three.")]],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        await say("which lease offer is cheapest?");
+        const runId = await turn();
+        const asked = requests[0]?.at(-1) as {
+          tool_choice?: string;
+          messages: unknown[];
+        };
+        expect(asked.tool_choice).toBe("none");
+        expect(JSON.stringify(asked.messages.at(-1))).toContain(briefRequest);
+        // The brief isn't sent to the user; the fixed note is.
+        expect(sent.map((m) => m.text)).toEqual([budgetFallbackNote]);
+        const [task] = await tx
+          .select()
+          .from(runs)
+          .where(and(eq(runs.userId, userId), eq(runs.kind, "background")));
+        expect(task).toMatchObject({
+          brief: "Goal: compare lease offers. Done: two of three.",
+          triggerType: "delegate",
+          parentRunId: runId,
+        });
+        const stored = await tx
+          .select({ content: runMessages.content })
+          .from(runMessages)
+          .where(eq(runMessages.runId, runId ?? ""));
+        expect(stored.at(-1)?.content).toEqual({
+          role: "assistant",
+          content: budgetFallbackNote,
+        });
       },
     );
   });
@@ -545,6 +629,35 @@ describe("runFrontTurn", () => {
         const stored = JSON.stringify(rows.map((row) => row.content));
         expect(stored).toContain("stored as blob");
         expect(stored.length).toBeLessThan(5_000);
+      },
+      {
+        vmAnswer: (cmd) =>
+          cmd.includes("identify -format '%m")
+            ? { stdout: "image PNG 800 600 50000" }
+            : cmd.includes("mkdir -p")
+              ? { stdout: "800 600" }
+              : {},
+      },
+    );
+  });
+
+  test("an image from an earlier turn reaches the next turn as its stub", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("view_image", { path: "~/shot.png" }),
+          textReply("It's a login page."),
+        ],
+        [textReply("Yes, the same one.")],
+      ],
+      async ({ say, turn, requests }) => {
+        await say("what's in the screenshot?");
+        await turn(0);
+        await say("same page as before?");
+        await turn(1);
+        const next = JSON.stringify(requests[1]?.[0]?.messages);
+        expect(next).toContain("stored as blob");
+        expect(next).not.toContain("data:image/png;base64,");
       },
       {
         vmAnswer: (cmd) =>

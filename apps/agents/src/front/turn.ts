@@ -55,6 +55,7 @@ import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
+import { startBackgroundRun } from "../background/run.ts";
 import { delegateDefinition, delegateTool } from "../tools/delegate.ts";
 import {
   browserHandoffDefinition,
@@ -78,6 +79,18 @@ import {
 
 /** Most model calls in one turn (§1, "Per-turn step budget"). */
 export const frontStepBudget = 15;
+
+/** Added before the turn's last step, so the front of house hands the rest over itself. */
+export const budgetNote =
+  "This is the last step of this turn. If the work isn't finished, hand the rest to a background agent now: call `delegate` with a brief covering the goal, what you've done, where things stand and what's left, and tell the user in a line that you're carrying on in the background.";
+
+/** Asks for a brief when the last step didn't hand over. Not stored. */
+export const briefRequest =
+  "Write a self-contained brief for a background agent to finish what you were doing: the goal, what's been done, where things stand, what's left, and anything the user approved, word for word. Write only the brief.";
+
+/** Sent when the turn ran out of steps and the server handed the rest over. */
+export const budgetFallbackNote =
+  "This is taking longer than I expected, so I'm carrying on in the background. I'll let you know when it's done.";
 
 /**
  * Added once when a turn ends having sent nothing, without `end_turn`. Anthropic's
@@ -331,11 +344,27 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
 
   let nudged = false;
   let droppedNote: string | undefined;
-  let outcome: "reply" | "silent" | "empty" | "refused" | "unfinished" =
+  let budgetNoted = false;
+  let lastStepDelegated = false;
+  let outcome:
+    "reply" | "silent" | "empty" | "refused" | "delegated" | "unfinished" =
     "unfinished";
   try {
     while (steps < frontStepBudget) {
-      if (steps > 0) await steerIn(droppedNote);
+      // Before the last step, ask the model to hand the rest over (§1).
+      const lastStep = steps >= frontStepBudget - 1 && !budgetNoted;
+      if (steps > 0) {
+        const note = [droppedNote, lastStep ? budgetNote : undefined]
+          .filter(Boolean)
+          .join("\n\n");
+        const steered = await steerIn(note || undefined);
+        if (lastStep && !steered) {
+          const ask: ModelMessage = { role: "user", content: budgetNote };
+          messages.push(ask);
+          await log.store(db, ask);
+        }
+      }
+      if (lastStep) budgetNoted = true;
       droppedNote = undefined;
       const result = await callModel();
 
@@ -365,6 +394,9 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       messages.push(...result.responseMessages);
       if (stream.deliveryError) throw stream.deliveryError;
       const step = result.finalStep;
+      lastStepDelegated = step.toolCalls.some(
+        (call) => call.toolName === "delegate",
+      );
 
       if (stream.dropStep) {
         logger.info(
@@ -403,9 +435,60 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       await log.store(db, nudge);
     }
 
+    // Out of steps with work left: the model handed it over on its last
+    // step, or the server does it with a brief the model writes.
+    if (outcome === "unfinished") {
+      if (!lastStepDelegated) {
+        const brief = await gateway.generate({
+          profile: "front",
+          run: {
+            runId,
+            userId,
+            prompt,
+            contextRange: () => ({
+              fromMessageId: window[0]?.id ?? input.id,
+              toMessageId: log.lastStoredId,
+            }),
+          },
+          stepOffset: steps,
+          instructions,
+          messages: withRollingBreakpoint([
+            ...messages,
+            { role: "user", content: briefRequest },
+          ]),
+          tools,
+          toolChoice: "none",
+          stopWhen: isStepCount(1),
+          timeout: frontCallTimeoutMs,
+        });
+        steps += 1;
+        const taskId = await startBackgroundRun(db, {
+          userId,
+          brief: brief.finalStep.text.trim() || briefRequest,
+          triggerType: "delegate",
+          parentRunId: runId,
+        });
+        await deliverReply({
+          db,
+          logger,
+          telegram,
+          userId,
+          runId,
+          chatId: user.chatId,
+          text: budgetFallbackNote,
+        });
+        const said: ModelMessage = {
+          role: "assistant",
+          content: budgetFallbackNote,
+        };
+        messages.push(said);
+        await log.store(db, said);
+        logger.info({ taskId }, "out of steps; handed the rest over");
+      }
+      outcome = "delegated";
+    }
     if (outcome === "empty")
       logger.error("turn ended with an empty reply twice; nothing sent");
-    else if (outcome === "unfinished") logger.warn("turn hit the step budget");
     await finishRun(db, runId, "completed", steps);
     logger.info({ steps, outcome }, "turn completed");
     return runId;
