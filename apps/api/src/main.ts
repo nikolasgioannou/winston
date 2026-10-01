@@ -25,6 +25,13 @@ const server = Bun.serve({
       botId: botIdFromToken(config.TELEGRAM_BOT_TOKEN),
       webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
     },
+    gmailPush:
+      config.GMAIL_PUSH_AUDIENCE && config.GMAIL_PUSH_SERVICE_ACCOUNT
+        ? {
+            audience: config.GMAIL_PUSH_AUDIENCE,
+            serviceAccount: config.GMAIL_PUSH_SERVICE_ACCOUNT,
+          }
+        : undefined,
   }).fetch,
 });
 

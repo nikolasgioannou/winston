@@ -67,6 +67,9 @@ const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
   agents: { cpu: 512, memoryMiB: 1024 },
 };
 
+/** Winston's Google Cloud project (docs/runbooks/google-cloud.md, infra/gcp). */
+export const gcpProject = "winston-510100";
+
 /** How long agents gets after SIGTERM before it's killed: Fargate's maximum. */
 export const agentsStopSeconds = 120;
 
@@ -130,7 +133,13 @@ export class ServicesStack extends Stack {
     const publicUrl = `https://${domain}`;
 
     const environment: Record<Service, Record<string, string>> = {
-      api: { API_HOST: "0.0.0.0", API_PORT: String(servicePorts.api) },
+      api: {
+        API_HOST: "0.0.0.0",
+        API_PORT: String(servicePorts.api),
+        // Gmail push (infra/gcp/prod): the audience and signer Pub/Sub uses.
+        GMAIL_PUSH_AUDIENCE: `https://api.${domain}/webhooks/gmail`,
+        GMAIL_PUSH_SERVICE_ACCOUNT: `gmail-push@${gcpProject}.iam.gserviceaccount.com`,
+      },
       gateway: {
         GATEWAY_HOST: "0.0.0.0",
         GATEWAY_PORT: String(servicePorts.gateway),
@@ -154,6 +163,7 @@ export class ServicesStack extends Stack {
         VM_PROVIDER: "ec2",
         EC2_LAUNCH_TEMPLATE: props.vm.launchTemplateName,
         EC2_SUBNET_IDS: props.vm.subnetIds.join(","),
+        GMAIL_PUSH_TOPIC: `projects/${gcpProject}/topics/gmail-push`,
         // In-flight steps get most of the stop timeout to finish and checkpoint (§8b).
         SHUTDOWN_TIMEOUT_MS: String((agentsStopSeconds - 10) * 1000),
       },

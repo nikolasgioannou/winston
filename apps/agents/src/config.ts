@@ -53,6 +53,11 @@ const agentsConfigSchema = dbConfigSchema
       .string()
       .min(1)
       .default(new URL("../../../.data/blobs", import.meta.url).pathname),
+    /** The OAuth client connected accounts were granted to: refreshing their tokens. */
+    GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
+    /** Where Gmail publishes changes (`projects/<id>/topics/gmail-push`); mail isn't watched without it. */
+    GMAIL_PUSH_TOPIC: z.string().min(1).optional(),
     /** Where the site is served, for links Winston sends (like reconnecting an account). */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
     /** How many jobs this process runs at once, besides background steps. */

@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { localTokenVault } from "@winston/shared/token-vault";
 import {
   connectionDtoColumns,
   disconnectConnection,
+  saveConnection,
   setCapability,
   toConnectionDto,
 } from "./connections.ts";
@@ -22,6 +24,33 @@ const connection = (userId: string, overrides = {}) => ({
 });
 
 describe("connections", () => {
+  test("connecting or reconnecting a mail account asks for a watch on its changes; a calendar doesn't yet", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const vault = localTokenVault("ab".repeat(32));
+      const grant = {
+        userId: user.id,
+        domain: "mail" as const,
+        provider: "gmail" as const,
+        externalEmail: "ada@work.example",
+        scopes: ["gmail.modify"],
+        refreshToken: "refresh",
+      };
+      const { connectionId } = await saveConnection(tx, vault, grant);
+      await saveConnection(tx, vault, grant);
+      await saveConnection(tx, vault, {
+        ...grant,
+        domain: "calendar",
+        provider: "google_calendar",
+      });
+      const watches = await tx
+        .select({ payload: jobs.payload })
+        .from(jobs)
+        .where(eq(jobs.type, "watch_connection"));
+      expect(watches.map((j) => j.payload)).toEqual([{ connectionId }]);
+    });
+  });
+
   test("one connection per user, domain and account", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

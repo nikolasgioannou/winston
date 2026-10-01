@@ -27,6 +27,38 @@ const refreshResponseSchema = z.object({
 });
 
 /**
+ * Trades a refresh token for an access token. Returns "invalid_grant" when
+ * Google says the grant is gone (expired or revoked).
+ */
+export async function refreshGoogleToken(
+  refreshToken: string,
+  client: { clientId: string; clientSecret: string },
+  send: typeof fetch = fetch,
+) {
+  const response = await send(tokenEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+    }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    if (response.status === 400 && body.error === "invalid_grant")
+      return "invalid_grant" as const;
+    throw new Error(
+      `Refreshing a Google token failed with ${String(response.status)}: ${body.error ?? "no error code"}`,
+    );
+  }
+  return refreshResponseSchema.parse(await response.json());
+}
+
+/**
  * Access tokens for connected Google accounts, for every connector call
  * (docs/design.md §12a): the refresh token is decrypted, traded for an access
  * token, and that's cached until shortly before it expires. When Google says
@@ -78,30 +110,12 @@ export function googleAccessTokens({
       connection.tokenCiphertext,
       tokenContext(connectionId),
     );
-    const response = await send(tokenEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: client.clientId,
-        client_secret: client.clientSecret,
-      }),
-    });
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as {
-        error?: string;
-      };
-      if (response.status === 400 && body.error === "invalid_grant") {
-        cache.delete(connectionId);
-        await markExpired(db, connectionId, reconnectUrl);
-        throw new ConnectionUnavailableError(connectionId, "expired");
-      }
-      throw new Error(
-        `Refreshing a Google token failed with ${String(response.status)}: ${body.error ?? "no error code"}`,
-      );
+    const fresh = await refreshGoogleToken(refreshToken, client, send);
+    if (fresh === "invalid_grant") {
+      cache.delete(connectionId);
+      await markExpired(db, connectionId, reconnectUrl);
+      throw new ConnectionUnavailableError(connectionId, "expired");
     }
-    const fresh = refreshResponseSchema.parse(await response.json());
     cache.set(connectionId, {
       token: fresh.access_token,
       expiresAt: now() + fresh.expires_in * 1000,

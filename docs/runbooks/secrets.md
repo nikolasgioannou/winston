@@ -11,14 +11,14 @@ export AWS_PROFILE=winston-prod
 
 ## The secrets
 
-| Secret                            | Value                                                                                                          | Services        |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------- |
-| `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                        | api, agents     |
-| `winston/telegram-webhook-secret` | generated at creation                                                                                          | api             |
-| `winston/openrouter-api-key`      | the production OpenRouter key                                                                                  | agents          |
-| `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md) | web             |
-| `winston/gateway-internal-secret` | generated at creation                                                                                          | agents, gateway |
-| `winston/run-token-secret`        | generated at creation                                                                                          | agents, gateway |
+| Secret                            | Value                                                                                                          | Services             |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                        | api, agents          |
+| `winston/telegram-webhook-secret` | generated at creation                                                                                          | api                  |
+| `winston/openrouter-api-key`      | the production OpenRouter key                                                                                  | agents               |
+| `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md) | web, gateway, agents |
+| `winston/gateway-internal-secret` | generated at creation                                                                                          | agents, gateway      |
+| `winston/run-token-secret`        | generated at creation                                                                                          | agents, gateway      |
 
 Every secret starts with a random 48-character value, so the generated ones are ready as they are and the others hold a placeholder until they're set. Database credentials aren't here: RDS manages and rotates them (the `rds!db-…` secret). Connected accounts' tokens are encrypted with the KMS key `alias/winston/tokens`, not stored as secrets.
 

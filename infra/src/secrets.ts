@@ -39,6 +39,9 @@ export const serviceSecrets = {
     TELEGRAM_BOT_TOKEN: "telegram-bot-token",
     GATEWAY_INTERNAL_SECRET: "gateway-internal-secret",
     RUN_TOKEN_SECRET: "run-token-secret",
+    // Refreshing connected accounts' tokens for watches and syncs (§3).
+    GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
+    GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
   },
   gateway: {
     GATEWAY_INTERNAL_SECRET: "gateway-internal-secret",

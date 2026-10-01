@@ -39,9 +39,10 @@ describe("secrets", () => {
       "google-oauth",
       "run-token-secret",
     ]);
-    // The site signs people in; the gateway refreshes connected accounts' tokens.
-    for (const service of ["api", "agents"] as const)
-      expect(namesFor(service).has("google-oauth")).toBe(false);
+    // The site signs people in; the gateway and agents refresh connected
+    // accounts' tokens (connector calls; watches and syncs). api never does.
+    expect(namesFor("api").has("google-oauth")).toBe(false);
+    expect(namesFor("agents").has("google-oauth")).toBe(true);
   });
 
   test("every secret is used by some service", () => {

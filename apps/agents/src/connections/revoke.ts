@@ -1,3 +1,5 @@
+import { refreshGoogleToken } from "@winston/connectors/access-token";
+import { gmailSync } from "@winston/connectors/gmail-sync";
 import { tokenContext } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
 import type { TokenVault } from "@winston/shared/token-vault";
@@ -42,9 +44,12 @@ export function googleTokenRevoker(
 export function revokeConnectionTokenHandler({
   vault,
   revoke,
+  stopWatch,
 }: {
   vault: TokenVault;
   revoke: RevokeGoogleToken;
+  /** Ends a mail account's watch with its refresh token, before the token goes (§3). */
+  stopWatch?: (refreshToken: string) => Promise<void>;
 }): JobHandler {
   return async ({ job, db, logger }) => {
     const { connectionId } = z
@@ -70,27 +75,53 @@ export function revokeConnectionTokenHandler({
             ne(connections.status, "disconnected"),
           ),
         );
+      const refreshToken = await vault.decrypt(
+        connection.tokenCiphertext,
+        tokenContext(connectionId),
+      );
+      // Best effort: notifications for a disconnected account are ignored anyway.
+      if (
+        connection.domain === "mail" &&
+        connection.watchExpiresAt &&
+        stopWatch
+      )
+        await stopWatch(refreshToken).catch((error: unknown) => {
+          logger.warn(
+            { err: error, connectionId },
+            "stopping the mail watch failed",
+          );
+        });
       if (sibling)
         logger.info(
           { connectionId, siblingId: sibling.id },
           "another connection uses this Google account; deleting the token without revoking",
         );
-      else
-        await revoke(
-          await vault.decrypt(
-            connection.tokenCiphertext,
-            tokenContext(connectionId),
-          ),
-        );
+      else await revoke(refreshToken);
 
       await tx
         .update(connections)
-        .set({ tokenCiphertext: null })
+        .set({ tokenCiphertext: null, watchExpiresAt: null })
         .where(eq(connections.id, connectionId));
       logger.info(
         { connectionId, revoked: !sibling },
         "disconnected connection's token dealt with",
       );
     });
+  };
+}
+
+/** Stops a mail account's watch, given its refresh token. */
+export function gmailWatchStopper(
+  client: { clientId: string; clientSecret: string },
+  send: typeof fetch = fetch,
+) {
+  return async (refreshToken: string) => {
+    const token = await refreshGoogleToken(refreshToken, client, send);
+    // A grant that's already gone has no watch left to stop.
+    if (token === "invalid_grant") return;
+    await gmailSync({
+      accessToken: () => Promise.resolve(token.access_token),
+      fetch: send,
+    }).stop();
   };
 }

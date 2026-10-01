@@ -49,6 +49,25 @@ export const fireDerivedTimerJob = {
 } as const;
 
 /**
+ * Starting or renewing a connection's watch on its provider's change feed
+ * (§3): queued when an account connects and by the renewal sweep.
+ */
+export const watchConnectionJob = {
+  type: "watch_connection",
+  dedupeKey: (connectionId: string) => `watch_connection:${connectionId}`,
+} as const;
+
+/**
+ * Syncing a connection's changes into events (§17 event pipeline): queued by
+ * push notifications and the reconciliation sweep. One queued per
+ * connection, so a burst of notifications is one sync.
+ */
+export const syncConnectionJob = {
+  type: "sync_connection",
+  dedupeKey: (connectionId: string) => `sync_connection:${connectionId}`,
+} as const;
+
+/**
  * Provisioning a user's VM (§10, §15). Queued when a user's VM is requested
  * (at sign-up), by a setup failure's automatic retry, and by the retry
  * button. Payload `{ replace: true }` rebuilds a VM that's already running: a

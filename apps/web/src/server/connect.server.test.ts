@@ -86,12 +86,17 @@ describe("completeGoogleConnect", () => {
           externalEmail: "ada@acme.com",
         },
       });
+      // Winston hears of it, and Gmail starts telling us about changes.
       expect(
-        await tx
-          .select({ type: jobs.type })
-          .from(jobs)
-          .where(eq(jobs.userId, user.id)),
-      ).toEqual([{ type: "front_turn" }]);
+        (
+          await tx
+            .select({ type: jobs.type })
+            .from(jobs)
+            .where(eq(jobs.userId, user.id))
+        )
+          .map((job) => job.type)
+          .sort(),
+      ).toEqual(["front_turn", "watch_connection"]);
     });
   });
 

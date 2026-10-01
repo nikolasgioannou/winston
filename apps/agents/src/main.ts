@@ -12,6 +12,7 @@ import {
   restoreVmJob,
   revokeConnectionTokenJob,
   runStepJob,
+  watchConnectionJob,
   saveAttachmentJob,
   transcribeVoiceJob,
 } from "@winston/domain/jobs";
@@ -35,9 +36,15 @@ import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
 import { ec2VmProvider } from "./vm/ec2-provider.ts";
 import {
+  gmailWatchStopper,
   googleTokenRevoker,
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
+import {
+  startWatchRenewal,
+  watchConnectionHandler,
+} from "./connections/watch.ts";
+import { googleAccessTokens } from "@winston/connectors/access-token";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
@@ -87,6 +94,17 @@ const vmProvider =
       });
 
 const tokenVault = createTokenVault(config);
+const googleClient = {
+  clientId: config.GOOGLE_OAUTH_CLIENT_ID,
+  clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
+};
+// Connected accounts' access tokens, for watches and syncs (§12a).
+const accessToken = googleAccessTokens({
+  db,
+  vault: tokenVault,
+  client: googleClient,
+  reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
+});
 
 const worker = createWorker({
   db,
@@ -97,6 +115,11 @@ const worker = createWorker({
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
       revoke: googleTokenRevoker(),
+      stopWatch: gmailWatchStopper(googleClient),
+    }),
+    [watchConnectionJob.type]: watchConnectionHandler({
+      accessToken,
+      gmailTopic: config.GMAIL_PUSH_TOPIC,
     }),
     [deleteUserJob.type]: deleteUserHandler({
       provider: vmProvider,
@@ -163,6 +186,7 @@ async function shutdown(signal: string) {
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
   scheduler.stop();
+  watchRenewal.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
   await db.$client.end();
   clearTimeout(timeout);
@@ -189,6 +213,7 @@ sweepGrants();
 worker.start();
 backgroundWorker.start();
 const scheduler = startScheduler(db, logger);
+const watchRenewal = startWatchRenewal(db, logger);
 logger.info(
   {
     concurrency: config.WORKER_CONCURRENCY,

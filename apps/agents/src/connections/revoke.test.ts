@@ -36,11 +36,20 @@ async function connectionFor(
   return id;
 }
 
-function run(tx: DbOrTx, connectionId: string, revoked: string[]) {
+function run(
+  tx: DbOrTx,
+  connectionId: string,
+  revoked: string[],
+  stopped: string[] = [],
+) {
   return revokeConnectionTokenHandler({
     vault,
     revoke: (token) => {
       revoked.push(token);
+      return Promise.resolve();
+    },
+    stopWatch: (token) => {
+      stopped.push(token);
       return Promise.resolve();
     },
   })({
@@ -64,6 +73,27 @@ describe("revokeConnectionTokenHandler", () => {
       await run(tx, id, revoked);
       expect(revoked).toEqual([`refresh-${id}`]);
       expect(await tokenOf(tx, id)).toBeNull();
+    });
+  });
+
+  test("stops a watched mail account's watch first, and forgets the watch", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const watched = await connectionFor(tx, user.id, {
+        watchExpiresAt: new Date(Date.now() + 86_400_000),
+      });
+      const unwatched = await connectionFor(tx, user.id, {
+        externalEmail: "other@acme.com",
+      });
+      const stopped: string[] = [];
+      await run(tx, watched, [], stopped);
+      await run(tx, unwatched, [], stopped);
+      expect(stopped).toEqual([`refresh-${watched}`]);
+      const [row] = await tx
+        .select()
+        .from(connections)
+        .where(eq(connections.id, watched));
+      expect(row?.watchExpiresAt).toBeNull();
     });
   });
 

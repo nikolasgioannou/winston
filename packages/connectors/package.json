@@ -8,6 +8,7 @@
     "./errors": "./src/errors.ts",
     "./free-slots": "./src/free-slots.ts",
     "./gmail": "./src/gmail.ts",
+    "./gmail-sync": "./src/gmail-sync.ts",
     "./google-calendar": "./src/google-calendar.ts",
     "./grants": "./src/grants.ts",
     "./mail": "./src/mail.ts",
