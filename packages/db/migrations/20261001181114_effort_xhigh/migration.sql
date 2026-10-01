@@ -1,0 +1,1 @@
+ALTER TYPE "run_effort" ADD VALUE 'xhigh';

@@ -128,4 +128,39 @@ describe("winston task", () => {
       ].map((at) => ago(at, now)),
     ).toEqual(["45s", "12m", "3h", "2d"]);
   });
+
+  test("update changes the current task's effort unless given an id; bad levels never reach the backend", async () => {
+    const current = await cli(["task", "update", "--effort", "high"], () =>
+      Response.json({
+        timeZone: "UTC",
+        task: task("task_01a", { effort: "high" }),
+      }),
+    );
+    expect(current.requests[0]?.method).toBe("PATCH");
+    expect(new URL(current.requests[0]?.url ?? "").pathname).toBe(
+      "/v1/tasks/current",
+    );
+    expect(current.out).toBe(
+      "task_01a now runs at high effort, from its next step.",
+    );
+    const named = await cli(
+      ["task", "update", "task_01b", "--effort", "low"],
+      () =>
+        Response.json({
+          timeZone: "UTC",
+          task: task("task_01b", { effort: "low" }),
+        }),
+    );
+    expect(new URL(named.requests[0]?.url ?? "").pathname).toBe(
+      "/v1/tasks/task_01b",
+    );
+    for (const argv of [
+      ["task", "update", "--effort", "max"],
+      ["task", "update"],
+    ]) {
+      const bad = await cli(argv, () => Response.json({}));
+      expect(bad.code).toBe(1);
+      expect(bad.requests).toHaveLength(0);
+    }
+  });
 });

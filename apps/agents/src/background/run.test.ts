@@ -653,4 +653,34 @@ describe("background runs", () => {
     });
     expect(contextOf(log.slice(0, 5))).toHaveLength(5);
   });
+
+  test("a raised effort applies from the run's next model call", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const fake = fakeGateway({
+        replies: [toolCallReply("bash", { command: "ls" }), textReply("Done.")],
+      });
+      const runId = await startBackgroundRun(tx, {
+        userId: user.id,
+        brief: "Check the inbox.",
+        effort: "low",
+      });
+      const deps: BackgroundDeps = {
+        db: tx,
+        logger,
+        gateway: fake.gateway,
+        vm: fakeVmClient().client,
+        runTokenSecret: testRunTokenSecret,
+        blobs,
+        retryDelayMs: 0,
+      };
+      await runBackgroundStep(deps, runId);
+      await tx.update(runs).set({ effort: "xhigh" }).where(eq(runs.id, runId));
+      await runBackgroundStep(deps, runId);
+      expect(fake.requests.map((r) => r.reasoning)).toEqual([
+        { effort: "low" },
+        { effort: "xhigh" },
+      ]);
+    });
+  });
 });

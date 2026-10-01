@@ -1,14 +1,14 @@
 ---
 id: "12c38a"
 title: Let runs raise their own effort
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - cli
   - m6
 created_at: 2026-09-27T05:38:50.163Z
-updated_at: 2026-09-27T05:38:50.198Z
+updated_at: 2026-10-01T18:13:16.526Z
 blocked_by:
   - "6abd88"
 ---

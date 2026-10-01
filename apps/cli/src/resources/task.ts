@@ -12,6 +12,9 @@ type Task = Page["tasks"][number];
 type Detail = InferResponseType<Tasks[":id"]["$get"], 200>;
 type Cancelled = InferResponseType<Tasks[":id"]["cancel"]["$post"], 200>;
 type Resumed = InferResponseType<Tasks[":id"]["resume"]["$post"], 200>;
+type Updated = InferResponseType<Tasks[":id"]["$patch"], 200>;
+
+const efforts = ["low", "medium", "high", "xhigh"] as const;
 
 /** How long ago, roughly: `45s`, `12m`, `3h`, `2d`. */
 export function ago(iso: string, now = Date.now()) {
@@ -112,7 +115,8 @@ const needId = (args: string[]) => {
 
 export const task: Resource = {
   name: "task",
-  description: "Your background tasks: what's running, cancel, resume",
+  description:
+    "Your background tasks: what's running, cancel, resume, change effort",
   ids: ["task"],
   verbs: [
     {
@@ -191,6 +195,43 @@ export const task: Resource = {
           case "finished":
             return `${result.id} had already ended (${result.status}).`;
         }
+      },
+    },
+    {
+      name: "update",
+      summary:
+        "Change a task's effort; without an id, the task you're running in",
+      usage: "[<task_id>]",
+      flags: [
+        {
+          name: "effort",
+          value: "low|medium|high|xhigh",
+          description: "How hard its model calls think from the next step on",
+        },
+      ],
+      examples: [
+        "winston task update --effort high",
+        "winston task update task_01k5… --effort low",
+      ],
+      run: async ({ client, flags, args }) => {
+        const value = textFlag(flags, "effort");
+        const effort = efforts.find((e) => e === value);
+        if (!effort)
+          throw CliError.usage(
+            value === undefined
+              ? "Nothing to update."
+              : `--effort is low, medium, high or xhigh, not "${value}".`,
+            value === undefined
+              ? "Pass --effort low|medium|high|xhigh."
+              : undefined,
+          );
+        const [id = "current"] = args;
+        const result = await call<Updated>(
+          client.v1.tasks[":id"].$patch({ param: { id }, json: { effort } }),
+        );
+        return flags.json === true
+          ? json(result)
+          : `${result.task.id} now runs at ${result.task.effort} effort, from its next step.`;
       },
     },
     {

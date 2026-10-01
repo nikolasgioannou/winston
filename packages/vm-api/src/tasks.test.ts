@@ -198,4 +198,36 @@ describe("task routes", () => {
       ).toContain("isn't parked (it's running)");
     });
   });
+
+  test("update changes a task's effort; with no id, the background task calling", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const mine = await task(tx, user.id, "running");
+      const other = await task(tx, user.id, "parked");
+      const done = await task(tx, user.id, "completed");
+      const api = setupApi(tx);
+      const patch = (
+        caller: ReturnType<typeof api.as>,
+        id: string,
+        body: unknown,
+      ) => caller(`/v1/tasks/${id}`, { method: "PATCH", body });
+      const fromTask = api.as(user.id, mine, "background");
+      const updated = await patch(fromTask, "current", { effort: "xhigh" });
+      expect(await updated.json()).toMatchObject({
+        task: { id: mine, effort: "xhigh" },
+      });
+      expect(
+        (await patch(api.as(user.id), other, { effort: "low" })).status,
+      ).toBe(200);
+      const [row] = await tx.select().from(runs).where(eq(runs.id, other));
+      expect(row?.effort).toBe("low");
+      expect(
+        (await patch(api.as(user.id), "current", { effort: "high" })).status,
+      ).toBe(422);
+      expect((await patch(fromTask, mine, { effort: "max" })).status).toBe(400);
+      expect((await patch(fromTask, done, { effort: "high" })).status).toBe(
+        409,
+      );
+    });
+  });
 });

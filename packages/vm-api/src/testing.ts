@@ -329,12 +329,12 @@ export function setupApi(
       },
     },
   });
-  const as = (userId: string, runId = "run_1") => {
-    const token = mintRunToken(
-      testSecret,
-      { runId, userId, kind: "front" },
-      60_000,
-    );
+  const as = (
+    userId: string,
+    runId = "run_1",
+    kind: "front" | "background" = "front",
+  ) => {
+    const token = mintRunToken(testSecret, { runId, userId, kind }, 60_000);
     return (path: string, init: { method?: string; body?: unknown } = {}) =>
       app.request(
         path,

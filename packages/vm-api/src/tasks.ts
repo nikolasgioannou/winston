@@ -4,6 +4,7 @@
  * boundary; resume continues a parked one with a note.
  */
 import type { DbOrTx } from "@winston/db/client";
+import { finalRunStatuses } from "@winston/db/run-state";
 import { runs, users } from "@winston/db/schema";
 import { cancelTask, resumeTask } from "@winston/db/tasks";
 import { parseHumanTime } from "@winston/shared/human-time";
@@ -30,6 +31,10 @@ const listQuery = z.object({
 });
 
 const resumeBody = z.object({ note: z.string().optional() });
+
+const updateBody = z.object({
+  effort: z.enum(["low", "medium", "high", "xhigh"]),
+});
 
 type Run = typeof runs.$inferSelect;
 
@@ -134,6 +139,46 @@ export function taskRoutes({ db }: { db: DbOrTx }) {
       const run = await taskFor(userId, c.req.param("id"));
       return c.json({ timeZone: await timeZoneOf(userId), task: taskDto(run) });
     })
+    .patch(
+      "/:id",
+      validator("json", (value) => {
+        const parsed = updateBody.safeParse(value);
+        if (!parsed.success)
+          throw new ApiFailure(
+            "invalid_request",
+            z.prettifyError(parsed.error),
+            "Pass --effort low, medium, high or xhigh.",
+          );
+        return parsed.data;
+      }),
+      async (c) => {
+        const { userId, runId, runKind } = c.get("run");
+        const asked = c.req.param("id");
+        // `current` is the run making the call.
+        if (asked === "current" && runKind !== "background")
+          throw new ApiFailure(
+            "not_supported",
+            "Only background tasks have an effort to change; this is a conversation turn.",
+            "Pass a task_ id to change a background task's effort.",
+          );
+        const run = await taskFor(userId, asked === "current" ? runId : asked);
+        if (finalRunStatuses.includes(run.status))
+          throw new ApiFailure(
+            "conflict",
+            `${run.id} has already ended (${run.status}).`,
+          );
+        const { effort } = c.req.valid("json");
+        const [updated] = await db
+          .update(runs)
+          .set({ effort })
+          .where(eq(runs.id, run.id))
+          .returning();
+        return c.json({
+          timeZone: await timeZoneOf(userId),
+          task: taskDto(updated ?? run),
+        });
+      },
+    )
     .post("/:id/cancel", async (c) => {
       const { userId } = c.get("run");
       const run = await taskFor(userId, c.req.param("id"));

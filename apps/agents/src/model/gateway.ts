@@ -5,10 +5,12 @@
  * - Routing is set on the model only. Per-call `providerOptions.openrouter`
  *   is copied shallowly into the request, so a per-call `provider` would
  *   replace this one, fallbacks setting included.
- * - Effort is fixed per profile and always sent explicitly (Opus defaults to
- *   medium), through the provider's `reasoning` setting; the AI SDK's
- *   top-level `reasoning` option is ignored by this provider. It never changes
- *   mid-conversation: through OpenRouter that invalidates the message cache.
+ * - Effort comes from the profile, or a background run's own setting, and is
+ *   always sent explicitly (Opus defaults to medium), through the provider's
+ *   `reasoning` setting; the AI SDK's top-level `reasoning` option is ignored
+ *   by this provider. Changing it mid-conversation invalidates the message
+ *   cache through OpenRouter, so only a background run raising its own effort
+ *   does (one miss each time).
  * - Sampling settings and forced tool choice are rejected: Anthropic's
  *   thinking models return 400 for them.
  * - Every call is recorded: `generate` hands each step to the log sink
@@ -85,11 +87,11 @@ export type GenerateOptions<Tools extends ToolSet> = OmitModel<
   run: ModelRun;
   /** Added to the recorded step numbers, for callers that run one step per call. */
   stepOffset?: number;
-  /** The run's own effort, fixed for the run, instead of the profile's (a background task's). */
+  /** The run's own effort instead of the profile's (a background task's; changing it costs one cache miss). */
   effort?: Effort;
 };
 
-export type Effort = "low" | "medium" | "high";
+export type Effort = "low" | "medium" | "high" | "xhigh";
 
 export function createModelGateway({
   apiKey,

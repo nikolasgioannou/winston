@@ -27,7 +27,12 @@ export const runKind = pgEnum("run_kind", ["front", "background"]);
 export const runTrigger = pgEnum("run_trigger", ["delegate"]);
 
 /** Reasoning effort for a run's model calls (§6). */
-export const runEffort = pgEnum("run_effort", ["low", "medium", "high"]);
+export const runEffort = pgEnum("run_effort", [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
 
 /**
  * One agent run: a front-of-house turn (`run_…`), or a background task
@@ -50,7 +55,7 @@ export const runs = snakeCase.table("runs", {
   }),
   /** Background: the self-contained brief it was started with. */
   brief: text(),
-  /** Background: the effort its model calls use, when not the profile's own. */
+  /** Background: the effort its model calls use, when not the profile's own; the run can raise it. */
   effort: runEffort(),
   /** Background: its final answer, or where it got to when capped or failed. */
   result: text(),
