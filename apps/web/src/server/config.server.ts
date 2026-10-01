@@ -1,10 +1,10 @@
 import { dbConfigSchema } from "@winston/db/config";
-import { localVaultConfigSchema } from "@winston/shared/token-vault";
+import { tokenVaultConfigSchema } from "@winston/shared/token-vault";
 import { loadConfig } from "@winston/shared/config";
 import { z } from "zod";
 
 const webConfigSchema = dbConfigSchema
-  .extend(localVaultConfigSchema.shape)
+  .extend(tokenVaultConfigSchema.shape)
   .extend({
     /** The Google OAuth client for this environment (docs/runbooks/google-cloud.md). */
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),

@@ -1,14 +1,14 @@
 ---
 id: "2ca5a6"
 title: Wire production secrets and the KMS token vault
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.611Z
-updated_at: 2026-09-27T05:36:32.662Z
+updated_at: 2026-10-01T05:03:50.064Z
 blocked_by:
   - "35fdd4"
   - "f25d3b"
@@ -32,3 +32,5 @@ Implement the **KMS envelope encryption** vault behind the interface from the co
 Provide `docs/runbooks/secrets.md`: how to set or rotate each secret value with the AWS CLI.
 
 Tests: the KMS vault against a mocked KMS client (round trip, tampering), and a CDK assertion that each task definition references only its allowed secrets.
+
+**Done (2026-10-01):** the secrets exist only for what the code reads today (no session secret, since sessions are Postgres rows, and no Jev key until Jev is wired). Task definitions don't exist yet, so the per-task-definition secrets assertion and the KMS grants moved to the Fargate ticket (071e49).

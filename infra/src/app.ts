@@ -2,6 +2,7 @@ import { Stack, type App } from "aws-cdk-lib";
 import { DataStack } from "./data.ts";
 import { EdgeStack } from "./edge.ts";
 import { NetworkStack } from "./network.ts";
+import { ServicesStack } from "./services.ts";
 
 /** Where Winston runs: the winston-prod account (docs/runbooks/aws-access.md). */
 export const production = {
@@ -42,9 +43,10 @@ export function defineStacks(app: App, environment: Environment = production) {
   return {
     network,
     data,
-    services: stack(
+    services: new ServicesStack(
+      app,
       "Services",
-      "ECS services, ECR, the load balancer and secrets",
+      props("Services", "ECS services, ECR, the load balancer and secrets"),
     ),
     edge: new EdgeStack(app, "Edge", {
       ...props("Edge", "Certificates and CloudFront"),

@@ -26,7 +26,7 @@ Research ECS Fargate details before writing it:
 
 Build:
 - ECR repositories, and an ECS cluster.
-- Task definitions with per-service secrets, IAM task roles following least privilege (KMS decrypt only where needed, S3 access scoped per bucket), log groups with retention, and health checks.
+- Task definitions with per-service secrets (from `Secrets.environmentFor(service)` in `infra/src/secrets.ts`; set `TOKEN_KMS_KEY_ID` for web, api and agents; grant `kms:Decrypt` + `kms:GenerateDataKey` on the tokens key to api and agents and only `kms:GenerateDataKey` to web), IAM task roles following least privilege (KMS decrypt only where needed, S3 access scoped per bucket), log groups with retention, and health checks.
 - Services in the public subnets with public IPs.
 - **Database credentials** (decided in the data stack, docs/design.md §12a): services get the database host and the RDS-managed secret's ARN, not a password. `@winston/db`'s client passes postgres.js a `password` function that reads the secret's current value for each new connection, so rotation never needs a restart. Connect with TLS (verify against the RDS CA bundle). Grant each task role `secretsmanager:GetSecretValue` on that secret only.
 - An ALB with a certificate:
@@ -34,6 +34,6 @@ Build:
   - `gateway.runwinston.com` → `gateway`, for VM websockets only. Its internal API is *not* routed publicly.
   - `web` behind CloudFront, in the next ticket.
 
-Record the chosen sizes and expected monthly cost in §19. Stack tests: no service is publicly reachable except through the ALB, the gateway internal API isn't exposed on the ALB, and the circuit breaker is enabled.
+Record the chosen sizes and expected monthly cost in §19. Stack tests: each task definition references only the secrets `serviceSecrets` gives its service (moved here from the secrets ticket, since task definitions start here), no service is publicly reachable except through the ALB, the gateway internal API isn't exposed on the ALB, and the circuit breaker is enabled.
 
 - Output the load balancer's DNS name, and have the founder add the `api` and `gateway` CNAMEs in Cloudflare (DNS only), following docs/runbooks/dns.md. Use the Edge stack's certificate.

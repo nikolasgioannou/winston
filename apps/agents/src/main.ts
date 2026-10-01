@@ -32,7 +32,7 @@ import {
   googleTokenRevoker,
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
-import { localTokenVault } from "@winston/shared/token-vault";
+import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
   reconnectUrlFor,
@@ -66,7 +66,7 @@ const vmProvider = dockerVmProvider({
   gatewayUrl: config.VM_GATEWAY_URL,
 });
 
-const tokenVault = localTokenVault(config.TOKEN_ENCRYPTION_KEY);
+const tokenVault = createTokenVault(config);
 
 const worker = createWorker({
   db,
