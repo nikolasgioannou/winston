@@ -14,13 +14,7 @@ export const warnBeforeMs = 24 * 60 * 60_000;
 
 type Connection = Pick<
   typeof connections.$inferSelect,
-  | "id"
-  | "userId"
-  | "domain"
-  | "provider"
-  | "alias"
-  | "externalEmail"
-  | "grantedAt"
+  "id" | "userId" | "domain" | "provider" | "externalEmail" | "grantedAt"
 >;
 
 /** Makes each connection's one-tap reconnect link. */
@@ -39,7 +33,6 @@ const columns = {
   userId: connections.userId,
   domain: connections.domain,
   provider: connections.provider,
-  alias: connections.alias,
   externalEmail: connections.externalEmail,
   grantedAt: connections.grantedAt,
 };
@@ -62,7 +55,6 @@ async function recordGrantEvent(
       connectionId: connection.id,
       domain: connection.domain,
       provider: connection.provider,
-      alias: connection.alias,
       externalEmail: connection.externalEmail,
       expiresAt: new Date(
         connection.grantedAt.getTime() + grantLifetimeMs,

@@ -43,8 +43,6 @@ export const connections = snakeCase.table(
     provider: connectionProvider().notNull(),
     /** The Google account's address. */
     externalEmail: text().notNull(),
-    /** The user's name for it, like `work`, as in `mail:work` (`aliasPattern`). */
-    alias: text(),
     /** The OAuth scopes Google granted. */
     scopes: text().array().notNull().default([]),
     capabilities: jsonb().$type<CapabilityMap>().notNull().default({}),
@@ -65,7 +63,5 @@ export const connections = snakeCase.table(
   (t) => [
     // Also serves lookups by user, since user_id leads.
     unique().on(t.userId, t.domain, t.externalEmail),
-    // Winston picks an account by alias (`--account work`).
-    unique().on(t.userId, t.domain, t.alias),
   ],
 );

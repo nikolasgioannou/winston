@@ -1,6 +1,4 @@
 import {
-  aliasPattern,
-  defaultAlias,
   defaultCapabilities,
   isCapabilityOf,
   type ConnectionDomain,
@@ -27,7 +25,6 @@ export interface ConnectionDto {
   domain: ConnectionRow["domain"];
   provider: ConnectionRow["provider"];
   externalEmail: string;
-  alias: string | null;
   scopes: string[];
   capabilities: ConnectionRow["capabilities"];
   grantedAt: string;
@@ -44,7 +41,6 @@ export const connectionDtoColumns = {
   domain: connections.domain,
   provider: connections.provider,
   externalEmail: connections.externalEmail,
-  alias: connections.alias,
   scopes: connections.scopes,
   capabilities: connections.capabilities,
   grantedAt: connections.grantedAt,
@@ -64,7 +60,6 @@ export function toConnectionDto(
     domain: row.domain,
     provider: row.provider,
     externalEmail: row.externalEmail,
-    alias: row.alias,
     scopes: row.scopes,
     capabilities: row.capabilities,
     grantedAt: row.grantedAt.toISOString(),
@@ -78,7 +73,7 @@ export const tokenContext = (connectionId: string) => ({ connectionId });
 
 /**
  * Stores a new grant (docs/design.md §12a): a new connection with the
- * default alias and capabilities, or, for an account the user already
+ * default capabilities, or, for an account the user already
  * connected in this domain, fresh tokens and scopes on the same connection.
  * The refresh token is sealed with the connection's id as context. A new
  * connection also tells Winston (`system.app.connected`).
@@ -130,26 +125,12 @@ export async function saveConnection(
   }
 
   return db.transaction(async (tx) => {
-    const aliases = await tx
-      .select({ alias: connections.alias })
-      .from(connections)
-      .where(
-        and(
-          eq(connections.userId, grant.userId),
-          eq(connections.domain, grant.domain),
-        ),
-      );
-    const alias = defaultAlias(
-      grant.externalEmail,
-      new Set(aliases.flatMap((row) => (row.alias ? [row.alias] : []))),
-    );
     await tx.insert(connections).values({
       id,
       userId: grant.userId,
       domain: grant.domain,
       provider: grant.provider,
       externalEmail: grant.externalEmail,
-      alias,
       capabilities: defaultCapabilities[grant.domain],
       ...fresh,
     });
@@ -165,7 +146,6 @@ async function connectionFacts(db: DbOrTx, connectionId: string) {
       connectionId: connections.id,
       domain: connections.domain,
       provider: connections.provider,
-      alias: connections.alias,
       externalEmail: connections.externalEmail,
     })
     .from(connections)
@@ -218,47 +198,6 @@ export async function setCapability(
     .where(ownedBy(userId, connectionId))
     .returning({ capabilities: connections.capabilities });
   return updated?.capabilities;
-}
-
-export type RenameResult =
-  | { ok: true; alias: string }
-  | { ok: false; problem: "invalid" | "taken" | "not_found" };
-
-/**
- * Renames a user's connection. An alias is a shell-safe word
- * (`aliasPattern`), unique among the user's connections in that domain.
- */
-export async function renameConnection(
-  db: DbOrTx,
-  userId: string,
-  connectionId: string,
-  alias: string,
-): Promise<RenameResult> {
-  if (!aliasPattern.test(alias)) return { ok: false, problem: "invalid" };
-  return db.transaction(async (tx) => {
-    const [connection] = await tx
-      .select({ domain: connections.domain })
-      .from(connections)
-      .where(ownedBy(userId, connectionId));
-    if (!connection) return { ok: false, problem: "not_found" };
-    const [clash] = await tx
-      .select({ id: connections.id })
-      .from(connections)
-      .where(
-        and(
-          eq(connections.userId, userId),
-          eq(connections.domain, connection.domain),
-          eq(connections.alias, alias),
-          ne(connections.id, connectionId),
-        ),
-      );
-    if (clash) return { ok: false, problem: "taken" };
-    await tx
-      .update(connections)
-      .set({ alias })
-      .where(ownedBy(userId, connectionId));
-    return { ok: true, alias };
-  });
 }
 
 /**

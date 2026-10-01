@@ -44,14 +44,9 @@ export function HomePage(props: HomePageProps) {
 function Checklist({ state, telegramLink, retrying, onRetry }: HomePageProps) {
   return (
     <>
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-title font-semibold text-fg">
-          Welcome, {state.firstName}
-        </h1>
-        <p className="text-sm text-fg-muted">
-          Three steps, and Winston is ready to help you from Telegram.
-        </p>
-      </header>
+      <h1 className="text-title font-semibold text-fg">
+        Welcome, {state.firstName}
+      </h1>
       <Card>
         <ComputerStep state={state} retrying={retrying} onRetry={onRetry} />
         <Step
@@ -210,14 +205,9 @@ function Marker({ number, progress }: { number: number; progress: Progress }) {
 function Summary({ state }: { state: HomeState }) {
   return (
     <>
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-title font-semibold text-fg">
-          Hi, {state.firstName}
-        </h1>
-        <p className="text-sm text-fg-muted">
-          Winston is ready. Message it in Telegram any time.
-        </p>
-      </header>
+      <h1 className="text-title font-semibold text-fg">
+        Hi, {state.firstName}
+      </h1>
       {state.attention.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-medium text-fg">

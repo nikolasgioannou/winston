@@ -73,7 +73,6 @@ describe("sweepConnectionGrants", () => {
           connectionId: id,
           domain: "mail",
           provider: "gmail",
-          alias: "work",
           externalEmail: "ada@acme.com",
           expiresAt: at(grantLifetimeMs).toISOString(),
           reconnectUrl: `https://runwinston.com/auth/google/connect?reconnect=${id}`,

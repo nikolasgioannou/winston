@@ -11,7 +11,6 @@ const account = (
   domain: "mail",
   provider: "gmail",
   externalEmail: "ada@acme.com",
-  alias: "work",
   scopes: ["gmail.modify"],
   capabilities: { read: true, draft: true, send: false, modify_labels: false },
   grantedAt: "2026-09-29T12:00:00.000Z",
@@ -24,14 +23,12 @@ export const work = account({ id: "acct_1" });
 const personalMail = account({
   id: "acct_2",
   externalEmail: "ada.lovelace@gmail.com",
-  alias: "personal",
 });
 export const personalCalendar = account({
   id: "acct_3",
   domain: "calendar",
   provider: "google_calendar",
   externalEmail: "ada.lovelace@gmail.com",
-  alias: "personal",
   scopes: ["calendar.events"],
 });
 

@@ -2,7 +2,7 @@ export { Badge } from "./badge";
 export { GoogleIcon } from "./brand-icons";
 export { Button, type ButtonProps } from "./button";
 export { Callout } from "./callout";
-export { Card } from "./card";
+export { Card, LinkCard, linkCardRow } from "./card";
 export { cn } from "./cn";
 export { controlHeight, type ControlSize } from "./control";
 export { ConfirmDialog } from "./dialog";

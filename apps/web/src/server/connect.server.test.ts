@@ -56,7 +56,6 @@ describe("completeGoogleConnect", () => {
         domain: "mail",
         provider: "gmail",
         externalEmail: "ada@acme.com",
-        alias: "work",
         scopes: ["gmail.modify"],
         capabilities: {
           read: true,
@@ -84,7 +83,6 @@ describe("completeGoogleConnect", () => {
           connectionId: row.id,
           domain: "mail",
           provider: "gmail",
-          alias: "work",
           externalEmail: "ada@acme.com",
         },
       });
@@ -109,7 +107,7 @@ describe("completeGoogleConnect", () => {
       const [first] = await connectionsOf(tx, user.id);
       await tx
         .update(connections)
-        .set({ status: "expired", alias: "day job" })
+        .set({ status: "expired" })
         .where(eq(connections.userId, user.id));
 
       await completeGoogleConnect(
@@ -130,7 +128,6 @@ describe("completeGoogleConnect", () => {
       expect(again).toMatchObject({
         id: first.id,
         status: "ok",
-        alias: "day job",
       });
       expect(again.grantedAt.getTime()).toBeGreaterThanOrEqual(
         first.grantedAt.getTime(),
@@ -150,7 +147,7 @@ describe("completeGoogleConnect", () => {
     });
   });
 
-  test("a second account in the same domain gets its own alias; the calendar keeps what was granted", async () => {
+  test("a second account in the same domain is its own connection; the calendar keeps what was granted", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
       await completeGoogleConnect(
@@ -189,7 +186,7 @@ describe("completeGoogleConnect", () => {
       // One transaction gives them all the same created_at, so sort here.
       expect(
         rows
-          .map((r) => [r.domain, r.externalEmail, r.alias, r.scopes])
+          .map((r) => [r.domain, r.externalEmail, r.scopes])
           .sort((a, b) =>
             `${String(a[0])}${String(a[1])}`.localeCompare(
               `${String(b[0])}${String(b[1])}`,
@@ -199,11 +196,10 @@ describe("completeGoogleConnect", () => {
         [
           "calendar",
           "ada@acme.com",
-          "work",
           ["calendar.events", "calendar.calendarlist.readonly"],
         ],
-        ["mail", "ada@acme.com", "work", ["gmail.modify"]],
-        ["mail", "ada@bigco.com", "bigco", ["gmail.modify"]],
+        ["mail", "ada@acme.com", ["gmail.modify"]],
+        ["mail", "ada@bigco.com", ["gmail.modify"]],
       ]);
     });
   });

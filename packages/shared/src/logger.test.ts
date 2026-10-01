@@ -54,7 +54,7 @@ describe("createLogger", () => {
       {
         token: "t0p",
         headers: { authorization: "Bearer abc", accept: "json" },
-        connection: { ciphertext: "xyz", alias: "work" },
+        connection: { ciphertext: "xyz", email: "ada@acme.com" },
       },
       "request",
     );
@@ -64,7 +64,7 @@ describe("createLogger", () => {
     expect(lines[0]).toMatchObject({
       token: "[redacted]",
       headers: { authorization: "[redacted]", accept: "json" },
-      connection: { ciphertext: "[redacted]", alias: "work" },
+      connection: { ciphertext: "[redacted]", email: "ada@acme.com" },
     });
   });
 

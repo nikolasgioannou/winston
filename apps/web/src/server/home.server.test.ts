@@ -48,15 +48,14 @@ describe("homeState", () => {
         ...overrides,
       });
       await tx.insert(connections).values([
-        account("acct_ok", { alias: "fine" }),
-        account("acct_soon", { alias: "work", status: "expiring" }),
+        account("acct_ok", {}),
+        account("acct_soon", { status: "expiring" }),
         account("acct_gone", {
-          alias: "personal",
           domain: "calendar",
           provider: "google_calendar",
           status: "expired",
         }),
-        account("acct_off", { alias: "old", status: "disconnected" }),
+        account("acct_off", { status: "disconnected" }),
       ]);
       const state = await homeState(tx, user);
       expect(state.accountsConnected).toBe(3);
@@ -64,9 +63,8 @@ describe("homeState", () => {
         {
           id: "acct_gone",
           tone: "error",
-          title: "Your personal calendar access expired",
-          description:
-            "Reconnect acct_gone@acme.com so Winston can help with it again.",
+          title: "Calendar access for acct_gone@acme.com expired",
+          description: "Reconnect so Winston can help with it again.",
           action: {
             label: "Reconnect",
             href: "/auth/google/connect?reconnect=acct_gone",
@@ -75,9 +73,8 @@ describe("homeState", () => {
         {
           id: "acct_soon",
           tone: "attention",
-          title: "Your work mail access expires soon",
-          description:
-            "Reconnect acct_soon@acme.com so Winston can keep helping with it.",
+          title: "Mail access for acct_soon@acme.com expires soon",
+          description: "Reconnect so Winston can keep helping with it.",
           action: {
             label: "Reconnect",
             href: "/auth/google/connect?reconnect=acct_soon",

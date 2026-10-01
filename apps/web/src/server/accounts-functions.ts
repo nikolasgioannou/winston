@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   connectionDtoColumns,
   disconnectConnection,
-  renameConnection,
   setCapability,
   toConnectionDto,
 } from "@winston/db/connections";
@@ -68,17 +67,6 @@ export const setAccountCapability = createServerFn({ method: "POST" })
     if (!capabilities) throw notFound();
     return capabilities;
   });
-
-export const renameAccount = createServerFn({ method: "POST" })
-  .validator(byId.extend({ alias: z.string() }))
-  .handler(async ({ data }) =>
-    renameConnection(
-      database(),
-      (await requireUser()).id,
-      data.id,
-      data.alias.trim(),
-    ),
-  );
 
 export const disconnectAccount = createServerFn({ method: "POST" })
   .validator(byId)

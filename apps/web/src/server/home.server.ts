@@ -26,7 +26,6 @@ export async function homeState(
     .select({
       id: connections.id,
       domain: connections.domain,
-      alias: connections.alias,
       externalEmail: connections.externalEmail,
       status: connections.status,
     })
@@ -40,15 +39,15 @@ export async function homeState(
     .orderBy(asc(connections.createdAt));
   const attention = needingReconnect
     .map((connection): AttentionItem => {
-      const name = `${connection.alias ?? connection.externalEmail} ${connection.domain}`;
+      const kind = connection.domain === "mail" ? "Mail" : "Calendar";
       const expired = connection.status === "expired";
       return {
         id: connection.id,
         tone: expired ? "error" : "attention",
         title: expired
-          ? `Your ${name} access expired`
-          : `Your ${name} access expires soon`,
-        description: `Reconnect ${connection.externalEmail} so Winston can ${expired ? "help with it again" : "keep helping with it"}.`,
+          ? `${kind} access for ${connection.externalEmail} expired`
+          : `${kind} access for ${connection.externalEmail} expires soon`,
+        description: `Reconnect so Winston can ${expired ? "help with it again" : "keep helping with it"}.`,
         action: {
           label: "Reconnect",
           href: `/auth/google/connect?reconnect=${connection.id}`,

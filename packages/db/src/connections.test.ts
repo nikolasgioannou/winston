@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import {
   connectionDtoColumns,
   disconnectConnection,
-  renameConnection,
   setCapability,
   toConnectionDto,
 } from "./connections.ts";
@@ -76,7 +75,6 @@ describe("connections", () => {
         domain: "mail",
         provider: "gmail",
         externalEmail: "ada@work.example",
-        alias: null,
         scopes: [],
         capabilities: { read: true, send: false },
         grantedAt: "2026-09-29T12:00:00.000Z",
@@ -97,7 +95,6 @@ describe("managing a connection", () => {
       .insert(connections)
       .values(
         connection(userId, {
-          alias: "work",
           capabilities: {
             read: true,
             draft: true,
@@ -137,47 +134,6 @@ describe("managing a connection", () => {
     });
   });
 
-  test("an alias must be a shell-safe word no other connection in the domain uses", async () => {
-    await inRollback(db, async (tx) => {
-      const user = await insertUser(tx);
-      const work = await insert(tx, user.id);
-      await insert(tx, user.id, {
-        externalEmail: "ada@gmail.com",
-        alias: "personal",
-      });
-      const calendar = await insert(tx, user.id, {
-        domain: "calendar",
-        provider: "google_calendar",
-        alias: "cal",
-      });
-
-      expect(await renameConnection(tx, user.id, work.id, "my work")).toEqual({
-        ok: false,
-        problem: "invalid",
-      });
-      expect(await renameConnection(tx, user.id, work.id, "$(rm)")).toEqual({
-        ok: false,
-        problem: "invalid",
-      });
-      expect(await renameConnection(tx, user.id, work.id, "personal")).toEqual({
-        ok: false,
-        problem: "taken",
-      });
-      // Calendar aliases are a separate namespace.
-      expect(
-        await renameConnection(tx, user.id, calendar.id, "personal"),
-      ).toEqual({ ok: true, alias: "personal" });
-      expect(await renameConnection(tx, user.id, work.id, "day-job")).toEqual({
-        ok: true,
-        alias: "day-job",
-      });
-      expect(await renameConnection(tx, user.id, "acct_missing", "x")).toEqual({
-        ok: false,
-        problem: "not_found",
-      });
-    });
-  });
-
   test("disconnecting marks it at once, tells Winston and queues the grant's revocation, once", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
@@ -199,7 +155,6 @@ describe("managing a connection", () => {
         payload: {
           connectionId: row.id,
           domain: "mail",
-          alias: "work",
           externalEmail: "ada@work.example",
         },
       });

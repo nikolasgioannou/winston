@@ -6,7 +6,6 @@ import { AccountPage, type SaveState } from "../../../pages/account-page";
 import {
   disconnectAccount,
   getAccount,
-  renameAccount,
   setAccountCapability,
 } from "../../../server/accounts-functions";
 
@@ -65,14 +64,6 @@ function Account() {
       capabilities={{ ...account.capabilities, ...pending }}
       saves={saves}
       onToggle={(capability, enabled) => void toggle(capability, enabled)}
-      onRename={async (alias) => {
-        const result = await renameAccount({ data: { id: account.id, alias } });
-        if (result.ok) {
-          await router.invalidate();
-          toast.success(`Renamed to ${result.alias}`);
-        }
-        return result;
-      }}
       onDisconnect={() => {
         void disconnectAccount({ data: { id: account.id } })
           .then(async () => {

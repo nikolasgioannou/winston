@@ -1,8 +1,10 @@
 import type { ConnectionDto } from "@winston/db/connections";
 import {
+  Badge,
   Button,
-  Card,
   EmptyState,
+  LinkCard,
+  linkCardRow,
   Menu,
   StatusPill,
   type MenuLink,
@@ -28,6 +30,10 @@ const domainNames: Record<ConnectionDto["domain"], string> = {
   mail: "Mail",
   calendar: "Calendar",
 };
+const providerNames: Record<ConnectionDto["provider"], string> = {
+  gmail: "Gmail",
+  google_calendar: "Google Calendar",
+};
 const domainIcons: Record<ConnectionDto["domain"], ReactNode> = {
   mail: <Mail />,
   calendar: <CalendarDays />,
@@ -45,16 +51,8 @@ export function AccountsPage({
   const add = <Menu trigger={<Button>Add account</Button>} links={addLinks} />;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8 sm:px-10">
-      <header className="flex items-start justify-between gap-6">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-title font-semibold text-fg">
-            Connected accounts
-          </h1>
-          <p className="text-sm text-fg-muted">
-            The mail and calendars Winston can help with. Connect as many as you
-            like.
-          </p>
-        </div>
+      <header className="flex items-center justify-between gap-6">
+        <h1 className="text-title font-semibold text-fg">Connected accounts</h1>
         {connections.length > 0 && add}
       </header>
       {connections.length === 0 ? (
@@ -65,11 +63,11 @@ export function AccountsPage({
           action={add}
         />
       ) : (
-        <Card>
+        <LinkCard>
           {connections.map((connection) => (
             <AccountRow key={connection.id} connection={connection} />
           ))}
-        </Card>
+        </LinkCard>
       )}
     </div>
   );
@@ -80,19 +78,17 @@ function AccountRow({ connection }: { connection: ConnectionDto }) {
     <Link
       to="/accounts/$accountId"
       params={{ accountId: connection.id }}
-      className="-mx-2 flex items-center gap-3 rounded-lg px-2 outline-none hover:bg-hover focus-visible:shadow-[inset_0_0_0_1px_var(--w-focus)]"
+      className={linkCardRow}
     >
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-strong text-icon [&>svg]:size-4">
         {domainIcons[connection.domain]}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2 text-sm font-medium text-fg">
-          <span className="truncate">
-            {connection.alias ?? connection.externalEmail}
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-medium text-fg">
+            {providerNames[connection.provider]}
           </span>
-          <span className="text-caption font-normal text-fg-muted">
-            {domainNames[connection.domain]}
-          </span>
+          <Badge>{domainNames[connection.domain]}</Badge>
         </span>
         <span className="truncate text-caption text-fg-muted">
           {connection.externalEmail}

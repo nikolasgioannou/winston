@@ -19,7 +19,6 @@ const page = (props: Partial<AccountPageProps>) => () => {
         capabilities={account.capabilities}
         saves={{}}
         onToggle={noop}
-        onRename={(alias) => Promise.resolve({ ok: true, alias })}
         onDisconnect={noop}
         {...props}
       />

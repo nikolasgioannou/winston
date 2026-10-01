@@ -20,7 +20,7 @@ export interface FlagSpec {
 export const standardFlags = {
   account: {
     name: "account",
-    value: "<alias>",
+    value: "<email>",
     description: "Which connected account (optional if there's only one)",
   },
   limit: {

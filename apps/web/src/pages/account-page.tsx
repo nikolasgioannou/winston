@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { ConnectionDto, RenameResult } from "@winston/db/connections";
+import type { ConnectionDto } from "@winston/db/connections";
 import {
   capabilitiesByDomain,
   type Capability,
@@ -11,10 +11,9 @@ import {
   Section,
   SettingRow,
   Switch,
-  TextField,
 } from "@winston/ui";
 import { ChevronLeft } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 /** Where a toggle's save stands, as the row shows it. */
 export type SaveState = "saving" | "saved" | "error";
@@ -27,7 +26,6 @@ export interface AccountPageProps {
   capabilities: ConnectionDto["capabilities"];
   saves: Partial<Record<Capability, SaveState>>;
   onToggle: (capability: Capability, enabled: boolean) => void;
-  onRename: (alias: string) => Promise<RenameResult>;
   onDisconnect: () => void;
   /** Opens the disconnect confirmation, for the dev design view. */
   confirmingDisconnect?: boolean;
@@ -66,8 +64,8 @@ const readCopy: Record<ConnectionDto["domain"], string> = {
 };
 
 /**
- * `/accounts/<id>` (docs/design.md §20): one connection's name, what Winston
- * may do with it (the toggles the server enforces), reconnecting and
+ * `/accounts/<id>` (docs/design.md §20): one connection: what Winston may
+ * do with it (the toggles the server enforces), reconnecting and
  * disconnecting.
  */
 export function AccountPage(props: AccountPageProps) {
@@ -85,28 +83,27 @@ export function AccountPage(props: AccountPageProps) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-8 sm:px-10">
       <header className="flex flex-col gap-3">
-        <Link
-          to="/accounts"
-          className="-ml-1 flex w-fit items-center gap-0.5 rounded-md py-0.5 pr-1.5 text-sm text-fg-muted hover:bg-hover hover:text-fg"
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/accounts" />}
+          // Lines the chevron up with the title below.
+          className="-ml-2 w-fit"
         >
           <ChevronLeft className="size-4" />
           Connected accounts
-        </Link>
+        </Button>
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-title font-semibold text-fg">
-            {account.alias ?? account.externalEmail}
+          <h1 className="text-title font-semibold break-all text-fg">
+            {account.externalEmail}
           </h1>
           <p className="text-sm text-fg-muted">
-            {account.domain === "mail" ? "Gmail" : "Google Calendar"} ·{" "}
-            {account.externalEmail}
+            {account.domain === "mail" ? "Gmail" : "Google Calendar"}
           </p>
         </div>
         <StatusCallout status={account.status} action={reconnect} />
       </header>
-
-      <Section title="Name">
-        <AliasField key={account.alias} {...props} />
-      </Section>
 
       <Section title="What Winston can do">
         {capabilitiesByDomain[account.domain].map((capability) => (
@@ -168,55 +165,6 @@ function StatusCallout({
         </Callout>
       );
   }
-}
-
-function AliasField({ account, onRename }: AccountPageProps) {
-  const [alias, setAlias] = useState(account.alias ?? "");
-  const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
-  const changed = alias.trim() !== (account.alias ?? "");
-
-  const save = async () => {
-    setSaving(true);
-    setError(undefined);
-    const result = await onRename(alias.trim());
-    setSaving(false);
-    if (!result.ok)
-      setError(
-        result.problem === "taken"
-          ? "Another account already has that name."
-          : "Use lowercase letters, numbers, dots, dashes or underscores, starting with a letter or number.",
-      );
-  };
-
-  return (
-    <form
-      className="flex items-start gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <TextField
-        aria-label="Name"
-        value={alias}
-        onChange={(event) => {
-          setAlias(event.target.value);
-          setError(undefined);
-        }}
-        description={
-          error === undefined
-            ? `What you and Winston call it, as in "check my ${alias.trim() || "work"} email".`
-            : undefined
-        }
-        error={error}
-        className="max-w-80 flex-1"
-      />
-      <Button type="submit" disabled={!changed || saving}>
-        {saving ? "Saving…" : "Save"}
-      </Button>
-    </form>
-  );
 }
 
 function CapabilityRow({
@@ -287,7 +235,7 @@ function DisconnectButton({
     <ConfirmDialog
       {...(confirmingDisconnect ? { defaultOpen: true } : {})}
       trigger={<Button variant="danger">Disconnect</Button>}
-      title={`Disconnect ${account.alias ?? account.externalEmail}?`}
+      title={`Disconnect ${account.externalEmail}?`}
       description={`Winston stops using ${account.externalEmail}, and its access is revoked with Google. You can connect it again any time.`}
       confirmLabel="Disconnect"
       onConfirm={onDisconnect}
