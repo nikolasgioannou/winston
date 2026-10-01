@@ -35,5 +35,7 @@ export interface Verb {
 export interface Resource {
   name: string;
   description: string;
+  /** Id prefixes its `get` verb shows (`evt`); `winston get <id>` routes by them. */
+  ids?: string[];
   verbs: Verb[];
 }

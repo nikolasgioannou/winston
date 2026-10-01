@@ -147,8 +147,8 @@ export function requireCapability(
     );
 }
 
-/** Each capability, as an error message says it. */
-const describe: Record<Capability, string> = {
+/** Each capability, as an error message (and `winston accounts get`) says it. */
+export const describe: Record<Capability, string> = {
   read: "reading",
   draft: "drafting",
   send: "sending",
@@ -166,7 +166,7 @@ const capitalize = (text: string) =>
 export interface ConnectorDeps {
   webPublicUrl: string;
   mail: (connection: ConnectionRow) => MailProvider;
-  /** Absent until Google Calendar is wired (M5). */
+  /** Absent where calendars aren't wired, as in some tests. */
   calendar?: (connection: ConnectionRow) => CalendarProvider;
 }
 

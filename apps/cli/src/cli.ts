@@ -11,13 +11,39 @@ import {
   type FlagSpec,
   type TextSources,
 } from "./flags.ts";
+import { accounts } from "./resources/accounts.ts";
 import { calendar } from "./resources/calendar.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { suggest } from "./suggest.ts";
 import { version } from "./version.ts";
 
-export const resources: Resource[] = [me, mail, calendar];
+export const resources: Resource[] = [me, mail, calendar, accounts];
+
+/** Every prefix `winston get` knows, as `msg_, thr_, …`. */
+const knownIds = () =>
+  resources.flatMap((r) => (r.ids ?? []).map((p) => `${p}_`)).join(", ");
+
+/** A TypeID: a lowercase prefix, then 26 base32 characters (§11 identifiers). */
+const typeIdPattern = /^([a-z]+(?:_[a-z]+)*)_[0-7][0-9a-hjkmnp-tv-z]{25}$/;
+
+/** The resource whose `get` shows `id`, found by its prefix. */
+function ownerOf(id: string): [Resource, Verb] {
+  const prefix = typeIdPattern.exec(id)?.[1];
+  if (!prefix)
+    throw CliError.usage(
+      `"${id}" isn't an id.`,
+      `Ids look like evt_01k5…: a prefix (${knownIds()}) and 26 characters.`,
+    );
+  const resource = resources.find((r) => r.ids?.includes(prefix));
+  const verb = resource?.verbs.find((v) => v.name === "get");
+  if (!resource || !verb)
+    throw CliError.usage(
+      `winston get doesn't know ${prefix}_ ids.`,
+      `It knows ${knownIds()}.`,
+    );
+  return [resource, verb];
+}
 
 export interface Io {
   out: (text: string) => void;
@@ -48,6 +74,8 @@ export function topHelp() {
     "",
     "Resources:",
     ...resources.map((r) => `  ${pad(r.name, width)}${r.description}`),
+    "",
+    `Any object by its id: winston get <id> (${knownIds()})`,
     "",
     "Run `winston <resource> --help` for its verbs, flags and examples.",
   ].join("\n");
@@ -80,6 +108,30 @@ export function verbHelp(resource: Resource, verb: Verb) {
   ].join("\n");
 }
 
+/** Parses a verb's flags and runs it (or prints its help). */
+async function runVerb(
+  io: Io,
+  resource: Resource,
+  verb: Verb,
+  args: readonly string[],
+) {
+  const { positionals, flags } = parseFlags(args, verb.flags);
+  if (flags.help === true) {
+    io.out(verbHelp(resource, verb));
+    return 0;
+  }
+  io.out(
+    await verb.run({
+      client: io.client(),
+      flags,
+      args: positionals,
+      text: io.text,
+      files: io.files,
+    }),
+  );
+  return 0;
+}
+
 /** Runs `argv` (without the program name) and returns the exit code. */
 export async function run(argv: readonly string[], io: Io): Promise<number> {
   const [resourceName, verbName, ...rest] = argv;
@@ -95,6 +147,16 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
     if (resourceName === "--version") {
       io.out(version);
       return 0;
+    }
+    if (resourceName === "get") {
+      if (verbName === undefined || verbName === "--help") {
+        io.out(
+          `winston get <id>: any object by its id, shown as its resource's get shows it.\nIt knows ${knownIds()}.`,
+        );
+        return 0;
+      }
+      const [resource, verb] = ownerOf(verbName);
+      return await runVerb(io, resource, verb, [verbName, ...rest]);
     }
     const resource = resources.find((r) => r.name === resourceName);
     if (!resource) {
@@ -122,21 +184,7 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
         `Run \`winston ${resource.name} --help\` to see its verbs.`,
       );
     }
-    const { positionals, flags } = parseFlags(rest, verb.flags);
-    if (flags.help === true) {
-      io.out(verbHelp(resource, verb));
-      return 0;
-    }
-    io.out(
-      await verb.run({
-        client: io.client(),
-        flags,
-        args: positionals,
-        text: io.text,
-        files: io.files,
-      }),
-    );
-    return 0;
+    return await runVerb(io, resource, verb, rest);
   } catch (error) {
     if (!(error instanceof CliError)) throw error;
     io.err(error.hint ? `${error.message}\n${error.hint}` : error.message);

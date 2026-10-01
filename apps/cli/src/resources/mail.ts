@@ -12,7 +12,7 @@ import {
   type FlagSpec,
   type FlagValues,
 } from "../flags.ts";
-import { json, list, shortTime } from "../output.ts";
+import { json, list, record, shortTime } from "../output.ts";
 
 /** Typed by the API itself (Hono RPC), so a change there breaks the build here. */
 type Page = InferResponseType<ApiClient["v1"]["mail"]["messages"]["$get"], 200>;
@@ -355,6 +355,7 @@ const changeWords = (changes: UpdateResult["changes"]) =>
 
 export const mail: Resource = {
   name: "mail",
+  ids: ["msg", "thr", "att"],
   description:
     "Email in the user's connected accounts: list, search, read, download",
   verbs: [
@@ -400,8 +401,9 @@ export const mail: Resource = {
     },
     {
       name: "get",
-      summary: "A message, or a whole thread oldest first, with its text",
-      usage: "<msg_id|thr_id>",
+      summary:
+        "A message, or a whole thread oldest first, with its text; or an attachment's name, type and size",
+      usage: "<msg_id|thr_id|att_id>",
       flags: [
         {
           name: "full",
@@ -419,6 +421,14 @@ export const mail: Resource = {
             "Which message? Pass a msg_ or thr_ id.",
             "Get ids from winston mail list or search.",
           );
+        if (id.startsWith("att_")) {
+          const info = await call<AttachmentInfo>(
+            client.v1.mail.attachments[":id"].$get({ param: { id } }),
+          );
+          return flags.json === true
+            ? json(info)
+            : `${record(info.id, info.filename, info.mimeType, size(info.size))}\nSave it with: winston mail download ${info.id}`;
+        }
         return showDetail(
           await call<Detail>(
             client.v1.mail.messages[":id"].$get({ param: { id } }),

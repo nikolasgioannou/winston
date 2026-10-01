@@ -389,6 +389,7 @@ function showUpdated(result: Updated, asJson: boolean) {
 
 export const calendar: Resource = {
   name: "calendar",
+  ids: ["evt"],
   description:
     "Events in the user's connected calendars: list, find free time, create, change, answer",
   verbs: [
