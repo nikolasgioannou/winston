@@ -42,7 +42,7 @@ export function defineStacks(app: App, environment: Environment = production) {
   });
 
   const edge = new EdgeStack(app, "Edge", {
-    ...props("Edge", "Certificates and CloudFront"),
+    ...props("Edge", "Certificates"),
     domain: environment.domain,
   });
   const ci = new CiStack(
@@ -51,14 +51,15 @@ export function defineStacks(app: App, environment: Environment = production) {
     props("Ci", "Image repositories and GitHub's deploy role"),
   );
   const services = new ServicesStack(app, "Services", {
-    ...props("Services", "ECS services, the load balancer and secrets"),
+    ...props(
+      "Services",
+      "ECS services, the load balancer, CloudFront and secrets",
+    ),
     domain: environment.domain,
     desiredCounts: {
       gateway: 1,
-      // Stopped until production keys are set (ticket 1e6482): they'd fail
-      // their config check on the placeholder secrets.
-      api: 0,
-      web: 0,
+      api: 1,
+      web: 1,
       // Stopped until the EC2 VM provider replaces local Docker (550446).
       agents: 0,
     },

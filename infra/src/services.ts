@@ -1,5 +1,23 @@
-import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
+import {
+  CfnOutput,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+} from "aws-cdk-lib";
 import type { ICertificate } from "aws-cdk-lib/aws-certificatemanager";
+import {
+  AllowedMethods,
+  CachePolicy,
+  Distribution,
+  HttpVersion,
+  OriginProtocolPolicy,
+  OriginRequestPolicy,
+  PriceClass,
+  SecurityPolicyProtocol,
+  ViewerProtocolPolicy,
+} from "aws-cdk-lib/aws-cloudfront";
+import { LoadBalancerV2Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import {
   SubnetType,
   type ISecurityGroup,
@@ -36,6 +54,9 @@ import { Secrets, type Service } from "./secrets.ts";
 /** The SSM parameter naming the image tag (a commit SHA) every service runs. */
 export const imageTagParameter = "/winston/image-tag";
 
+/** CloudFront sends it to the load balancer; requests without it don't reach web. */
+export const originHeader = "X-Winston-Origin";
+
 /** Fargate task sizes (CPU units, MiB), on ARM64 (docs/design.md §19). */
 const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
   api: { cpu: 256, memoryMiB: 512 },
@@ -59,8 +80,8 @@ export interface ServicesStackProps extends StackProps {
 }
 
 /**
- * The four backend services on Fargate behind one load balancer (docs/design.md
- * §9, §19), with their secrets.
+ * The four backend services on Fargate behind one load balancer, with their
+ * secrets, and CloudFront in front of web (docs/design.md §9, §19).
  */
 export class ServicesStack extends Stack {
   readonly secrets: Secrets;
@@ -68,6 +89,7 @@ export class ServicesStack extends Stack {
   readonly loadBalancer: ApplicationLoadBalancer;
   readonly services: Record<Service, FargateService>;
   readonly taskDefinitions: Record<Service, FargateTaskDefinition>;
+  readonly distribution: Distribution;
 
   constructor(scope: Construct, id: string, props: ServicesStackProps) {
     super(scope, id, props);
@@ -235,13 +257,62 @@ export class ServicesStack extends Stack {
       ],
       action: ListenerAction.forward([targets("gateway")]),
     });
-    // CloudFront's origin (the next ticket puts it in front).
+    // The site, only through CloudFront: it adds a header whose value is a
+    // generated secret, and the load balancer serves web only with it.
+    const originSecret = new Secret(this, "OriginSecret", {
+      secretName: "winston/cloudfront-origin-header",
+      description: "CloudFront's header to the load balancer; generated",
+      generateSecretString: { excludePunctuation: true, passwordLength: 48 },
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    // A CloudFormation dynamic reference, resolved at deploy time.
+    const originSecretValue = originSecret.secretValue.unsafeUnwrap();
     listener.addAction("Web", {
       priority: 30,
-      conditions: [ListenerCondition.hostHeaders([domain])],
+      conditions: [
+        ListenerCondition.hostHeaders([domain]),
+        ListenerCondition.httpHeader(originHeader, [originSecretValue]),
+      ],
       action: ListenerAction.forward([targets("web")]),
     });
 
+    // CloudFront forwards the viewer's Host, so the load balancer routes it
+    // to web and TLS to the origin is checked against runwinston.com.
+    const origin = new LoadBalancerV2Origin(this.loadBalancer, {
+      protocolPolicy: OriginProtocolPolicy.HTTPS_ONLY,
+      customHeaders: { [originHeader]: originSecretValue },
+    });
+    this.distribution = new Distribution(this, "Site", {
+      comment: `${domain}: the web service`,
+      domainNames: [domain],
+      certificate: props.certificate,
+      minimumProtocolVersion: SecurityPolicyProtocol.TLS_V1_2_2021,
+      httpVersion: HttpVersion.HTTP2_AND_3,
+      // North America and Europe; the users are in the US.
+      priceClass: PriceClass.PRICE_CLASS_100,
+      // Pages and server functions: never cached, with cookies and all.
+      defaultBehavior: {
+        origin,
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: AllowedMethods.ALLOW_ALL,
+        cachePolicy: CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER,
+      },
+      additionalBehaviors: {
+        // Hashed build assets: cached for as long as the origin says (a year).
+        "/assets/*": {
+          origin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          originRequestPolicy: OriginRequestPolicy.HOST_HEADER_ONLY,
+        },
+      },
+    });
+
+    new CfnOutput(this, "DistributionDomainName", {
+      description: "The target of the apex CNAME (docs/runbooks/dns.md)",
+      value: this.distribution.distributionDomainName,
+    });
     new CfnOutput(this, "LoadBalancerDnsName", {
       description: `The target of the api and gateway CNAMEs (docs/runbooks/dns.md)`,
       value: this.loadBalancer.loadBalancerDnsName,

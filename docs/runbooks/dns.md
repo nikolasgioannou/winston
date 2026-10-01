@@ -19,7 +19,7 @@ The validation records stay forever: ACM renews the certificate automatically on
 
 | Name      | Type  | Target                                                                                             | Added by              |
 | --------- | ----- | -------------------------------------------------------------------------------------------------- | --------------------- |
-| `@`       | CNAME | the CloudFront distribution's domain (`Edge`)                                                      | the CloudFront ticket |
+| `@`       | CNAME | `ds6jyq6ch7zaz.cloudfront.net` (`Services.DistributionDomainName`)                                 | the CloudFront ticket |
 | `api`     | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
 | `gateway` | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
 

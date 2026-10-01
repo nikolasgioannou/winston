@@ -139,4 +139,68 @@ describe("services stack", () => {
       expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
     expect(actionsFor("agents")).toContain("s3:PutObject");
   });
+
+  test("web is reachable only with CloudFront's origin header", () => {
+    template.hasResourceProperties(
+      "AWS::ElasticLoadBalancingV2::ListenerRule",
+      {
+        Conditions: Match.arrayWith([
+          {
+            Field: "host-header",
+            HostHeaderConfig: { Values: ["runwinston.com"] },
+          },
+          Match.objectLike({
+            Field: "http-header",
+            HttpHeaderConfig: Match.objectLike({
+              HttpHeaderName: "X-Winston-Origin",
+            }),
+          }),
+        ]),
+      },
+    );
+  });
+
+  test("CloudFront caches hashed assets and nothing else, forwarding cookies to web", () => {
+    const { DistributionConfig: config } = Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
+    )[0]?.Properties as {
+      DistributionConfig: {
+        Aliases: string[];
+        DefaultCacheBehavior: {
+          CachePolicyId: string;
+          OriginRequestPolicyId: string;
+          ViewerProtocolPolicy: string;
+        };
+        CacheBehaviors: { PathPattern: string; CachePolicyId: string }[];
+        Origins: {
+          CustomOriginConfig: { OriginProtocolPolicy: string };
+          OriginCustomHeaders: { HeaderName: string }[];
+        }[];
+      };
+    };
+    // AWS's managed policies: CachingDisabled, AllViewer, CachingOptimized.
+    expect(config.Aliases).toEqual(["runwinston.com"]);
+    expect(config.DefaultCacheBehavior).toMatchObject({
+      CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+      OriginRequestPolicyId: "216adef6-5c7f-47e4-b989-5492eafa07d3",
+      ViewerProtocolPolicy: "redirect-to-https",
+    });
+    expect(
+      config.CacheBehaviors.map(({ PathPattern, CachePolicyId }) => ({
+        PathPattern,
+        CachePolicyId,
+      })),
+    ).toEqual([
+      {
+        PathPattern: "/assets/*",
+        CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6",
+      },
+    ]);
+    expect(config.Origins[0]?.CustomOriginConfig.OriginProtocolPolicy).toBe(
+      "https-only",
+    );
+    expect(
+      config.Origins[0]?.OriginCustomHeaders.map((h) => h.HeaderName),
+    ).toEqual(["X-Winston-Origin"]);
+  });
 });

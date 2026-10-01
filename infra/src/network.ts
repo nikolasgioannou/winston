@@ -49,6 +49,8 @@ export class NetworkStack extends Stack {
       gatewayEndpoints: { s3: { service: GatewayVpcEndpointAwsService.S3 } },
     });
 
+    // A group's description can't change in place: editing one replaces the
+    // group, and stacks using it would block the deploy (strong references).
     const group = (name: string, description: string, outbound = true) =>
       new SecurityGroup(this, name, {
         vpc: this.vpc,

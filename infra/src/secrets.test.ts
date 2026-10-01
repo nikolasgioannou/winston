@@ -21,9 +21,11 @@ describe("secrets", () => {
       (resource) => (resource.Properties as { Name: string }).Name,
     );
     expect(names.sort()).toEqual(
-      Object.keys(secrets)
-        .map((name) => `winston/${name}`)
-        .sort(),
+      [
+        ...Object.keys(secrets).map((name) => `winston/${name}`),
+        // CloudFront's origin header, which no service reads.
+        "winston/cloudfront-origin-header",
+      ].sort(),
     );
     for (const resource of Object.values(resources))
       expect(resource.DeletionPolicy).toBe("Retain");

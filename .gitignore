@@ -12,5 +12,5 @@ apps/web/dist/
 # The route tree production builds generate without the dev design view.
 apps/web/src/routeTree.prod.gen.ts
 # CDK's synthesized templates and asset staging (bun run infra:synth).
-infra/cdk.out/
+infra/cdk.out*/
 infra/.cdk.staging/

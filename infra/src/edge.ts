@@ -10,8 +10,10 @@ export interface EdgeStackProps extends StackProps {
 }
 
 /**
- * The public edge (docs/design.md §19). DNS is on Cloudflare, so certificates
- * are validated by CNAME records added there (docs/runbooks/dns.md).
+ * The certificate (docs/design.md §19). DNS is on Cloudflare, so it's
+ * validated by CNAME records added there (docs/runbooks/dns.md). CloudFront
+ * lives in the Services stack, next to its origin: here it would make a
+ * cycle, since the load balancer uses this certificate.
  */
 export class EdgeStack extends Stack {
   /** The site, the API and the gateway; in us-east-1, as CloudFront requires. */
