@@ -1,21 +1,22 @@
 {
-  "name": "@winston/vm-api",
+  "name": "@winston/connectors",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./connections": "./src/connections.ts"
+    "./access-token": "./src/access-token.ts",
+    "./calendar": "./src/calendar.ts",
+    "./errors": "./src/errors.ts",
+    "./grants": "./src/grants.ts",
+    "./mail": "./src/mail.ts"
   },
   "scripts": {
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@winston/connectors": "workspace:*",
     "@winston/db": "workspace:*",
     "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
-    "hono": "4.13.9",
     "zod": "4.6.5"
   }
 }

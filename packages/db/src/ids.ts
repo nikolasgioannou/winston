@@ -13,6 +13,12 @@ export const idPrefixes = {
   file: "file",
   webSession: "ses",
   connection: "acct",
+  // Provider objects the CLI names (external_refs).
+  message: "msg",
+  thread: "thr",
+  draft: "drf",
+  attachment: "att",
+  calendarEvent: "evt",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;

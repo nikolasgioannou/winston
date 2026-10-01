@@ -7,10 +7,7 @@ import {
   toConnectionDto,
 } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
-import {
-  capabilitiesByDomain,
-  capabilityScopes,
-} from "@winston/domain/connections";
+import { unavailableCapabilities } from "@winston/domain/connections";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { database } from "./db.server";
@@ -44,9 +41,10 @@ export const getAccount = createServerFn({ method: "GET" })
       .from(connections)
       .where(and(eq(connections.id, data.id), eq(connections.userId, user.id)));
     if (!row) throw notFound();
-    const scopes: Record<string, string> = capabilityScopes[row.provider];
-    const unavailable = capabilitiesByDomain[row.domain].filter(
-      (capability) => !row.scopes.includes(scopes[capability] ?? ""),
+    const unavailable = unavailableCapabilities(
+      row.provider,
+      row.domain,
+      row.scopes,
     );
     return { account: toConnectionDto(row), unavailable };
   });

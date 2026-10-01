@@ -1,6 +1,7 @@
 /**
  * Helpers for tests that need a real Postgres. See docs/testing.md.
  */
+import { capabilitiesByDomain } from "@winston/domain/connections";
 import { loadConfig } from "@winston/shared/config";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -9,7 +10,7 @@ import postgres from "postgres";
 import { z } from "zod";
 import { createDb, type Db, type DbOrTx } from "./client.ts";
 import { assertLocalDatabase } from "./config.ts";
-import { runs, users } from "./schema/index.ts";
+import { connections, runs, users } from "./schema/index.ts";
 
 const testConfigSchema = z.object({
   TEST_DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
@@ -120,4 +121,36 @@ export async function insertRun(
     .returning();
   if (!run) throw new Error("Inserting a test run returned no row.");
   return run;
+}
+
+let connectionCount = 0;
+
+/**
+ * Inserts a connected account for `userId`: Gmail, every capability on, a
+ * fresh grant and no token; pass fields to override.
+ */
+export async function insertConnection(
+  db: DbOrTx,
+  userId: string,
+  overrides: Partial<typeof connections.$inferInsert> = {},
+) {
+  connectionCount += 1;
+  const domain = overrides.domain ?? "mail";
+  const [connection] = await db
+    .insert(connections)
+    .values({
+      userId,
+      domain,
+      provider: domain === "mail" ? "gmail" : "google_calendar",
+      externalEmail: `account${connectionCount.toString()}@example.com`,
+      capabilities: Object.fromEntries(
+        capabilitiesByDomain[domain].map((capability) => [capability, true]),
+      ),
+      grantedAt: new Date(),
+      ...overrides,
+    })
+    .returning();
+  if (!connection)
+    throw new Error("Inserting a test connection returned no row.");
+  return connection;
 }

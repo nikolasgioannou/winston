@@ -5,18 +5,20 @@
   "exports": {
     "./account-deletion": "./src/account-deletion.ts",
     "./allowlist": "./src/allowlist.ts",
+    "./audit": "./src/audit.ts",
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
-    "./ids": "./src/ids.ts",
     "./connections": "./src/connections.ts",
-    "./testing": "./src/testing.ts",
+    "./external-refs": "./src/external-refs.ts",
+    "./ids": "./src/ids.ts",
     "./profile": "./src/profile.ts",
     "./queue": "./src/queue.ts",
     "./schema": "./src/schema/index.ts",
     "./system-events": "./src/system-events.ts",
+    "./telegram-link-tokens": "./src/telegram-link-tokens.ts",
+    "./testing": "./src/testing.ts",
     "./vm-state": "./src/vm-state.ts",
     "./vms": "./src/vms.ts",
-    "./telegram-link-tokens": "./src/telegram-link-tokens.ts",
     "./web-sessions": "./src/web-sessions.ts"
   },
   "scripts": {

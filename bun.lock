@@ -32,6 +32,7 @@
         "@aws-sdk/client-ec2": "3.1144.0",
         "@aws-sdk/client-s3": "3.1144.0",
         "@openrouter/ai-sdk-provider": "3.1.0",
+        "@winston/connectors": "workspace:*",
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
         "@winston/prompts": "workspace:*",
@@ -121,6 +122,16 @@
         "aws-cdk": "2.1143.0",
       },
     },
+    "packages/connectors": {
+      "name": "@winston/connectors",
+      "dependencies": {
+        "@winston/db": "workspace:*",
+        "@winston/domain": "workspace:*",
+        "@winston/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "zod": "4.6.5",
+      },
+    },
     "packages/db": {
       "name": "@winston/db",
       "dependencies": {
@@ -187,6 +198,7 @@
     "packages/vm-api": {
       "name": "@winston/vm-api",
       "dependencies": {
+        "@winston/connectors": "workspace:*",
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
@@ -622,6 +634,8 @@
     "@winston/api": ["@winston/api@workspace:apps/api"],
 
     "@winston/cli": ["@winston/cli@workspace:apps/cli"],
+
+    "@winston/connectors": ["@winston/connectors@workspace:packages/connectors"],
 
     "@winston/db": ["@winston/db@workspace:packages/db"],
 

@@ -87,3 +87,15 @@ export function isCapabilityOf<D extends ConnectionDomain>(
     capability,
   );
 }
+
+/** A connection's capabilities whose Google scope wasn't granted: unusable until it's reconnected. */
+export function unavailableCapabilities(
+  provider: ConnectionProvider,
+  domain: ConnectionDomain,
+  scopes: readonly string[],
+): Capability[] {
+  const needed: Record<string, string> = capabilityScopes[provider];
+  return capabilitiesByDomain[domain].filter(
+    (capability) => !scopes.includes(needed[capability] ?? ""),
+  );
+}

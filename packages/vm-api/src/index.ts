@@ -14,6 +14,7 @@ import { updateProfile } from "@winston/db/profile";
 import { isTimeZone } from "@winston/shared/time";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { toApiFailure, type ConnectorDeps } from "./connections.ts";
 import { z } from "zod";
 
 export interface VmApiEnv {
@@ -35,9 +36,12 @@ const meUpdate = z.object({
 export function createVmApi({
   db,
   runTokenSecret,
+  connectors,
 }: {
   db: DbOrTx;
   runTokenSecret: string;
+  /** Mail and calendar (docs/design.md §5); absent where nothing is connected, as in some tests. */
+  connectors?: ConnectorDeps;
 }) {
   const app = new Hono<VmApiEnv>();
 
@@ -59,6 +63,8 @@ export function createVmApi({
   });
 
   app.onError((error, c) => {
+    const failure = toApiFailure(error, connectors?.webPublicUrl);
+    if (failure) return c.json(failure.body, failure.status);
     console.error(error);
     return c.json(
       apiError(

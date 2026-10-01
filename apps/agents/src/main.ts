@@ -39,7 +39,7 @@ import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
   reconnectUrlFor,
   sweepConnectionGrants,
-} from "./connections/grants.ts";
+} from "@winston/connectors/grants";
 import { provisionVmHandler, restoreVmHandler } from "./vm/provision.ts";
 import { createWorker } from "./worker.ts";
 
