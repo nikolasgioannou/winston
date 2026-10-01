@@ -1,5 +1,5 @@
 import { appShellFixtures } from "../../components/app-shell.fixtures";
-import { accountFixtures } from "../../pages/account-page.fixtures";
+import { accountFixtures } from "../../pages/account-dialog.fixtures";
 import { accountsFixtures } from "../../pages/accounts-page.fixtures";
 import { homeFixtures } from "../../pages/home-page.fixtures";
 import { profileFixtures } from "../../pages/profile-page.fixtures";

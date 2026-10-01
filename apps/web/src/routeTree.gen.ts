@@ -14,7 +14,6 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
 import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
-import { Route as AuthedAccountsAccountIdRouteImport } from './routes/_authed/accounts/$accountId'
 import { Route as AuthedProfileIndexRouteImport } from './routes/_authed/profile/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthGoogleStartRouteImport } from './routes/auth/google/start'
@@ -45,11 +44,6 @@ const AuthSignOutRoute = AuthSignOutRouteImport.update({
 const AuthedAccountsIndexRoute = AuthedAccountsIndexRouteImport.update({
   id: '/accounts/',
   path: '/accounts/',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedAccountsAccountIdRoute = AuthedAccountsAccountIdRouteImport.update({
-  id: '/accounts/$accountId',
-  path: '/accounts/$accountId',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedProfileIndexRoute = AuthedProfileIndexRouteImport.update({
@@ -93,7 +87,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -107,7 +100,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -123,7 +115,6 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/_authed/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
-  '/_authed/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -139,7 +130,6 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/auth/sign-out'
-    | '/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -153,7 +143,6 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/auth/sign-out'
-    | '/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -168,7 +157,6 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/_authed/home'
     | '/auth/sign-out'
-    | '/_authed/accounts/$accountId'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -228,13 +216,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAccountsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/accounts/$accountId': {
-      id: '/_authed/accounts/$accountId'
-      path: '/accounts/$accountId'
-      fullPath: '/accounts/$accountId'
-      preLoaderRoute: typeof AuthedAccountsAccountIdRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/profile/': {
       id: '/_authed/profile/'
       path: '/profile'
@@ -289,14 +270,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedHomeRoute: typeof AuthedHomeRoute
-  AuthedAccountsAccountIdRoute: typeof AuthedAccountsAccountIdRoute
   AuthedAccountsIndexRoute: typeof AuthedAccountsIndexRoute
   AuthedProfileIndexRoute: typeof AuthedProfileIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedHomeRoute: AuthedHomeRoute,
-  AuthedAccountsAccountIdRoute: AuthedAccountsAccountIdRoute,
   AuthedAccountsIndexRoute: AuthedAccountsIndexRoute,
   AuthedProfileIndexRoute: AuthedProfileIndexRoute,
 }

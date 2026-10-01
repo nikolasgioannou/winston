@@ -20,7 +20,7 @@ const account = (
 });
 
 export const work = account({ id: "acct_1" });
-const personalMail = account({
+export const personalMail = account({
   id: "acct_2",
   externalEmail: "ada.lovelace@gmail.com",
 });

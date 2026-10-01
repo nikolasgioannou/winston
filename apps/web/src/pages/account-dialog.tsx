@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import type { ConnectionDto } from "@winston/db/connections";
 import {
   capabilitiesByDomain,
@@ -9,18 +8,18 @@ import {
   Button,
   Callout,
   ConfirmDialog,
-  Page,
-  PageHeader,
+  Dialog,
   Section,
   SettingRow,
   Switch,
 } from "@winston/ui";
 import type { ReactNode } from "react";
+import { domainNames, providerNames } from "../components/providers";
 
 /** Where a toggle's save stands, as the row shows it. */
 export type SaveState = "saving" | "saved" | "error";
 
-export interface AccountPageProps {
+export interface AccountDialogProps {
   account: ConnectionDto;
   /** Capabilities whose Google scope wasn't granted. */
   unavailable: readonly Capability[];
@@ -31,6 +30,8 @@ export interface AccountPageProps {
   onDisconnect: () => void;
   /** Opens the disconnect confirmation, for the dev design view. */
   confirmingDisconnect?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 const capabilityCopy: Record<
@@ -66,12 +67,12 @@ const readCopy: Record<ConnectionDto["domain"], string> = {
 };
 
 /**
- * `/accounts/<id>` (docs/design.md §20): one connection: what Winston may
- * do with it (the toggles the server enforces), reconnecting and
- * disconnecting.
+ * One connected account, in a dialog over `/accounts` (docs/design.md §20):
+ * what Winston may do with it (the toggles the server enforces) and the
+ * connection itself, each in a card.
  */
-export function AccountPage(props: AccountPageProps) {
-  const { account } = props;
+export function AccountDialog(props: AccountDialogProps) {
+  const { account, open, onOpenChange } = props;
   const disconnected = account.status === "disconnected";
   const reconnect = (
     <Button
@@ -83,19 +84,20 @@ export function AccountPage(props: AccountPageProps) {
     </Button>
   );
   return (
-    <Page>
-      <PageHeader
-        back={{ label: "Connected accounts", link: <Link to="/accounts" /> }}
-        title={account.externalEmail}
-        action={
-          <Badge>
-            {account.domain === "mail" ? "Gmail" : "Google Calendar"}
-          </Badge>
-        }
-      />
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={account.externalEmail}
+      description={
+        <span className="flex items-center gap-2">
+          {providerNames[account.provider]}
+          <Badge>{domainNames[account.domain]}</Badge>
+        </span>
+      }
+    >
       <StatusCallout status={account.status} action={reconnect} />
 
-      <Section title="What Winston can do">
+      <Section title="What Winston can do" card>
         {capabilitiesByDomain[account.domain].map((capability) => (
           <CapabilityRow
             key={capability}
@@ -108,7 +110,7 @@ export function AccountPage(props: AccountPageProps) {
         ))}
       </Section>
 
-      <Section title="Connection">
+      <Section title="Connection" card>
         <SettingRow
           label="Reconnect"
           description="Sign in to Google again, for example to grant a permission you left out."
@@ -122,7 +124,7 @@ export function AccountPage(props: AccountPageProps) {
           />
         )}
       </Section>
-    </Page>
+    </Dialog>
   );
 }
 
@@ -166,7 +168,7 @@ function CapabilityRow({
   onToggle,
   disabled,
   reconnect,
-}: AccountPageProps & {
+}: AccountDialogProps & {
   capability: Capability;
   domain: ConnectionDto["domain"];
   disabled: boolean;
@@ -220,7 +222,7 @@ function DisconnectButton({
   account,
   onDisconnect,
   confirmingDisconnect,
-}: AccountPageProps) {
+}: AccountDialogProps) {
   return (
     <ConfirmDialog
       {...(confirmingDisconnect ? { defaultOpen: true } : {})}

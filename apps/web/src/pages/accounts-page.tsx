@@ -11,6 +11,7 @@ import {
 } from "@winston/ui";
 import { Link } from "@tanstack/react-router";
 import { Blocks, ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { AddAccountDialog } from "../components/add-account-dialog";
 import {
   domainNames,
@@ -20,15 +21,19 @@ import {
 
 /**
  * `/accounts` (docs/design.md §20): the user's connected Google accounts,
- * any number per domain, and a way to add more.
+ * any number per domain, and a way to add more. An account opens in a
+ * dialog over the list.
  */
 export function AccountsPage({
   connections,
   addingAccount,
+  children,
 }: {
   connections: readonly ConnectionDto[];
   /** Opens Add account, for the dev design view. */
   addingAccount?: boolean;
+  /** The open account's dialog, if any. */
+  children?: ReactNode;
 }) {
   const add = (
     <AddAccountDialog {...(addingAccount ? { defaultOpen: true } : {})} />
@@ -53,6 +58,7 @@ export function AccountsPage({
           ))}
         </LinkCard>
       )}
+      {children}
     </Page>
   );
 }
@@ -60,8 +66,8 @@ export function AccountsPage({
 function AccountRow({ connection }: { connection: ConnectionDto }) {
   return (
     <Link
-      to="/accounts/$accountId"
-      params={{ accountId: connection.id }}
+      to="/accounts"
+      search={{ account: connection.id }}
       className={linkCardRow}
     >
       <IconTile>

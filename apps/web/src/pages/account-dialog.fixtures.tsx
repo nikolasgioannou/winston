@@ -1,11 +1,12 @@
 import { AppShell } from "../components/app-shell";
-import { AccountPage, type AccountPageProps } from "./account-page";
-import { personalCalendar, work } from "./accounts-page.fixtures";
+import { AccountDialog, type AccountDialogProps } from "./account-dialog";
+import { AccountsPage } from "./accounts-page";
+import { personalCalendar, personalMail, work } from "./accounts-page.fixtures";
 import type { PageFixtures } from "./fixtures";
 
 const noop = () => undefined;
 
-const page = (props: Partial<AccountPageProps>) => () => {
+const page = (props: Partial<AccountDialogProps>) => () => {
   const account = props.account ?? work;
   return (
     <AppShell
@@ -13,23 +14,27 @@ const page = (props: Partial<AccountPageProps>) => () => {
       drawerOpen={false}
       onDrawerOpenChange={noop}
     >
-      <AccountPage
-        account={account}
-        unavailable={[]}
-        capabilities={account.capabilities}
-        saves={{}}
-        onToggle={noop}
-        onDisconnect={noop}
-        {...props}
-      />
+      <AccountsPage connections={[work, personalMail, personalCalendar]}>
+        <AccountDialog
+          account={account}
+          unavailable={[]}
+          capabilities={account.capabilities}
+          saves={{}}
+          onToggle={noop}
+          onDisconnect={noop}
+          open
+          onOpenChange={noop}
+          {...props}
+        />
+      </AccountsPage>
     </AppShell>
   );
 };
 
-/** One account's states for the dev design view. */
+/** The account dialog's states for the dev design view. */
 export const accountFixtures: PageFixtures = {
-  title: "Account",
-  path: "/accounts/<acct_id>",
+  title: "Account dialog",
+  path: "/accounts?account=<acct_id>",
   states: {
     mail: { label: "Mail", render: page({}) },
     saving: {
