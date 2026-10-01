@@ -17,7 +17,7 @@ import {
   saveAttachmentHandler,
   transcribeVoiceHandler,
 } from "./attachments.ts";
-import { localBlobStore } from "./blobs.ts";
+import { createBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
@@ -58,7 +58,7 @@ const vm = gatewayClient({
   baseUrl: config.GATEWAY_INTERNAL_URL,
   secret: config.GATEWAY_INTERNAL_SECRET,
 });
-const blobs = localBlobStore(config.BLOB_DIR);
+const blobs = createBlobStore(config);
 
 const vmProvider = dockerVmProvider({
   engine: dockerEngine(await dockerSocketPath()),

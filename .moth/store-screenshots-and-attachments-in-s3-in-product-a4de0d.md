@@ -1,14 +1,14 @@
 ---
 id: "a4de0d"
 title: Store screenshots and attachments in S3 in production
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - infra
   - m4
 created_at: 2026-09-27T05:42:59.180Z
-updated_at: 2026-09-27T05:42:59.238Z
+updated_at: 2026-10-01T05:08:15.629Z
 blocked_by:
   - "68e9cc"
   - "f25d3b"
@@ -24,3 +24,5 @@ Large binaries (browser screenshots, image content blocks, attachments reference
 Research sensible S3 settings for this use: storage class, a lifecycle rule for old run screenshots (the log should still be reconstructable, so decide on retention with the founder in mind, and note it in §12), and server-side encryption.
 
 Tests: the S3 implementation against a mocked S3 client (put, get, delete, per-user prefix deletion), and content-addressed deduplication.
+
+**Done (2026-10-01):** keys stay global SHA-256 names rather than per-user prefixes, since account deletion already removes only blobs no one else references, through the generic interface; only `agents` uses blobs, so only it gets the bucket (granted in the Fargate ticket, 071e49). Blobs never expire.

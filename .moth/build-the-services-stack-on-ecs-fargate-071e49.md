@@ -26,7 +26,7 @@ Research ECS Fargate details before writing it:
 
 Build:
 - ECR repositories, and an ECS cluster.
-- Task definitions with per-service secrets (from `Secrets.environmentFor(service)` in `infra/src/secrets.ts`; set `TOKEN_KMS_KEY_ID` for web, api and agents; grant `kms:Decrypt` + `kms:GenerateDataKey` on the tokens key to api and agents and only `kms:GenerateDataKey` to web), IAM task roles following least privilege (KMS decrypt only where needed, S3 access scoped per bucket), log groups with retention, and health checks.
+- Task definitions with per-service secrets (from `Secrets.environmentFor(service)` in `infra/src/secrets.ts`; set `TOKEN_KMS_KEY_ID` for web, api and agents; grant `kms:Decrypt` + `kms:GenerateDataKey` on the tokens key to api and agents and only `kms:GenerateDataKey` to web), IAM task roles following least privilege (KMS decrypt only where needed, S3 access scoped per bucket: only `agents` touches the `blobs` bucket, with get, put and delete, and gets `BLOB_BUCKET`), log groups with retention, and health checks.
 - Services in the public subnets with public IPs.
 - **Database credentials** (decided in the data stack, docs/design.md §12a): services get the database host and the RDS-managed secret's ARN, not a password. `@winston/db`'s client passes postgres.js a `password` function that reads the secret's current value for each new connection, so rotation never needs a restart. Connect with TLS (verify against the RDS CA bundle). Grant each task role `secretsmanager:GetSecretValue` on that secret only.
 - An ALB with a certificate:

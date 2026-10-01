@@ -38,7 +38,9 @@ const agentsConfigSchema = dbConfigSchema
     RUN_TOKEN_SECRET: z
       .string()
       .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
-    /** Local blob storage for images and other binaries (S3 in production, M4). */
+    /** The S3 bucket for images and other binaries (production). */
+    BLOB_BUCKET: z.string().min(1).optional(),
+    /** Local blob storage, used when BLOB_BUCKET isn't set. */
     BLOB_DIR: z
       .string()
       .min(1)
