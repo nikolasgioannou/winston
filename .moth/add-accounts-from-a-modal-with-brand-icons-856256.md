@@ -32,4 +32,5 @@ Done autonomously with the rest of this batch; the founder reviews it all at the
   - **Google** requires permission (via its Partner Marketing Hub) before third parties show product icons like Gmail's and Calendar's. So `ProviderIcon`, the one place they're drawn, shows neutral icons for now. **Needs the founder:** request permission, or decide otherwise.
 - Account rows use `ProviderIcon` in an `IconTile`.
 - Dev design view: Connected accounts gains "Add account" (the dialog open). Checked it renders.
+- **Follow-up (2026-10-01):** the founder chose to use the Gmail and Google Calendar icons now, since Winston is private and friends-only, and to ask Google before any wider launch. `GmailIcon` and `GoogleCalendarIcon` (`packages/ui`) are Google's 2026 artwork, unmodified, copied from thesvg (MIT; checked to be plain artwork), with per-instance ids. `ProviderIcon` uses them in the account rows, the Add account dialog and the account dialog.
 

@@ -1,5 +1,10 @@
 export { Badge } from "./badge";
-export { GoogleIcon, TelegramIcon } from "./brand-icons";
+export {
+  GmailIcon,
+  GoogleCalendarIcon,
+  GoogleIcon,
+  TelegramIcon,
+} from "./brand-icons";
 export { Button, type ButtonProps } from "./button";
 export { Callout } from "./callout";
 export { Card, LinkCard, linkCardRow } from "./card";

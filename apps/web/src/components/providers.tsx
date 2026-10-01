@@ -2,7 +2,7 @@ import type {
   ConnectionDomain,
   ConnectionProvider,
 } from "@winston/domain/connections";
-import { CalendarDays, Mail } from "lucide-react";
+import { GmailIcon, GoogleCalendarIcon } from "@winston/ui";
 
 /** Each domain's name, as the type badge shows it. */
 export const domainNames: Record<ConnectionDomain, string> = {
@@ -15,13 +15,9 @@ export const providerNames: Record<ConnectionProvider, string> = {
   google_calendar: "Google Calendar",
 };
 
-/**
- * A provider's icon. Google requires permission to show its product icons
- * (Partner Marketing Hub), so Gmail and Google Calendar show neutral icons
- * until it's granted; their brand icons go here, the one place to change.
- */
+/** A provider's brand icon (see the note on `GmailIcon` about Google's permission). */
 export function ProviderIcon({ provider }: { provider: ConnectionProvider }) {
-  return provider === "gmail" ? <Mail /> : <CalendarDays />;
+  return provider === "gmail" ? <GmailIcon /> : <GoogleCalendarIcon />;
 }
 
 /**
