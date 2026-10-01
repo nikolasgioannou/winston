@@ -13,6 +13,8 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   RUN_TOKEN_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+  /** Production: the bucket VM binaries are published to (self-update). */
+  ARTIFACTS_BUCKET: z.string().min(1).optional(),
   GATEWAY_INTERNAL_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),

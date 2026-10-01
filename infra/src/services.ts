@@ -78,6 +78,8 @@ export interface ServicesStackProps extends StackProps {
   database: { endpoint: string; port: string; secretArn: string };
   tokensKey: IKey;
   blobs: IBucket;
+  /** VM binaries; the gateway presigns downloads from it. */
+  artifacts: IBucket;
   /** What agents needs to run users' VMs on EC2 (the Vm stack). */
   vm: {
     backendPolicy: IManagedPolicy;
@@ -129,6 +131,7 @@ export class ServicesStack extends Stack {
       gateway: {
         GATEWAY_HOST: "0.0.0.0",
         GATEWAY_PORT: String(servicePorts.gateway),
+        ARTIFACTS_BUCKET: props.artifacts.bucketName,
       },
       web: {
         WEB_HOST: "0.0.0.0",
@@ -241,6 +244,8 @@ export class ServicesStack extends Stack {
     props.tokensKey.grant(taskDefinitions.web.taskRole, "kms:GenerateDataKey");
     // agents runs users' VMs (the EC2 VmProvider).
     taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);
+    // The gateway reads the VM manifest and presigns binary downloads (§10).
+    props.artifacts.grantRead(taskDefinitions.gateway.taskRole);
     // Only agents stores blobs (§12).
     props.blobs.grantRead(taskDefinitions.agents.taskRole);
     props.blobs.grantPut(taskDefinitions.agents.taskRole);

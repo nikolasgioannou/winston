@@ -13,6 +13,7 @@ import { and, eq, or, sql } from "drizzle-orm";
 import type { Execs } from "./execs.ts";
 import type { FileTransfers } from "./files.ts";
 import type { VmApi } from "@winston/vm-api";
+import type { Updates } from "./updates.ts";
 
 /** What a VM connection carries once authenticated. */
 export interface VmSocketData {
@@ -84,12 +85,14 @@ export async function handleVmFrame(
     execs,
     files,
     vmApi,
+    updates,
   }: {
     db: DbOrTx;
     logger: Logger;
     execs: Execs;
     files: FileTransfers;
     vmApi: VmApi;
+    updates?: Pick<Updates, "hello">;
   },
   vm: { vmId: string; userId: string },
   text: string,
@@ -131,6 +134,10 @@ export async function handleVmFrame(
         },
         "VM said hello",
       );
+      updates?.hello(vmId, {
+        cliVersion: frame.cliVersion,
+        winstondVersion: frame.winstondVersion,
+      });
       return [];
     }
     case "ping": {

@@ -54,7 +54,6 @@ export function defineStacks(app: App, environment: Environment = production) {
   const vm = new VmStack(app, "Vm", {
     ...props("Vm", "The user VMs' launch template, permissions and snapshots"),
     vmSecurityGroup: network.securityGroups.vm,
-    artifacts: data.artifacts,
   });
   const services = new ServicesStack(app, "Services", {
     ...props(
@@ -80,6 +79,7 @@ export function defineStacks(app: App, environment: Environment = production) {
     },
     tokensKey: data.tokensKey,
     blobs: data.blobs,
+    artifacts: data.artifacts,
     vm: {
       backendPolicy: vm.backendPolicy,
       launchTemplateName: "winston-vm",

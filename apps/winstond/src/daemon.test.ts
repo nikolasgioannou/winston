@@ -120,6 +120,77 @@ async function start(
 }
 
 describe("winstond", () => {
+  test("an update: a new CLI is announced with a fresh hello; a new winstond restarts", async () => {
+    const gateway = fakeGateway();
+    running.push({ stop: () => void gateway.server.stop(true) });
+    const applied: string[] = [];
+    let restarts = 0;
+    let confirms = 0;
+    let replacesWinstond = false;
+    const daemon = createDaemon({
+      gatewayUrl: gateway.url,
+      registrationToken: "reg-1",
+      tokens: tokenStore(
+        join(await mkdtemp(join(tmpdir(), "winstond-")), "token"),
+      ),
+      executor: createExecutor({ prefix: [] }),
+      files: localFiles(tmpdir()),
+      versions: { winstond: "0.1.1+a", cli: "0.1.1+a" },
+      updates: {
+        apply: (frame) => {
+          applied.push(frame.version);
+          return Promise.resolve({
+            cliUpdated: true,
+            winstondUpdated: replacesWinstond,
+          });
+        },
+        confirm: () => {
+          confirms++;
+          return Promise.resolve();
+        },
+        restart: () => {
+          restarts++;
+        },
+      },
+      logger,
+      backoff: () => 20,
+      pingEveryMs: 50,
+    });
+    daemon.start();
+    running.push(daemon);
+    const hellos = () =>
+      (gateway.connections[0]?.frames ?? []).filter(
+        (frame) => frame.type === "hello",
+      ) as unknown as { cliVersion: string | null }[];
+    await eventually(() => hellos().length === 1);
+    expect(confirms).toBe(1);
+
+    const binary = {
+      url: "https://s3/x",
+      sha256: "0".repeat(64),
+      signature: "c2ln",
+    };
+    const announce = (version: string) => {
+      gateway.connections[0]?.ws.send(
+        JSON.stringify({
+          id: `u-${version}`,
+          type: "update.available",
+          version,
+          binaries: { winston: binary, winstond: binary },
+        }),
+      );
+    };
+    announce("0.1.2+b");
+    await eventually(() => hellos().length === 2);
+    expect(hellos()[1]?.cliVersion).toBe("0.1.2+b");
+    expect(restarts).toBe(0);
+
+    replacesWinstond = true;
+    announce("0.1.3+c");
+    await eventually(() => restarts === 1);
+    expect(applied).toEqual(["0.1.2+b", "0.1.3+c"]);
+  });
+
   test("first boot: registers, stores the VM token, then says hello and pings", async () => {
     const gateway = fakeGateway();
     running.push({ stop: () => void gateway.server.stop(true) });

@@ -3,6 +3,7 @@ import {
   newFrameId,
   parseFrame,
   type VmToGatewayFrame,
+  type UpdateAvailableFrame,
 } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import { backoffDelayMs } from "./backoff.ts";
@@ -51,6 +52,16 @@ export interface DaemonOptions {
   executor: Executor;
   files: Files;
   versions: { winstond: string; cli: string | null };
+  /** Self-update (updater.ts); absent in tests that don't need it. */
+  updates?: {
+    apply: (
+      frame: UpdateAvailableFrame,
+    ) => Promise<{ cliUpdated: boolean; winstondUpdated: boolean }>;
+    /** This winstond connected: any pending update of it worked. */
+    confirm: () => Promise<void>;
+    /** Hands over to the new winstond (systemd restarts the process). */
+    restart: () => void;
+  };
   logger: Logger;
   /** For tests: faster reconnects and pings. */
   backoff?: (attempt: number) => number;
@@ -106,6 +117,35 @@ export function createDaemon(options: DaemonOptions) {
       winstondVersion: options.versions.winstond,
       capabilities: [],
     });
+    // Connected and accepted: a just-installed winstond works.
+    void options.updates?.confirm().catch((error: unknown) => {
+      logger.warn({ err: error }, "confirming the update failed");
+    });
+  };
+
+  let updating = false;
+  const update = async (ws: WebSocket, frame: UpdateAvailableFrame) => {
+    const updates = options.updates;
+    if (!updates || updating) return;
+    updating = true;
+    try {
+      const { cliUpdated, winstondUpdated } = await updates.apply(frame);
+      if (winstondUpdated) {
+        logger.info({ version: frame.version }, "winstond updated; restarting");
+        updates.restart();
+        return;
+      }
+      if (cliUpdated) {
+        options.versions.cli = frame.version;
+        logger.info({ version: frame.version }, "CLI updated");
+        if (ws.readyState === WebSocket.OPEN) hello(ws);
+      }
+    } catch (error) {
+      // The old binaries keep working; the gateway lets work through.
+      logger.error({ err: error, version: frame.version }, "update failed");
+    } finally {
+      updating = false;
+    }
   };
 
   /** Which token to present: the stored one, unless it was just refused and a registration token exists. */
@@ -320,6 +360,8 @@ export function createDaemon(options: DaemonOptions) {
         uploads.get(frame.transferId)?.queue.close();
       } else if (frame.type === "rpc.response") {
         answer(frame.replyTo, { status: frame.status, body: frame.body });
+      } else if (frame.type === "update.available") {
+        void update(ws, frame);
       } else if (frame.type === "ping") {
         send(ws, { id: newFrameId(), type: "pong", replyTo: frame.id });
       } else if (frame.type === "error") {

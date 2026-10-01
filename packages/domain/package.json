@@ -9,7 +9,8 @@
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",
     "./jobs": "./src/jobs.ts",
-    "./run-token": "./src/run-token.ts"
+    "./run-token": "./src/run-token.ts",
+    "./vm-versions": "./src/vm-versions.ts"
   },
   "scripts": {
     "typecheck": "tsc"

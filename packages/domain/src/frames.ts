@@ -12,7 +12,7 @@ const base = { id: frameId };
 
 // vm → gateway
 
-/** The first frame on every connection: who the VM is running. */
+/** The first frame on every connection, and again after a CLI update: who the VM is running. */
 export const helloFrame = z.object({
   ...base,
   type: z.literal("hello"),
@@ -180,6 +180,27 @@ export const rpcResponseFrame = z.object({
 // both ways
 
 /** Liveness, every 20 s from the VM; `last_seen_at` is updated. */
+/** One signed binary in an update: where to download it, and how to check it. */
+const updateBinary = z.object({
+  /** A short-lived presigned S3 URL; the VM needs no AWS credentials. */
+  url: z.url(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /** ECDSA P-256 over the SHA-256 (KMS), DER, base64. */
+  signature: z.string().min(1).max(512),
+});
+
+/**
+ * The current VM binaries, for a VM that reported older ones in `hello`
+ * (docs/design.md §10). `winstond` replaces whichever differ, then says
+ * hello again (or restarts, for its own binary).
+ */
+export const updateAvailableFrame = z.object({
+  ...base,
+  type: z.literal("update.available"),
+  version: z.string().min(1).max(64),
+  binaries: z.object({ winston: updateBinary, winstond: updateBinary }),
+});
+
 export const pingFrame = z.object({ ...base, type: z.literal("ping") });
 export const pongFrame = z.object({
   ...base,
@@ -210,6 +231,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   fileChunkFrame,
   fileEndFrame,
   rpcResponseFrame,
+  updateAvailableFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -217,6 +239,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
 
 export type VmToGatewayFrame = z.infer<typeof vmToGatewayFrame>;
 export type GatewayToVmFrame = z.infer<typeof gatewayToVmFrame>;
+export type UpdateAvailableFrame = z.infer<typeof updateAvailableFrame>;
 export type FileErrorCode = z.infer<typeof fileErrorFrame>["code"];
 export type ExecResult = Omit<
   z.infer<typeof execResultFrame>,

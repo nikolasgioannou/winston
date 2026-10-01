@@ -39,7 +39,7 @@ describe("vm stack", () => {
     });
   });
 
-  test("VMs may use Session Manager and read artifacts, and nothing else", () => {
+  test("VMs may use Session Manager and nothing else", () => {
     template.hasResourceProperties("AWS::IAM::Role", {
       AssumeRolePolicyDocument: Match.objectLike({
         Statement: [
@@ -57,12 +57,7 @@ describe("vm stack", () => {
     const instanceRolePolicies = statementsOf("AWS::IAM::Policy", (props) =>
       JSON.stringify(props.Roles).includes("InstanceRole"),
     );
-    const actions = instanceRolePolicies.flatMap((s) => [s.Action].flat());
-    expect(
-      actions.every(
-        (action) => action.startsWith("s3:Get") || action.startsWith("s3:List"),
-      ),
-    ).toBe(true);
+    expect(instanceRolePolicies).toEqual([]);
   });
 
   test("agents can launch only from the template and touch only tagged resources", () => {

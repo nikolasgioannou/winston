@@ -8,6 +8,7 @@ import { createVmApi } from "@winston/vm-api";
 import { createExecs } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
 import { internalRoutes } from "./internal.ts";
+import { createUpdates, type UpdatesOptions } from "./updates.ts";
 import {
   authenticateVm,
   handleVmFrame,
@@ -31,12 +32,15 @@ export function createGateway({
   logger,
   internalSecret,
   runTokenSecret,
+  artifacts,
 }: {
   db: DbOrTx;
   logger: Logger;
   internalSecret: string;
   /** Verifies the run tokens CLI calls carry (agents signs them). */
   runTokenSecret: string;
+  /** Where published VM binaries come from (production); none locally. */
+  artifacts?: Pick<UpdatesOptions, "loadManifest" | "presign">;
 }) {
   const vmApi = createVmApi({ db, runTokenSecret });
   const connections = new Connections<VmSocket>();
@@ -47,6 +51,13 @@ export function createGateway({
     return ws;
   };
   const execs = createExecs((vmId, frame) => sendTo(vmId, frame) !== undefined);
+  const updates = createUpdates({
+    loadManifest: artifacts?.loadManifest ?? (() => Promise.resolve(undefined)),
+    presign:
+      artifacts?.presign ?? (() => Promise.reject(new Error("no artifacts"))),
+    send: (vmId, frame) => sendTo(vmId, frame) !== undefined,
+    logger,
+  });
   const files = createFileTransfers(sendTo);
   const internal = internalRoutes({
     db,
@@ -54,6 +65,7 @@ export function createGateway({
     isConnected: (vmId) => connections.get(vmId) !== undefined,
     execs,
     files,
+    updates,
   });
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
@@ -102,7 +114,7 @@ export function createGateway({
       }
       const vmLogger = logger.child({ vmId: ws.data.vmId });
       for (const reply of await handleVmFrame(
-        { db, logger: vmLogger, execs, files, vmApi },
+        { db, logger: vmLogger, execs, files, vmApi, updates },
         ws.data,
         message,
       ))
@@ -110,12 +122,14 @@ export function createGateway({
     },
     close(ws, code) {
       connections.remove(ws.data.vmId, ws);
+      if (!connections.get(ws.data.vmId)) updates.disconnected(ws.data.vmId);
       files.closed(ws);
       logger.info({ vmId: ws.data.vmId, code }, "VM disconnected");
     },
   };
 
   return {
+    updates,
     connections,
     execs,
     files,

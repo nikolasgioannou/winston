@@ -1,14 +1,14 @@
 ---
 id: "9f2e3f"
 title: Sign VM binaries and let winstond update itself
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - vm
 created_at: 2026-09-27T05:36:33.051Z
-updated_at: 2026-09-27T05:36:33.103Z
+updated_at: 2026-10-01T07:42:36.120Z
 blocked_by:
   - "245cbb"
   - "f25d3b"
@@ -24,3 +24,5 @@ Build the pipeline pieces:
 - **Version handshake:** until a VM reports the current CLI version, `gateway` holds back new agent `exec` work for it (§10). The system prompt and CLI `--help` must always agree. Keep the hold short. If the update fails, alert through logs and let work proceed on the old version rather than wedging the user.
 
 Tests: signature verification rejects a tampered binary, the atomic swap, rollback on failed restart, and the gateway's hold-then-release behaviour.
+
+**Done (2026-10-01):** downloads use presigned URLs from the gateway, so VMs hold no S3 permissions (the instance role lost its artifact reads). The CLI moved into winstond's directory so winstond can replace it. Publishing was tried for real (signed in KMS, verified against the committed public key, uploaded). The full loop on a VM runs at go-live, when the deploy publishes and a VM connects.

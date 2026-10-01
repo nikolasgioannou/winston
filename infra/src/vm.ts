@@ -19,7 +19,6 @@ import {
   Role,
   ServicePrincipal,
 } from "aws-cdk-lib/aws-iam";
-import type { IBucket } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 
 /** The SSM parameter naming the AMI new VMs launch from (`image:build:ami`). */
@@ -34,7 +33,6 @@ export const roleTag = "winston:role";
 
 export interface VmStackProps extends StackProps {
   vmSecurityGroup: ISecurityGroup;
-  artifacts: IBucket;
 }
 
 /**
@@ -50,15 +48,14 @@ export class VmStack extends Stack {
     super(scope, id, props);
 
     // VMs hold no useful AWS permissions: Session Manager for admin access,
-    // and reading the artifacts bucket for self-updates (§10).
+    // and nothing else. Self-updates download through presigned URLs (§10).
     const role = new Role(this, "InstanceRole", {
       assumedBy: new ServicePrincipal("ec2.amazonaws.com"),
-      description: "Winston VMs: SSM Session Manager and artifact reads only",
+      description: "Winston VMs: SSM Session Manager only",
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
       ],
     });
-    props.artifacts.grantRead(role);
 
     this.launchTemplate = new LaunchTemplate(this, "LaunchTemplate", {
       launchTemplateName: "winston-vm",

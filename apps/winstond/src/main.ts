@@ -9,6 +9,8 @@ import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
 import { helperFiles, runFileHelper } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
+import { signingPublicKey } from "./signing-key.ts";
+import { applyUpdate, confirmUpdate } from "./updater.ts";
 import { readUserData } from "./user-data.ts";
 import { version } from "./version.ts";
 
@@ -49,13 +51,22 @@ async function cliVersion() {
 }
 
 const logger = createLogger("winstond", { pretty: false });
+/** winstond's own directory, which holds both binaries (updater.ts). */
+const dir = process.env.WINSTOND_DIR ?? "/usr/local/lib/winstond";
+const versions = { winstond: version, cli: await cliVersion() };
 const daemon = createDaemon({
   gatewayUrl,
   registrationToken: settings.registrationToken,
   executor: createExecutor(),
   files: helperFiles(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
-  versions: { winstond: version, cli: await cliVersion() },
+  versions,
+  updates: {
+    apply: (frame) =>
+      applyUpdate(frame, { dir, publicKeyPem: signingPublicKey, versions }),
+    confirm: () => confirmUpdate(dir),
+    restart: () => process.exit(0),
+  },
   logger,
 });
 daemon.start();

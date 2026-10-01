@@ -135,9 +135,15 @@ describe("services stack", () => {
     expect(actionsFor("web")).toContain("kms:GenerateDataKey");
     expect(actionsFor("web")).not.toContain("kms:Decrypt");
     expect(actionsFor("gateway").some((a) => a.startsWith("kms:"))).toBe(false);
-    for (const service of ["api", "gateway", "web"] as const)
+    for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
     expect(actionsFor("agents")).toContain("s3:PutObject");
+    // The gateway only reads (VM binaries, to presign their downloads).
+    expect(
+      actionsFor("gateway")
+        .filter((a) => a.startsWith("s3:"))
+        .every((a) => a.startsWith("s3:Get") || a.startsWith("s3:List")),
+    ).toBe(true);
   });
 
   test("web is reachable only with CloudFront's origin header", () => {

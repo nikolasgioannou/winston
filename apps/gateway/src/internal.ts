@@ -7,6 +7,7 @@ import { z } from "zod";
 import { VmUnavailableError, VmUnreachableError, type Execs } from "./execs.ts";
 import { FileTransferError, type FileTransfers } from "./files.ts";
 import { maxFileBytes } from "./limits.ts";
+import type { Updates } from "./updates.ts";
 
 const execBody = z.object({
   cmd: z.string().min(1),
@@ -26,12 +27,14 @@ export function internalRoutes({
   isConnected,
   execs,
   files,
+  updates,
 }: {
   db: DbOrTx;
   secret: string;
   isConnected: (vmId: string) => boolean;
   execs: Execs;
   files: FileTransfers;
+  updates?: Pick<Updates, "ready">;
 }) {
   const expected = Buffer.from(`Bearer ${secret}`);
   const authorized = (header: string | undefined) => {
@@ -122,6 +125,8 @@ export function internalRoutes({
           404,
         );
       try {
+        // Work waits briefly for an outdated CLI to update (§10).
+        await updates?.ready(vm.id);
         return c.json(await execs.run(vm.id, body.data));
       } catch (error) {
         if (error instanceof VmUnavailableError)

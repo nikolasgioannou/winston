@@ -4,6 +4,7 @@
  */
 import { createDb } from "@winston/db/client";
 import { createLogger } from "@winston/shared/logger";
+import { s3Artifacts } from "./artifacts.ts";
 import { loadGatewayConfig } from "./config.ts";
 import { createGateway } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
@@ -22,7 +23,18 @@ const gateway = createGateway({
   logger,
   internalSecret: config.GATEWAY_INTERNAL_SECRET,
   runTokenSecret: config.RUN_TOKEN_SECRET,
+  ...(config.ARTIFACTS_BUCKET
+    ? { artifacts: s3Artifacts(config.ARTIFACTS_BUCKET) }
+    : {}),
 });
+// New VM binaries reach connected VMs within a minute of being published.
+const refreshUpdates = () => {
+  gateway.updates.refresh().catch((error: unknown) => {
+    logger.error({ err: error }, "reading the VM manifest failed");
+  });
+};
+refreshUpdates();
+const updateChecker = setInterval(refreshUpdates, 60_000);
 const server = Bun.serve<VmSocketData>({
   hostname: config.GATEWAY_HOST,
   port: config.GATEWAY_PORT,
@@ -43,6 +55,7 @@ async function shutdown(signal: string) {
   stopping = true;
   logger.info({ signal }, "stopping");
   clearInterval(sweeper);
+  clearInterval(updateChecker);
   // Closes VM sockets; they reconnect to another gateway or after restart.
   await server.stop(true);
   await db.$client.end();
