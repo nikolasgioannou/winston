@@ -85,7 +85,14 @@ export interface BackgroundDeps {
  */
 export async function startBackgroundRun(
   db: DbOrTx,
-  options: { userId: string; brief: string; effort?: Effort },
+  options: {
+    userId: string;
+    brief: string;
+    effort?: Effort;
+    /** What started it, and the front-of-house turn that did. */
+    triggerType?: "delegate";
+    parentRunId?: string;
+  },
 ) {
   return db.transaction(async (tx) => {
     const [user] = await tx
@@ -101,6 +108,8 @@ export async function startBackgroundRun(
       status: "queued",
       brief: options.brief,
       effort: options.effort,
+      triggerType: options.triggerType,
+      parentRunId: options.parentRunId,
     });
     const message: ModelMessage = {
       role: "user",

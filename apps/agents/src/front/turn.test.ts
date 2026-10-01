@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import {
   inboundItems,
+  jobs,
   modelCalls,
   outboundMessages,
   runMessages,
@@ -170,6 +171,57 @@ async function scenario(
 }
 
 describe("runFrontTurn", () => {
+  test("delegate queues one background run and returns at once; the turn ends without waiting for it", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply(
+            "delegate",
+            {
+              brief:
+                "Compare the three lease renewal offers in Nik's mail and report the cheapest.",
+              effort: "medium",
+            },
+            "On it, I'll get back to you.",
+          ),
+          toolCallReply("end_turn", {}),
+        ],
+      ],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        await say("which lease offer is cheapest?");
+        const runId = await turn();
+        expect(sent.map((m) => m.text)).toEqual([
+          "On it, I'll get back to you.",
+        ]);
+        const tasks = await tx
+          .select()
+          .from(runs)
+          .where(and(eq(runs.userId, userId), eq(runs.kind, "background")));
+        expect(tasks).toHaveLength(1);
+        expect(tasks[0]).toMatchObject({
+          status: "queued",
+          triggerType: "delegate",
+          parentRunId: runId,
+          effort: "medium",
+          brief:
+            "Compare the three lease renewal offers in Nik's mail and report the cheapest.",
+        });
+        const steps = await tx
+          .select()
+          .from(jobs)
+          .where(and(eq(jobs.type, "run_step"), eq(jobs.userId, userId)));
+        expect(steps.map((j) => j.payload)).toEqual([{ runId: tasks[0]?.id }]);
+        // The model heard back the task id straight away.
+        expect(JSON.stringify(requests[0]?.[1])).toContain(tasks[0]?.id ?? "-");
+        const [front] = await tx
+          .select()
+          .from(runs)
+          .where(eq(runs.id, runId ?? ""));
+        expect(front?.status).toBe("completed");
+      },
+    );
+  });
+
   test("the final text is the reply: sent and recorded", async () => {
     await scenario(
       [[textReply("Morning.")]],

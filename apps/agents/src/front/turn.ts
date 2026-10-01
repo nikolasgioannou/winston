@@ -55,6 +55,7 @@ import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
+import { delegateDefinition, delegateTool } from "../tools/delegate.ts";
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
@@ -106,6 +107,7 @@ const prompt = promptVersion("front-of-house", [
   bashDefinition("front"),
   viewImageDefinition,
   attachDefinition,
+  delegateDefinition,
   endTurnDefinition,
 ]);
 const instructions = cacheBreakpoint({
@@ -256,6 +258,10 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         runId,
         chatId: user.chatId,
       }),
+      () => stream.dropStep,
+    ),
+    delegate: unlessDropped(
+      delegateTool({ db, logger, userId, runId }),
       () => stream.dropStep,
     ),
     end_turn: unlessDropped(endTurnTool, () => stream.dropStep),

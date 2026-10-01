@@ -4,6 +4,7 @@ import {
   snakeCase,
   text,
   timestamp,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { newId } from "../ids.ts";
 import { users } from "./users.ts";
@@ -22,6 +23,9 @@ export const runStatus = pgEnum("run_status", [
 /** A front-of-house turn, or a background agent's task (§1). */
 export const runKind = pgEnum("run_kind", ["front", "background"]);
 
+/** What started a background run: the front of house delegating, so far (§1). */
+export const runTrigger = pgEnum("run_trigger", ["delegate"]);
+
 /** Reasoning effort for a run's model calls (§6). */
 export const runEffort = pgEnum("run_effort", ["low", "medium", "high"]);
 
@@ -38,6 +42,12 @@ export const runs = snakeCase.table("runs", {
     .references(() => users.id, { onDelete: "cascade" }),
   kind: runKind().notNull().default("front"),
   status: runStatus().notNull().default("running"),
+  /** Background: what started it; unset when started by hand (`bun run task:start`). */
+  triggerType: runTrigger(),
+  /** Background: the front-of-house turn that delegated it. */
+  parentRunId: text().references((): AnyPgColumn => runs.id, {
+    onDelete: "set null",
+  }),
   /** Background: the self-contained brief it was started with. */
   brief: text(),
   /** Background: the effort its model calls use, when not the profile's own. */
