@@ -1,13 +1,13 @@
 ---
 id: "ea88cd"
 title: Write the background agent's system prompt
-status: todo
+status: done
 priority: none
 labels:
   - m6
   - prompts
 created_at: 2026-09-27T05:38:49.765Z
-updated_at: 2026-09-27T05:38:49.799Z
+updated_at: 2026-10-01T17:38:42.941Z
 blocked_by:
   - "64a47f"
 ---
@@ -22,3 +22,9 @@ Background agents get their own static system prompt in `packages/prompts` (docs
 - **Effort:** it can raise its own effort when a task turns out harder. The mechanism arrives in the effort ticket, so phrase this generically now.
 
 Keep it static (no dates or user data). Record the prompt version through the existing `prompt_versions` path.
+
+## As built
+
+- `packages/prompts/src/background.md`, recorded through `promptVersion("background", …)` like the front's. Summary and eval results in docs/design.md §1 ("The background prompt").
+- Effort is phrased generically ("slow down and think it through"); the mechanism comes with 12c38a. Event-triggered runs aren't described yet: the "one line when nothing needed doing" rule is there, and trigger specifics come with M7.
+
