@@ -14,6 +14,7 @@ export * from "./run-messages.ts";
 export * from "./runs.ts";
 export * from "./telegram-link-tokens.ts";
 export * from "./telegram-links.ts";
+export * from "./triggers.ts";
 export * from "./users.ts";
 export * from "./vms.ts";
 export * from "./web-sessions.ts";

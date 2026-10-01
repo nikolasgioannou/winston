@@ -9,6 +9,8 @@ export const idPrefixes = {
   frontRun: "run",
   /** A background run: the task the CLI names (`winston task`). */
   task: "task",
+  /** A schedule or subscription Winston set for himself (§3). */
+  trigger: "trg",
   /** A provider event, before matching subscriptions (§3). */
   event: "evn",
   /** Inbound items and outbound messages together form the history (`hist_`). */
