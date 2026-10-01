@@ -1,14 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import cdkJson from "../cdk.json";
-import { defineStacks, production } from "./app.ts";
+import { production } from "./app.ts";
+import { testApp } from "./testing.ts";
 
 describe("infra app", () => {
-  // The same feature flags as `cdk synth`, and its version reporting, which
-  // the CLI turns on by default (it's what keeps empty stacks valid).
-  const app = new App({ context: cdkJson.context, analyticsReporting: true });
-  const stacks = defineStacks(app);
+  const { app, stacks } = testApp();
 
   test("synthesizes cleanly, including CloudFormation validation", () => {
     expect(() => app.synth()).not.toThrow();

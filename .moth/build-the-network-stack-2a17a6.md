@@ -1,13 +1,13 @@
 ---
 id: "2a17a6"
 title: Build the network stack
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.345Z
-updated_at: 2026-09-27T05:36:32.378Z
+updated_at: 2026-10-01T03:56:03.693Z
 blocked_by:
   - "60490f"
 ---

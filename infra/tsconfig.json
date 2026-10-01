@@ -1,4 +1,9 @@
 {
   "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // aws-cdk-lib's classes and interfaces disagree under this check (e.g. Vpc
+    // isn't assignable to IVpc), so infrastructure code goes without it.
+    "exactOptionalPropertyTypes": false
+  },
   "include": ["bin", "src"]
 }
