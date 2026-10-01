@@ -1,5 +1,5 @@
 /**
- * Gmail's side of `MailReader` (docs/design.md §3, §11 `winston mail`), over
+ * Gmail's side of `MailProvider` (docs/design.md §3, §11 `winston mail`), over
  * the Gmail REST API with the connection's access token.
  *
  * - **Listing** is `messages.list` with a query (the portable filters
@@ -19,6 +19,7 @@
  *   change between fetches, so an attachment is named `<message id>/<part id>`.
  */
 import { compile } from "html-to-text";
+import { composeRaw } from "./mail-compose.ts";
 import {
   NotSupportedError,
   ProviderNotFoundError,
@@ -31,12 +32,13 @@ import type {
   MailFilter,
   MailFolder,
   MailMessage,
-  MailReader,
+  MailProvider,
   MailThread,
   Page,
 } from "./mail.ts";
 
 const api = "https://gmail.googleapis.com/gmail/v1/users/me";
+const uploadApi = "https://gmail.googleapis.com/upload/gmail/v1/users/me";
 const parallelGets = 10;
 
 export interface GmailOptions {
@@ -270,18 +272,31 @@ const unescapeSnippet = (snippet: string) =>
       String.fromCodePoint(Number(code)),
     );
 
-export function gmailReader({
+export function gmailProvider({
   address,
   accessToken,
   fetch: send = fetch,
-}: GmailOptions): MailReader {
-  async function call<T>(path: string): Promise<T> {
-    const response = await send(`${api}${path}`, {
-      headers: { Authorization: `Bearer ${await accessToken()}` },
+}: GmailOptions): MailProvider {
+  async function call<T>(
+    path: string,
+    init: {
+      method?: string;
+      body?: string | Blob;
+      contentType?: string;
+      base?: string;
+    } = {},
+  ): Promise<T> {
+    const response = await send(`${init.base ?? api}${path}`, {
+      method: init.method ?? "GET",
+      headers: {
+        Authorization: `Bearer ${await accessToken()}`,
+        ...(init.contentType ? { "Content-Type": init.contentType } : {}),
+      },
+      ...(init.body === undefined ? {} : { body: init.body }),
     });
     if (response.status === 404)
       throw new ProviderNotFoundError(
-        "Gmail has no such message or thread (it may have been deleted).",
+        "Gmail has no such message, thread or draft (it may have been deleted).",
       );
     if (response.status === 429 || response.status >= 500)
       throw new ProviderUnavailableError(
@@ -295,8 +310,37 @@ export function gmailReader({
         `Gmail said ${String(response.status)}: ${body.error?.message ?? "no details"}`,
       );
     }
-    return (await response.json()) as T;
+    // Some writes (trash of a thread, batchModify) answer with nothing.
+    const text = await response.text();
+    return (text ? JSON.parse(text) : {}) as T;
   }
+
+  const post = <T>(path: string, body: unknown) =>
+    call<T>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+      contentType: "application/json",
+    });
+
+  /**
+   * Uploads a raw message with JSON metadata (multipart upload), which takes
+   * messages up to Gmail's size limit, attachments included.
+   */
+  const upload = <T>(path: string, metadata: unknown, raw: Uint8Array) => {
+    const boundary = `winston-${crypto.randomUUID()}`;
+    const body = new Blob([
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+      `--${boundary}\r\nContent-Type: message/rfc822\r\n\r\n`,
+      raw,
+      `\r\n--${boundary}--`,
+    ]);
+    return call<T>(`${path}?uploadType=multipart`, {
+      method: "POST",
+      base: uploadApi,
+      body,
+      contentType: `multipart/related; boundary=${boundary}`,
+    });
+  };
 
   let labelNames: Promise<Map<string, string>> | undefined;
   /** User labels' names by id (system labels like INBOX are flags instead). */
@@ -311,6 +355,28 @@ export function gmailReader({
             .map((label) => [label.id, label.name]),
         ),
     ));
+
+  /** A label's id by name; `create` makes a missing user label (decided: adding a new label creates it, as Gmail does). */
+  async function labelId(name: string, create: boolean) {
+    const system: Record<string, string> = {
+      inbox: "INBOX",
+      starred: "STARRED",
+      unread: "UNREAD",
+      important: "IMPORTANT",
+    };
+    const builtIn = system[name.toLowerCase()];
+    if (builtIn) return builtIn;
+    for (const [id, label] of await labels())
+      if (label.toLowerCase() === name.toLowerCase()) return id;
+    if (!create) return undefined;
+    const made = await post<{ id: string; name: string }>("/labels", {
+      name,
+      labelListVisibility: "labelShow",
+      messageListVisibility: "show",
+    });
+    (await labels()).set(made.id, made.name);
+    return made.id;
+  }
 
   async function toMessage(message: GmailMessage): Promise<MailMessage> {
     const names = await labels();
@@ -437,6 +503,95 @@ export function gmailReader({
         mimeType: part.mimeType ?? "application/octet-stream",
         data: new Uint8Array(Buffer.from(data, "base64url")),
       };
+    },
+
+    async send(mail) {
+      const sent = await upload<{ id: string; threadId: string }>(
+        "/messages/send",
+        mail.inReplyTo ? { threadId: mail.inReplyTo.threadId } : {},
+        await composeRaw(mail),
+      );
+      return { messageId: sent.id, threadId: sent.threadId };
+    },
+
+    async createDraft(mail) {
+      const draft = await upload<{
+        id: string;
+        message: { id: string; threadId: string };
+      }>(
+        "/drafts",
+        {
+          message: mail.inReplyTo ? { threadId: mail.inReplyTo.threadId } : {},
+        },
+        await composeRaw(mail),
+      );
+      return {
+        draftId: draft.id,
+        messageId: draft.message.id,
+        threadId: draft.message.threadId,
+      };
+    },
+
+    async sendDraft(draftId) {
+      const sent = await post<{ id: string; threadId: string }>(
+        "/drafts/send",
+        { id: draftId },
+      );
+      return { messageId: sent.id, threadId: sent.threadId };
+    },
+
+    async getDraft(draftId) {
+      const draft = await call<{ message: GmailMessage }>(
+        `/drafts/${encodeURIComponent(draftId)}?format=full`,
+      );
+      return toFull(draft.message);
+    },
+
+    async modify(target, changes) {
+      const add: string[] = [];
+      const remove: string[] = [];
+      if (changes.read === true) remove.push("UNREAD");
+      if (changes.read === false) add.push("UNREAD");
+      if (changes.starred === true) add.push("STARRED");
+      if (changes.starred === false) remove.push("STARRED");
+      if (changes.archived === true) remove.push("INBOX");
+      if (changes.archived === false) add.push("INBOX");
+      for (const name of changes.addLabels ?? [])
+        add.push((await labelId(name, true)) ?? name);
+      for (const name of changes.removeLabels ?? []) {
+        const id = await labelId(name, false);
+        // Removing a label that doesn't exist changes nothing.
+        if (id) remove.push(id);
+      }
+      const labelChanges = {
+        ...(add.length ? { addLabelIds: add } : {}),
+        ...(remove.length ? { removeLabelIds: remove } : {}),
+      };
+      if (!add.length && !remove.length) return;
+      if (target.messages?.length)
+        await post("/messages/batchModify", {
+          ids: target.messages,
+          ...labelChanges,
+        });
+      for (const thread of target.threads ?? [])
+        await post(
+          `/threads/${encodeURIComponent(thread)}/modify`,
+          labelChanges,
+        );
+    },
+
+    async trash(target) {
+      for (const message of target.messages ?? [])
+        await post(`/messages/${encodeURIComponent(message)}/trash`, {});
+      for (const thread of target.threads ?? [])
+        await post(`/threads/${encodeURIComponent(thread)}/trash`, {});
+      // drafts.delete is permanent; trashing the draft's message isn't.
+      for (const draft of target.drafts ?? []) {
+        const { message } = await call<{ message: { id: string } }>(
+          `/drafts/${encodeURIComponent(draft)}?format=minimal`,
+        );
+        await post(`/messages/${encodeURIComponent(message.id)}/trash`, {});
+      }
     },
   };
 }

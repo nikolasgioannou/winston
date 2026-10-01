@@ -3,7 +3,7 @@
  * serves the internal API (docs/design.md §9, §15).
  */
 import { googleAccessTokens } from "@winston/connectors/access-token";
-import { gmailReader } from "@winston/connectors/gmail";
+import { gmailProvider } from "@winston/connectors/gmail";
 import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
@@ -43,7 +43,7 @@ const gateway = createGateway({
   connectors: {
     webPublicUrl: config.WEB_PUBLIC_URL,
     mail: (connection) =>
-      gmailReader({
+      gmailProvider({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),
       }),

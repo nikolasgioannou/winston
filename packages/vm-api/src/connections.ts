@@ -24,7 +24,7 @@ import {
   ProviderNotFoundError,
   ProviderUnavailableError,
 } from "@winston/connectors/errors";
-import type { MailReader } from "@winston/connectors/mail";
+import type { MailProvider } from "@winston/connectors/mail";
 import { TimeParseError } from "@winston/shared/human-time";
 import { and, asc, eq, ne } from "drizzle-orm";
 
@@ -165,7 +165,7 @@ const capitalize = (text: string) =>
 /** What the connector routes need: providers per connection, and the site's address for links. */
 export interface ConnectorDeps {
   webPublicUrl: string;
-  mail: (connection: ConnectionRow) => MailReader;
+  mail: (connection: ConnectionRow) => MailProvider;
   /** Absent until Google Calendar is wired (M5). */
   calendar?: (connection: ConnectionRow) => CalendarProvider;
 }

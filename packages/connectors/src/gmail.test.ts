@@ -6,7 +6,7 @@ import {
 } from "./errors.ts";
 import {
   gmailQuery,
-  gmailReader,
+  gmailProvider,
   parseAddresses,
   stripQuotedText,
 } from "./gmail.ts";
@@ -195,7 +195,7 @@ function fakeGmail(overrides: Record<string, () => Response> = {}) {
   }) as unknown as typeof fetch;
   return {
     requests,
-    gmail: gmailReader({
+    gmail: gmailProvider({
       address: "me@example.com",
       accessToken: () => Promise.resolve("token-1"),
       fetch: fetchImpl,
@@ -269,7 +269,7 @@ describe("parsing", () => {
   });
 });
 
-describe("gmailReader", () => {
+describe("gmailProvider", () => {
   test("lists newest first with flags, user labels by name, attachments, a cursor and the estimate", async () => {
     const { gmail, requests } = fakeGmail();
     const page = await gmail.list(
@@ -364,5 +364,142 @@ describe("gmailReader", () => {
     expect(gmail.getMessage("m-busy")).rejects.toBeInstanceOf(
       ProviderUnavailableError,
     );
+  });
+});
+
+/** A Gmail that records writes: path, method and body. */
+function fakeGmailWrites() {
+  const writes: { method: string; path: string; body: string }[] = [];
+  let createdLabels = 0;
+  const fetchImpl = (async (input: string, init?: RequestInit) => {
+    const url = new URL(input);
+    const path = url.pathname.replace(/^\/(upload\/)?gmail\/v1\/users\/me/, "");
+    const method = init?.method ?? "GET";
+    const body =
+      init?.body instanceof Blob
+        ? await init.body.text()
+        : typeof init?.body === "string"
+          ? init.body
+          : "";
+    if (method !== "GET")
+      writes.push({
+        method,
+        path: `${url.pathname.startsWith("/upload") ? "upload:" : ""}${path}`,
+        body,
+      });
+    const json = (value: unknown) => Response.json(value);
+    if (path === "/labels" && method === "GET")
+      return json({
+        labels: [{ id: "Label_7", name: "Lease stuff", type: "user" }],
+      });
+    if (path === "/labels" && method === "POST") {
+      createdLabels++;
+      return json({
+        id: `Label_new${String(createdLabels)}`,
+        name: (JSON.parse(body) as { name: string }).name,
+      });
+    }
+    if (path === "/messages/send")
+      return json({ id: "m-sent", threadId: "t-1" });
+    if (path === "/drafts" && method === "POST")
+      return json({ id: "r-1", message: { id: "m-draft", threadId: "t-1" } });
+    if (path === "/drafts/send")
+      return json({ id: "m-sent2", threadId: "t-1" });
+    if (path === "/drafts/r-1")
+      return json({ id: "r-1", message: { id: "m-draft", threadId: "t-1" } });
+    if (path === "/messages/batchModify")
+      return new Response("", { status: 204 });
+    return json({});
+  }) as unknown as typeof fetch;
+  return {
+    writes,
+    gmail: gmailProvider({
+      address: "me@example.com",
+      accessToken: () => Promise.resolve("token-1"),
+      fetch: fetchImpl,
+    }),
+  };
+}
+
+describe("gmailProvider writes", () => {
+  test("send uploads the raw message with its thread, as one multipart request", async () => {
+    const { gmail, writes } = fakeGmailWrites();
+    const sent = await gmail.send({
+      to: ["dana@example.com"],
+      subject: "Re: Lease renewal",
+      body: "Tuesday works.",
+      inReplyTo: {
+        threadId: "t-1",
+        messageIdHeader: "<abc@x>",
+        references: [],
+      },
+    });
+    expect(sent).toEqual({ messageId: "m-sent", threadId: "t-1" });
+    expect(writes[0]?.path).toBe("upload:/messages/send");
+    expect(writes[0]?.body).toContain('{"threadId":"t-1"}');
+    expect(writes[0]?.body).toContain("Content-Type: message/rfc822");
+    expect(writes[0]?.body).toContain("In-Reply-To: <abc@x>");
+    expect(writes[0]?.body).toContain("Subject: Re: Lease renewal");
+  });
+
+  test("drafts: created with their thread, then sent by id", async () => {
+    const { gmail, writes } = fakeGmailWrites();
+    const draft = await gmail.createDraft({
+      to: ["dana@example.com"],
+      subject: "Hi",
+      body: "Draft",
+    });
+    expect(draft).toEqual({
+      draftId: "r-1",
+      messageId: "m-draft",
+      threadId: "t-1",
+    });
+    expect(writes[0]?.path).toBe("upload:/drafts");
+    expect(await gmail.sendDraft("r-1")).toEqual({
+      messageId: "m-sent2",
+      threadId: "t-1",
+    });
+    expect(writes[1]).toEqual({
+      method: "POST",
+      path: "/drafts/send",
+      body: '{"id":"r-1"}',
+    });
+  });
+
+  test("modify turns changes into label ids, creating a new label once and ignoring removal of a missing one", async () => {
+    const { gmail, writes } = fakeGmailWrites();
+    await gmail.modify(
+      { messages: ["m-1", "m-2"], threads: ["t-9"] },
+      {
+        read: true,
+        starred: true,
+        archived: true,
+        addLabels: ["lease stuff", "Taxes 2026"],
+        removeLabels: ["Never existed"],
+      },
+    );
+    const labelCreates = writes.filter((w) => w.path === "/labels");
+    expect(labelCreates).toHaveLength(1);
+    expect(JSON.parse(labelCreates[0]?.body ?? "{}")).toMatchObject({
+      name: "Taxes 2026",
+    });
+    const batch = writes.find((w) => w.path === "/messages/batchModify");
+    expect(JSON.parse(batch?.body ?? "{}")).toEqual({
+      ids: ["m-1", "m-2"],
+      addLabelIds: ["STARRED", "Label_7", "Label_new1"],
+      removeLabelIds: ["UNREAD", "INBOX"],
+    });
+    expect(writes.at(-1)?.path).toBe("/threads/t-9/modify");
+  });
+
+  test("trash moves messages, threads and drafts to the trash; never a permanent delete", async () => {
+    const { gmail, writes } = fakeGmailWrites();
+    await gmail.trash({ messages: ["m-1"], threads: ["t-9"], drafts: ["r-1"] });
+    expect(writes.map((w) => `${w.method} ${w.path}`)).toEqual([
+      "POST /messages/m-1/trash",
+      "POST /threads/t-9/trash",
+      "POST /messages/m-draft/trash",
+    ]);
+    expect(writes.some((w) => w.method === "DELETE")).toBe(false);
   });
 });

@@ -8,7 +8,8 @@
     "./errors": "./src/errors.ts",
     "./gmail": "./src/gmail.ts",
     "./grants": "./src/grants.ts",
-    "./mail": "./src/mail.ts"
+    "./mail": "./src/mail.ts",
+    "./mail-compose": "./src/mail-compose.ts"
   },
   "scripts": {
     "typecheck": "tsc"
@@ -19,9 +20,11 @@
     "@winston/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
     "html-to-text": "10.0.1",
+    "nodemailer": "10.0.13",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/html-to-text": "9.0.4"
+    "@types/html-to-text": "9.0.4",
+    "@types/nodemailer": "8.0.2"
   }
 }

@@ -92,8 +92,10 @@ export interface OutgoingMail {
   body: string;
   attachments?:
     { filename: string; mimeType: string; data: Uint8Array }[] | undefined;
-  /** Replying or forwarding: the message it answers, to thread it. */
-  inReplyTo?: { messageId: string; threadId: string } | undefined;
+  /** Replying or forwarding: the message it answers, to thread it for everyone. */
+  inReplyTo?:
+    | { threadId: string; messageIdHeader: string; references: string[] }
+    | undefined;
 }
 
 export interface SentMail {

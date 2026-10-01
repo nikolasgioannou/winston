@@ -1,13 +1,13 @@
 ---
 id: "d66d10"
 title: Send, reply, forward and organize mail via Gmail
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - m5
 created_at: 2026-09-27T05:37:39.234Z
-updated_at: 2026-09-27T05:37:39.268Z
+updated_at: 2026-10-01T16:29:24.848Z
 blocked_by:
   - "6af84b"
 ---
@@ -28,3 +28,5 @@ Operations:
 - **`--dry-run`:** returns exactly what would be sent (from, to, cc, subject, body, attachment names) without sending. It's how agents preview for confirm-first.
 
 Every write goes through the audit log. Tests on the pure parts: MIME output (golden files), reply headers and recipients, and dry-run rendering. Plus provider calls with recorded or mocked API responses.
+
+**Done (2026-10-01):** MIME by nodemailer's MailComposer (works on Bun, no dependencies). Adding a missing label creates it. Deleting a draft trashes its message (Gmail's drafts.delete is permanent). Dry runs check the capability too.

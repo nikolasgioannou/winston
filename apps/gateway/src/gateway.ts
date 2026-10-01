@@ -63,19 +63,29 @@ export function createGateway({
     logger,
   });
   const files = createFileTransfers(sendTo);
+  const vmIdOf = async (userId: string) => {
+    const [vm] = await db
+      .select({ id: vms.id })
+      .from(vms)
+      .where(eq(vms.userId, userId));
+    if (!vm) throw new VmUnavailableError();
+    return vm.id;
+  };
   const vmApi = createVmApi({
     db,
     runTokenSecret,
     ...(connectors ? { connectors } : {}),
+    // Attachments travel to and from the user's VM through the file transfer.
     vmFiles: {
-      // Attachments land on the user's VM through the file transfer.
+      async read(userId, path) {
+        return new Uint8Array(
+          await new Response(
+            await files.read(await vmIdOf(userId), path),
+          ).arrayBuffer(),
+        );
+      },
       async write(userId, path, bytes) {
-        const [vm] = await db
-          .select({ id: vms.id })
-          .from(vms)
-          .where(eq(vms.userId, userId));
-        if (!vm) throw new VmUnavailableError();
-        return files.write(vm.id, path, bytes);
+        return files.write(await vmIdOf(userId), path, bytes);
       },
     },
   });

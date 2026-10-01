@@ -16,7 +16,9 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { toApiFailure, type ConnectorDeps } from "./connections.ts";
 import type { VmApiEnv } from "./env.ts";
-import { mailRoutes, type VmFiles } from "./mail.ts";
+import type { VmFiles } from "./files.ts";
+import { mailRoutes } from "./mail.ts";
+import { mailWriteRoutes } from "./mail-write.ts";
 import { z } from "zod";
 
 const meUpdate = z.object({
@@ -127,7 +129,8 @@ export function createVmApi({
       const [me] = await selectMe(userId);
       return c.json(me);
     })
-    .route("/v1/mail", mailRoutes({ db, connectors, vmFiles }));
+    .route("/v1/mail", mailRoutes({ db, connectors, vmFiles }))
+    .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }));
 }
 
 export type { VmApiEnv } from "./env.ts";

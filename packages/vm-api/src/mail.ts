@@ -25,15 +25,7 @@ import {
   type ConnectorDeps,
 } from "./connections.ts";
 import type { VmApiEnv } from "./env.ts";
-
-/** Writing a file onto the user's VM (the gateway's file transfer). */
-export interface VmFiles {
-  write(
-    userId: string,
-    path: string,
-    bytes: Uint8Array,
-  ): Promise<{ size: number }>;
-}
+import type { VmFiles } from "./files.ts";
 
 export const mailFolders = [
   "inbox",

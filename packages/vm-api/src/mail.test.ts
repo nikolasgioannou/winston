@@ -1,131 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  FullMailMessage,
-  MailFilter,
-  MailReader,
-} from "@winston/connectors/mail";
-import type { DbOrTx } from "@winston/db/client";
 import {
   inRollback,
   insertConnection,
   insertUser,
   testDb,
 } from "@winston/db/testing";
-import { mintRunToken } from "@winston/domain/run-token";
-import { createVmApi } from "./index.ts";
+import { setupApi as setup } from "./testing.ts";
 
 const db = await testDb();
-const secret = "vm-api-test-secret-0123456789abcdef";
-
-const message = (
-  id: string,
-  overrides: Partial<FullMailMessage> = {},
-): FullMailMessage => ({
-  providerId: id,
-  threadId: "t-1",
-  from: { name: "Dana Reyes", email: "dana@example.com" },
-  to: [{ name: null, email: "me@example.com" }],
-  cc: [],
-  subject: `Subject ${id}`,
-  date: new Date("2026-09-25T20:02:00Z"),
-  snippet: "snippet",
-  unread: true,
-  starred: false,
-  inInbox: true,
-  labels: [],
-  attachments: [],
-  messageIdHeader: null,
-  body: `Body of ${id}`,
-  references: [],
-  replyTo: [],
-  quotedTextHidden: false,
-  ...overrides,
-});
-
-const withAttachment = message("m-1", {
-  attachments: [
-    {
-      providerId: "m-1/1",
-      filename: "lease.pdf",
-      mimeType: "application/pdf",
-      size: 10,
-    },
-  ],
-});
-
-/** A mail provider that records the filters it's asked for. */
-function fakeMail() {
-  const filters: MailFilter[] = [];
-  const reader: MailReader = {
-    address: "me@example.com",
-    list: (filter, page) => {
-      filters.push(filter);
-      return Promise.resolve({
-        items: [withAttachment, message("m-2")].slice(0, page.limit),
-        cursor: "next-page",
-        estimatedTotal: 7,
-      });
-    },
-    getMessage: (id) =>
-      Promise.resolve(id === "m-1" ? withAttachment : message(id)),
-    getThread: (id) =>
-      Promise.resolve({
-        providerId: id,
-        subject: "Lease",
-        messages: [message("m-1"), message("m-2")],
-      }),
-    getAttachment: () =>
-      Promise.resolve({
-        filename: "lease.pdf",
-        mimeType: "application/pdf",
-        data: new Uint8Array([1, 2, 3]),
-      }),
-  };
-  return { reader, filters };
-}
-
-function setup(tx: DbOrTx) {
-  const mail = fakeMail();
-  const written: { userId: string; path: string; bytes: Uint8Array }[] = [];
-  const app = createVmApi({
-    db: tx,
-    runTokenSecret: secret,
-    connectors: {
-      webPublicUrl: "https://runwinston.com",
-      mail: () => mail.reader,
-    },
-    vmFiles: {
-      write: (userId, path, bytes) => {
-        written.push({ userId, path, bytes });
-        return Promise.resolve({ size: bytes.length });
-      },
-    },
-  });
-  const as = (userId: string) => {
-    const token = mintRunToken(
-      secret,
-      { runId: "run_1", userId, kind: "front" },
-      60_000,
-    );
-    return (path: string, init: { method?: string; body?: unknown } = {}) =>
-      app.request(
-        path,
-        {
-          method: init.method ?? "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          ...(init.body === undefined
-            ? {}
-            : { body: JSON.stringify(init.body) }),
-        },
-        { vmUserId: userId },
-      );
-  };
-  return { as, mail, written };
-}
-
 describe("mail routes", () => {
   test("list passes the filters with times resolved in the user's zone, and returns stable ids", async () => {
     await inRollback(db, async (tx) => {
