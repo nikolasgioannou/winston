@@ -12,6 +12,7 @@ import {
   restoreVmJob,
   revokeConnectionTokenJob,
   runStepJob,
+  syncConnectionJob,
   watchConnectionJob,
   saveAttachmentJob,
   transcribeVoiceJob,
@@ -45,6 +46,9 @@ import {
   watchConnectionHandler,
 } from "./connections/watch.ts";
 import { googleAccessTokens } from "@winston/connectors/access-token";
+import { gmailProvider } from "@winston/connectors/gmail";
+import { gmailSync } from "@winston/connectors/gmail-sync";
+import { syncConnectionHandler } from "./connections/sync.ts";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
 import {
@@ -116,6 +120,15 @@ const worker = createWorker({
       vault: tokenVault,
       revoke: googleTokenRevoker(),
       stopWatch: gmailWatchStopper(googleClient),
+    }),
+    [syncConnectionJob.type]: syncConnectionHandler({
+      mail: (connection) => ({
+        sync: gmailSync({ accessToken: () => accessToken(connection.id) }),
+        mail: gmailProvider({
+          address: connection.externalEmail,
+          accessToken: () => accessToken(connection.id),
+        }),
+      }),
     }),
     [watchConnectionJob.type]: watchConnectionHandler({
       accessToken,

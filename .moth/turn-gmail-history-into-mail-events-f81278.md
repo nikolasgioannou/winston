@@ -1,14 +1,14 @@
 ---
 id: "f81278"
 title: Turn Gmail history into mail events
-status: todo
+status: done
 priority: none
 labels:
   - connectors
   - events
   - m7
 created_at: 2026-09-27T05:40:24.445Z
-updated_at: 2026-09-27T05:40:24.498Z
+updated_at: 2026-10-01T19:12:43.607Z
 blocked_by:
   - "6af84b"
   - "70194e"
@@ -29,3 +29,10 @@ Rules:
 - Advance `sync_state.historyId` **only after** events are safely stored.
 
 Tests with recorded history fixtures: each change type, `is_reply_to_user` cases, dedupe on re-run, self-caused matching, the expired-history fallback, and the checkpoint only advancing on success.
+
+## As built
+
+- `syncMail` in `apps/agents/src/connections/sync-mail.ts`, run by the `sync_connection` handler (`connections/sync.ts`; calendar joins in 6a3656); Gmail's history, profile, recent messages and labels in `@winston/connectors/gmail-sync`. Details in docs/design.md §3 (Mail sync as built).
+- Tested on fixture history (each change type, `isReplyToUser`, dedupe on re-run, self-caused matching, the expired-history fallback, and a failure leaving the checkpoint alone) rather than recorded Gmail responses, so no real mail is in the repository.
+- Stored events aren't matched to subscriptions yet; that's 463072.
+
