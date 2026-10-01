@@ -1,4 +1,5 @@
-import { Stack, type App } from "aws-cdk-lib";
+import type { App } from "aws-cdk-lib";
+import { BudgetStack } from "./budget.ts";
 import { CiStack } from "./ci.ts";
 import { DataStack } from "./data.ts";
 import { EdgeStack } from "./edge.ts";
@@ -16,8 +17,7 @@ export const production = {
 export type Environment = typeof production;
 
 /**
- * The stacks from docs/design.md §19, one CloudFormation stack each. A stack is
- * empty until the ticket that fills it; CDK skips deploying empty stacks.
+ * The stacks from docs/design.md §19, one CloudFormation stack each.
  */
 export function defineStacks(app: App, environment: Environment = production) {
   const env = { account: environment.account, region: environment.region };
@@ -28,9 +28,6 @@ export function defineStacks(app: App, environment: Environment = production) {
     // Stateful stacks can't be deleted by accident.
     terminationProtection: stateful,
   });
-  const stack = (id: string, description: string, stateful = false) =>
-    new Stack(app, id, props(id, description, stateful));
-
   const network = new NetworkStack(
     app,
     "Network",
@@ -94,6 +91,6 @@ export function defineStacks(app: App, environment: Environment = production) {
     edge,
     vm,
     ci,
-    budget: stack("Budget", "Budget alerts"),
+    budget: new BudgetStack(app, "Budget", props("Budget", "Budget alerts")),
   };
 }

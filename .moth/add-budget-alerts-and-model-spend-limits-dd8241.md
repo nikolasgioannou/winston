@@ -1,13 +1,13 @@
 ---
 id: "dd8241"
 title: Add budget alerts and model spend limits
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
 created_at: 2026-09-27T05:36:33.293Z
-updated_at: 2026-09-27T05:36:33.329Z
+updated_at: 2026-10-01T15:57:06.404Z
 blocked_by:
   - "60490f"
 ---
@@ -17,3 +17,5 @@ The founder wants to know if spending goes abnormal (docs/design.md §8, Account
 Model spend isn't billed by AWS at all, since it goes to OpenRouter. Walk the founder through setting an **OpenRouter credit limit and low-balance alert** on their account, and write the steps into `docs/runbooks/costs.md`. Do the same for TypeSafe if Jev has billing controls.
 
 Stack test: both alerts exist with the right thresholds.
+
+**Done (2026-10-01):** deployed, alerting `/winston/alert-email` (set to the founder's AWS address). The OpenRouter steps are in docs/runbooks/costs.md for the founder to apply on their account; Jev isn't wired yet, so its controls wait for M8.
