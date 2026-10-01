@@ -189,7 +189,7 @@ export function renderTaskResult(item: TaskItem, timeZone: string) {
   const { payload } = item;
   return envelope(item.type, [
     element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
-    `  <task${attributes({ id: payload.taskId, capped: payload.capped ? "true" : undefined })}>${escapeText(payload.brief)}</task>`,
+    `  <task${attributes({ id: payload.taskId, capped: payload.capped ? "true" : undefined, cancelled: payload.cancelled ? "true" : undefined })}>${escapeText(payload.brief)}</task>`,
     element(item.type === "task.failed" ? "error" : "report", payload.report),
   ]);
 }

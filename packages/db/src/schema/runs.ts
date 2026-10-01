@@ -54,6 +54,8 @@ export const runs = snakeCase.table("runs", {
   effort: runEffort(),
   /** Background: its final answer, or where it got to when capped or failed. */
   result: text(),
+  /** Background: cancelling was asked for; the run stops at its next step boundary. */
+  cancelRequestedAt: timestamp({ withTimezone: true }),
   stepCount: integer().notNull().default(0),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp({ withTimezone: true }),

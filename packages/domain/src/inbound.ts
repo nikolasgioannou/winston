@@ -105,6 +105,8 @@ export const taskResultPayloadSchema = z.object({
   report: z.string(),
   /** Stopped at the step cap: the report says where it got to. */
   capped: z.boolean().optional(),
+  /** Stopped because it was cancelled (`winston task cancel`). */
+  cancelled: z.boolean().optional(),
 });
 export type TaskResultPayload = z.infer<typeof taskResultPayloadSchema>;
 

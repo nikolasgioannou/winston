@@ -13,11 +13,9 @@
  */
 import type { DbOrTx } from "@winston/db/client";
 import { newId } from "@winston/db/ids";
-import { enqueue } from "@winston/db/queue";
 import { applyRunEvent } from "@winston/db/run-state";
 import { runMessages, runs, users } from "@winston/db/schema";
-import { recordSystemEvent } from "@winston/db/system-events";
-import { runStepJob } from "@winston/domain/jobs";
+import { finishTask, queueTaskStep } from "@winston/db/tasks";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
 import { formatInTimeZone } from "@winston/shared/time";
@@ -50,6 +48,13 @@ export const backgroundCallTimeoutMs = 5 * 60_000;
 /** Added as the last step when the run reaches the step cap. */
 export const capNote =
   "You've reached the step limit for this task, so stop here. Don't call any tools. Write your report now: what you did, where you got to, what's left and anything waiting on the user.";
+
+/** Added as the last step when the task was cancelled. */
+export const cancelNote =
+  "This task has been cancelled, so stop here. Don't call any tools. Write a short report of what you did and anything left half-done.";
+
+/** What a tool call returns when the task was cancelled before it ran. */
+export const cancelledToolNote = "Not run: the task was cancelled.";
 
 /** Added once when the model ends without a report. */
 export const emptyReportNudge =
@@ -119,62 +124,10 @@ export async function startBackgroundRun(
     await tx
       .insert(runMessages)
       .values({ runId, seq: 0, role: "user", content: message });
-    await queueStep(tx, options.userId, runId);
+    await queueTaskStep(tx, options.userId, runId);
     return runId;
   });
 }
-
-/** How much of the brief a result repeats, so the front of house knows which task it was. */
-export const briefPreviewChars = 200;
-
-/**
- * Ends a run and reports the outcome to the front of house, together: only
- * the front of house messages the user (§4), so the result becomes a
- * `task.completed` or `task.failed` item, which queues a turn like any other
- * input. Returns the new status, or undefined if the run had already moved
- * on (cancelled meanwhile, say), in which case nothing is reported.
- */
-export async function finishBackgroundRun(
-  db: DbOrTx,
-  runId: string,
-  event: "complete" | "cap" | "fail",
-  report: string,
-) {
-  return db.transaction(async (tx) => {
-    const result = report.trim() || "The task ended without a report.";
-    const status = await applyRunEvent(tx, runId, event, { result });
-    if (!status) return undefined;
-    const [run] = await tx
-      .select({ userId: runs.userId, brief: runs.brief })
-      .from(runs)
-      .where(eq(runs.id, runId));
-    if (!run) throw new Error(`No run ${runId}`);
-    const brief = Array.from(run.brief ?? "");
-    await recordSystemEvent(tx, {
-      userId: run.userId,
-      type: event === "fail" ? "task.failed" : "task.completed",
-      payload: {
-        taskId: runId,
-        brief:
-          brief.length > briefPreviewChars
-            ? `${brief.slice(0, briefPreviewChars).join("")}…`
-            : brief.join(""),
-        report: result,
-        ...(event === "cap" ? { capped: true } : {}),
-      },
-      sourceRef: `task:${runId}:finished`,
-    });
-    return status;
-  });
-}
-
-const queueStep = (db: DbOrTx, userId: string, runId: string) =>
-  enqueue(db, runStepJob.type, {
-    userId,
-    payload: { runId },
-    dedupeKey: runStepJob.dedupeKey(runId),
-    maxAttempts: runStepJob.maxAttempts,
-  });
 
 /**
  * Runs one step of a background run. Returns what happened: the step ran and
@@ -238,8 +191,12 @@ export async function runBackgroundStep(
     );
   }
 
-  const capped = run.stepCount >= maxStepsPerRun - 1;
-  if (capped) await store({ role: "user", content: capNote });
+  // The last call: cancelled, or at the step cap. No tools, just the report.
+  const cancelling = run.cancelRequestedAt !== null;
+  const capped = !cancelling && run.stepCount >= maxStepsPerRun - 1;
+  const last = cancelling || capped;
+  if (cancelling) await store({ role: "user", content: cancelNote });
+  else if (capped) await store({ role: "user", content: capNote });
 
   const tools = {
     bash: bashTool({
@@ -277,7 +234,7 @@ export async function runBackgroundStep(
             await rehydrateImages(messages, deps.blobs),
           ),
           tools: requests,
-          ...(capped ? { toolChoice: "none" as const } : {}),
+          ...(last ? { toolChoice: "none" as const } : {}),
           stopWhen: isStepCount(1),
           timeout: backgroundCallTimeoutMs,
           ...(signal ? { abortSignal: signal } : {}),
@@ -298,7 +255,21 @@ export async function runBackgroundStep(
     }
   };
 
-  const result = await call();
+  let result: Awaited<ReturnType<typeof call>>;
+  try {
+    result = await call();
+  } catch (error) {
+    // A cancelled task ends even if its report can't be written.
+    if (!cancelling || signal?.aborted) throw error;
+    logger.warn({ err: error }, "the cancelled task's report failed");
+    await finishTask(
+      db,
+      runId,
+      "cancel",
+      `Cancelled after ${String(run.stepCount)} steps, before it could write a report.`,
+    );
+    return "finished";
+  }
   for (const message of result.responseMessages) await store(message);
   await db
     .update(runs)
@@ -307,52 +278,69 @@ export async function runBackgroundStep(
   const step = result.finalStep;
 
   if (step.rawFinishReason === "refusal") {
-    await finishBackgroundRun(
-      db,
-      runId,
-      "fail",
-      "The model refused this task.",
-    );
+    await finishTask(db, runId, "fail", "The model refused this task.");
     logger.warn("the model refused the task");
     return "finished";
   }
 
-  if (capped || step.toolCalls.length === 0) {
+  if (last || step.toolCalls.length === 0) {
     const report = step.text.trim();
-    if (!report && !capped && !messages.some(isNudge)) {
+    if (!report && !last && !messages.some(isNudge)) {
       logger.warn("the run ended without a report; nudging once");
       await store({ role: "user", content: emptyReportNudge });
-      await queueStep(db, run.userId, runId);
+      await queueTaskStep(db, run.userId, runId);
       return "continued";
     }
-    await finishBackgroundRun(db, runId, capped ? "cap" : "complete", report);
-    logger.info({ status: capped ? "capped" : "completed" }, "run finished");
+    const event = cancelling ? "cancel" : capped ? "cap" : "complete";
+    await finishTask(db, runId, event, report);
+    logger.info({ event }, "run finished");
     return "finished";
+  }
+
+  const calls = step.toolCalls.map((requested): ToolCallPart => ({
+    type: "tool-call",
+    toolCallId: requested.toolCallId,
+    toolName: requested.toolName,
+    input: requested.input,
+  }));
+  // Cancelled while the model was thinking: its tools don't start.
+  const [latest] = await db
+    .select({ cancelRequestedAt: runs.cancelRequestedAt })
+    .from(runs)
+    .where(eq(runs.id, runId));
+  if (latest?.cancelRequestedAt) {
+    await store(
+      toolMessage(
+        calls.map((call) => ({
+          call,
+          output: { type: "text", value: cancelledToolNote },
+        })),
+      ),
+    );
+    await queueTaskStep(db, run.userId, runId);
+    return "continued";
   }
 
   const outputs: { call: ToolCallPart; output: ToolResultPart["output"] }[] =
     [];
-  for (const requested of step.toolCalls) {
-    const call: ToolCallPart = {
-      type: "tool-call",
-      toolCallId: requested.toolCallId,
-      toolName: requested.toolName,
-      input: requested.input,
-    };
+  for (const [i, call] of calls.entries()) {
+    const requested = step.toolCalls[i];
     outputs.push({
       call,
       output: await runTool(
         tools,
         call,
         messages,
-        "invalid" in requested && requested.invalid === true,
+        requested !== undefined &&
+          "invalid" in requested &&
+          requested.invalid === true,
         signal,
       ),
     });
   }
   await store(await storableMessage(toolMessage(outputs), deps.blobs));
   signal?.throwIfAborted();
-  await queueStep(db, run.userId, runId);
+  await queueTaskStep(db, run.userId, runId);
   return "continued";
 }
 

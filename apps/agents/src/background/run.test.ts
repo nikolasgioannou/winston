@@ -24,9 +24,12 @@ import {
 } from "../model/testing.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
+import { finishTask } from "@winston/db/tasks";
+import { cancelTask } from "@winston/db/tasks";
 import {
+  cancelledToolNote,
+  cancelNote,
   capNote,
-  finishBackgroundRun,
   interruptedNote,
   maxStepsPerRun,
   runBackgroundStep,
@@ -305,12 +308,7 @@ describe("background runs", () => {
         .update(runs)
         .set({ status: "running" })
         .where(eq(runs.id, second));
-      await finishBackgroundRun(
-        tx,
-        second,
-        "cap",
-        "Found Monday's hours only.",
-      );
+      await finishTask(tx, second, "cap", "Found Monday's hours only.");
       const items = await tx
         .select()
         .from(inboundItems)
@@ -355,7 +353,7 @@ describe("background runs", () => {
         .set({ status: "cancelled" })
         .where(eq(runs.id, cancelled));
       expect(
-        await finishBackgroundRun(tx, cancelled, "complete", "late"),
+        await finishTask(tx, cancelled, "complete", "late"),
       ).toBeUndefined();
       const items = await tx
         .select()
@@ -379,7 +377,7 @@ describe("background runs", () => {
         .update(runs)
         .set({ status: "running" })
         .where(eq(runs.id, runId));
-      await finishBackgroundRun(tx, runId, "complete", "done");
+      await finishTask(tx, runId, "complete", "done");
       const [item] = await tx
         .select({ payload: inboundItems.payload })
         .from(inboundItems)
@@ -387,6 +385,75 @@ describe("background runs", () => {
       expect((item?.payload as { brief: string }).brief).toBe(
         `${"b".repeat(200)}…`,
       );
+    });
+  });
+
+  test("a cancelled task stops at the next step boundary: no more tools, a last report, then cancelled", async () => {
+    await inRollback(db, async (tx) => {
+      const vm = fakeVmClient();
+      const { deps, runId, userId, requests } = await setup(
+        tx,
+        [
+          toolCallReply("bash", { command: "winston mail list" }),
+          textReply("I'd listed Nik's mail; nothing else was started."),
+        ],
+        vm.client,
+      );
+      expect(await runBackgroundStep(deps, runId)).toBe("continued");
+      expect(await cancelTask(tx, runId)).toBe("cancelling");
+      expect(await runBackgroundStep(deps, runId)).toBe("finished");
+      expect(requests[1]?.tool_choice).toBe("none");
+      const messages = await messagesOf(tx, runId);
+      expect(messages.at(-2)).toEqual({ role: "user", content: cancelNote });
+      expect(vm.commands).toEqual(["winston mail list"]);
+      expect(await runOf(tx, runId)).toMatchObject({
+        status: "cancelled",
+        result: "I'd listed Nik's mail; nothing else was started.",
+      });
+      const [item] = await tx
+        .select({ type: inboundItems.type, payload: inboundItems.payload })
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, userId));
+      expect(item).toMatchObject({
+        type: "task.completed",
+        payload: { cancelled: true },
+      });
+    });
+  });
+
+  test("cancelled while the model thinks: the tools it asked for don't start", async () => {
+    await inRollback(db, async (tx) => {
+      const vm = fakeVmClient();
+      const user = await insertUser(tx);
+      let runId = "";
+      const fake = fakeGateway({
+        replies: [
+          toolCallReply("bash", { command: "winston mail send --to a@b.c" }),
+          textReply("Stopped before sending anything."),
+        ],
+        onRequest: async (index) => {
+          if (index === 0) await cancelTask(tx, runId);
+        },
+      });
+      runId = await startBackgroundRun(tx, {
+        userId: user.id,
+        brief: "Send it.",
+      });
+      const deps: BackgroundDeps = {
+        db: tx,
+        logger,
+        gateway: fake.gateway,
+        vm: vm.client,
+        runTokenSecret: testRunTokenSecret,
+        blobs,
+        retryDelayMs: 0,
+      };
+      expect(await drive(deps, runId)).toEqual(["continued", "finished"]);
+      expect(vm.commands).toEqual([]);
+      expect(JSON.stringify(await messagesOf(tx, runId))).toContain(
+        cancelledToolNote,
+      );
+      expect((await runOf(tx, runId))?.status).toBe("cancelled");
     });
   });
 });

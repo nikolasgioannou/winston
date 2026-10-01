@@ -137,6 +137,7 @@ describe("winston get", () => {
       att: "/v1/mail/attachments/",
       evt: "/v1/calendar/events/",
       acct: "/v1/accounts/",
+      task: "/v1/tasks/",
     };
     const registered = resources.flatMap((r) => r.ids ?? []);
     expect(registered.sort()).toEqual(Object.keys(paths).sort());
@@ -168,7 +169,7 @@ describe("winston get", () => {
     const unknown = await cli(["get", id("zzz")], () => Response.json({}));
     expect(unknown.code).toBe(1);
     expect(unknown.err).toBe(
-      "winston get doesn't know zzz_ ids.\nIt knows msg_, thr_, att_, evt_, acct_.",
+      "winston get doesn't know zzz_ ids.\nIt knows msg_, thr_, att_, evt_, acct_, task_.",
     );
     expect(unknown.requests).toHaveLength(0);
     for (const bad of [

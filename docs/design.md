@@ -878,6 +878,10 @@ task resume  <task_id> [--note <text>]   Resume a parked task. The note (for exa
 task cancel  <task_id>                   Stop a running or parked task. It reports what it had done
 ```
 
+- **As built** (`packages/vm-api/src/tasks.ts`, `apps/cli/src/resources/task.ts`, shared logic in `@winston/db/tasks`): `GET /v1/tasks` (`status` = running (queued or running) | parked | done (completed, capped, cancelled) | failed | all, default running and parked; `since`; newest first, paged by id, since task ids are UUIDv7 TypeIDs that sort by creation time), `GET /v1/tasks/:id`, `POST /v1/tasks/:id/cancel`, `POST /v1/tasks/:id/resume` (`{ note }`). Only the user's own background runs are visible. List lines: `task_…  running  12m ago  8 steps  <first line of the brief>` (`cancelling` while a cancel is pending). `task_` is in the `winston get` registry.
+- **Cancel** (`cancelTask`): a queued or parked task ends at once with a one-line report; a running one gets `runs.cancel_requested_at` and stops at its next step boundary, never mid-command. The next step makes one last call with no tools ("This task has been cancelled… write a short report of what you did and anything left half-done") and ends `cancelled`; if that call fails, it ends anyway with a plain report. A cancel that lands while the model is thinking is caught before its tools start (they get "Not run: the task was cancelled."). Every cancel reports as `task.completed` with `cancelled: true`.
+- **Resume** (`resumeTask`): only from `parked` (otherwise `conflict`, exit 6). The note answers the tool call the run parked on (or becomes the next user message), the run goes back to `running` and its next step is queued.
+
 #### `winston browser`
 
 Talks to local Chrome over CDP. Each run owns its own window. Acting on a site takes that site's **domain lock** (exit `6` if another run holds it).
