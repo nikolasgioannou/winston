@@ -32,6 +32,9 @@ export interface ProfilePageProps {
   onRelinkingChange: (relinking: boolean) => void;
 }
 
+/** Fields beside their labels share one width. */
+const fieldWidth = "w-56 sm:w-64";
+
 /** How long a field says "Saved" after it saves. */
 const savedForMs = 2_000;
 
@@ -45,7 +48,17 @@ export function ProfilePage(props: ProfilePageProps) {
       <PageHeader title="Profile" />
       <Section title="You" card>
         <NameFields {...props} />
-        <TextField label="Email" value={props.email} disabled />
+        <SettingRow
+          label="Email"
+          control={
+            <TextField
+              aria-label="Email"
+              value={props.email}
+              disabled
+              className={fieldWidth}
+            />
+          }
+        />
       </Section>
       <TelegramCard {...props} />
       <Section title="Account" card>
@@ -59,7 +72,6 @@ export function ProfilePage(props: ProfilePageProps) {
         />
         <SettingRow
           label="Delete account"
-          description="Deletes your computer, disconnects your accounts and erases everything Winston knows about you."
           control={
             <ConfirmDialog
               {...(props.confirmingDelete ? { defaultOpen: true } : {})}
@@ -113,28 +125,38 @@ function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row">
-      <TextField
+    <>
+      <SettingRow
         label="First name"
-        value={first}
-        onChange={(event) => {
-          setFirst(event.target.value);
-        }}
-        onBlur={() => void commit("first")}
         {...(saved === "first" ? { description: "Saved" } : {})}
-        className="flex-1"
+        control={
+          <TextField
+            aria-label="First name"
+            value={first}
+            onChange={(event) => {
+              setFirst(event.target.value);
+            }}
+            onBlur={() => void commit("first")}
+            className={fieldWidth}
+          />
+        }
       />
-      <TextField
+      <SettingRow
         label="Last name"
-        value={last}
-        onChange={(event) => {
-          setLast(event.target.value);
-        }}
-        onBlur={() => void commit("last")}
         {...(saved === "last" ? { description: "Saved" } : {})}
-        className="flex-1"
+        control={
+          <TextField
+            aria-label="Last name"
+            value={last}
+            onChange={(event) => {
+              setLast(event.target.value);
+            }}
+            onBlur={() => void commit("last")}
+            className={fieldWidth}
+          />
+        }
       />
-    </div>
+    </>
   );
 }
 
