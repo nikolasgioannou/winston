@@ -1,13 +1,13 @@
 ---
 id: "fa537d"
 title: Teach Winston to use triggers well
-status: todo
+status: done
 priority: none
 labels:
   - m7
   - prompts
 created_at: 2026-09-27T05:40:24.960Z
-updated_at: 2026-09-27T05:40:25.035Z
+updated_at: 2026-10-01T20:03:05.367Z
 blocked_by:
   - "0512b5"
   - "4da088"
@@ -28,3 +28,10 @@ Proactivity is emergent. There's no meeting-reminder feature, only Winston choos
 Check by hand in production:
 - Ask for a heads-up before meetings with external attendees, and watch it fire.
 - Ask to be told when a specific person replies, with a follow-up deadline, and exercise both paths.
+
+## As built
+
+- `front-of-house.md`: new "Acting on your own: triggers" section (when to set one, which kind, self-contained notes, preference plus trigger, check the list and update rather than stack, delete stale ones); `system.app.disconnected` (`cancelledTriggers`) and `system.settings.changed` explained; "What you can't do yet" no longer says he can't set reminders, and forbids promising a follow-up without a trigger.
+- `background.md`: trigger runs judge by the note and the user's notes, end quietly, and delete or update their trigger once settled; a "Triggers" section lets a delegated task set one when the brief asks or the task waits on something.
+- Eval in docs/design.md §3 (front 2–4 runs per scenario, trigger runs 3 each, all passing). The "check by hand in production" items wait for the founder's GCP apply (131), since live mail and calendar events need Pub/Sub and watches.
+
