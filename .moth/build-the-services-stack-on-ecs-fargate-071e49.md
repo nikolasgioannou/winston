@@ -28,6 +28,7 @@ Build:
 - ECR repositories, and an ECS cluster.
 - Task definitions with per-service secrets, IAM task roles following least privilege (KMS decrypt only where needed, S3 access scoped per bucket), log groups with retention, and health checks.
 - Services in the public subnets with public IPs.
+- **Database credentials** (decided in the data stack, docs/design.md §12a): services get the database host and the RDS-managed secret's ARN, not a password. `@winston/db`'s client passes postgres.js a `password` function that reads the secret's current value for each new connection, so rotation never needs a restart. Connect with TLS (verify against the RDS CA bundle). Grant each task role `secretsmanager:GetSecretValue` on that secret only.
 - An ALB with a certificate:
   - `api.runwinston.com` → `api`.
   - `gateway.runwinston.com` → `gateway`, for VM websockets only. Its internal API is *not* routed publicly.

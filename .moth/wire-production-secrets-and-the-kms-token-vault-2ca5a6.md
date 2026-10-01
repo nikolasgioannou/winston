@@ -27,6 +27,7 @@ Implement the **KMS envelope encryption** vault behind the interface from the co
 - `GenerateDataKey` for encryption, with the encrypted data key stored alongside the ciphertext.
 - `Decrypt` for reading, with reasonable data-key caching.
 - Select the implementation by environment.
+- Grants (the keys exist in the data stack, with key policies that delegate to IAM): `api` and `agents` get `kms:Decrypt` and `kms:GenerateDataKey` on the tokens key; `web` gets only `kms:GenerateDataKey`, since it stores tokens when an account is connected but never reads them.
 
 Provide `docs/runbooks/secrets.md`: how to set or rotate each secret value with the AWS CLI.
 

@@ -1,14 +1,14 @@
 ---
 id: "f25d3b"
 title: "Build the data stack: RDS, KMS keys and S3 buckets"
-status: todo
+status: done
 priority: none
 labels:
   - db
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.394Z
-updated_at: 2026-09-27T05:36:32.427Z
+updated_at: 2026-10-01T04:09:01.245Z
 blocked_by:
   - "2a17a6"
 ---
