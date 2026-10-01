@@ -11,11 +11,13 @@ import type { DbOrTx } from "@winston/db/client";
 import { promptVersions } from "@winston/db/schema";
 import { canonicalJson } from "@winston/shared/json";
 import background from "./background.md" with { type: "text" };
+import compaction from "./compaction.md" with { type: "text" };
 import frontOfHouse from "./front-of-house.md" with { type: "text" };
 
 export const systemPrompts = {
   "front-of-house": frontOfHouse,
   background,
+  compaction,
 } as const;
 
 export type PromptName = keyof typeof systemPrompts;

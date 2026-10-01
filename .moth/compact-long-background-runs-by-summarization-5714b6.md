@@ -1,13 +1,13 @@
 ---
 id: "5714b6"
 title: Compact long background runs by summarization
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m6
 created_at: 2026-09-27T05:38:50.061Z
-updated_at: 2026-09-27T05:38:50.096Z
+updated_at: 2026-10-01T18:04:28.381Z
 blocked_by:
   - "64a47f"
 ---
@@ -24,3 +24,10 @@ Implement in `prepareStep`:
 The compaction call itself must not break the "a tool call must be followed by its result" rule. Cut only at step boundaries.
 
 Tests with the fake model: the threshold triggers exactly one compaction, the rebuilt context has the right shape, resume after compaction uses it, screenshot pruning keeps the latest 3, and tool call/result pairs are never split.
+
+## As built
+
+- In the step engine rather than `prepareStep`, since each step is its own job and rebuilds its context from the log (`contextOf`). Details in docs/design.md §2.
+- `run_messages.kind` (`message` | `compaction`); the compaction prompt is `packages/prompts/src/compaction.md`.
+- Screenshot pruning (newest 3–5, cut in chunks of three) shipped with the engine in 64a47f, because per-step jobs needed it from the start.
+

@@ -14,7 +14,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { newId } from "@winston/db/ids";
 import { applyRunEvent } from "@winston/db/run-state";
-import { runMessages, runs, users } from "@winston/db/schema";
+import { modelCalls, runMessages, runs, users } from "@winston/db/schema";
 import {
   finishTask,
   handoffTool,
@@ -32,7 +32,7 @@ import {
   type ToolCallPart,
   type ToolResultPart,
 } from "ai";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
 import type { Effort, ModelGateway } from "../model/gateway.ts";
@@ -65,6 +65,16 @@ export const cancelNote =
 /** What a tool call returns when the task was cancelled before it ran. */
 export const cancelledToolNote = "Not run: the task was cancelled.";
 
+/** Above this many tokens of context, a run compacts before its next step (§2). */
+export const compactAtTokens = 120_000;
+
+/** Steps kept word for word after a compaction. */
+export const keptSteps = 5;
+
+/** The last message of the compaction call: the summary is due. */
+export const compactNow =
+  "Write the summary of this task so far now, under the headings in your instructions.";
+
 /** Added once when the model ends without a report. */
 export const emptyReportNudge =
   "You stopped without writing a report. Write it now, with no tool calls.";
@@ -83,6 +93,16 @@ const instructions = cacheBreakpoint({
   role: "system" as const,
   content: systemPrompts.background,
 });
+// The summarizer sees the same tools (the history uses them) but can't call them.
+const compactionPrompt = promptVersion("compaction", [
+  bashDefinition("background"),
+  viewImageDefinition,
+  browserHandoffDefinition,
+]);
+const compactionInstructions = cacheBreakpoint({
+  role: "system" as const,
+  content: systemPrompts.compaction,
+});
 
 export interface BackgroundDeps {
   db: DbOrTx;
@@ -93,6 +113,41 @@ export interface BackgroundDeps {
   blobs: BlobStore;
   /** For tests: the pause before a quick retry. */
   retryDelayMs?: number;
+  /** For tests: the context size that triggers a compaction. */
+  compactAtTokens?: number;
+}
+
+/** A stored message of the run, in order. */
+interface LogEntry {
+  id: number;
+  kind: "message" | "compaction";
+  message: ModelMessage;
+}
+
+/**
+ * The model's context from the run's log (§2). Without a compaction, every
+ * message. After one: the brief and the latest summary as one message, the
+ * last few steps before it word for word (starting at an assistant message,
+ * so a tool call is never cut from its result), and everything since.
+ */
+export function contextOf(log: readonly LogEntry[]): ModelMessage[] {
+  const at = log.findLastIndex((entry) => entry.kind === "compaction");
+  const messages = (entries: readonly LogEntry[]) =>
+    entries.filter((e) => e.kind === "message").map((e) => e.message);
+  if (at === -1) return messages(log);
+  const brief = log[0]?.message.content;
+  const summary = log[at]?.message.content;
+  const before = messages(log.slice(1, at));
+  const starts = before.flatMap((m, i) => (m.role === "assistant" ? [i] : []));
+  const from = starts[Math.max(0, starts.length - keptSteps)] ?? before.length;
+  return [
+    {
+      role: "user",
+      content: `${typeof brief === "string" ? brief : JSON.stringify(brief)}\n\n<summary_of_earlier_work>\n${typeof summary === "string" ? summary : JSON.stringify(summary)}\n</summary_of_earlier_work>\nThe steps after this summary are shown as they happened.`,
+    },
+    ...before.slice(from),
+    ...messages(log.slice(at + 1)),
+  ];
 }
 
 /**
@@ -161,31 +216,50 @@ export async function runBackgroundStep(
   }
 
   const stored = await db
-    .select({ id: runMessages.id, content: runMessages.content })
+    .select({
+      id: runMessages.id,
+      kind: runMessages.kind,
+      content: runMessages.content,
+    })
     .from(runMessages)
     .where(eq(runMessages.runId, runId))
     .orderBy(asc(runMessages.seq));
-  const messages = stored.map((row) => row.content as ModelMessage);
-  let lastStoredId = stored.at(-1)?.id ?? 0;
-  const firstId = stored[0]?.id ?? 0;
-  const store = async (message: ModelMessage) => {
+  const log: LogEntry[] = stored.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    message: row.content as ModelMessage,
+  }));
+  let messages = contextOf(log);
+  /** Where the context starts in the log: the latest compaction, or the brief. */
+  const contextStart = () =>
+    log.findLast((entry) => entry.kind === "compaction")?.id ?? log[0]?.id ?? 0;
+  const lastStoredId = () => log.at(-1)?.id ?? 0;
+  const store = async (
+    message: ModelMessage,
+    kind: LogEntry["kind"] = "message",
+  ) => {
     signal?.throwIfAborted();
     const [row] = await db
       .insert(runMessages)
       .values({
         runId,
-        seq: messages.length,
+        seq: log.length,
+        kind,
         role: message.role,
         content: message,
       })
       .returning({ id: runMessages.id });
     if (!row) throw new Error("Storing a run message returned no row.");
-    messages.push(message);
-    lastStoredId = row.id;
+    log.push({ id: row.id, kind, message });
+    messages = contextOf(log);
   };
 
   // A step that died after the model asked for tools: their fate is unknown.
-  const unanswered = unansweredToolCalls(messages);
+  const lastEntry = log.at(-1);
+  const unanswered =
+    lastEntry?.kind === "message"
+      ? unansweredToolCalls([lastEntry.message])
+      : [];
   if (unanswered.length > 0) {
     logger.warn(
       { calls: unanswered.length },
@@ -224,7 +298,13 @@ export async function runBackgroundStep(
     [handoffTool]: backgroundHandoffTool,
   };
 
-  const call = async () => {
+  /** One model call with quick retries on transient errors. */
+  const generate = async (options: {
+    prompt: typeof prompt;
+    instructions: typeof instructions;
+    messages: ModelMessage[];
+    noTools: boolean;
+  }) => {
     for (let retry = 0; ; retry += 1) {
       try {
         return await gateway.generate({
@@ -233,19 +313,19 @@ export async function runBackgroundStep(
           run: {
             runId,
             userId: run.userId,
-            prompt,
+            prompt: options.prompt,
             contextRange: () => ({
-              fromMessageId: firstId,
-              toMessageId: lastStoredId,
+              fromMessageId: contextStart(),
+              toMessageId: lastStoredId(),
             }),
           },
           stepOffset: run.stepCount,
-          instructions,
+          instructions: options.instructions,
           messages: withRollingBreakpoint(
-            await rehydrateImages(messages, deps.blobs),
+            await rehydrateImages(options.messages, deps.blobs),
           ),
           tools: requests,
-          ...(last ? { toolChoice: "none" as const } : {}),
+          ...(options.noTools ? { toolChoice: "none" as const } : {}),
           stopWhen: isStepCount(1),
           timeout: backgroundCallTimeoutMs,
           ...(signal ? { abortSignal: signal } : {}),
@@ -265,6 +345,24 @@ export async function runBackgroundStep(
       }
     }
   };
+  const call = () =>
+    generate({ prompt, instructions, messages, noTools: last });
+
+  // A long run summarizes itself before going on (§2, Background-run compaction).
+  if (
+    (await contextTokens(db, runId)) > (deps.compactAtTokens ?? compactAtTokens)
+  ) {
+    const compacted = await generate({
+      prompt: compactionPrompt,
+      instructions: compactionInstructions,
+      messages: [...messages, { role: "user", content: compactNow }],
+      noTools: true,
+    });
+    const summary = compacted.finalStep.text.trim();
+    if (!summary) throw new Error("The compaction's summary came back empty.");
+    await store({ role: "user", content: summary }, "compaction");
+    logger.info({ messages: messages.length }, "compacted the run's context");
+  }
 
   let result: Awaited<ReturnType<typeof call>>;
   try {
@@ -296,7 +394,7 @@ export async function runBackgroundStep(
 
   if (last || step.toolCalls.length === 0) {
     const report = step.text.trim();
-    if (!report && !last && !messages.some(isNudge)) {
+    if (!report && !last && !log.some((entry) => isNudge(entry.message))) {
       logger.warn("the run ended without a report; nudging once");
       await store({ role: "user", content: emptyReportNudge });
       await queueTaskStep(db, run.userId, runId);
@@ -369,6 +467,26 @@ export async function runBackgroundStep(
   signal?.throwIfAborted();
   await queueTaskStep(db, run.userId, runId);
   return "continued";
+}
+
+/**
+ * About how big the run's context is: what its latest step saw and wrote,
+ * exact and free. Right after a compaction it's 0, since that call saw the
+ * old, long context.
+ */
+async function contextTokens(db: DbOrTx, runId: string) {
+  const [latest] = await db
+    .select({
+      input: modelCalls.inputTokens,
+      output: modelCalls.outputTokens,
+      promptHash: modelCalls.promptHash,
+    })
+    .from(modelCalls)
+    .where(eq(modelCalls.runId, runId))
+    .orderBy(desc(modelCalls.id))
+    .limit(1);
+  if (!latest || latest.promptHash === compactionPrompt.hash) return 0;
+  return latest.input + latest.output;
 }
 
 /** A tool with its `execute` removed, so the model's call comes back unrun. */

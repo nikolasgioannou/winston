@@ -16,6 +16,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { localBlobStore } from "../blobs.ts";
 import { dbModelCallSink } from "../model/log.ts";
 import {
+  fakeCompletion,
   fakeGateway,
   httpError,
   refusal,
@@ -30,6 +31,8 @@ import {
   cancelledToolNote,
   cancelNote,
   capNote,
+  compactNow,
+  contextOf,
   interruptedNote,
   maxStepsPerRun,
   runBackgroundStep,
@@ -544,5 +547,110 @@ describe("background runs", () => {
         result: "Booked: Friday 7pm, confirmation 4471.",
       });
     });
+  });
+
+  test("past the threshold, the run compacts once and carries on from the summary, also after resuming", async () => {
+    await inRollback(db, async (tx) => {
+      const big = {
+        usage: { ...fakeCompletion.usage, prompt_tokens: 1_500 },
+      };
+      const { deps, runId, requests } = await setup(tx, [
+        { ...toolCallReply("bash", { command: "ls" }), ...big },
+        textReply(
+          "## Goal and brief\nFind the lease.\n## Key facts\nlease.pdf",
+        ),
+        toolCallReply("bash", { command: "cat lease.md" }),
+        textReply("Renews Jan 1."),
+      ]);
+      const compacting = { ...deps, compactAtTokens: 1_300 };
+      expect(await drive(compacting, runId)).toEqual([
+        "continued",
+        "continued",
+        "finished",
+      ]);
+      // One compaction call: the summarizer's prompt, no tools, the summary asked for last.
+      expect(requests).toHaveLength(4);
+      const compaction = requests[1] as {
+        messages: { role: string; content: unknown }[];
+        tool_choice?: string;
+      };
+      expect(JSON.stringify(compaction.messages[0])).toContain(
+        "summarizing a background task",
+      );
+      expect(compaction.tool_choice).toBe("none");
+      expect(JSON.stringify(compaction.messages.at(-1))).toContain(compactNow);
+      const rows = await tx
+        .select({ kind: runMessages.kind })
+        .from(runMessages)
+        .where(eq(runMessages.runId, runId));
+      expect(rows.filter((r) => r.kind === "compaction")).toHaveLength(1);
+      // The next calls see the brief and summary as one message, then the kept steps.
+      for (const index of [2, 3]) {
+        const sent = requests[index] as {
+          messages: { role: string; content: unknown }[];
+        };
+        expect(sent.messages[1]?.role).toBe("user");
+        const first = JSON.stringify(sent.messages[1]);
+        expect(first).toContain("Find the lease and summarize");
+        expect(first).toContain("summary_of_earlier_work");
+        expect(sent.messages[2]?.role).toBe("assistant");
+      }
+      const calls = await tx
+        .select({ promptHash: modelCalls.promptHash })
+        .from(modelCalls)
+        .where(eq(modelCalls.runId, runId));
+      expect(new Set(calls.map((c) => c.promptHash)).size).toBe(2);
+    });
+  });
+
+  test("the context after a compaction keeps the last five steps whole, starting at an assistant message", () => {
+    let id = 0;
+    const entry = (
+      message: ModelMessage,
+      kind: "message" | "compaction" = "message",
+    ) => ({ id: (id += 1), kind, message });
+    const step = (i: number) => [
+      entry({
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: `c${String(i)}`,
+            toolName: "bash",
+            input: {},
+          },
+        ],
+      }),
+      entry({
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: `c${String(i)}`,
+            toolName: "bash",
+            output: { type: "text", value: String(i) },
+          },
+        ],
+      }),
+    ];
+    const log = [
+      entry({ role: "user", content: "<task>brief</task>" }),
+      ...Array.from({ length: 8 }, (_, i) => step(i)).flat(),
+      entry({ role: "user", content: "SUMMARY" }, "compaction"),
+      ...step(8),
+    ];
+    const context = contextOf(log);
+    expect(context[0]).toEqual({
+      role: "user",
+      content:
+        "<task>brief</task>\n\n<summary_of_earlier_work>\nSUMMARY\n</summary_of_earlier_work>\nThe steps after this summary are shown as they happened.",
+    });
+    // Steps 3–7 kept, then step 8 from after the compaction.
+    expect(context).toHaveLength(1 + 5 * 2 + 2);
+    expect(JSON.stringify(context[1])).toContain('"c3"');
+    context.slice(1).forEach((message, i) => {
+      expect(message.role).toBe(i % 2 === 0 ? "assistant" : "tool");
+    });
+    expect(contextOf(log.slice(0, 5))).toHaveLength(5);
   });
 });
