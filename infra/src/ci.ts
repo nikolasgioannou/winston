@@ -11,8 +11,14 @@ import type { IBucket } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 import type { Service } from "./secrets.ts";
 
-/** The only repository and branch whose workflows may assume the roles below. */
-export const githubSubject = "repo:nikolasgioannou/winston:ref:refs/heads/main";
+/**
+ * The only repository and branch whose workflows may assume the roles below.
+ * The repository uses GitHub's immutable subject format: owner and repository
+ * carry their numeric ids, so a renamed or re-created repository with the
+ * same name can't match (`gh api repos/nikolasgioannou/winston/actions/oidc/customization/sub`).
+ */
+export const githubSubject =
+  "repo:nikolasgioannou@48188665/winston@1390141974:ref:refs/heads/main";
 
 export interface CiStackProps extends StackProps {
   artifacts: IBucket;

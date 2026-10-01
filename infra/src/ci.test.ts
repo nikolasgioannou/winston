@@ -44,7 +44,7 @@ describe("ci stack", () => {
         StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub":
-            "repo:nikolasgioannou/winston:ref:refs/heads/main",
+            "repo:nikolasgioannou@48188665/winston@1390141974:ref:refs/heads/main",
         },
       });
     }
