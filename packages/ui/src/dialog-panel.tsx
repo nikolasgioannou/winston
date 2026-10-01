@@ -3,6 +3,7 @@ import { Tabs } from "@base-ui/react/tabs";
 import { X } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { cn } from "./cn";
+import { IconTile } from "./page";
 
 /** One tab of a `Dialog`: its label in the header, its content in the body. */
 export interface DialogTab {
@@ -25,6 +26,7 @@ export function Dialog({
   trigger,
   title,
   description,
+  icon,
   children,
   tabs,
   defaultTab,
@@ -38,6 +40,8 @@ export function Dialog({
   title: ReactNode;
   /** A line under the title, when it adds something. */
   description?: ReactNode;
+  /** An icon beside the title, e.g. a brand mark, shown in an `IconTile`. */
+  icon?: ReactNode;
   children?: ReactNode;
   tabs?: readonly DialogTab[];
   /** The tab shown first (the first tab by default). */
@@ -56,18 +60,27 @@ export function Dialog({
       )}
     >
       <div className="flex items-start gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <BaseDialog.Title className="text-base font-semibold wrap-break-word">
-            {title}
-          </BaseDialog.Title>
-          {description !== undefined && (
-            <BaseDialog.Description
-              render={<div />}
-              className="text-sm text-fg-muted"
-            >
-              {description}
-            </BaseDialog.Description>
+        {/* The icon centres on the title and subtitle together; the close
+            button stays at the top. */}
+        <div className="flex min-w-0 flex-1 items-center gap-3.5">
+          {icon !== undefined && (
+            <IconTile className="size-11 rounded-lg [&>svg]:size-5">
+              {icon}
+            </IconTile>
           )}
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <BaseDialog.Title className="text-base font-semibold wrap-break-word">
+              {title}
+            </BaseDialog.Title>
+            {description !== undefined && (
+              <BaseDialog.Description
+                render={<div />}
+                className="text-sm text-fg-muted"
+              >
+                {description}
+              </BaseDialog.Description>
+            )}
+          </div>
         </div>
         <BaseDialog.Close
           aria-label="Close"

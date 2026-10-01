@@ -14,10 +14,11 @@ import {
   Switch,
 } from "@winston/ui";
 import type { ReactNode } from "react";
-import { domainNames, providerNames } from "../components/providers";
-
-/** Where a toggle's save stands, as the row shows it. */
-export type SaveState = "saving" | "saved" | "error";
+import {
+  domainNames,
+  ProviderIcon,
+  providerNames,
+} from "../components/providers";
 
 export interface AccountDialogProps {
   account: ConnectionDto;
@@ -25,7 +26,6 @@ export interface AccountDialogProps {
   unavailable: readonly Capability[];
   /** Toggles as they show, including ones still saving. */
   capabilities: ConnectionDto["capabilities"];
-  saves: Partial<Record<Capability, SaveState>>;
   onToggle: (capability: Capability, enabled: boolean) => void;
   onDisconnect: () => void;
   /** Opens the disconnect confirmation, for the dev design view. */
@@ -131,6 +131,7 @@ export function AccountDialog(props: AccountDialogProps) {
         },
       ]}
       title={account.externalEmail}
+      icon={<ProviderIcon provider={account.provider} />}
       description={
         <span className="flex items-center gap-2">
           {providerNames[account.provider]}
@@ -179,7 +180,6 @@ function CapabilityRow({
   domain,
   unavailable,
   capabilities,
-  saves,
   onToggle,
   disabled,
   reconnect,
@@ -200,34 +200,19 @@ function CapabilityRow({
         control={reconnect}
       />
     );
-  const save = saves[capability];
   return (
     <SettingRow
       label={copy.label}
-      description={
-        save === "error" ? (
-          <span className="text-error-text">Couldn't save. Try again.</span>
-        ) : (
-          description
-        )
-      }
+      description={description}
       control={
-        <span className="flex items-center gap-3">
-          {save === "saving" && (
-            <span className="text-caption text-fg-muted">Saving…</span>
-          )}
-          {save === "saved" && (
-            <span className="text-caption text-fg-muted">Saved</span>
-          )}
-          <Switch
-            aria-label={copy.label}
-            checked={capabilities[capability] === true}
-            disabled={disabled}
-            onCheckedChange={(checked) => {
-              onToggle(capability, checked);
-            }}
-          />
-        </span>
+        <Switch
+          aria-label={copy.label}
+          checked={capabilities[capability] === true}
+          disabled={disabled}
+          onCheckedChange={(checked) => {
+            onToggle(capability, checked);
+          }}
+        />
       }
     />
   );
