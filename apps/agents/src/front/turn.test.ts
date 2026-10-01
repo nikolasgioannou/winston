@@ -222,6 +222,31 @@ describe("runFrontTurn", () => {
     );
   });
 
+  test("a task's report reaches the turn as its envelope, and a quiet one can end in silence", async () => {
+    await scenario(
+      [[toolCallReply("end_turn", {})]],
+      async ({ tx, userId, turn, sent, requests }) => {
+        await tx.insert(inboundItems).values({
+          userId,
+          type: "task.completed",
+          payload: {
+            taskId: "task_01abc",
+            brief: "Check the gym's holiday hours.",
+            report: "Open as usual; nothing changes.",
+          },
+          occurredAt: new Date("2026-09-27T16:00:00Z"),
+        });
+        await turn();
+        expect(sent).toEqual([]);
+        const input = JSON.stringify(requests[0]?.[0]);
+        expect(input).toContain('<system_event type=\\"task.completed\\">');
+        expect(input).toContain(
+          "<report>Open as usual; nothing changes.</report>",
+        );
+      },
+    );
+  });
+
   test("the final text is the reply: sent and recorded", async () => {
     await scenario(
       [[textReply("Morning.")]],

@@ -1,7 +1,10 @@
-import { applyRunEvent } from "@winston/db/run-state";
 import { lockSpaces, withAdvisoryLock } from "../lock.ts";
 import type { JobHandler } from "../worker.ts";
-import { runBackgroundStep, type BackgroundDeps } from "./run.ts";
+import {
+  finishBackgroundRun,
+  runBackgroundStep,
+  type BackgroundDeps,
+} from "./run.ts";
 
 /** How long each lease extension lasts; it's renewed at a third of that. */
 export const stepLeaseMs = 60_000;
@@ -43,9 +46,12 @@ export function runStepHandler(
     } catch (error) {
       if (job.attempts >= job.maxAttempts && !controller.signal.aborted) {
         const reason = error instanceof Error ? error.message : String(error);
-        await applyRunEvent(db, runId, "fail", {
-          result: `The task failed: ${reason}`,
-        });
+        await finishBackgroundRun(
+          db,
+          runId,
+          "fail",
+          `The task failed: ${reason}`,
+        );
       }
       throw error;
     } finally {

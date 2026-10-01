@@ -1,5 +1,5 @@
 import { tmpdir } from "node:os";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { jobs, runs } from "@winston/db/schema";
 import { insertUser, testDb, truncateAll } from "@winston/db/testing";
 import { createLogger } from "@winston/shared/logger";
@@ -19,6 +19,8 @@ const logger = createLogger("agents-test", {
 });
 
 beforeEach(() => truncateAll(db));
+// Leave nothing behind for other test files, which roll back instead.
+afterAll(() => truncateAll(db));
 
 async function job(replies: Record<string, unknown>[]) {
   const user = await insertUser(db);

@@ -10,7 +10,12 @@
  */
 import { canonicalJson } from "@winston/shared/json";
 import { formatInTimeZone } from "@winston/shared/time";
-import type { Attachment, UserMessagePayload } from "./inbound.ts";
+import type {
+  Attachment,
+  TaskResultPayload,
+  TaskResultType,
+  UserMessagePayload,
+} from "./inbound.ts";
 
 /** The message a user message replies to, resolved by the caller. */
 export interface ReplyContext {
@@ -34,9 +39,17 @@ export interface EventItem {
   subscriptionNote?: string;
 }
 
+/** A background run's outcome, reported to the front of house. */
+export interface TaskItem {
+  type: TaskResultType;
+  occurredAt: Date;
+  payload: TaskResultPayload;
+}
+
 export type EnvelopeItem =
   | ({ kind: "user_message" } & UserMessageItem)
-  | ({ kind: "event" } & EventItem);
+  | ({ kind: "event" } & EventItem)
+  | ({ kind: "task" } & TaskItem);
 
 /** How much of a replied-to message is quoted. */
 export const replyQuoteMaxChars = 300;
@@ -168,13 +181,28 @@ export function renderEvent(item: EventItem, timeZone: string) {
   return envelope(item.type, lines);
 }
 
+/**
+ * A background run's report or failure. The report is the agent's own words,
+ * but it may quote outside content, so it's escaped like everything else.
+ */
+export function renderTaskResult(item: TaskItem, timeZone: string) {
+  const { payload } = item;
+  return envelope(item.type, [
+    element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
+    `  <task${attributes({ id: payload.taskId, capped: payload.capped ? "true" : undefined })}>${escapeText(payload.brief)}</task>`,
+    element(item.type === "task.failed" ? "error" : "report", payload.report),
+  ]);
+}
+
 /** Renders a batch of items as the content of one user-role message. */
 export function renderBatch(items: readonly EnvelopeItem[], timeZone: string) {
   return items
     .map((item) =>
       item.kind === "user_message"
         ? renderUserMessage(item, timeZone)
-        : renderEvent(item, timeZone),
+        : item.kind === "task"
+          ? renderTaskResult(item, timeZone)
+          : renderEvent(item, timeZone),
     )
     .join("\n\n");
 }

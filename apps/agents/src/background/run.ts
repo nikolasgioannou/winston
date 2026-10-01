@@ -16,6 +16,7 @@ import { newId } from "@winston/db/ids";
 import { enqueue } from "@winston/db/queue";
 import { applyRunEvent } from "@winston/db/run-state";
 import { runMessages, runs, users } from "@winston/db/schema";
+import { recordSystemEvent } from "@winston/db/system-events";
 import { runStepJob } from "@winston/domain/jobs";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
@@ -120,6 +121,50 @@ export async function startBackgroundRun(
       .values({ runId, seq: 0, role: "user", content: message });
     await queueStep(tx, options.userId, runId);
     return runId;
+  });
+}
+
+/** How much of the brief a result repeats, so the front of house knows which task it was. */
+export const briefPreviewChars = 200;
+
+/**
+ * Ends a run and reports the outcome to the front of house, together: only
+ * the front of house messages the user (§4), so the result becomes a
+ * `task.completed` or `task.failed` item, which queues a turn like any other
+ * input. Returns the new status, or undefined if the run had already moved
+ * on (cancelled meanwhile, say), in which case nothing is reported.
+ */
+export async function finishBackgroundRun(
+  db: DbOrTx,
+  runId: string,
+  event: "complete" | "cap" | "fail",
+  report: string,
+) {
+  return db.transaction(async (tx) => {
+    const result = report.trim() || "The task ended without a report.";
+    const status = await applyRunEvent(tx, runId, event, { result });
+    if (!status) return undefined;
+    const [run] = await tx
+      .select({ userId: runs.userId, brief: runs.brief })
+      .from(runs)
+      .where(eq(runs.id, runId));
+    if (!run) throw new Error(`No run ${runId}`);
+    const brief = Array.from(run.brief ?? "");
+    await recordSystemEvent(tx, {
+      userId: run.userId,
+      type: event === "fail" ? "task.failed" : "task.completed",
+      payload: {
+        taskId: runId,
+        brief:
+          brief.length > briefPreviewChars
+            ? `${brief.slice(0, briefPreviewChars).join("")}…`
+            : brief.join(""),
+        report: result,
+        ...(event === "cap" ? { capped: true } : {}),
+      },
+      sourceRef: `task:${runId}:finished`,
+    });
+    return status;
   });
 }
 
@@ -262,9 +307,12 @@ export async function runBackgroundStep(
   const step = result.finalStep;
 
   if (step.rawFinishReason === "refusal") {
-    await applyRunEvent(db, runId, "fail", {
-      result: "The model refused this task.",
-    });
+    await finishBackgroundRun(
+      db,
+      runId,
+      "fail",
+      "The model refused this task.",
+    );
     logger.warn("the model refused the task");
     return "finished";
   }
@@ -277,9 +325,7 @@ export async function runBackgroundStep(
       await queueStep(db, run.userId, runId);
       return "continued";
     }
-    await applyRunEvent(db, runId, capped ? "cap" : "complete", {
-      result: report,
-    });
+    await finishBackgroundRun(db, runId, capped ? "cap" : "complete", report);
     logger.info({ status: capped ? "capped" : "completed" }, "run finished");
     return "finished";
   }

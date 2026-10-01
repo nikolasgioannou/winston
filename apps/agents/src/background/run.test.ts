@@ -1,12 +1,18 @@
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
-import { jobs, modelCalls, runMessages, runs } from "@winston/db/schema";
+import {
+  inboundItems,
+  jobs,
+  modelCalls,
+  runMessages,
+  runs,
+} from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { runStepJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import type { ModelMessage } from "ai";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { localBlobStore } from "../blobs.ts";
 import { dbModelCallSink } from "../model/log.ts";
 import {
@@ -20,6 +26,7 @@ import type { VmClient } from "../vm/gateway-client.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import {
   capNote,
+  finishBackgroundRun,
   interruptedNote,
   maxStepsPerRun,
   runBackgroundStep,
@@ -281,6 +288,105 @@ describe("background runs", () => {
       ]);
       expect(await drive(deps, runId)).toEqual(["continued", "finished"]);
       expect((await runOf(tx, runId))?.result).toBe("Here's the report.");
+    });
+  });
+
+  test("a finished run reports to the front of house: one item, one turn, and close finishes share the turn", async () => {
+    await inRollback(db, async (tx) => {
+      const { deps, runId, userId } = await setup(tx, [
+        textReply("Northside is cheapest at $2,350/month."),
+      ]);
+      await drive(deps, runId);
+      const second = await startBackgroundRun(tx, {
+        userId,
+        brief: "Check the gym's holiday hours.",
+      });
+      await tx
+        .update(runs)
+        .set({ status: "running" })
+        .where(eq(runs.id, second));
+      await finishBackgroundRun(
+        tx,
+        second,
+        "cap",
+        "Found Monday's hours only.",
+      );
+      const items = await tx
+        .select()
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, userId));
+      expect(items.map((item) => [item.type, item.payload])).toEqual([
+        [
+          "task.completed",
+          {
+            taskId: runId,
+            brief: "Find the lease and summarize the renewal terms.",
+            report: "Northside is cheapest at $2,350/month.",
+          },
+        ],
+        [
+          "task.completed",
+          {
+            taskId: second,
+            brief: "Check the gym's holiday hours.",
+            report: "Found Monday's hours only.",
+            capped: true,
+          },
+        ],
+      ]);
+      const turns = await tx
+        .select()
+        .from(jobs)
+        .where(and(eq(jobs.type, "front_turn"), eq(jobs.userId, userId)));
+      expect(turns).toHaveLength(1);
+    });
+  });
+
+  test("a failure reports task.failed; a run cancelled meanwhile reports nothing", async () => {
+    await inRollback(db, async (tx) => {
+      const { deps, runId, userId } = await setup(tx, [refusal()]);
+      await drive(deps, runId);
+      const cancelled = await startBackgroundRun(tx, {
+        userId,
+        brief: "x".repeat(300),
+      });
+      await tx
+        .update(runs)
+        .set({ status: "cancelled" })
+        .where(eq(runs.id, cancelled));
+      expect(
+        await finishBackgroundRun(tx, cancelled, "complete", "late"),
+      ).toBeUndefined();
+      const items = await tx
+        .select()
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, userId));
+      expect(items.map((item) => item.type)).toEqual(["task.failed"]);
+      expect(items[0]?.payload).toMatchObject({
+        report: "The model refused this task.",
+      });
+    });
+  });
+
+  test("a long brief is cut in the report", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const runId = await startBackgroundRun(tx, {
+        userId: user.id,
+        brief: "b".repeat(500),
+      });
+      await tx
+        .update(runs)
+        .set({ status: "running" })
+        .where(eq(runs.id, runId));
+      await finishBackgroundRun(tx, runId, "complete", "done");
+      const [item] = await tx
+        .select({ payload: inboundItems.payload })
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, user.id));
+      expect((item?.payload as { brief: string }).brief).toBe(
+        `${"b".repeat(200)}…`,
+      );
     });
   });
 });

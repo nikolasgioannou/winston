@@ -1,7 +1,11 @@
 import type { DbOrTx } from "@winston/db/client";
 import { inboundItems, outboundMessages } from "@winston/db/schema";
 import type { EnvelopeItem, ReplyContext } from "@winston/domain/envelope";
-import { userMessagePayloadSchema } from "@winston/domain/inbound";
+import {
+  taskResultPayloadSchema,
+  taskResultTypes,
+  userMessagePayloadSchema,
+} from "@winston/domain/inbound";
 import { and, arrayContains, eq, sql } from "drizzle-orm";
 
 type InboundItem = typeof inboundItems.$inferSelect;
@@ -14,6 +18,14 @@ export async function toEnvelopeItems(
 ): Promise<EnvelopeItem[]> {
   return Promise.all(
     items.map(async (item): Promise<EnvelopeItem> => {
+      const taskType = taskResultTypes.find((type) => type === item.type);
+      if (taskType)
+        return {
+          kind: "task",
+          type: taskType,
+          occurredAt: item.occurredAt,
+          payload: taskResultPayloadSchema.parse(item.payload),
+        };
       if (item.type !== "user_message")
         return {
           kind: "event",

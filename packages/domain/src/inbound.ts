@@ -91,3 +91,23 @@ export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;
  * linked Telegram from the site. Its payload is empty.
  */
 export const onboardingCompletedType = "system.onboarding.completed";
+
+/**
+ * A background run's outcome, for the front of house (`task.completed`,
+ * `task.failed`; docs/design.md §4, "Processing without responding"). Only
+ * the front of house messages the user, so this is how a task reports back.
+ */
+export const taskResultPayloadSchema = z.object({
+  taskId: z.string(),
+  /** The start of the brief, so the front of house knows which task this is. */
+  brief: z.string(),
+  /** The agent's report; for a failure, what went wrong. */
+  report: z.string(),
+  /** Stopped at the step cap: the report says where it got to. */
+  capped: z.boolean().optional(),
+});
+export type TaskResultPayload = z.infer<typeof taskResultPayloadSchema>;
+
+/** The inbound item types a background run's outcome becomes. */
+export const taskResultTypes = ["task.completed", "task.failed"] as const;
+export type TaskResultType = (typeof taskResultTypes)[number];

@@ -1,13 +1,13 @@
 ---
 id: "1fd02f"
 title: Report background results back through the front of house
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m6
 created_at: 2026-09-27T05:38:49.886Z
-updated_at: 2026-09-27T05:38:49.921Z
+updated_at: 2026-10-01T17:48:24.966Z
 blocked_by:
   - "438b86"
 ---
@@ -26,3 +26,10 @@ Update the front-of-house prompt: task results are for Winston, not to be forwar
 Envelope rendering for these item types, with snapshot tests.
 
 Tests with the fake model: completion produces exactly one item and one turn, failures and caps render correctly, and simultaneous completions coalesce.
+
+## As built
+
+- `finishBackgroundRun` ends a run and records `task.completed` / `task.failed` in one transaction; every finish path (report, cap, refusal, the job's last failed attempt) goes through it. Details and eval results in docs/design.md §4.
+- Envelope: `renderTaskResult`, with inline snapshots. The front's `toEnvelopeItems` parses these items with `taskResultPayloadSchema`.
+- The handler tests commit real rows (advisory locks need real connections), so they now truncate afterwards too; leftover users were colliding with other test files' generated emails on later runs.
+
