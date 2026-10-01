@@ -15,7 +15,12 @@ import type { DbOrTx } from "@winston/db/client";
 import { newId } from "@winston/db/ids";
 import { applyRunEvent } from "@winston/db/run-state";
 import { runMessages, runs, users } from "@winston/db/schema";
-import { finishTask, queueTaskStep } from "@winston/db/tasks";
+import {
+  finishTask,
+  handoffTool,
+  parkTask,
+  queueTaskStep,
+} from "@winston/db/tasks";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
 import { formatInTimeZone } from "@winston/shared/time";
@@ -32,6 +37,10 @@ import { storableMessage, type BlobStore } from "../blobs.ts";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
 import type { Effort, ModelGateway } from "../model/gateway.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
+import {
+  backgroundHandoffTool,
+  browserHandoffDefinition,
+} from "../tools/handoff.ts";
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { rehydrateImages } from "./images.ts";
@@ -68,6 +77,7 @@ export const interruptedNote =
 const prompt = promptVersion("background", [
   bashDefinition("background"),
   viewImageDefinition,
+  browserHandoffDefinition,
 ]);
 const instructions = cacheBreakpoint({
   role: "system" as const,
@@ -139,7 +149,7 @@ export async function runBackgroundStep(
   deps: BackgroundDeps,
   runId: string,
   signal?: AbortSignal,
-): Promise<"continued" | "finished" | "skipped"> {
+): Promise<"continued" | "finished" | "parked" | "skipped"> {
   const { db, gateway } = deps;
   const logger = deps.logger.child({ runId });
   const [run] = await db.select().from(runs).where(eq(runs.id, runId));
@@ -211,6 +221,7 @@ export async function runBackgroundStep(
   const requests = {
     bash: withoutExecute(tools.bash),
     view_image: withoutExecute(tools.view_image),
+    [handoffTool]: backgroundHandoffTool,
   };
 
   const call = async () => {
@@ -319,6 +330,22 @@ export async function runBackgroundStep(
     );
     await queueTaskStep(db, run.userId, runId);
     return "continued";
+  }
+
+  // Handed over to the user: park, with the call unanswered until resumed.
+  const handoff = calls.find((call) => call.toolName === handoffTool);
+  if (handoff) {
+    const { reason } = handoff.input as { reason?: unknown };
+    await parkTask(
+      db,
+      runId,
+      typeof reason === "string" && reason.trim()
+        ? reason.trim()
+        : "The task needs the user to take over.",
+      run.stepCount + 1,
+    );
+    logger.info("handed over to the user; parked");
+    return "parked";
   }
 
   const outputs: { call: ToolCallPart; output: ToolResultPart["output"] }[] =

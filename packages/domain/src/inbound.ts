@@ -113,3 +113,15 @@ export type TaskResultPayload = z.infer<typeof taskResultPayloadSchema>;
 /** The inbound item types a background run's outcome becomes. */
 export const taskResultTypes = ["task.completed", "task.failed"] as const;
 export type TaskResultType = (typeof taskResultTypes)[number];
+
+/**
+ * A background run that handed over to the user and is parked until they're
+ * done (`task.needs_user`; docs/design.md §1, Browser handoff).
+ */
+export const taskNeedsUserPayloadSchema = z.object({
+  taskId: z.string(),
+  brief: z.string(),
+  /** What the user needs to do, in the agent's words. */
+  reason: z.string(),
+});
+export type TaskNeedsUserPayload = z.infer<typeof taskNeedsUserPayloadSchema>;

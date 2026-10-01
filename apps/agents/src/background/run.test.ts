@@ -25,7 +25,7 @@ import {
 import type { VmClient } from "../vm/gateway-client.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import { finishTask } from "@winston/db/tasks";
-import { cancelTask } from "@winston/db/tasks";
+import { cancelTask, notRunBesideHandoff, resumeTask } from "@winston/db/tasks";
 import {
   cancelledToolNote,
   cancelNote,
@@ -454,6 +454,95 @@ describe("background runs", () => {
         cancelledToolNote,
       );
       expect((await runOf(tx, runId))?.status).toBe("cancelled");
+    });
+  });
+
+  test("a handoff parks the run with its reason and tells the front of house; resume answers it and carries on", async () => {
+    await inRollback(db, async (tx) => {
+      const vm = fakeVmClient();
+      const { deps, runId, userId, requests } = await setup(
+        tx,
+        [
+          {
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "call_bash",
+                      type: "function",
+                      function: {
+                        name: "bash",
+                        arguments: JSON.stringify({ command: "ls" }),
+                      },
+                    },
+                    {
+                      id: "call_handoff",
+                      type: "function",
+                      function: {
+                        name: "browser_handoff",
+                        arguments: JSON.stringify({
+                          reason: "Sign in to OpenTable.",
+                        }),
+                      },
+                    },
+                  ],
+                },
+                finish_reason: "tool_calls",
+              },
+            ],
+          },
+          textReply("Booked: Friday 7pm, confirmation 4471."),
+        ],
+        vm.client,
+      );
+      expect(await drive(deps, runId)).toEqual(["parked"]);
+      expect(await runOf(tx, runId)).toMatchObject({
+        status: "parked",
+        waitingFor: "Sign in to OpenTable.",
+      });
+      // Nothing ran beside the handoff, and no step is queued.
+      expect(vm.commands).toEqual([]);
+      const queued = await tx
+        .select()
+        .from(jobs)
+        .where(
+          and(
+            eq(jobs.dedupeKey, runStepJob.dedupeKey(runId)),
+            eq(jobs.status, "queued"),
+          ),
+        );
+      // The first step's job was never leased in this test, so only it remains.
+      expect(queued).toHaveLength(1);
+      const [item] = await tx
+        .select({ type: inboundItems.type, payload: inboundItems.payload })
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, userId));
+      expect(item).toEqual({
+        type: "task.needs_user",
+        payload: {
+          taskId: runId,
+          brief: "Find the lease and summarize the renewal terms.",
+          reason: "Sign in to OpenTable.",
+        },
+      });
+
+      expect(await resumeTask(tx, runId, "user says done")).toBe(true);
+      const tool = (await messagesOf(tx, runId)).at(-1);
+      expect(JSON.stringify(tool)).toContain(
+        "The user is done. The front of house says: user says done",
+      );
+      expect(JSON.stringify(tool)).toContain(notRunBesideHandoff);
+      expect(await drive(deps, runId)).toEqual(["finished"]);
+      expect(requests).toHaveLength(2);
+      expect(await runOf(tx, runId)).toMatchObject({
+        status: "completed",
+        waitingFor: null,
+        result: "Booked: Friday 7pm, confirmation 4471.",
+      });
     });
   });
 });

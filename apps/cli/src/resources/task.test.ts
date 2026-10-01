@@ -14,6 +14,7 @@ const task = (id: string, overrides: Record<string, unknown> = {}) => ({
   createdAt: minutesAgo(12),
   finishedAt: null,
   cancelRequested: false,
+  waitingFor: null,
   brief: "Compare the three lease offers in Nik's mail.\nReport the cheapest.",
   result: null,
   ...overrides,

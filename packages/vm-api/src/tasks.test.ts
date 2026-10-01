@@ -175,7 +175,8 @@ describe("task routes", () => {
             toolName: "browser_handoff",
             output: {
               type: "text",
-              value: "Resumed. The front of house says: user says done",
+              value:
+                "The user is done. The front of house says: user says done",
             },
           },
         ],

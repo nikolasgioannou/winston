@@ -43,6 +43,8 @@ const taskDto = (run: Run) => ({
   createdAt: run.createdAt.toISOString(),
   finishedAt: run.finishedAt?.toISOString() ?? null,
   cancelRequested: run.cancelRequestedAt !== null,
+  /** While parked: what it's waiting for the user to do. */
+  waitingFor: run.waitingFor,
   brief: run.brief ?? "",
   result: run.result,
 });

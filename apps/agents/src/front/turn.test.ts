@@ -247,6 +247,32 @@ describe("runFrontTurn", () => {
     );
   });
 
+  test("a front-of-house handoff ends the turn, with nothing parked", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply(
+            "browser_handoff",
+            { reason: "Sign in to your bank." },
+            "Over to you: sign in to your bank, then tell me when you're done.",
+          ),
+        ],
+      ],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        await say("pay my credit card bill");
+        const runId = await turn();
+        expect(sent.map((m) => m.text)).toEqual([
+          "Over to you: sign in to your bank, then tell me when you're done.",
+        ]);
+        expect(requests[0]).toHaveLength(1);
+        const all = await tx.select().from(runs).where(eq(runs.userId, userId));
+        expect(all.map((r) => [r.id, r.kind, r.status])).toEqual([
+          [runId ?? "", "front", "completed"],
+        ]);
+      },
+    );
+  });
+
   test("the final text is the reply: sent and recorded", async () => {
     await scenario(
       [[textReply("Morning.")]],

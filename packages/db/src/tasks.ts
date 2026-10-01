@@ -46,16 +46,12 @@ export async function finishTask(
       .from(runs)
       .where(eq(runs.id, runId));
     if (!run) throw new Error(`No run ${runId}`);
-    const brief = Array.from(run.brief ?? "");
     await recordSystemEvent(tx, {
       userId: run.userId,
       type: event === "fail" ? "task.failed" : "task.completed",
       payload: {
         taskId: runId,
-        brief:
-          brief.length > briefPreviewChars
-            ? `${brief.slice(0, briefPreviewChars).join("")}…`
-            : brief.join(""),
+        brief: briefPreview(run.brief),
         report: result,
         ...(event === "cap" ? { capped: true } : {}),
         ...(event === "cancel" ? { cancelled: true } : {}),
@@ -63,6 +59,45 @@ export async function finishTask(
       sourceRef: `task:${runId}:finished`,
     });
     return status;
+  });
+}
+
+/** The start of a brief, for a report's `<task>` line. */
+function briefPreview(brief: string | null) {
+  const chars = Array.from(brief ?? "");
+  return chars.length > briefPreviewChars
+    ? `${chars.slice(0, briefPreviewChars).join("")}…`
+    : chars.join("");
+}
+
+/**
+ * Parks a run that handed over to the user (§1, Browser handoff): no process
+ * waits, it never times out, and the front of house hears what's needed as
+ * a `task.needs_user` item. `task resume` picks it up again. Returns false if
+ * the run had already moved on.
+ */
+export async function parkTask(
+  db: DbOrTx,
+  runId: string,
+  reason: string,
+  /** Distinguishes this handoff from the run's earlier ones. */
+  step: number,
+) {
+  return db.transaction(async (tx) => {
+    if (!(await applyRunEvent(tx, runId, "park"))) return false;
+    const [run] = await tx
+      .update(runs)
+      .set({ waitingFor: reason })
+      .where(eq(runs.id, runId))
+      .returning({ userId: runs.userId, brief: runs.brief });
+    if (!run) throw new Error(`No run ${runId}`);
+    await recordSystemEvent(tx, {
+      userId: run.userId,
+      type: "task.needs_user",
+      payload: { taskId: runId, brief: briefPreview(run.brief), reason },
+      sourceRef: `task:${runId}:parked:${String(step)}`,
+    });
+    return true;
   });
 }
 
@@ -118,9 +153,10 @@ export async function resumeTask(
     const status = await applyRunEvent(tx, runId, "resume");
     if (!status) return false;
     const [run] = await tx
-      .select({ userId: runs.userId })
-      .from(runs)
-      .where(eq(runs.id, runId));
+      .update(runs)
+      .set({ waitingFor: null })
+      .where(eq(runs.id, runId))
+      .returning({ userId: runs.userId });
     const [last] = await tx
       .select({ seq: runMessages.seq, content: runMessages.content })
       .from(runMessages)
@@ -128,7 +164,8 @@ export async function resumeTask(
       .orderBy(desc(runMessages.seq))
       .limit(1);
     if (!run || !last) throw new Error(`Run ${runId} has no messages.`);
-    const text = `Resumed${note ? `. The front of house says: ${note}` : "."}`;
+    const text = `The user is done${note ? `. The front of house says: ${note}` : "."}`;
+    // The handoff gets the note; anything asked for beside it never ran.
     const pending = pendingToolCalls(last.content as StoredMessage);
     const message: StoredMessage =
       pending.length > 0
@@ -138,7 +175,11 @@ export async function resumeTask(
               type: "tool-result",
               toolCallId: call.toolCallId,
               toolName: call.toolName,
-              output: { type: "text", value: text },
+              output: {
+                type: "text",
+                value:
+                  call.toolName === handoffTool ? text : notRunBesideHandoff,
+              },
             })),
           }
         : { role: "user", content: text };
@@ -152,6 +193,13 @@ export async function resumeTask(
     return true;
   });
 }
+
+/** The tool that parks a run; resuming answers it. */
+export const handoffTool = "browser_handoff";
+
+/** What a tool call made beside a handoff returns: it never ran. */
+export const notRunBesideHandoff =
+  "Not run: you handed over to the user first. Run it again if it's still needed.";
 
 /** A stored AI SDK message, read through the little this module needs. */
 interface StoredMessage {

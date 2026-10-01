@@ -483,6 +483,29 @@ describe("renderTaskResult", () => {
     `);
   });
 
+  test("a task waiting on the user says what for", () => {
+    expect(
+      renderTaskResult(
+        {
+          type: "task.needs_user",
+          occurredAt: sentAt,
+          payload: {
+            taskId: "task_01abc",
+            brief: "Book a table for four at Lilia on Friday.",
+            reason: "Sign in to OpenTable; it wants a code sent to your phone.",
+          },
+        },
+        zone,
+      ),
+    ).toMatchInlineSnapshot(`
+      "<system_event type="task.needs_user">
+        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <task id="task_01abc">Book a table for four at Lilia on Friday.</task>
+        <reason>Sign in to OpenTable; it wants a code sent to your phone.</reason>
+      </system_event>"
+    `);
+  });
+
   test("a report can't open a fake envelope", () => {
     const xml = renderTaskResult(
       {

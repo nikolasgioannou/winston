@@ -56,6 +56,10 @@ import { storableMessage, type BlobStore } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
 import { delegateDefinition, delegateTool } from "../tools/delegate.ts";
+import {
+  browserHandoffDefinition,
+  frontHandoffTool,
+} from "../tools/handoff.ts";
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
@@ -108,6 +112,7 @@ const prompt = promptVersion("front-of-house", [
   viewImageDefinition,
   attachDefinition,
   delegateDefinition,
+  browserHandoffDefinition,
   endTurnDefinition,
 ]);
 const instructions = cacheBreakpoint({
@@ -264,6 +269,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       delegateTool({ db, logger, userId, runId }),
       () => stream.dropStep,
     ),
+    browser_handoff: unlessDropped(frontHandoffTool, () => stream.dropStep),
     end_turn: unlessDropped(endTurnTool, () => stream.dropStep),
   };
   const attempt = async (profile: ModelProfile) => {
@@ -367,7 +373,13 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         droppedNote = messageDroppedNote;
         continue;
       }
-      if (step.toolCalls.some((call) => call.toolName === "end_turn")) {
+      // A handoff ends the turn too: the user's reply is the next message (§1).
+      if (
+        step.toolCalls.some(
+          (call) =>
+            call.toolName === "end_turn" || call.toolName === "browser_handoff",
+        )
+      ) {
         outcome = stream.sent > 0 ? "reply" : "silent";
         break;
       }

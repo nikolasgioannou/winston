@@ -1,13 +1,13 @@
 ---
 id: "ac0f5f"
 title: Park runs on handoff and resume them
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m6
 created_at: 2026-09-27T05:38:50.008Z
-updated_at: 2026-09-27T05:38:50.043Z
+updated_at: 2026-10-01T17:59:43.915Z
 blocked_by:
   - "6abd88"
 ---
@@ -20,3 +20,10 @@ blocked_by:
 - **Routing "done":** update the front-of-house prompt. When the user says "done" or similar and tasks are parked, route to the right one via `winston task resume`, using context or a Telegram reply to the handoff message, and ask if it's ambiguous (§1).
 
 Tests with the fake model: parking persists state and produces the item, resume answers the pending tool call and continues from the checkpoint, and a front-of-house handoff ends the turn without creating a parked run.
+
+## As built
+
+- `apps/agents/src/tools/handoff.ts` (`browser_handoff`, one description, a background variant without `execute` and a front variant that ends the turn); `parkTask` and the resume answers in `@winston/db/tasks`; `runs.waiting_for`; `task.needs_user` items and envelopes. Details in docs/design.md §1, Browser handoff.
+- The tool is in the tool lists now, as the ticket asks, even though nothing has a browser yet; its description is about the browser, so it isn't reached for elsewhere. M8 adds the link.
+- The front of house's one nudge for a long-waiting task isn't built: nothing can wake the front of house on a timer until the scheduler (M7).
+

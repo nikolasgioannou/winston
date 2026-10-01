@@ -2,6 +2,7 @@ import type { DbOrTx } from "@winston/db/client";
 import { inboundItems, outboundMessages } from "@winston/db/schema";
 import type { EnvelopeItem, ReplyContext } from "@winston/domain/envelope";
 import {
+  taskNeedsUserPayloadSchema,
   taskResultPayloadSchema,
   taskResultTypes,
   userMessagePayloadSchema,
@@ -18,6 +19,13 @@ export async function toEnvelopeItems(
 ): Promise<EnvelopeItem[]> {
   return Promise.all(
     items.map(async (item): Promise<EnvelopeItem> => {
+      if (item.type === "task.needs_user")
+        return {
+          kind: "task",
+          type: "task.needs_user",
+          occurredAt: item.occurredAt,
+          payload: taskNeedsUserPayloadSchema.parse(item.payload),
+        };
       const taskType = taskResultTypes.find((type) => type === item.type);
       if (taskType)
         return {

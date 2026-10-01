@@ -12,6 +12,7 @@ import { canonicalJson } from "@winston/shared/json";
 import { formatInTimeZone } from "@winston/shared/time";
 import type {
   Attachment,
+  TaskNeedsUserPayload,
   TaskResultPayload,
   TaskResultType,
   UserMessagePayload,
@@ -39,12 +40,14 @@ export interface EventItem {
   subscriptionNote?: string;
 }
 
-/** A background run's outcome, reported to the front of house. */
-export interface TaskItem {
-  type: TaskResultType;
-  occurredAt: Date;
-  payload: TaskResultPayload;
-}
+/** A background run's outcome, or its handing over to the user, for the front of house. */
+export type TaskItem =
+  | { type: TaskResultType; occurredAt: Date; payload: TaskResultPayload }
+  | {
+      type: "task.needs_user";
+      occurredAt: Date;
+      payload: TaskNeedsUserPayload;
+    };
 
 export type EnvelopeItem =
   | ({ kind: "user_message" } & UserMessageItem)
@@ -186,9 +189,19 @@ export function renderEvent(item: EventItem, timeZone: string) {
  * but it may quote outside content, so it's escaped like everything else.
  */
 export function renderTaskResult(item: TaskItem, timeZone: string) {
+  const at = element(
+    "occurred_at",
+    formatInTimeZone(item.occurredAt, timeZone),
+  );
+  if (item.type === "task.needs_user")
+    return envelope(item.type, [
+      at,
+      `  <task${attributes({ id: item.payload.taskId })}>${escapeText(item.payload.brief)}</task>`,
+      element("reason", item.payload.reason),
+    ]);
   const { payload } = item;
   return envelope(item.type, [
-    element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
+    at,
     `  <task${attributes({ id: payload.taskId, capped: payload.capped ? "true" : undefined, cancelled: payload.cancelled ? "true" : undefined })}>${escapeText(payload.brief)}</task>`,
     element(item.type === "task.failed" ? "error" : "report", payload.report),
   ]);

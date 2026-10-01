@@ -85,6 +85,9 @@ function showTask(detail: Detail, flags: FlagValues) {
     task.finishedAt
       ? `Finished: ${shortTime(task.finishedAt, timeZone)}`
       : undefined,
+    task.status === "parked" && task.waitingFor
+      ? `Waiting for the user: ${task.waitingFor}`
+      : undefined,
     task.cancelRequested && task.status === "running"
       ? "Cancelling: it stops at its next step and reports what it had done."
       : undefined,
