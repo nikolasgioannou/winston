@@ -40,11 +40,8 @@ import {
   googleTokenRevoker,
   revokeConnectionTokenHandler,
 } from "./connections/revoke.ts";
-import {
-  startWatchRenewal,
-  watchConnectionHandler,
-  watchStopper,
-} from "./connections/watch.ts";
+import { startReconciliation } from "./connections/reconcile.ts";
+import { watchConnectionHandler, watchStopper } from "./connections/watch.ts";
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { gmailSync } from "@winston/connectors/gmail-sync";
@@ -206,7 +203,7 @@ async function shutdown(signal: string) {
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
   scheduler.stop();
-  watchRenewal.stop();
+  reconciliation.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
   await db.$client.end();
   clearTimeout(timeout);
@@ -233,7 +230,7 @@ sweepGrants();
 worker.start();
 backgroundWorker.start();
 const scheduler = startScheduler(db, logger);
-const watchRenewal = startWatchRenewal(db, logger);
+const reconciliation = startReconciliation(db, logger);
 logger.info(
   {
     concurrency: config.WORKER_CONCURRENCY,

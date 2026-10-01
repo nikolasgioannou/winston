@@ -49,6 +49,8 @@ export function calendarWebhookRoutes(deps: Pick<ApiDeps, "db">) {
       userId: channel.userId,
       payload: { connectionId: channel.connectionId },
       dedupeKey: syncConnectionJob.dedupeKey(channel.connectionId),
+      // A reconcile queued for later is pulled forward to now.
+      onDuplicate: "reschedule",
     });
     logger.info({ channelId, state }, "calendar push");
     return c.body(null, 204);

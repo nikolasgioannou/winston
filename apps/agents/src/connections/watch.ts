@@ -2,8 +2,9 @@
  * Watches on connected accounts' change feeds (docs/design.md §3, How change
  * notifications arrive): a Gmail watch per mail account, and a Google
  * Calendar channel per watched calendar of a calendar account. A
- * `watch_connection` job starts or renews them; the renewal sweep queues a
- * job for every account whose watch is missing or ends within two days.
+ * `watch_connection` job starts or renews them; reconciliation (every 10
+ * minutes) queues one for every account whose watch is missing or ends within
+ * two days.
  * `connections.watch_expires_at` is the soonest end.
  */
 import {
@@ -24,9 +25,6 @@ import type { JobHandler } from "../worker.ts";
 
 /** A watch ending sooner than this is renewed. */
 export const renewWithinMs = 2 * 24 * 3600_000;
-
-/** How often the sweep looks for watches to renew. */
-export const renewSweepMs = 3600_000;
 
 /** How long a new calendar channel is asked to last; Google may grant less. */
 export const channelTtlSeconds = 7 * 24 * 3600;
@@ -250,20 +248,4 @@ export async function renewWatches(db: DbOrTx, now = new Date()) {
       dedupeKey: watchConnectionJob.dedupeKey(connection.id),
     });
   return due.length;
-}
-
-/** Runs the renewal sweep now and then every hour. */
-export function startWatchRenewal(db: DbOrTx, logger: Logger) {
-  const sweep = () => {
-    renewWatches(db).catch((error: unknown) => {
-      logger.error({ err: error }, "renewing watches failed");
-    });
-  };
-  const timer = setInterval(sweep, renewSweepMs);
-  sweep();
-  return {
-    stop: () => {
-      clearInterval(timer);
-    },
-  };
 }

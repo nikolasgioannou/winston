@@ -68,6 +68,8 @@ export function gmailWebhookRoutes(
         userId: connection.userId,
         payload: { connectionId: connection.id },
         dedupeKey: syncConnectionJob.dedupeKey(connection.id),
+        // A reconcile queued for later is pulled forward to now.
+        onDuplicate: "reschedule",
       });
     logger.info(
       { connections: matches.length, historyId: String(data.data.historyId) },
