@@ -4,8 +4,11 @@ import { call, type ApiClient } from "../client.ts";
 import type { Context, Resource } from "../commands.ts";
 import { CliError } from "../errors.ts";
 import {
+  either,
+  listFlag,
   resolveText,
   standardFlags,
+  textFlag,
   type FlagSpec,
   type FlagValues,
 } from "../flags.ts";
@@ -76,20 +79,17 @@ const filterFlags: FlagSpec[] = [
   standardFlags.account,
 ];
 
-const text = (flags: FlagValues, name: string) =>
-  typeof flags[name] === "string" ? flags[name] : undefined;
-
 /** The list/search query, flag for flag. */
 function query(flags: FlagValues, folder: string, search?: string) {
   if (flags.unread === true && flags.read === true)
     throw CliError.usage("Pick one of --unread and --read.");
   const entries = {
-    account: text(flags, "account"),
-    in: text(flags, "in") ?? folder,
+    account: textFlag(flags, "account"),
+    in: textFlag(flags, "in") ?? folder,
     text: search,
-    from: text(flags, "from"),
-    to: text(flags, "to"),
-    subject: text(flags, "subject"),
+    from: textFlag(flags, "from"),
+    to: textFlag(flags, "to"),
+    subject: textFlag(flags, "subject"),
     unread:
       flags.unread === true
         ? "true"
@@ -97,13 +97,13 @@ function query(flags: FlagValues, folder: string, search?: string) {
           ? "false"
           : undefined,
     has_attachment: flags["has-attachment"] === true ? "true" : undefined,
-    label: text(flags, "label"),
-    category: text(flags, "category"),
-    native: text(flags, "native"),
-    since: text(flags, "since"),
-    until: text(flags, "until"),
+    label: textFlag(flags, "label"),
+    category: textFlag(flags, "category"),
+    native: textFlag(flags, "native"),
+    since: textFlag(flags, "since"),
+    until: textFlag(flags, "until"),
     limit: typeof flags.limit === "number" ? String(flags.limit) : undefined,
-    cursor: text(flags, "cursor"),
+    cursor: textFlag(flags, "cursor"),
   };
   return Object.fromEntries(
     Object.entries(entries).filter(
@@ -239,11 +239,6 @@ async function freePath(
   }
 }
 
-const list_ = (flags: FlagValues, name: string) => {
-  const value = flags[name];
-  return Array.isArray(value) ? value : [];
-};
-
 /** A send's flags shared by send, reply and forward. */
 const writeFlags = {
   to: {
@@ -316,14 +311,14 @@ function showSend(result: SendResult, asJson: boolean) {
 
 /** Files to attach, as paths on the computer under the home folder. */
 const attachPaths = (flags: FlagValues, files: Context["files"]) =>
-  list_(flags, "attach").map((path) => inHome(path, files));
+  listFlag(flags, "attach").map((path) => inHome(path, files));
 
 async function bodyText(
   flags: FlagValues,
   context: Context,
   required: boolean,
 ) {
-  const value = text(flags, "body");
+  const value = textFlag(flags, "body");
   if (value === undefined) {
     if (required)
       throw CliError.usage(
@@ -357,13 +352,6 @@ const changeWords = (changes: UpdateResult["changes"]) =>
   ]
     .filter(Boolean)
     .join(", ");
-
-/** Exactly one of two switches, or neither. */
-function either(flags: FlagValues, yes: string, no: string) {
-  if (flags[yes] === true && flags[no] === true)
-    throw CliError.usage(`Pick one of --${yes} and --${no}.`);
-  return flags[yes] === true ? true : flags[no] === true ? false : undefined;
-}
 
 export const mail: Resource = {
   name: "mail",
@@ -461,7 +449,7 @@ export const mail: Resource = {
             "Which attachments? Pass att_ ids.",
             "winston mail get <msg_id> lists a message's attachments.",
           );
-        const dir = inHome(text(flags, "to") ?? "~/downloads", files);
+        const dir = inHome(textFlag(flags, "to") ?? "~/downloads", files);
         const saved: Saved[] = [];
         for (const id of args) {
           const info = await call<AttachmentInfo>(
@@ -518,25 +506,25 @@ export const mail: Resource = {
             ),
             flags.json === true,
           );
-        const to = list_(flags, "to");
+        const to = listFlag(flags, "to");
         if (to.length === 0)
           throw CliError.usage(
             "Who to? Pass --to (repeat it for more).",
             "To send a saved draft, pass its drf_ id instead.",
           );
-        const subject = text(flags, "subject");
+        const subject = textFlag(flags, "subject");
         if (subject === undefined)
           throw CliError.usage("--subject is required.");
         return showSend(
           await call<SendResult>(
             client.v1.mail.send.$post({
               json: {
-                ...(text(flags, "account")
-                  ? { account: text(flags, "account") }
+                ...(textFlag(flags, "account")
+                  ? { account: textFlag(flags, "account") }
                   : {}),
                 to,
-                cc: list_(flags, "cc"),
-                bcc: list_(flags, "bcc"),
+                cc: listFlag(flags, "cc"),
+                bcc: listFlag(flags, "bcc"),
                 subject,
                 body: (await bodyText(flags, context, true)) ?? "",
                 attach: attachPaths(flags, context.files),
@@ -611,7 +599,7 @@ export const mail: Resource = {
         const { client, flags, args } = context;
         const [id] = args;
         if (!id) throw CliError.usage("Which message? Pass a msg_ or thr_ id.");
-        const to = list_(flags, "to");
+        const to = listFlag(flags, "to");
         if (to.length === 0)
           throw CliError.usage("Who to? Pass --to (repeat it for more).");
         const body = await bodyText(flags, context, false);
@@ -621,8 +609,8 @@ export const mail: Resource = {
               param: { id },
               json: {
                 to,
-                cc: list_(flags, "cc"),
-                bcc: list_(flags, "bcc"),
+                cc: listFlag(flags, "cc"),
+                bcc: listFlag(flags, "bcc"),
                 ...(body === undefined ? {} : { body }),
                 attach: attachPaths(flags, context.files),
                 draft: flags.draft === true,
@@ -676,8 +664,8 @@ export const mail: Resource = {
               ...(read === undefined ? {} : { read }),
               ...(starred === undefined ? {} : { starred }),
               ...(archived === undefined ? {} : { archived }),
-              addLabels: list_(flags, "add-label"),
-              removeLabels: list_(flags, "remove-label"),
+              addLabels: listFlag(flags, "add-label"),
+              removeLabels: listFlag(flags, "remove-label"),
               dryRun: flags["dry-run"] === true,
             },
           }),

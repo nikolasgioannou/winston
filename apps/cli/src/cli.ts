@@ -11,12 +11,13 @@ import {
   type FlagSpec,
   type TextSources,
 } from "./flags.ts";
+import { calendar } from "./resources/calendar.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { suggest } from "./suggest.ts";
 import { version } from "./version.ts";
 
-export const resources: Resource[] = [me, mail];
+export const resources: Resource[] = [me, mail, calendar];
 
 export interface Io {
   out: (text: string) => void;

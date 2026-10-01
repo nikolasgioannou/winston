@@ -121,6 +121,23 @@ export function parseFlags(
   return { positionals, flags };
 }
 
+/** A flag's string value, if it was given. */
+export const textFlag = (flags: FlagValues, name: string) =>
+  typeof flags[name] === "string" ? flags[name] : undefined;
+
+/** A repeatable flag's values (empty if it wasn't given). */
+export const listFlag = (flags: FlagValues, name: string) => {
+  const value = flags[name];
+  return Array.isArray(value) ? value : [];
+};
+
+/** Exactly one of two switches, or neither. */
+export function either(flags: FlagValues, yes: string, no: string) {
+  if (flags[yes] === true && flags[no] === true)
+    throw CliError.usage(`Pick one of --${yes} and --${no}.`);
+  return flags[yes] === true ? true : flags[no] === true ? false : undefined;
+}
+
 /** Where long text can come from: a literal, stdin (`-`), or a file (`@path`). */
 export interface TextSources {
   readStdin: () => Promise<string>;

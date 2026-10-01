@@ -5,7 +5,11 @@
  * Times come back as instants (and all-day events as dates) with the user's
  * time zone, so the CLI shows them in it.
  */
-import type { CalendarEvent, EventTime } from "@winston/connectors/calendar";
+import type {
+  CalendarEvent,
+  CalendarProvider,
+  EventTime,
+} from "@winston/connectors/calendar";
 import {
   defaultWorkingHours,
   freeSlots,
@@ -68,6 +72,8 @@ export interface EventDto {
   id: string;
   seriesId: string | null;
   calendar: string;
+  /** The calendar's name, as the user sees it in Google Calendar. */
+  calendarName: string;
   title: string;
   start: { at: string } | { date: string };
   end: { at: string } | { date: string };
@@ -128,8 +134,13 @@ export function calendarRoutes({
   async function dtos(
     userId: string,
     connection: ConnectionRow,
+    provider: CalendarProvider,
     events: CalendarEvent[],
   ) {
+    // The primary calendar is named after the account; others need a lookup.
+    const names = events.some((e) => e.calendarId !== connection.externalEmail)
+      ? new Map((await provider.listCalendars()).map((c) => [c.id, c.name]))
+      : new Map<string, string>();
     const ids = await refsFor(db, userId, connection.id, "calendarEvent", [
       ...events.map((e) => e.providerId),
       ...events.flatMap((e) => (e.seriesId ? [e.seriesId] : [])),
@@ -138,6 +149,7 @@ export function calendarRoutes({
       id: ids.get(e.providerId) ?? "",
       seriesId: e.seriesId ? (ids.get(e.seriesId) ?? null) : null,
       calendar: e.calendarId,
+      calendarName: names.get(e.calendarId) ?? e.calendarId,
       title: e.title,
       start: timeDto(e.start),
       end: timeDto(e.end),
@@ -206,7 +218,7 @@ export function calendarRoutes({
         account: { id: connection.id, email: connection.externalEmail },
         timeZone,
         range: { since: since.toISOString(), until: until.toISOString() },
-        events: await dtos(userId, connection, page.items),
+        events: await dtos(userId, connection, provider, page.items),
         cursor: page.cursor,
       });
     })
@@ -232,8 +244,9 @@ export function calendarRoutes({
       if (!connection) throw new ApiFailure("not_found", `There's no ${id}.`);
       const deps = need();
       requireCapability(connection, "read", deps.webPublicUrl);
-      const event = await deps.calendar(connection).get(ref.providerId);
-      const [dto] = await dtos(userId, connection, [event]);
+      const provider = deps.calendar(connection);
+      const event = await provider.get(ref.providerId);
+      const [dto] = await dtos(userId, connection, provider, [event]);
       return c.json({
         account: { id: connection.id, email: connection.externalEmail },
         timeZone: await timeZoneOf(userId),

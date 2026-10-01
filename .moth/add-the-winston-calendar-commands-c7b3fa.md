@@ -1,13 +1,13 @@
 ---
 id: "c7b3fa"
 title: Add the winston calendar commands
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - m5
 created_at: 2026-09-27T05:37:39.456Z
-updated_at: 2026-09-27T05:37:39.508Z
+updated_at: 2026-10-01T16:54:01.015Z
 blocked_by:
   - "253db2"
   - "cfff20"
@@ -28,3 +28,10 @@ The list line format:
 - Create a recurring 1:1.
 
 Tests: output snapshots, time parsing for `--start` in the user's zone, flag validation (needing exactly one of `--end`, `--duration` or `--all-day`), dry-run previews, and exit codes.
+
+## As built
+
+- `apps/cli/src/resources/calendar.ts`, tests in `calendar.test.ts`. The fake-backend harness moved to `apps/cli/src/testing.ts`, and the flag readers (`textFlag`, `listFlag`, `either`) to `flags.ts`, now that two resources share them.
+- The API's event DTO gained `calendarName`, so list lines name a secondary calendar ("Family") rather than its id.
+- Output tests assert exact text rather than snapshot files, like the mail tests. Time parsing for `--start` in the user's zone is tested where it happens, in the API's route tests (cfff20); the CLI sends times as typed.
+
