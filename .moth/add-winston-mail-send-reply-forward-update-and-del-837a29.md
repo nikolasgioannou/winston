@@ -1,13 +1,13 @@
 ---
 id: "837a29"
 title: Add winston mail send, reply, forward, update and delete
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - m5
 created_at: 2026-09-27T05:37:39.285Z
-updated_at: 2026-09-27T05:37:39.337Z
+updated_at: 2026-10-01T16:32:20.384Z
 blocked_by:
   - "d66d10"
   - "fc5532"
@@ -28,3 +28,5 @@ Tuesday works. Thanks, Dana.
 `--help` examples should show the common agent flows: reply with a heredoc body, save as a draft, archive several messages, and preview before sending.
 
 Tests: argument validation (missing `--to`, conflicting flags), stdin and `@file` bodies, dry-run output snapshots, and exit code 3 when `send` is disabled but `--draft` works.
+
+**Done (2026-10-01):** repeatable flags became a general CLI feature (`FlagSpec.repeatable`).

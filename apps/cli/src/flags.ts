@@ -14,6 +14,8 @@ export interface FlagSpec {
   text?: boolean;
   /** A whole number. */
   integer?: boolean;
+  /** May be given more than once (`--to a --to b`); the value is a list. */
+  repeatable?: boolean;
 }
 
 /** The standard flags (§11): the same name and meaning on every resource. */
@@ -53,7 +55,10 @@ export const globalFlags: FlagSpec[] = [
   { name: "help", description: "Show help" },
 ];
 
-export type FlagValues = Record<string, string | number | boolean | undefined>;
+export type FlagValues = Record<
+  string,
+  string | string[] | number | boolean | undefined
+>;
 
 export interface Parsed {
   positionals: string[];
@@ -108,6 +113,9 @@ export function parseFlags(
           `\`--${spec.name}\` must be a whole number, not "${value}".`,
         );
       flags[spec.name] = Number(value);
+    } else if (spec.repeatable) {
+      const previous = flags[spec.name];
+      flags[spec.name] = [...(Array.isArray(previous) ? previous : []), value];
     } else flags[spec.name] = value;
   }
   return { positionals, flags };

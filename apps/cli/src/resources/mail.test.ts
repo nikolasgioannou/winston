@@ -79,8 +79,8 @@ async function cli(
     out: (t) => out.push(t),
     err: (t) => err.push(t),
     text: {
-      readStdin: () => Promise.resolve(""),
-      readFile: () => Promise.resolve(""),
+      readStdin: () => Promise.resolve("Tuesday works.\nThanks, Dana."),
+      readFile: (path) => Promise.resolve(`contents of ${path}`),
     },
     files: {
       home: "/home/winston",
@@ -284,5 +284,217 @@ describe("winston mail", () => {
         )
       ).code,
     ).toBe(1);
+  });
+
+  test("send: --to is repeatable, the body reads stdin, attachments resolve under home, and a dry run is a marked preview", async () => {
+    let sentBody: unknown;
+    const { code, out, requests } = await cli(
+      [
+        "mail",
+        "send",
+        "--to",
+        "dana@example.com",
+        "--to",
+        "sam@example.com",
+        "--subject",
+        "Re: Lease renewal",
+        "--body",
+        "-",
+        "--attach",
+        "~/notes/plan.pdf",
+        "--dry-run",
+      ],
+      async (request) => {
+        sentBody = await request.json();
+        return Response.json({
+          account: { id: "acct_1", email: "me@example.com" },
+          preview: {
+            dryRun: true,
+            draft: false,
+            account: "me@example.com",
+            to: ["dana@example.com", "sam@example.com"],
+            cc: [],
+            bcc: [],
+            subject: "Re: Lease renewal",
+            body: "Tuesday works.\nThanks, Dana.",
+            attachments: ["plan.pdf"],
+            threadId: null,
+          },
+        });
+      },
+    );
+    expect(code).toBe(0);
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/v1/mail/send");
+    expect(sentBody).toEqual({
+      to: ["dana@example.com", "sam@example.com"],
+      cc: [],
+      bcc: [],
+      subject: "Re: Lease renewal",
+      body: "Tuesday works.\nThanks, Dana.",
+      attach: ["/home/winston/notes/plan.pdf"],
+      draft: false,
+      dryRun: true,
+    });
+    expect(out).toBe(
+      [
+        "DRY RUN (nothing sent)",
+        "from: me@example.com  to: dana@example.com, sam@example.com  subject: Re: Lease renewal",
+        "attachments: plan.pdf",
+        "Tuesday works.",
+        "Thanks, Dana.",
+      ].join("\n"),
+    );
+  });
+
+  test("send prints the sent ids; --draft prints the draft and how to send it; a drf_ id sends that draft", async () => {
+    const sent = await cli(
+      [
+        "mail",
+        "send",
+        "--to",
+        "a@b.co",
+        "--subject",
+        "Hi",
+        "--body",
+        "@~/notes/hi.txt",
+      ],
+      async (request) => {
+        expect(((await request.json()) as { body: string }).body).toBe(
+          "contents of ~/notes/hi.txt",
+        );
+        return Response.json({
+          account: { id: "acct_1", email: "me@example.com" },
+          sent: { id: "msg_01s", threadId: "thr_01s" },
+        });
+      },
+    );
+    expect(sent.out).toBe("Sent msg_01s in thr_01s from me@example.com.");
+    const drafted = await cli(
+      [
+        "mail",
+        "send",
+        "--to",
+        "a@b.co",
+        "--subject",
+        "Hi",
+        "--body",
+        "Hi",
+        "--draft",
+      ],
+      () =>
+        Response.json({
+          account: { id: "acct_1", email: "me@example.com" },
+          draft: { id: "drf_01d", messageId: "msg_01d", threadId: "thr_01d" },
+        }),
+    );
+    expect(drafted.out).toBe(
+      "Saved draft drf_01d (msg_01d in thr_01d) in me@example.com. Send it with: winston mail send drf_01d",
+    );
+    const fromDraft = await cli(["mail", "send", "drf_01d"], () =>
+      Response.json({
+        account: { id: "acct_1", email: "me@example.com" },
+        sent: { id: "msg_01s", threadId: "thr_01d" },
+      }),
+    );
+    expect(new URL(fromDraft.requests[0]?.url ?? "").pathname).toBe(
+      "/v1/mail/drafts/drf_01d/send",
+    );
+  });
+
+  test("argument checks: send needs --to, --subject and --body; reply needs an id and a body; update needs a change direction", async () => {
+    const backend = () => Response.json({});
+    expect(
+      (await cli(["mail", "send", "--subject", "x", "--body", "y"], backend))
+        .err,
+    ).toContain("Who to?");
+    expect(
+      (await cli(["mail", "send", "--to", "a@b.co", "--body", "y"], backend))
+        .err,
+    ).toContain("--subject is required.");
+    expect(
+      (await cli(["mail", "send", "--to", "a@b.co", "--subject", "x"], backend))
+        .code,
+    ).toBe(1);
+    expect((await cli(["mail", "reply", "--body", "x"], backend)).code).toBe(1);
+    expect((await cli(["mail", "reply", "msg_1"], backend)).err).toContain(
+      "--body is required.",
+    );
+    expect(
+      (await cli(["mail", "update", "msg_1", "--read", "--unread"], backend))
+        .err,
+    ).toBe("Pick one of --read and --unread.");
+    expect(
+      (
+        await cli(
+          [
+            "mail",
+            "send",
+            "--to",
+            "a@b.co",
+            "--subject",
+            "x",
+            "--body",
+            "y",
+            "--attach",
+            "/etc/passwd",
+          ],
+          backend,
+        )
+      ).code,
+    ).toBe(1);
+  });
+
+  test("with sending off, send exits 3 with the toggle link; update and delete report what changed", async () => {
+    const refused = await cli(["mail", "reply", "msg_1", "--body", "ok"], () =>
+      Response.json(
+        apiError(
+          "permission_disabled",
+          "Sending is turned off for me@example.com.",
+          "The user can turn it on at https://runwinston.com/accounts?account=acct_1",
+        ),
+        { status: 403 },
+      ),
+    );
+    expect(refused.code).toBe(3);
+    expect(refused.err).toContain("accounts?account=acct_1");
+    const updated = await cli(
+      [
+        "mail",
+        "update",
+        "msg_1",
+        "thr_2",
+        "--read",
+        "--archive",
+        "--add-label",
+        "Lease",
+      ],
+      async (request) => {
+        expect(await request.json()).toEqual({
+          ids: ["msg_1", "thr_2"],
+          read: true,
+          archived: true,
+          addLabels: ["Lease"],
+          removeLabels: [],
+          dryRun: false,
+        });
+        return Response.json({
+          dryRun: false,
+          updated: ["msg_1", "thr_2"],
+          changes: {
+            read: true,
+            archived: true,
+            addLabels: ["Lease"],
+            removeLabels: [],
+          },
+        });
+      },
+    );
+    expect(updated.out).toBe("Updated msg_1, thr_2: read, archived, +Lease");
+    const deleted = await cli(["mail", "delete", "drf_1", "--dry-run"], () =>
+      Response.json({ dryRun: true, trashed: ["drf_1"] }),
+    );
+    expect(deleted.out).toBe(
+      "DRY RUN (nothing moved)\nWould move to the trash: drf_1",
+    );
   });
 });
