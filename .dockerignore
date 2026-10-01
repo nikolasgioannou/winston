@@ -1,0 +1,16 @@
+# Images build from the repo root (docker/*.Dockerfile) and install their own
+# dependencies, so only source and manifests go in.
+**/node_modules
+**/dist
+.git
+.github
+.moth
+.vscode
+.data
+.packer
+.env*
+docs
+image
+infra
+**/*.test.ts
+README.md

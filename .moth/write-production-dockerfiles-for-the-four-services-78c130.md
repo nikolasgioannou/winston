@@ -1,14 +1,14 @@
 ---
 id: "78c130"
 title: Write production Dockerfiles for the four services
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - tooling
 created_at: 2026-09-27T05:36:32.510Z
-updated_at: 2026-09-27T05:36:32.595Z
+updated_at: 2026-10-01T04:57:17.762Z
 blocked_by:
   - "4e6f9b"
   - "5cbe5b"

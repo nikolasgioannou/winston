@@ -2,6 +2,7 @@ import type { DbOrTx } from "@winston/db/client";
 import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
+import { sql } from "drizzle-orm";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
 import { createExecs } from "./execs.ts";
@@ -21,9 +22,9 @@ export const maxFrameBytes = 1024 * 1024;
 type VmSocket = ServerWebSocket<VmSocketData>;
 
 /**
- * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`, and
- * everything under `/internal` is the internal API. One `Bun.serve` hosts
- * both.
+ * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`,
+ * everything under `/internal` is the internal API, and `/health` is for the
+ * load balancer. One `Bun.serve` hosts them all.
  */
 export function createGateway({
   db,
@@ -56,6 +57,16 @@ export function createGateway({
   });
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
+  /** Liveness for the load balancer, like api's: the process answers and Postgres is reachable. */
+  const health = async () => {
+    try {
+      await db.execute(sql`select 1`);
+      return Response.json({ ok: true });
+    } catch (error) {
+      logger.error({ err: error }, "health check: database unreachable");
+      return Response.json({ ok: false }, { status: 503 });
+    }
+  };
 
   const websocket: WebSocketHandler<VmSocketData> = {
     maxPayloadLength: maxFrameBytes,
@@ -122,6 +133,7 @@ export function createGateway({
           : new Response("expected a websocket", { status: 400 });
       }
       if (url.pathname.startsWith("/internal/")) return internal.fetch(request);
+      if (url.pathname === "/health") return health();
       return new Response("not found", { status: 404 });
     },
   };

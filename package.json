@@ -16,6 +16,7 @@
     "db:seed": "bun run --filter @winston/db db:seed",
     "db:up": "docker compose up --detach --wait postgres",
     "dev": "bun scripts/dev.ts",
+    "docker:build": "bun scripts/docker-build.ts",
     "format": "prettier --write . && packer fmt -recursive image",
     "format:check": "prettier --check . && packer fmt -check -recursive image",
     "image:build:local": "bun scripts/image-build-local.ts",

@@ -125,6 +125,12 @@ const hello = {
 };
 
 describe("gateway", () => {
+  test("/health answers when Postgres is reachable", async () => {
+    const response = await fetch(new URL("/health", server.url));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
   test("a registration token is exchanged once for a VM token, and hello makes the VM ready", async () => {
     const { vmId, registrationToken } = await registeringVm();
     const client = await connect(registrationToken);

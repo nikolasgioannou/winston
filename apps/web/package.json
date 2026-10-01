@@ -6,6 +6,7 @@
   "scripts": {
     "build": "bun --bun vite build",
     "dev": "bun --env-file=../../.env.local --bun vite dev",
+    "serve": "NODE_ENV=production bun --env-file=../../.env.local scripts/serve.ts",
     "typecheck": "tsc",
     "verify:build": "bun scripts/verify-build.ts"
   },
