@@ -1,14 +1,14 @@
 ---
 id: "2c0dbe"
 title: Set up the AWS Organization and the winston-prod account (with the founder)
-status: todo
+status: done
 priority: none
 labels:
   - collab
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.229Z
-updated_at: 2026-09-27T05:36:32.263Z
+updated_at: 2026-10-01T03:01:38.081Z
 blocked_by:
   - "0fa82e"
 ---
@@ -23,3 +23,5 @@ Winston gets its own AWS account, `winston-prod`, inside an AWS Organization, fu
 - Confirm `aws sts get-caller-identity --profile winston-prod` works.
 
 Write `docs/runbooks/aws-access.md`: how to log in (`aws sso login`), the profile name, and which account ids are which. Don't write any credentials into the repo.
+
+**Done (2026-09-30):** the Organization, Identity Center (in `us-east-1`), the founder's user and an `AdministratorAccess` permission set already existed for other projects, so they were reused. New: a `Winston` OU holding `winston-prod`, centralized root access management, the assignment, and the SSO profile. Details in docs/runbooks/aws-access.md.
