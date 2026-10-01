@@ -42,6 +42,7 @@ import {
   SslPolicy,
   TargetType,
 } from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import type { IManagedPolicy } from "aws-cdk-lib/aws-iam";
 import type { IKey } from "aws-cdk-lib/aws-kms";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import type { IBucket } from "aws-cdk-lib/aws-s3";
@@ -77,6 +78,12 @@ export interface ServicesStackProps extends StackProps {
   database: { endpoint: string; port: string; secretArn: string };
   tokensKey: IKey;
   blobs: IBucket;
+  /** What agents needs to run users' VMs on EC2 (the Vm stack). */
+  vm: {
+    backendPolicy: IManagedPolicy;
+    launchTemplateName: string;
+    subnetIds: string[];
+  };
 }
 
 /**
@@ -136,6 +143,9 @@ export class ServicesStack extends Stack {
         BLOB_BUCKET: props.blobs.bucketName,
         GATEWAY_INTERNAL_URL: `http://gateway.winston.internal:${String(servicePorts.gateway)}`,
         VM_GATEWAY_URL: `wss://gateway.${domain}`,
+        VM_PROVIDER: "ec2",
+        EC2_LAUNCH_TEMPLATE: props.vm.launchTemplateName,
+        EC2_SUBNET_IDS: props.vm.subnetIds.join(","),
       },
     };
 
@@ -229,6 +239,8 @@ export class ServicesStack extends Stack {
         "kms:GenerateDataKey",
       );
     props.tokensKey.grant(taskDefinitions.web.taskRole, "kms:GenerateDataKey");
+    // agents runs users' VMs (the EC2 VmProvider).
+    taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);
     // Only agents stores blobs (§12).
     props.blobs.grantRead(taskDefinitions.agents.taskRole);
     props.blobs.grantPut(taskDefinitions.agents.taskRole);

@@ -4,6 +4,7 @@ import { DataStack } from "./data.ts";
 import { EdgeStack } from "./edge.ts";
 import { NetworkStack } from "./network.ts";
 import { ServicesStack } from "./services.ts";
+import { VmStack } from "./vm.ts";
 
 /** Where Winston runs: the winston-prod account (docs/runbooks/aws-access.md). */
 export const production = {
@@ -50,6 +51,11 @@ export function defineStacks(app: App, environment: Environment = production) {
     "Ci",
     props("Ci", "Image repositories and GitHub's deploy role"),
   );
+  const vm = new VmStack(app, "Vm", {
+    ...props("Vm", "The user VMs' launch template, permissions and snapshots"),
+    vmSecurityGroup: network.securityGroups.vm,
+    artifacts: data.artifacts,
+  });
   const services = new ServicesStack(app, "Services", {
     ...props(
       "Services",
@@ -74,6 +80,11 @@ export function defineStacks(app: App, environment: Environment = production) {
     },
     tokensKey: data.tokensKey,
     blobs: data.blobs,
+    vm: {
+      backendPolicy: vm.backendPolicy,
+      launchTemplateName: "winston-vm",
+      subnetIds: network.vpc.publicSubnets.map((subnet) => subnet.subnetId),
+    },
   });
 
   return {
@@ -81,7 +92,7 @@ export function defineStacks(app: App, environment: Environment = production) {
     data,
     services,
     edge,
-    vm: stack("Vm", "The user VMs' launch template and snapshots"),
+    vm,
     ci,
     budget: stack("Budget", "Budget alerts"),
   };

@@ -1,14 +1,14 @@
 ---
 id: "b9062e"
 title: "Build the VM stack: launch template, security and snapshots"
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
   - vm
 created_at: 2026-09-27T05:36:32.914Z
-updated_at: 2026-09-27T05:36:32.965Z
+updated_at: 2026-10-01T07:31:27.719Z
 blocked_by:
   - "2a17a6"
   - "ce9145"
@@ -28,3 +28,5 @@ Build:
 - An IAM policy for the backend role (`agents`, which runs `provision_vm`) scoped to launching from *this* launch template, creating and attaching tagged volumes, and terminating only tagged Winston instances.
 
 Stack tests: the instance profile has no permissions beyond SSM and artifact reads, IMDSv2 is required, and the backend's EC2 permissions are scoped by tag and launch template.
+
+**Done (2026-10-01):** deployed. Snapshots kept 14 days. No recover alarm: simplified automatic recovery covers `t3a` by default. The backend policy was checked with IAM's simulator, and a VM was launched, replaced and destroyed from the template.
