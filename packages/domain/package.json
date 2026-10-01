@@ -6,6 +6,7 @@
     "./api-errors": "./src/api-errors.ts",
     "./connections": "./src/connections.ts",
     "./envelope": "./src/envelope.ts",
+    "./events": "./src/events.ts",
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",
     "./jobs": "./src/jobs.ts",

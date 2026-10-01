@@ -1,14 +1,14 @@
 ---
 id: "9c407f"
 title: Define the event catalog and events table
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - events
   - m7
 created_at: 2026-09-27T05:40:24.003Z
-updated_at: 2026-09-27T05:40:24.040Z
+updated_at: 2026-10-01T18:29:31.893Z
 blocked_by:
   - "480aff"
 ---
@@ -30,3 +30,11 @@ Also:
 - Envelope rendering for event items (the generic event shape with an escaped `<data>` block, §4), with snapshot tests.
 
 Tests: every catalog entry has a valid schema and description, the CLI output snapshot, and the payload validation rejecting malformed events.
+
+## As built
+
+- The catalog lives in `@winston/domain/events` rather than `packages/shared`: `@winston/domain` (added since this ticket was written) holds the domain model, including the inbound payload schemas the catalog reuses.
+- `events` table, `GET /v1/events/catalog`, `winston events catalog [<domain>]`. The CLI's test runs against the real route, so its snapshot is the catalog itself.
+- Event envelopes already render generically (`renderEvent`: occurred_at, subscription note, escaped key-sorted `<data>`), with snapshot tests from M1; nothing to add.
+- System events stay inbound items delivered to the front of house until 0512b5 wires them into subscriptions.
+

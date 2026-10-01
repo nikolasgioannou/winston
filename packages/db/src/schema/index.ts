@@ -2,6 +2,7 @@ export * from "./allowed-emails.ts";
 export * from "./audit-log.ts";
 export * from "./connections.ts";
 export * from "./cost-ledger.ts";
+export * from "./events.ts";
 export * from "./external-refs.ts";
 export * from "./front-state.ts";
 export * from "./inbound-items.ts";

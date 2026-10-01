@@ -20,6 +20,7 @@ import type { VmFiles } from "./files.ts";
 import { accountRoutes } from "./accounts.ts";
 import { calendarRoutes } from "./calendar.ts";
 import { calendarWriteRoutes } from "./calendar-write.ts";
+import { eventRoutes } from "./events.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
 import { taskRoutes } from "./tasks.ts";
@@ -138,7 +139,8 @@ export function createVmApi({
     .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }))
     .route("/v1/calendar", calendarRoutes({ db, connectors }))
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
-    .route("/v1/tasks", taskRoutes({ db }));
+    .route("/v1/tasks", taskRoutes({ db }))
+    .route("/v1/events", eventRoutes());
 }
 
 export type { VmApiEnv } from "./env.ts";

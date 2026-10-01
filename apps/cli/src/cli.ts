@@ -13,13 +13,21 @@ import {
 } from "./flags.ts";
 import { accounts } from "./resources/accounts.ts";
 import { calendar } from "./resources/calendar.ts";
+import { events } from "./resources/events.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { task } from "./resources/task.ts";
 import { suggest } from "./suggest.ts";
 import { version } from "./version.ts";
 
-export const resources: Resource[] = [me, mail, calendar, accounts, task];
+export const resources: Resource[] = [
+  me,
+  mail,
+  calendar,
+  accounts,
+  task,
+  events,
+];
 
 /** Every prefix `winston get` knows, as `msg_, thr_, …`. */
 const knownIds = () =>

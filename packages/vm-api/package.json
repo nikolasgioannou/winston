@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./connections": "./src/connections.ts"
+    "./connections": "./src/connections.ts",
+    "./events": "./src/events.ts"
   },
   "scripts": {
     "typecheck": "tsc"
