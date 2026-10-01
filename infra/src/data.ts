@@ -9,6 +9,7 @@ import {
 } from "aws-cdk-lib/aws-ec2";
 import { Key, KeySpec, KeyUsage } from "aws-cdk-lib/aws-kms";
 import {
+  CfnDBInstance,
   DatabaseInstance,
   DatabaseInstanceEngine,
   PostgresEngineVersion,
@@ -34,6 +35,8 @@ export interface DataStackProps extends StackProps {
  */
 export class DataStack extends Stack {
   readonly database: DatabaseInstance;
+  /** The RDS-managed secret holding the master password. */
+  readonly databaseSecretArn: string;
   /** Envelope encryption for connection tokens (the token vault). */
   readonly tokensKey: Key;
   /** Signs VM binaries; VMs verify with its public key. */
@@ -73,6 +76,10 @@ export class DataStack extends Stack {
       deletionProtection: true,
       removalPolicy: RemovalPolicy.RETAIN,
     });
+
+    this.databaseSecretArn = (
+      this.database.node.defaultChild as CfnDBInstance
+    ).attrMasterUserSecretSecretArn;
 
     this.tokensKey = new Key(this, "TokensKey", {
       alias: "winston/tokens",

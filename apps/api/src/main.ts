@@ -11,7 +11,9 @@ const logger = createLogger("api", {
   level: config.LOG_LEVEL,
   pretty: config.LOG_PRETTY,
 });
-const db = createDb(config.DATABASE_URL);
+const db = createDb(config.DATABASE_URL, {
+  rdsSecretArn: config.DATABASE_SECRET_ARN,
+});
 const server = Bun.serve({
   hostname: config.API_HOST,
   port: config.API_PORT,

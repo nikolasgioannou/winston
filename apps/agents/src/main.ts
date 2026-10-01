@@ -46,7 +46,9 @@ const logger = createLogger("agents", {
   level: config.LOG_LEVEL,
   pretty: config.LOG_PRETTY,
 });
-const db = createDb(config.DATABASE_URL);
+const db = createDb(config.DATABASE_URL, {
+  rdsSecretArn: config.DATABASE_SECRET_ARN,
+});
 
 const gateway = createModelGateway({
   apiKey: config.OPENROUTER_API_KEY,

@@ -7,7 +7,7 @@ WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile --filter "@winston/${SERVICE}"
 RUN bun build "apps/${SERVICE}/src/main.ts" \
-    --target bun --production --sourcemap=linked --outdir /out
+    --target bun --production --keep-names --sourcemap=linked --outdir /out
 
 # No shell, no package manager; just Bun and the bundle.
 FROM oven/bun:1.4.2-distroless

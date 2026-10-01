@@ -26,6 +26,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "3.1144.0",
     "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",

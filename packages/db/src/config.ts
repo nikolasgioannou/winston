@@ -3,6 +3,14 @@ import { z } from "zod";
 
 export const dbConfigSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  /**
+   * Production: the RDS-managed secret with the password, which then stays
+   * out of DATABASE_URL (see `createDb`).
+   */
+  DATABASE_SECRET_ARN: z
+    .string()
+    .startsWith("arn:aws:secretsmanager:")
+    .optional(),
 });
 
 /** Reads and validates the database settings from the environment. */

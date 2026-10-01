@@ -1,16 +1,250 @@
-import { Stack, type StackProps } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
+import type { ICertificate } from "aws-cdk-lib/aws-certificatemanager";
+import {
+  SubnetType,
+  type ISecurityGroup,
+  type IVpc,
+} from "aws-cdk-lib/aws-ec2";
+import type { IRepository } from "aws-cdk-lib/aws-ecr";
+import {
+  Cluster,
+  ContainerImage,
+  CpuArchitecture,
+  FargateService,
+  FargateTaskDefinition,
+  LogDrivers,
+  OperatingSystemFamily,
+} from "aws-cdk-lib/aws-ecs";
+import {
+  ApplicationLoadBalancer,
+  ApplicationProtocol,
+  ApplicationTargetGroup,
+  ListenerAction,
+  ListenerCondition,
+  SslPolicy,
+  TargetType,
+} from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import type { IKey } from "aws-cdk-lib/aws-kms";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import type { IBucket } from "aws-cdk-lib/aws-s3";
+import { Secret } from "aws-cdk-lib/aws-secretsmanager";
+import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
-import { Secrets } from "./secrets.ts";
+import { servicePorts } from "./network.ts";
+import { Secrets, type Service } from "./secrets.ts";
+
+/** The SSM parameter naming the image tag (a commit SHA) every service runs. */
+export const imageTagParameter = "/winston/image-tag";
+
+/** Fargate task sizes (CPU units, MiB), on ARM64 (docs/design.md §19). */
+const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
+  api: { cpu: 256, memoryMiB: 512 },
+  gateway: { cpu: 256, memoryMiB: 512 },
+  web: { cpu: 256, memoryMiB: 512 },
+  // Runs agent loops and the job queue; the busiest service.
+  agents: { cpu: 512, memoryMiB: 1024 },
+};
+
+export interface ServicesStackProps extends StackProps {
+  domain: string;
+  /** How many tasks each service runs; 0 keeps a service defined but stopped. */
+  desiredCounts: Record<Service, number>;
+  vpc: IVpc;
+  securityGroups: Record<Service | "alb", ISecurityGroup>;
+  repositories: Record<Service, IRepository>;
+  certificate: ICertificate;
+  database: { endpoint: string; port: string; secretArn: string };
+  tokensKey: IKey;
+  blobs: IBucket;
+}
 
 /**
- * The backend services (docs/design.md §19). For now, their secrets; the
- * cluster, services and load balancer come with the Fargate ticket.
+ * The four backend services on Fargate behind one load balancer (docs/design.md
+ * §9, §19), with their secrets.
  */
 export class ServicesStack extends Stack {
   readonly secrets: Secrets;
+  readonly cluster: Cluster;
+  readonly loadBalancer: ApplicationLoadBalancer;
+  readonly services: Record<Service, FargateService>;
+  readonly taskDefinitions: Record<Service, FargateTaskDefinition>;
 
-  constructor(scope: Construct, id: string, props: StackProps) {
+  constructor(scope: Construct, id: string, props: ServicesStackProps) {
     super(scope, id, props);
+    const { domain } = props;
     this.secrets = new Secrets(this, "Secrets");
+
+    this.cluster = new Cluster(this, "Cluster", { vpc: props.vpc });
+    // Private DNS for service-to-service calls: agents reaches the gateway's
+    // internal API at gateway.winston.internal, never through the load balancer.
+    this.cluster.addDefaultCloudMapNamespace({ name: "winston.internal" });
+
+    // Resolved by CloudFormation at each deploy, so a deploy that only sets
+    // the parameter rolls out new images (docs/runbooks/deploys.md).
+    const imageTag = StringParameter.valueForStringParameter(
+      this,
+      imageTagParameter,
+    );
+    const databaseSecret = Secret.fromSecretCompleteArn(
+      this,
+      "DatabaseSecret",
+      props.database.secretArn,
+    );
+    const databaseUrl = `postgres://postgres@${props.database.endpoint}:${props.database.port}/winston`;
+    const publicUrl = `https://${domain}`;
+
+    const environment: Record<Service, Record<string, string>> = {
+      api: { API_HOST: "0.0.0.0", API_PORT: String(servicePorts.api) },
+      gateway: {
+        GATEWAY_HOST: "0.0.0.0",
+        GATEWAY_PORT: String(servicePorts.gateway),
+      },
+      web: {
+        WEB_HOST: "0.0.0.0",
+        WEB_PORT: String(servicePorts.web),
+        WEB_PUBLIC_URL: publicUrl,
+        TELEGRAM_BOT_USERNAME: "RunWinstonBot",
+        TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
+      },
+      agents: {
+        WEB_PUBLIC_URL: publicUrl,
+        TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
+        BLOB_BUCKET: props.blobs.bucketName,
+        GATEWAY_INTERNAL_URL: `http://gateway.winston.internal:${String(servicePorts.gateway)}`,
+        VM_GATEWAY_URL: `wss://gateway.${domain}`,
+      },
+    };
+
+    const taskDefinitions = {} as Record<Service, FargateTaskDefinition>;
+    const services = {} as Record<Service, FargateService>;
+    for (const service of Object.keys(sizes) as Service[]) {
+      const taskDefinition = new FargateTaskDefinition(this, `${service}Task`, {
+        cpu: sizes[service].cpu,
+        memoryLimitMiB: sizes[service].memoryMiB,
+        runtimePlatform: {
+          cpuArchitecture: CpuArchitecture.ARM64,
+          operatingSystemFamily: OperatingSystemFamily.LINUX,
+        },
+      });
+      const port = service === "agents" ? undefined : servicePorts[service];
+      taskDefinition.addContainer(service, {
+        image: ContainerImage.fromEcrRepository(
+          props.repositories[service],
+          imageTag,
+        ),
+        environment: {
+          ...environment[service],
+          LOG_LEVEL: "info",
+          DATABASE_URL: databaseUrl,
+          DATABASE_SECRET_ARN: props.database.secretArn,
+        },
+        secrets: this.secrets.environmentFor(service),
+        portMappings: port ? [{ containerPort: port }] : [],
+        logging: LogDrivers.awsLogs({
+          streamPrefix: service,
+          logGroup: new LogGroup(this, `${service}Logs`, {
+            retention: RetentionDays.ONE_MONTH,
+          }),
+        }),
+        // agents has no port; ECS replaces it if the process exits.
+        stopTimeout: Duration.seconds(30),
+      });
+      // Each new connection reads the current password (§12a).
+      databaseSecret.grantRead(taskDefinition.taskRole);
+      taskDefinitions[service] = taskDefinition;
+
+      services[service] = new FargateService(this, `${service}Service`, {
+        cluster: this.cluster,
+        taskDefinition,
+        desiredCount: props.desiredCounts[service],
+        // Public subnets with public IPs instead of a NAT gateway (§8).
+        vpcSubnets: { subnetType: SubnetType.PUBLIC },
+        assignPublicIp: true,
+        securityGroups: [props.securityGroups[service]],
+        minHealthyPercent: 100,
+        maxHealthyPercent: 200,
+        circuitBreaker: { enable: true, rollback: true },
+        ...(service === "gateway"
+          ? { cloudMapOptions: { name: "gateway" } }
+          : {}),
+      });
+    }
+    this.taskDefinitions = taskDefinitions;
+    this.services = services;
+
+    // Tokens: api and agents read and write them; web only seals new ones.
+    for (const service of ["api", "agents"] as const)
+      props.tokensKey.grant(
+        taskDefinitions[service].taskRole,
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+      );
+    props.tokensKey.grant(taskDefinitions.web.taskRole, "kms:GenerateDataKey");
+    // Only agents stores blobs (§12).
+    props.blobs.grantRead(taskDefinitions.agents.taskRole);
+    props.blobs.grantPut(taskDefinitions.agents.taskRole);
+    props.blobs.grantDelete(taskDefinitions.agents.taskRole);
+
+    this.loadBalancer = new ApplicationLoadBalancer(this, "LoadBalancer", {
+      vpc: props.vpc,
+      internetFacing: true,
+      vpcSubnets: { subnetType: SubnetType.PUBLIC },
+      securityGroup: props.securityGroups.alb,
+      // VMs ping the gateway every 20 s, well inside this.
+      idleTimeout: Duration.seconds(60),
+    });
+    const listener = this.loadBalancer.addListener("Https", {
+      port: 443,
+      certificates: [props.certificate],
+      sslPolicy: SslPolicy.RECOMMENDED_TLS,
+      // The security groups say who may connect; the rules say what's routed.
+      open: false,
+      defaultAction: ListenerAction.fixedResponse(404, {
+        contentType: "text/plain",
+        messageBody: "not found",
+      }),
+    });
+
+    const targets = (service: Exclude<Service, "agents">) =>
+      new ApplicationTargetGroup(this, `${service}Targets`, {
+        vpc: props.vpc,
+        targetType: TargetType.IP,
+        port: servicePorts[service],
+        protocol: ApplicationProtocol.HTTP,
+        targets: [services[service]],
+        healthCheck: {
+          path: "/health",
+          interval: Duration.seconds(15),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+        deregistrationDelay: Duration.seconds(30),
+      });
+
+    listener.addAction("Api", {
+      priority: 10,
+      conditions: [ListenerCondition.hostHeaders([`api.${domain}`])],
+      action: ListenerAction.forward([targets("api")]),
+    });
+    // Only the VM websocket; the gateway's internal API is never routed.
+    listener.addAction("Gateway", {
+      priority: 20,
+      conditions: [
+        ListenerCondition.hostHeaders([`gateway.${domain}`]),
+        ListenerCondition.pathPatterns(["/vm/connect"]),
+      ],
+      action: ListenerAction.forward([targets("gateway")]),
+    });
+    // CloudFront's origin (the next ticket puts it in front).
+    listener.addAction("Web", {
+      priority: 30,
+      conditions: [ListenerCondition.hostHeaders([domain])],
+      action: ListenerAction.forward([targets("web")]),
+    });
+
+    new CfnOutput(this, "LoadBalancerDnsName", {
+      description: `The target of the api and gateway CNAMEs (docs/runbooks/dns.md)`,
+      value: this.loadBalancer.loadBalancerDnsName,
+    });
   }
 }

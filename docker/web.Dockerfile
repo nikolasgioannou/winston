@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile --filter @winston/web
 WORKDIR /repo/apps/web
 RUN bun --bun vite build
 RUN bun build scripts/serve.ts \
-    --target bun --production --sourcemap=linked --outdir /out
+    --target bun --production --keep-names --sourcemap=linked --outdir /out
 
 FROM oven/bun:1.4.2-distroless
 WORKDIR /app

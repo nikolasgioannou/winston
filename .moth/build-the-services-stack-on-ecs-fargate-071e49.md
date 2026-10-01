@@ -1,13 +1,13 @@
 ---
 id: "071e49"
 title: Build the services stack on ECS Fargate
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.678Z
-updated_at: 2026-09-27T05:36:32.782Z
+updated_at: 2026-10-01T05:53:16.210Z
 blocked_by:
   - "2a17a6"
   - "2ca5a6"

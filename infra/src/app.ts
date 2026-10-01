@@ -1,4 +1,5 @@
 import { Stack, type App } from "aws-cdk-lib";
+import { CiStack } from "./ci.ts";
 import { DataStack } from "./data.ts";
 import { EdgeStack } from "./edge.ts";
 import { NetworkStack } from "./network.ts";
@@ -40,20 +41,47 @@ export function defineStacks(app: App, environment: Environment = production) {
     databaseSecurityGroup: network.securityGroups.database,
   });
 
+  const edge = new EdgeStack(app, "Edge", {
+    ...props("Edge", "Certificates and CloudFront"),
+    domain: environment.domain,
+  });
+  const ci = new CiStack(
+    app,
+    "Ci",
+    props("Ci", "Image repositories and GitHub's deploy role"),
+  );
+  const services = new ServicesStack(app, "Services", {
+    ...props("Services", "ECS services, the load balancer and secrets"),
+    domain: environment.domain,
+    desiredCounts: {
+      gateway: 1,
+      // Stopped until production keys are set (ticket 1e6482): they'd fail
+      // their config check on the placeholder secrets.
+      api: 0,
+      web: 0,
+      // Stopped until the EC2 VM provider replaces local Docker (550446).
+      agents: 0,
+    },
+    vpc: network.vpc,
+    securityGroups: network.securityGroups,
+    repositories: ci.repositories,
+    certificate: edge.certificate,
+    database: {
+      endpoint: data.database.dbInstanceEndpointAddress,
+      port: data.database.dbInstanceEndpointPort,
+      secretArn: data.databaseSecretArn,
+    },
+    tokensKey: data.tokensKey,
+    blobs: data.blobs,
+  });
+
   return {
     network,
     data,
-    services: new ServicesStack(
-      app,
-      "Services",
-      props("Services", "ECS services, ECR, the load balancer and secrets"),
-    ),
-    edge: new EdgeStack(app, "Edge", {
-      ...props("Edge", "Certificates and CloudFront"),
-      domain: environment.domain,
-    }),
+    services,
+    edge,
     vm: stack("Vm", "The user VMs' launch template and snapshots"),
-    ci: stack("Ci", "GitHub's deploy role"),
+    ci,
     budget: stack("Budget", "Budget alerts"),
   };
 }
