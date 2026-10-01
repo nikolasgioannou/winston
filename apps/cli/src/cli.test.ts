@@ -33,6 +33,11 @@ async function cli(
       readStdin: () => Promise.resolve("from stdin"),
       readFile: () => Promise.resolve("from file"),
     },
+    files: {
+      home: "/home/winston",
+      cwd: "/home/winston",
+      exists: () => Promise.resolve(false),
+    },
     client: () =>
       apiClient({
         socketPath: "/unused",

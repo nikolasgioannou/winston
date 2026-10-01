@@ -3,7 +3,7 @@
  * prints the result or the error, and returns the exit code.
  */
 import type { ApiClient } from "./client.ts";
-import type { Resource, Verb } from "./commands.ts";
+import type { LocalFiles, Resource, Verb } from "./commands.ts";
 import { CliError } from "./errors.ts";
 import {
   globalFlags,
@@ -11,16 +11,18 @@ import {
   type FlagSpec,
   type TextSources,
 } from "./flags.ts";
+import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { suggest } from "./suggest.ts";
 import { version } from "./version.ts";
 
-export const resources: Resource[] = [me];
+export const resources: Resource[] = [me, mail];
 
 export interface Io {
   out: (text: string) => void;
   err: (text: string) => void;
   text: TextSources;
+  files: LocalFiles;
   client: () => ApiClient;
 }
 
@@ -130,6 +132,7 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
         flags,
         args: positionals,
         text: io.text,
+        files: io.files,
       }),
     );
     return 0;

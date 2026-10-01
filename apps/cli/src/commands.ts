@@ -11,6 +11,14 @@ export interface Context {
   /** Positionals after the verb, e.g. an id. */
   args: string[];
   text: TextSources;
+  files: LocalFiles;
+}
+
+/** The VM's own disk, which the CLI runs on (choosing where downloads go). */
+export interface LocalFiles {
+  home: string;
+  cwd: string;
+  exists: (path: string) => Promise<boolean>;
 }
 
 export interface Verb {

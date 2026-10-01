@@ -11,6 +11,13 @@ export const defaultLimit = 20;
 export const time = (date: Date | string, timeZone: string) =>
   formatInTimeZone(typeof date === "string" ? new Date(date) : date, timeZone);
 
+/** A time for list lines: `2026-09-25 16:02 -04:00`, in the user's zone. */
+export const shortTime = (date: Date | string, timeZone: string) =>
+  time(date, timeZone).replace(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):\d{2}(.*)$/,
+    "$1 $2 $3",
+  );
+
 /** One record: its id, then its most useful fields, separated by " · ". */
 export const record = (id: string, ...fields: (string | undefined | null)[]) =>
   [id, ...fields.filter((field): field is string => Boolean(field))].join(

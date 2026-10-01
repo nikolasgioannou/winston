@@ -15,6 +15,7 @@ import { connections, users } from "@winston/db/schema";
 import { parseHumanTime } from "@winston/shared/human-time";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { validator } from "hono/validator";
 import { z } from "zod";
 import {
   ApiFailure,
@@ -115,6 +116,15 @@ export function mailRoutes({
     return connectors;
   };
 
+  /** The user's time zone: times in and out are in it. */
+  const timeZoneOf = async (userId: string) =>
+    (
+      await db
+        .select({ timeZone: users.timezone })
+        .from(users)
+        .where(eq(users.id, userId))
+    )[0]?.timeZone ?? "UTC";
+
   /** CLI ids for a page of messages, their threads and attachments. */
   async function ids(
     userId: string,
@@ -210,11 +220,7 @@ export function mailRoutes({
         query.account,
       );
       requireCapability(connection, "read", deps.webPublicUrl);
-      const [user] = await db
-        .select({ timeZone: users.timezone })
-        .from(users)
-        .where(eq(users.id, userId));
-      const timeZone = user?.timeZone ?? "UTC";
+      const timeZone = await timeZoneOf(userId);
       const time = (input: string | undefined) =>
         input === undefined
           ? undefined
@@ -239,6 +245,7 @@ export function mailRoutes({
       const { summary } = await ids(userId, connection, page.items);
       return c.json({
         account: { id: connection.id, email: connection.externalEmail },
+        timeZone,
         messages: page.items.map(summary),
         cursor: page.cursor,
         estimatedTotal: page.estimatedTotal,
@@ -265,6 +272,7 @@ export function mailRoutes({
       }));
       return c.json({
         account: { id: connection.id, email: connection.externalEmail },
+        timeZone: await timeZoneOf(userId),
         kind:
           ref.kind === "thread" ? ("thread" as const) : ("message" as const),
         messages: detail,
@@ -282,25 +290,32 @@ export function mailRoutes({
         size: file.data.length,
       });
     })
-    .post("/attachments/:id/save", async (c) => {
-      const { userId } = c.get("run");
-      const id = c.req.param("id");
-      const body = saveBody.safeParse(
-        await c.req.json().catch(() => undefined),
-      );
-      if (!body.success)
-        throw invalid(
-          body.error,
-          "Save under /home/winston, for example ~/downloads.",
-        );
-      const { ref, connection } = await owned(userId, id, ["attachment"]);
-      if (!vmFiles)
-        throw new ApiFailure(
-          "unavailable",
-          "Saving files isn't available here.",
-        );
-      const file = await need().mail(connection).getAttachment(ref.providerId);
-      const { size } = await vmFiles.write(userId, body.data.path, file.data);
-      return c.json({ id, path: body.data.path, size });
-    });
+    .post(
+      "/attachments/:id/save",
+      validator("json", (value) => {
+        const body = saveBody.safeParse(value);
+        if (!body.success)
+          throw invalid(
+            body.error,
+            "Save under /home/winston, for example ~/downloads.",
+          );
+        return body.data;
+      }),
+      async (c) => {
+        const { userId } = c.get("run");
+        const id = c.req.param("id");
+        const { path } = c.req.valid("json");
+        const { ref, connection } = await owned(userId, id, ["attachment"]);
+        if (!vmFiles)
+          throw new ApiFailure(
+            "unavailable",
+            "Saving files isn't available here.",
+          );
+        const file = await need()
+          .mail(connection)
+          .getAttachment(ref.providerId);
+        const { size } = await vmFiles.write(userId, path, file.data);
+        return c.json({ id, path, size });
+      },
+    );
 }

@@ -1,13 +1,13 @@
 ---
 id: "fc5532"
 title: Add winston mail list, search, get and download
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - m5
 created_at: 2026-09-27T05:37:39.165Z
-updated_at: 2026-09-27T05:37:39.218Z
+updated_at: 2026-10-01T16:20:34.270Z
 blocked_by:
   - "253db2"
   - "6af84b"
@@ -23,3 +23,5 @@ The read half of `winston mail`, following the conventions exactly (docs/design.
 - `--help` for each verb includes 2–3 **real examples**, since agents learn the CLI from `--help` (§11 Discoverability).
 
 Tests: output formatting snapshots, footers and truncation, `--json` shapes, and the exit codes for no account, ambiguous account, disabled capability and expired auth. Use a fake API.
+
+**Done (2026-10-01):** long bodies stop at 3,000 characters per message with a note naming `--full`. Mail responses carry the user's time zone so the CLI formats times without another call.

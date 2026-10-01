@@ -16,6 +16,11 @@ const exitCode = await run(Bun.argv.slice(2), {
     readStdin: () => Bun.stdin.text(),
     readFile: (path) => Bun.file(path).text(),
   },
+  files: {
+    home: process.env.HOME ?? "/home/winston",
+    cwd: process.cwd(),
+    exists: (path) => Bun.file(path).exists(),
+  },
   client: () =>
     apiClient({
       socketPath: process.env.WINSTOND_SOCKET ?? defaultSocketPath,

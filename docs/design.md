@@ -687,7 +687,10 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 - **Flags:** unknown flags, resources and verbs get Levenshtein "Did you mean" suggestions and exit 1. The standard flags are defined once (`standardFlags`), `--json` and `--help` work everywhere, and long-text flags resolve a literal, `-` (stdin) or `@path`.
 - **Output:** `record` prints id-first lines joined by " · ". `list` is bounded (20 by default) with a "… N more. To see them, use --cursor … or narrow with …" footer. `json` has sorted keys, and times format in the user's zone with the offset.
 - **Transport:** Hono's `hc<VmApi>` client over winstond's socket, with `Authorization: Bearer $WINSTON_RUN_TOKEN`. Response types come from the API (`InferResponseType`), and backend error codes map to exit codes (`@winston/domain/api-errors`). An unreachable winstond is exit 5.
-- **Commands:** so far `winston me get` and `winston me update --timezone <iana>`.
+- **Commands:** `winston me get|update`, and the read half of `winston mail` (`apps/cli/src/resources/mail.ts`):
+  - **`list`** (the inbox by default) and **`search [<text>]`** (everywhere by default) take the portable filters (`--from`, `--to`, `--subject`, `--unread`/`--read`, `--has-attachment`, `--label`, `--category`, `--in`, `--native`) and the standard ones, and print the §11 line (`msg_…  2026-09-25 16:02 -04:00  Dana Reyes <dana@…>  Re: Lease renewal  [inbox, unread, 📎]  thr_…`), times in the user's zone (the API sends it), with a footer naming the next cursor. Gmail's total is only an estimate, so the footer says "… more" rather than a count.
+  - **`get <msg_id|thr_id>`** prints headers, `Attachment: att_… name (type, size)` lines and the body text; a thread is numbered oldest first. **Each body stops after 3,000 characters** with "… N more characters. To see them, add --full." (consistent with keeping every output bounded; `--full` shows it all). Hidden quoted replies are noted.
+  - **`download <att_id>… [--to <dir>]`** resolves `~` and relative paths on the VM, refuses anything outside `/home/winston`, picks a free name (`lease (2).pdf` rather than overwriting), has the backend write the file onto the VM, and prints each path and size.
 - **Verified:** it runs in the local VM as `winston`, compiled with `bun build --compile --target=bun-linux-arm64`.
 
 ### Grammar
