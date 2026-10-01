@@ -1,13 +1,13 @@
 ---
 id: "64a47f"
 title: Build the durable background-run engine
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - m6
 created_at: 2026-09-27T05:38:49.678Z
-updated_at: 2026-09-27T05:38:49.748Z
+updated_at: 2026-10-01T17:25:11.758Z
 blocked_by:
   - "36a9c9"
   - "68e9cc"
@@ -33,3 +33,12 @@ Tests with the scripted fake model:
 - Killing the worker mid-run and resuming continues from the last checkpoint without re-running completed steps.
 - The step cap ends with a summary.
 - Retries work.
+
+## As built
+
+- One `run_step` job per step (decision and reasons in docs/design.md §9, "Durable agents"). The model is given tools without `execute`, so each step stores the model's message before running its tools; a step interrupted in between answers those calls with "unknown, check before doing it again" instead of repeating them.
+- Background steps run in their own worker pool (`BACKGROUND_CONCURRENCY`), and every front-of-house query now filters `kind = 'front'`, so background runs never enter the front's window.
+- A first, short background prompt (`packages/prompts/src/background.md`) so the engine runs; ea88cd writes the real one.
+- Images are rebuilt from blob stubs each step (newest 3–5, cut in chunks of three), since a step's context is always reloaded from storage.
+- Started by hand with `bun run task:start <email> "<brief>"` until delegation (438b86).
+

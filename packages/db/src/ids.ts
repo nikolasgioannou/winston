@@ -7,6 +7,8 @@ import { createId } from "@winston/shared/ids";
 export const idPrefixes = {
   user: "usr",
   frontRun: "run",
+  /** A background run: the task the CLI names (`winston task`). */
+  task: "task",
   /** Inbound items and outbound messages together form the history (`hist_`). */
   historyItem: "hist",
   vm: "vm",

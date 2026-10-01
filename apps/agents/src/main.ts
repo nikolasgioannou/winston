@@ -9,6 +9,7 @@ import {
   provisionVmJob,
   restoreVmJob,
   revokeConnectionTokenJob,
+  runStepJob,
   saveAttachmentJob,
   transcribeVoiceJob,
 } from "@winston/domain/jobs";
@@ -18,6 +19,7 @@ import {
   saveAttachmentHandler,
   transcribeVoiceHandler,
 } from "./attachments.ts";
+import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
 import { createBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
@@ -120,6 +122,22 @@ const worker = createWorker({
   concurrency: config.WORKER_CONCURRENCY,
 });
 
+// Background steps get their own pool, so long tasks never hold up a reply (§9).
+const backgroundWorker = createWorker({
+  db,
+  logger,
+  handlers: {
+    [runStepJob.type]: runStepHandler({
+      gateway,
+      vm,
+      runTokenSecret: config.RUN_TOKEN_SECRET,
+      blobs,
+    }),
+  },
+  concurrency: config.BACKGROUND_CONCURRENCY,
+  leaseMs: stepLeaseMs,
+});
+
 let stopping = false;
 async function shutdown(signal: string) {
   if (stopping) {
@@ -135,7 +153,7 @@ async function shutdown(signal: string) {
     process.exit(1);
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
-  await worker.stop();
+  await Promise.all([worker.stop(), backgroundWorker.stop()]);
   await db.$client.end();
   clearTimeout(timeout);
   logger.info("stopped");
@@ -159,4 +177,11 @@ const grantSweeper = setInterval(sweepGrants, grantSweepMs);
 sweepGrants();
 
 worker.start();
-logger.info({ concurrency: config.WORKER_CONCURRENCY }, "agents started");
+backgroundWorker.start();
+logger.info(
+  {
+    concurrency: config.WORKER_CONCURRENCY,
+    backgroundConcurrency: config.BACKGROUND_CONCURRENCY,
+  },
+  "agents started",
+);

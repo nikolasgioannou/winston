@@ -13,6 +13,19 @@ export const frontTurnJob = {
 } as const;
 
 /**
+ * One step of a background run (§1, §9): a model call and its tools, then
+ * the next step is queued. Any worker can take any step, since the run's
+ * state lives in `run_messages` between steps.
+ */
+export const runStepJob = {
+  type: "run_step",
+  /** One queued step per run. */
+  dedupeKey: (runId: string) => `run_step:${runId}`,
+  /** Attempts before the run fails: about 20 minutes of backoff, enough to ride out an outage. */
+  maxAttempts: 12,
+} as const;
+
+/**
  * Provisioning a user's VM (§10, §15). Queued when a user's VM is requested
  * (at sign-up), by a setup failure's automatic retry, and by the retry
  * button. Payload `{ replace: true }` rebuilds a VM that's already running: a

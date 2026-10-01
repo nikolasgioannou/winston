@@ -8,14 +8,27 @@ import {
 import { newId } from "../ids.ts";
 import { users } from "./users.ts";
 
-/** Run lifecycle (docs/design.md §17). More states arrive with background runs. */
+/** Run lifecycle (docs/design.md §17); `@winston/db/run-state` moves runs through it. */
 export const runStatus = pgEnum("run_status", [
+  "queued",
   "running",
   "completed",
   "failed",
+  "cancelled",
+  "capped",
+  "parked",
 ]);
 
-/** One agent run. Today: one front-of-house turn. */
+/** A front-of-house turn, or a background agent's task (§1). */
+export const runKind = pgEnum("run_kind", ["front", "background"]);
+
+/** Reasoning effort for a run's model calls (§6). */
+export const runEffort = pgEnum("run_effort", ["low", "medium", "high"]);
+
+/**
+ * One agent run: a front-of-house turn (`run_…`), or a background task
+ * (`task_…`) that progresses one `run_step` job at a time.
+ */
 export const runs = snakeCase.table("runs", {
   id: text()
     .primaryKey()
@@ -23,7 +36,14 @@ export const runs = snakeCase.table("runs", {
   userId: text()
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  kind: runKind().notNull().default("front"),
   status: runStatus().notNull().default("running"),
+  /** Background: the self-contained brief it was started with. */
+  brief: text(),
+  /** Background: the effort its model calls use, when not the profile's own. */
+  effort: runEffort(),
+  /** Background: its final answer, or where it got to when capped or failed. */
+  result: text(),
   stepCount: integer().notNull().default(0),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp({ withTimezone: true }),

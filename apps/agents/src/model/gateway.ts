@@ -85,7 +85,11 @@ export type GenerateOptions<Tools extends ToolSet> = OmitModel<
   run: ModelRun;
   /** Added to the recorded step numbers, for callers that run one step per call. */
   stepOffset?: number;
+  /** The run's own effort, fixed for the run, instead of the profile's (a background task's). */
+  effort?: Effort;
 };
+
+export type Effort = "low" | "medium" | "high";
 
 export function createModelGateway({
   apiKey,
@@ -97,8 +101,8 @@ export function createModelGateway({
     ...(fetch ? { fetch } : {}),
   });
 
-  function model(profile: ModelProfile): LanguageModel {
-    const { model, effort } = modelProfiles[profile];
+  function model(profile: ModelProfile, effort: Effort): LanguageModel {
+    const { model } = modelProfiles[profile];
     return wrapLanguageModel({
       model: openrouter(model, {
         provider: {
@@ -127,6 +131,7 @@ export function createModelGateway({
       profile,
       run,
       stepOffset = 0,
+      effort,
       ...options
     }: GenerateOptions<Tools>) {
       const callerOnStepEnd = options.onStepEnd;
@@ -136,7 +141,7 @@ export function createModelGateway({
         return await generateText<Tools>({
           ...options,
           maxRetries: 0,
-          model: model(profile),
+          model: model(profile, effort ?? modelProfiles[profile].effort),
           onStepEnd: async (step: StepResult<Tools>) => {
             const { fromMessageId, toMessageId } = run.contextRange();
             await sink({

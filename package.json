@@ -31,6 +31,7 @@
     "prepare": "lefthook install",
     "prod": "bun scripts/prod.ts",
     "prod:keys": "bun scripts/production-keys.ts",
+    "task:start": "bun run --filter @winston/agents task:start",
     "telegram:webhook": "bun run --filter @winston/api telegram:webhook",
     "test": "bun test --env-file=.env.local",
     "tunnel": "bun scripts/tunnel.ts",

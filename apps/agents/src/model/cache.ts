@@ -49,3 +49,14 @@ export function cacheBreakpoint<Message extends ModelMessage>(
       );
   }
 }
+
+/**
+ * Marks the request's last message (new input, or a tool result) as the
+ * rolling cache breakpoint, so each request caches everything up to itself
+ * and the next one reads it back (§16). Only the request copy is marked.
+ */
+export function withRollingBreakpoint(messages: readonly ModelMessage[]) {
+  const last = messages.at(-1);
+  if (!last || last.role === "assistant") return [...messages];
+  return [...messages.slice(0, -1), cacheBreakpoint(last)];
+}

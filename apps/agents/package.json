@@ -5,6 +5,7 @@
   "scripts": {
     "model:smoke": "bun --env-file=../../.env.local src/model/smoke.ts",
     "start": "bun --env-file=../../.env.local src/main.ts",
+    "task:start": "bun --env-file=../../.env.local src/background/start-cli.ts",
     "typecheck": "tsc",
     "vm:provision": "bun --env-file=../../.env.local src/vm/seeded.ts provision",
     "vm:reset": "bun --env-file=../../.env.local src/vm/seeded.ts reset",

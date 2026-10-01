@@ -50,7 +50,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { cacheBreakpoint } from "../model/cache.ts";
+import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
 import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
@@ -416,17 +416,6 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
 }
 
 /**
- * Marks the request's last message (new input, or a tool result) as the
- * rolling cache breakpoint, so each request caches everything up to itself
- * and the next one reads it back (§16). Only the request copy is marked.
- */
-function withRollingBreakpoint(messages: readonly ModelMessage[]) {
-  const last = messages.at(-1);
-  if (!last || last.role === "assistant") return [...messages];
-  return [...messages.slice(0, -1), cacheBreakpoint(last)];
-}
-
-/**
  * A tool that returns `notRun` instead of running while `dropped()` is true,
  * so a dropped step still gets a result for every call.
  */
@@ -483,7 +472,13 @@ async function recoverAbandonedRuns(tx: DbOrTx, userId: string) {
   const dead = await tx
     .update(runs)
     .set({ status: "failed", finishedAt: sql`now()` })
-    .where(and(eq(runs.userId, userId), eq(runs.status, "running")))
+    .where(
+      and(
+        eq(runs.userId, userId),
+        eq(runs.kind, "front"),
+        eq(runs.status, "running"),
+      ),
+    )
     .returning({ id: runs.id });
   if (dead.length > 0)
     await tx
@@ -517,6 +512,7 @@ async function outageNoticePending(db: DbOrTx, userId: string) {
     .where(
       and(
         eq(runs.userId, userId),
+        eq(runs.kind, "front"),
         eq(runs.status, "completed"),
         gt(runs.finishedAt, notice.sentAt),
       ),
@@ -701,6 +697,8 @@ async function loadWindow(db: DbOrTx, userId: string, beforeId: number) {
     .where(
       and(
         eq(runs.userId, userId),
+        // Background runs keep their own transcripts (§2).
+        eq(runs.kind, "front"),
         // Failed runs stay in the database as the record, never in context.
         eq(runs.status, "completed"),
         gte(runMessages.id, state?.start ?? 0),

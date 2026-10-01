@@ -35,7 +35,7 @@ export async function trimWindow(
     .select({ input: modelCalls.inputTokens, output: modelCalls.outputTokens })
     .from(modelCalls)
     .innerJoin(runs, eq(runs.id, modelCalls.runId))
-    .where(eq(runs.userId, userId))
+    .where(and(eq(runs.userId, userId), eq(runs.kind, "front")))
     .orderBy(desc(modelCalls.id))
     .limit(1);
   const tokens = latest ? latest.input + latest.output : 0;
@@ -56,6 +56,7 @@ export async function trimWindow(
     .where(
       and(
         eq(runs.userId, userId),
+        eq(runs.kind, "front"),
         eq(runs.status, "completed"),
         gte(runMessages.id, state?.start ?? 0),
       ),

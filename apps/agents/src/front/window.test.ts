@@ -66,8 +66,13 @@ async function conversation(tx: DbOrTx, count: number) {
 }
 
 /** Records the user's latest model call as having seen `tokens` of context. */
-async function lastCallSaw(tx: DbOrTx, userId: string, tokens: number) {
-  const run = await insertRun(tx, userId);
+async function lastCallSaw(
+  tx: DbOrTx,
+  userId: string,
+  tokens: number,
+  kind: "front" | "background" = "front",
+) {
+  const run = await insertRun(tx, userId, { kind });
   await ensurePromptVersion(tx, prompt);
   await tx.insert(modelCalls).values({
     runId: run.id,
@@ -132,6 +137,16 @@ describe("trimWindow", () => {
       await lastCallSaw(tx, userId, 6_500);
       await trimWindow(tx, userId, system, budget, logger);
       expect(await windowStart(tx, userId)).toBe(first);
+    });
+  });
+
+  test("a background run's big context doesn't count against the front's window", async () => {
+    await inRollback(db, async (tx) => {
+      const { userId } = await conversation(tx, 10);
+      await lastCallSaw(tx, userId, 9_000);
+      await lastCallSaw(tx, userId, 500_000, "background");
+      await trimWindow(tx, userId, system, budget, logger);
+      expect(await windowStart(tx, userId)).toBe(0);
     });
   });
 

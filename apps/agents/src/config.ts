@@ -55,8 +55,14 @@ const agentsConfigSchema = dbConfigSchema
       .default(new URL("../../../.data/blobs", import.meta.url).pathname),
     /** Where the site is served, for links Winston sends (like reconnecting an account). */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
-    /** How many jobs this process runs at once. */
+    /** How many jobs this process runs at once, besides background steps. */
     WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+    /**
+     * How many background-run steps this process runs at once, in their own
+     * pool so they never hold up a reply. Steps mostly wait on the model or
+     * the VM, so this can be generous.
+     */
+    BACKGROUND_CONCURRENCY: z.coerce.number().int().positive().default(16),
     /** How long in-flight jobs get to finish on shutdown before the process exits anyway. */
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   })
