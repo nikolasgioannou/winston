@@ -68,7 +68,6 @@ function Accounts() {
           account={open.account}
           unavailable={open.unavailable}
           capabilities={editing.capabilities}
-          saves={editing.saves}
           onToggle={(capability, enabled) =>
             void editing.toggle(capability, enabled)
           }

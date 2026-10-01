@@ -32,9 +32,12 @@ function Profile() {
       firstName={firstName}
       lastName={lastName}
       onSaveName={async (name) => {
-        const result = await saveProfile({ data: name });
+        const result = await saveProfile({ data: name }).catch(
+          () => ({ ok: false, problem: "not_found" }) as const,
+        );
         // Home greets by first name; keep the loaders current.
         if (result.ok) await router.invalidate();
+        else toast.error("Couldn't save your name. Please try again.");
         return result;
       }}
       onDeleteAccount={() => {

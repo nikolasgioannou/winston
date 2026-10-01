@@ -1,12 +1,9 @@
 import { useRouter } from "@tanstack/react-router";
 import type { ConnectionDto } from "@winston/db/connections";
 import type { Capability } from "@winston/domain/connections";
+import { toast } from "@winston/ui";
 import { useState } from "react";
-import type { SaveState } from "../pages/account-dialog";
 import { setAccountCapability } from "../server/accounts-functions";
-
-/** How long "Saved" shows after a toggle. */
-const savedForMs = 2_000;
 
 /** A copy of `record` without `key`. */
 function without<T extends object>(record: T, key: keyof T): T {
@@ -16,44 +13,29 @@ function without<T extends object>(record: T, key: keyof T): T {
 }
 
 /**
- * Capability toggles that save as they change: each shows its new value while
- * saving, then "Saved" for a moment, or snaps back with an error.
+ * Capability toggles that save as they change, quietly: a switch shows its
+ * new value at once, and only a failure says anything (it snaps back, with a
+ * toast).
  */
 export function useCapabilitySaves(account: ConnectionDto | null) {
   const router = useRouter();
   const [pending, setPending] = useState<Partial<Record<Capability, boolean>>>(
     {},
   );
-  const [saves, setSaves] = useState<Partial<Record<Capability, SaveState>>>(
-    {},
-  );
 
   const toggle = async (capability: Capability, enabled: boolean) => {
     if (!account) return;
     setPending((p) => ({ ...p, [capability]: enabled }));
-    setSaves((s) => ({ ...s, [capability]: "saving" }));
-    let saved: SaveState = "saved";
     try {
       await setAccountCapability({
         data: { id: account.id, capability, enabled },
       });
       await router.invalidate();
     } catch {
-      saved = "error";
+      toast.error("Couldn't save that change. Please try again.");
     }
     setPending((p) => without(p, capability));
-    setSaves((s) => ({ ...s, [capability]: saved }));
-    if (saved === "saved")
-      setTimeout(() => {
-        setSaves((s) =>
-          s[capability] === "saved" ? without(s, capability) : s,
-        );
-      }, savedForMs);
   };
 
-  return {
-    capabilities: { ...account?.capabilities, ...pending },
-    saves,
-    toggle,
-  };
+  return { capabilities: { ...account?.capabilities, ...pending }, toggle };
 }

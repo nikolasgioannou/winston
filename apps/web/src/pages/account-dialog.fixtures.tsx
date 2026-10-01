@@ -19,7 +19,6 @@ const page = (props: Partial<AccountDialogProps>) => () => {
           account={account}
           unavailable={[]}
           capabilities={account.capabilities}
-          saves={{}}
           onToggle={noop}
           onDisconnect={noop}
           open
@@ -37,21 +36,6 @@ export const accountFixtures: PageFixtures = {
   path: "/accounts?account=<acct_id>",
   states: {
     mail: { label: "Mail", render: page({}) },
-    saving: {
-      label: "Toggle saving",
-      render: page({
-        capabilities: { ...work.capabilities, send: true },
-        saves: { send: "saving" },
-      }),
-    },
-    saved: {
-      label: "Toggle saved",
-      render: page({ saves: { draft: "saved" } }),
-    },
-    error: {
-      label: "Toggle error",
-      render: page({ saves: { send: "error" } }),
-    },
     unavailable: {
       label: "Unavailable capability",
       render: page({

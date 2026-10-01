@@ -35,9 +35,6 @@ export interface ProfilePageProps {
 /** Fields beside their labels share one width. */
 const fieldWidth = "w-56 sm:w-64";
 
-/** How long a field says "Saved" after it saves. */
-const savedForMs = 2_000;
-
 /**
  * `/profile` (docs/design.md §20): cards for the user, their Telegram link,
  * and account actions. The time zone isn't here: it follows the browser.
@@ -90,17 +87,16 @@ export function ProfilePage(props: ProfilePageProps) {
 }
 
 /**
- * First and last name, each saved when the field loses focus. A first name
- * is required, so clearing it puts the saved one back.
+ * First and last name, each saved quietly when the field loses focus. A
+ * first name is required, so clearing it puts the saved one back.
  */
 function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
   const [first, setFirst] = useState(firstName);
   const [last, setLast] = useState(lastName);
-  const [saved, setSaved] = useState<"first" | "last" | null>(null);
   // What's saved, as the fields last committed it.
   const committed = useRef({ firstName, lastName });
 
-  const commit = async (field: "first" | "last") => {
+  const commit = async () => {
     const name = { firstName: first.trim(), lastName: last.trim() };
     if (name.firstName === "") {
       setFirst(committed.current.firstName);
@@ -118,17 +114,12 @@ function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
       return;
     }
     committed.current = name;
-    setSaved(field);
-    setTimeout(() => {
-      setSaved((s) => (s === field ? null : s));
-    }, savedForMs);
   };
 
   return (
     <>
       <SettingRow
         label="First name"
-        {...(saved === "first" ? { description: "Saved" } : {})}
         control={
           <TextField
             aria-label="First name"
@@ -136,14 +127,13 @@ function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
             onChange={(event) => {
               setFirst(event.target.value);
             }}
-            onBlur={() => void commit("first")}
+            onBlur={() => void commit()}
             className={fieldWidth}
           />
         }
       />
       <SettingRow
         label="Last name"
-        {...(saved === "last" ? { description: "Saved" } : {})}
         control={
           <TextField
             aria-label="Last name"
@@ -151,7 +141,7 @@ function NameFields({ firstName, lastName, onSaveName }: ProfilePageProps) {
             onChange={(event) => {
               setLast(event.target.value);
             }}
-            onBlur={() => void commit("last")}
+            onBlur={() => void commit()}
             className={fieldWidth}
           />
         }
