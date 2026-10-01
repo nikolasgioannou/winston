@@ -3,13 +3,10 @@ import { Repository, TagMutability } from "aws-cdk-lib/aws-ecr";
 import type { Construct } from "constructs";
 import type { Service } from "./secrets.ts";
 
-/** The services that ship as images, one repository each. */
-export const imageServices = [
-  "api",
-  "agents",
-  "gateway",
-  "web",
-] as const satisfies readonly Service[];
+/** Everything that ships as an image, one repository each: the services and ops. */
+export const images = ["api", "agents", "gateway", "web", "ops"] as const;
+
+export type Image = Service | "ops";
 
 /**
  * What deploys build on (docs/design.md §19): the image repositories, which
@@ -17,15 +14,15 @@ export const imageServices = [
  * service starts. GitHub's deploy role joins it later.
  */
 export class CiStack extends Stack {
-  readonly repositories: Record<Service, Repository>;
+  readonly repositories: Record<Image, Repository>;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
     this.repositories = Object.fromEntries(
-      imageServices.map((service) => [
-        service,
-        new Repository(this, `${service}Repository`, {
-          repositoryName: `winston/${service}`,
+      images.map((image) => [
+        image,
+        new Repository(this, `${image}Repository`, {
+          repositoryName: `winston/${image}`,
           // Tags are commit SHAs; a pushed tag never changes meaning.
           imageTagMutability: TagMutability.IMMUTABLE,
           imageScanOnPush: true,
@@ -38,6 +35,6 @@ export class CiStack extends Stack {
           removalPolicy: RemovalPolicy.RETAIN,
         }),
       ]),
-    ) as Record<Service, Repository>;
+    ) as Record<Image, Repository>;
   }
 }

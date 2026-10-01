@@ -1,10 +1,16 @@
 /**
- * `bun run docker:build`: builds the four service images from the repo root
- * as `winston-<service>:local` (docs/design.md §9). Pass service names to
+ * `bun run docker:build`: builds the four service images and the ops image
+ * from the repo root as `winston-<name>:local` (docs/design.md §9). Pass service names to
  * build only those: `bun run docker:build api web`.
  */
-const services = ["api", "agents", "gateway", "web"] as const;
+const services = ["api", "agents", "gateway", "web", "ops"] as const;
 type Service = (typeof services)[number];
+
+/** api, agents and gateway share one Dockerfile; web and ops have their own. */
+const dockerfileArgs = (service: Service) =>
+  service === "web" || service === "ops"
+    ? ["-f", `docker/${service}.Dockerfile`]
+    : ["-f", "docker/service.Dockerfile", "--build-arg", `SERVICE=${service}`];
 
 const requested = process.argv.slice(2);
 for (const name of requested)
@@ -16,15 +22,7 @@ for (const name of requested)
   }
 
 for (const service of requested.length > 0 ? requested : services) {
-  const args =
-    service === "web"
-      ? ["-f", "docker/web.Dockerfile"]
-      : [
-          "-f",
-          "docker/service.Dockerfile",
-          "--build-arg",
-          `SERVICE=${service}`,
-        ];
+  const args = dockerfileArgs(service as Service);
   console.log(`Building winston-${service}:local`);
   const proc = Bun.spawn(
     ["docker", "build", ...args, "-t", `winston-${service}:local`, "."],

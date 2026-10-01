@@ -27,6 +27,7 @@ export class NetworkStack extends Stack {
     web: SecurityGroup;
     gateway: SecurityGroup;
     agents: SecurityGroup;
+    ops: SecurityGroup;
     database: SecurityGroup;
     vm: SecurityGroup;
   };
@@ -90,13 +91,26 @@ export class NetworkStack extends Stack {
       "Internal API from agents",
     );
 
-    const database = group("Database", "Postgres: from the services", false);
-    for (const [name, service] of Object.entries({ api, web, gateway, agents }))
-      database.addIngressRule(service, Port.tcp(postgresPort), `From ${name}`);
+    // One-off production tasks: migrations and admin commands (`bun run prod`).
+    const ops = group("Ops", "ops tasks: no inbound traffic");
+
+    const database = group(
+      "Database",
+      "Postgres: from the services and ops tasks",
+      false,
+    );
+    for (const [name, client] of Object.entries({
+      api,
+      web,
+      gateway,
+      agents,
+      ops,
+    }))
+      database.addIngressRule(client, Port.tcp(postgresPort), `From ${name}`);
 
     // winstond only connects out (docs/design.md §10).
     const vm = group("Vm", "User VMs: no inbound traffic");
 
-    this.securityGroups = { alb, api, web, gateway, agents, database, vm };
+    this.securityGroups = { alb, api, web, gateway, agents, ops, database, vm };
   }
 }

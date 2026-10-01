@@ -71,8 +71,8 @@ export interface ServicesStackProps extends StackProps {
   /** How many tasks each service runs; 0 keeps a service defined but stopped. */
   desiredCounts: Record<Service, number>;
   vpc: IVpc;
-  securityGroups: Record<Service | "alb", ISecurityGroup>;
-  repositories: Record<Service, IRepository>;
+  securityGroups: Record<Service | "alb" | "ops", ISecurityGroup>;
+  repositories: Record<Service | "ops", IRepository>;
   certificate: ICertificate;
   database: { endpoint: string; port: string; secretArn: string };
   tokensKey: IKey;
@@ -90,6 +90,8 @@ export class ServicesStack extends Stack {
   readonly services: Record<Service, FargateService>;
   readonly taskDefinitions: Record<Service, FargateTaskDefinition>;
   readonly distribution: Distribution;
+  /** One-off production tasks: migrations and admin commands. */
+  readonly opsTaskDefinition: FargateTaskDefinition;
 
   constructor(scope: Construct, id: string, props: ServicesStackProps) {
     super(scope, id, props);
@@ -193,6 +195,31 @@ export class ServicesStack extends Stack {
     }
     this.taskDefinitions = taskDefinitions;
     this.services = services;
+
+    // Ops: `bun run prod <command>` runs this as a one-off task, and deploys
+    // run migrations with it (docs/runbooks/production.md).
+    this.opsTaskDefinition = new FargateTaskDefinition(this, "opsTask", {
+      cpu: 256,
+      memoryLimitMiB: 512,
+      runtimePlatform: {
+        cpuArchitecture: CpuArchitecture.ARM64,
+        operatingSystemFamily: OperatingSystemFamily.LINUX,
+      },
+    });
+    this.opsTaskDefinition.addContainer("ops", {
+      image: ContainerImage.fromEcrRepository(props.repositories.ops, imageTag),
+      environment: {
+        DATABASE_URL: databaseUrl,
+        DATABASE_SECRET_ARN: props.database.secretArn,
+      },
+      logging: LogDrivers.awsLogs({
+        streamPrefix: "ops",
+        logGroup: new LogGroup(this, "opsLogs", {
+          retention: RetentionDays.ONE_MONTH,
+        }),
+      }),
+    });
+    databaseSecret.grantRead(this.opsTaskDefinition.taskRole);
 
     // Tokens: api and agents read and write them; web only seals new ones.
     for (const service of ["api", "agents"] as const)
@@ -309,6 +336,19 @@ export class ServicesStack extends Stack {
       },
     });
 
+    // What `bun run prod` needs to start an ops task.
+    new CfnOutput(this, "ClusterName", { value: this.cluster.clusterName });
+    new CfnOutput(this, "OpsTaskDefinition", {
+      value: this.opsTaskDefinition.family,
+    });
+    new CfnOutput(this, "OpsSubnets", {
+      value: props.vpc
+        .selectSubnets({ subnetType: SubnetType.PUBLIC })
+        .subnetIds.join(","),
+    });
+    new CfnOutput(this, "OpsSecurityGroup", {
+      value: props.securityGroups.ops.securityGroupId,
+    });
     new CfnOutput(this, "DistributionDomainName", {
       description: "The target of the apex CNAME (docs/runbooks/dns.md)",
       value: this.distribution.distributionDomainName,

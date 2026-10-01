@@ -61,13 +61,14 @@ describe("network stack", () => {
     expect(ingress("vm")).toEqual([]);
   });
 
-  test("agents accept no inbound traffic", () => {
+  test("agents and ops tasks accept no inbound traffic", () => {
     expect(ingress("agents")).toEqual([]);
+    expect(ingress("ops")).toEqual([]);
   });
 
-  test("Postgres is reachable only from the services, on 5432", () => {
+  test("Postgres is reachable only from the services and ops tasks, on 5432", () => {
     expect(ingress("database")).toEqual(
-      (["api", "web", "gateway", "agents"] as const).map((service) => ({
+      (["api", "web", "gateway", "agents", "ops"] as const).map((service) => ({
         port: 5432,
         source: groupId(service),
       })),
