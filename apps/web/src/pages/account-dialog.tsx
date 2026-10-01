@@ -7,9 +7,9 @@ import {
   Badge,
   Button,
   Callout,
+  Card,
   ConfirmDialog,
   Dialog,
-  Section,
   SettingRow,
   Switch,
 } from "@winston/ui";
@@ -32,6 +32,8 @@ export interface AccountDialogProps {
   confirmingDisconnect?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The tab shown first, for the dev design view. */
+  defaultTab?: "permissions" | "connection";
 }
 
 const capabilityCopy: Record<
@@ -67,9 +69,9 @@ const readCopy: Record<ConnectionDto["domain"], string> = {
 };
 
 /**
- * One connected account, in a dialog over `/accounts` (docs/design.md §20):
- * what Winston may do with it (the toggles the server enforces) and the
- * connection itself, each in a card.
+ * One connected account, in a dialog over `/accounts` (docs/design.md §20),
+ * in two tabs: Permissions (the toggles the server enforces) and Connection
+ * (reconnect, disconnect).
  */
 export function AccountDialog(props: AccountDialogProps) {
   const { account, open, onOpenChange } = props;
@@ -87,6 +89,47 @@ export function AccountDialog(props: AccountDialogProps) {
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
+      {...(props.defaultTab ? { defaultTab: props.defaultTab } : {})}
+      tabs={[
+        {
+          value: "permissions",
+          label: "Permissions",
+          content: (
+            <Card>
+              {capabilitiesByDomain[account.domain].map((capability) => (
+                <CapabilityRow
+                  key={capability}
+                  capability={capability}
+                  domain={account.domain}
+                  {...props}
+                  disabled={disconnected}
+                  reconnect={reconnect}
+                />
+              ))}
+            </Card>
+          ),
+        },
+        {
+          value: "connection",
+          label: "Connection",
+          content: (
+            <Card>
+              <SettingRow
+                label="Reconnect"
+                description="Sign in to Google again, for example to grant a permission you left out."
+                control={reconnect}
+              />
+              {!disconnected && (
+                <SettingRow
+                  label="Disconnect"
+                  description="Winston stops using this account, and its access is revoked with Google."
+                  control={<DisconnectButton {...props} />}
+                />
+              )}
+            </Card>
+          ),
+        },
+      ]}
       title={account.externalEmail}
       description={
         <span className="flex items-center gap-2">
@@ -96,34 +139,6 @@ export function AccountDialog(props: AccountDialogProps) {
       }
     >
       <StatusCallout status={account.status} action={reconnect} />
-
-      <Section title="What Winston can do" card>
-        {capabilitiesByDomain[account.domain].map((capability) => (
-          <CapabilityRow
-            key={capability}
-            capability={capability}
-            domain={account.domain}
-            {...props}
-            disabled={disconnected}
-            reconnect={reconnect}
-          />
-        ))}
-      </Section>
-
-      <Section title="Connection" card>
-        <SettingRow
-          label="Reconnect"
-          description="Sign in to Google again, for example to grant a permission you left out."
-          control={reconnect}
-        />
-        {!disconnected && (
-          <SettingRow
-            label="Disconnect"
-            description="Winston stops using this account, and its access is revoked with Google."
-            control={<DisconnectButton {...props} />}
-          />
-        )}
-      </Section>
     </Dialog>
   );
 }

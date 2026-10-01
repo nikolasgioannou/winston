@@ -11,7 +11,7 @@ export { Card, LinkCard, linkCardRow } from "./card";
 export { cn } from "./cn";
 export { controlHeight, type ControlSize } from "./control";
 export { ConfirmDialog } from "./dialog";
-export { Dialog } from "./dialog-panel";
+export { Dialog, type DialogTab } from "./dialog-panel";
 export { EmptyState, ErrorState } from "./empty-state";
 export { Select, type SelectOption, type SelectProps } from "./select";
 export { IconTile, Page, PageHeader } from "./page";

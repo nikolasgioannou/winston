@@ -67,7 +67,11 @@ export const accountFixtures: PageFixtures = {
     },
     confirming: {
       label: "Disconnect confirmation",
-      render: page({ confirmingDisconnect: true }),
+      render: page({ confirmingDisconnect: true, defaultTab: "connection" }),
+    },
+    connection: {
+      label: "Connection tab",
+      render: page({ defaultTab: "connection" }),
     },
     disconnected: {
       label: "Disconnected",
