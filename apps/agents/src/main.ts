@@ -5,6 +5,8 @@
 import { createDb } from "@winston/db/client";
 import {
   deleteUserJob,
+  expireTriggerJob,
+  fireScheduleJob,
   frontTurnJob,
   provisionVmJob,
   restoreVmJob,
@@ -43,6 +45,11 @@ import {
   sweepConnectionGrants,
 } from "@winston/connectors/grants";
 import { provisionVmHandler, restoreVmHandler } from "./vm/provision.ts";
+import {
+  expireTriggerHandler,
+  fireScheduleHandler,
+  startScheduler,
+} from "./scheduler.ts";
 import { createWorker } from "./worker.ts";
 
 const config = loadAgentsConfig();
@@ -107,6 +114,8 @@ const worker = createWorker({
       vm,
       transcriber: openRouterTranscriber({ apiKey: config.OPENROUTER_API_KEY }),
     }),
+    [fireScheduleJob.type]: fireScheduleHandler,
+    [expireTriggerJob.type]: expireTriggerHandler,
     [frontTurnJob.type]: frontTurnHandler({
       gateway,
       telegram,
@@ -153,6 +162,7 @@ async function shutdown(signal: string) {
     process.exit(1);
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
+  scheduler.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
   await db.$client.end();
   clearTimeout(timeout);
@@ -178,6 +188,7 @@ sweepGrants();
 
 worker.start();
 backgroundWorker.start();
+const scheduler = startScheduler(db, logger);
 logger.info(
   {
     concurrency: config.WORKER_CONCURRENCY,

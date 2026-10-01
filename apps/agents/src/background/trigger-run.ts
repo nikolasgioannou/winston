@@ -110,6 +110,8 @@ export async function startTriggerRun(
     reason: "schedule" | "event" | "expire";
     /** The events that fired it, for event runs. */
     events?: EventItem[];
+    /** For a schedule: the occurrence being fired; nothing happens if the trigger has moved past it. */
+    occurrence?: Date;
     now?: Date;
   },
 ) {
@@ -140,6 +142,11 @@ export async function startTriggerRun(
       note = row.onExpireNote;
     } else {
       if (!canFire(state, now)) return undefined;
+      if (
+        options.occurrence &&
+        row.nextFireAt?.getTime() !== options.occurrence.getTime()
+      )
+        return undefined;
       const fired = afterFire(state, now, timeZone);
       await tx
         .update(triggers)

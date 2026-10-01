@@ -9,6 +9,8 @@ export const lockSpaces = {
   frontTurn: 1,
   /** A background run's step (§9). */
   runStep: 2,
+  /** One scheduler tick at a time across instances (§9). */
+  scheduler: 3,
 } as const;
 
 /**

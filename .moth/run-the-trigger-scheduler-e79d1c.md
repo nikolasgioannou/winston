@@ -1,14 +1,14 @@
 ---
 id: "e79d1c"
 title: Run the trigger scheduler
-status: todo
+status: done
 priority: none
 labels:
   - agents
   - events
   - m7
 created_at: 2026-09-27T05:40:24.252Z
-updated_at: 2026-09-27T05:40:24.287Z
+updated_at: 2026-10-01T18:49:23.756Z
 blocked_by:
   - "3f6521"
 ---
@@ -25,3 +25,9 @@ Use the job queue's dedupe keys so overlapping ticks and multiple scheduler inst
 Decide missed-fire semantics after downtime: a schedule that should have fired while the system was down fires once on recovery, not once per missed occurrence. Note it in §17.
 
 Tests with a controllable clock: one-off and cron firing, a single fire under concurrent schedulers, expiry with and without `on_expire`, and missed-fire catch-up firing once.
+
+## As built
+
+- `apps/agents/src/scheduler.ts`: `schedulerTick` (with a `now` for tests), `startScheduler` (5 s), and the `fire_schedule` / `expire_trigger` handlers; job definitions in `@winston/domain/jobs`. `fire_derived_timer` jobs are queued here; their handler comes with 4da088.
+- Leader election: a per-tick transaction-level advisory lock, chosen over a session-level leader because nothing has to stay alive; dedupe plus idempotent handlers are what make it correct. Missed-fire semantics (fire once on recovery) are in docs/design.md §17.
+

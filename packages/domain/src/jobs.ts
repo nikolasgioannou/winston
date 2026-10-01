@@ -26,6 +26,29 @@ export const runStepJob = {
 } as const;
 
 /**
+ * A schedule's occurrence came (§3, §17 Scheduler loop). The payload names
+ * the occurrence, so a duplicate job for one the trigger has moved past does
+ * nothing.
+ */
+export const fireScheduleJob = {
+  type: "fire_schedule",
+  dedupeKey: (triggerId: string, occurrence: string) =>
+    `fire_schedule:${triggerId}:${occurrence}`,
+} as const;
+
+/** A trigger passed its `expires_at`: it expires, maybe with an `on_expire` run. */
+export const expireTriggerJob = {
+  type: "expire_trigger",
+  dedupeKey: (triggerId: string) => `expire_trigger:${triggerId}`,
+} as const;
+
+/** A materialized `calendar.event.starting` timer came due (§3, abstractions). */
+export const fireDerivedTimerJob = {
+  type: "fire_derived_timer",
+  dedupeKey: (timerId: number) => `fire_derived_timer:${String(timerId)}`,
+} as const;
+
+/**
  * Provisioning a user's VM (§10, §15). Queued when a user's VM is requested
  * (at sign-up), by a setup failure's automatic retry, and by the retry
  * button. Payload `{ replace: true }` rebuilds a VM that's already running: a
