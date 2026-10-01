@@ -35,3 +35,5 @@ Build:
   - `web` behind CloudFront, in the next ticket.
 
 Record the chosen sizes and expected monthly cost in §19. Stack tests: no service is publicly reachable except through the ALB, the gateway internal API isn't exposed on the ALB, and the circuit breaker is enabled.
+
+- Output the load balancer's DNS name, and have the founder add the `api` and `gateway` CNAMEs in Cloudflare (DNS only), following docs/runbooks/dns.md. Use the Edge stack's certificate.

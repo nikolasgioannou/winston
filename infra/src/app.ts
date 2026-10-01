@@ -1,5 +1,6 @@
 import { Stack, type App } from "aws-cdk-lib";
 import { DataStack } from "./data.ts";
+import { EdgeStack } from "./edge.ts";
 import { NetworkStack } from "./network.ts";
 
 /** Where Winston runs: the winston-prod account (docs/runbooks/aws-access.md). */
@@ -45,7 +46,10 @@ export function defineStacks(app: App, environment: Environment = production) {
       "Services",
       "ECS services, ECR, the load balancer and secrets",
     ),
-    edge: stack("Edge", "Certificates and CloudFront"),
+    edge: new EdgeStack(app, "Edge", {
+      ...props("Edge", "Certificates and CloudFront"),
+      domain: environment.domain,
+    }),
     vm: stack("Vm", "The user VMs' launch template and snapshots"),
     ci: stack("Ci", "GitHub's deploy role"),
     budget: stack("Budget", "Budget alerts"),

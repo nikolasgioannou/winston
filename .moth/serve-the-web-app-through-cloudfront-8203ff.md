@@ -20,3 +20,5 @@ Research the right CloudFront setup for an SSR app with server functions: cache 
 Build it in the Edge stack with the us-east-1 certificate. Point the apex and `www` (redirecting to the apex) at it. Make sure the `/dev/design` route really isn't in the production build, and that no path serves it.
 
 Verify after deploy: assets come back with long cache headers, HTML doesn't, sign-in works end to end with cookies through CloudFront, and hitting the ALB directly for `web` is refused.
+
+- Output the distribution's domain, and have the founder add the apex CNAME in Cloudflare (DNS only), following docs/runbooks/dns.md. Use the Edge stack's certificate.

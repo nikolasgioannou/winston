@@ -1,14 +1,14 @@
 ---
 id: "f92c63"
 title: Set up DNS and certificates for runwinston.com (with the founder)
-status: todo
+status: done
 priority: none
 labels:
   - collab
   - infra
   - m4
 created_at: 2026-09-27T05:36:32.443Z
-updated_at: 2026-09-27T18:37:16.803Z
+updated_at: 2026-10-01T04:31:32.418Z
 blocked_by:
   - "16c290"
   - "60490f"
@@ -27,3 +27,5 @@ If DNS lives in Cloudflare:
 - Validate ACM certificates through Cloudflare records (manually or via Terraform), and document how CDK-created endpoints get their records.
 
 Either way, the outcome is certificates issued and a documented, reproducible way for later stacks to create DNS records. Write the steps into `docs/runbooks/dns.md`. Verify with `dig` that the delegation or records resolve.
+
+**Done (2026-10-01):** one ACM certificate for the apex, `api.` and `gateway.` in the Edge stack, validated by CNAMEs the founder added in Cloudflare (DNS only). Later records are added by hand from the table in docs/runbooks/dns.md (the founder's choice over a Cloudflare API script).
