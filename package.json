@@ -30,6 +30,7 @@
     "model:smoke": "bun run --filter @winston/agents model:smoke",
     "prepare": "lefthook install",
     "prod": "bun scripts/prod.ts",
+    "prod:keys": "bun scripts/production-keys.ts",
     "telegram:webhook": "bun run --filter @winston/api telegram:webhook",
     "test": "bun test --env-file=.env.local",
     "tunnel": "bun scripts/tunnel.ts",

@@ -62,8 +62,7 @@ export function defineStacks(app: App, environment: Environment = production) {
       gateway: 1,
       api: 1,
       web: 1,
-      // Stopped until the EC2 VM provider replaces local Docker (550446).
-      agents: 0,
+      agents: 1,
     },
     vpc: network.vpc,
     securityGroups: network.securityGroups,

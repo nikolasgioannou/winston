@@ -22,6 +22,15 @@ export AWS_PROFILE=winston-prod
 
 Every secret starts with a random 48-character value, so the generated ones are ready as they are and the others hold a placeholder until they're set. Database credentials aren't here: RDS manages and rotates them (the `rds!db-…` secret). Connected accounts' tokens are encrypted with the KMS key `alias/winston/tokens`, not stored as secrets.
 
+## Setting the external keys (the easy way)
+
+```sh
+aws sso login --profile winston-prod
+bun run prod:keys
+```
+
+It asks for @RunWinstonBot's token, the production OpenRouter key, and the "Winston production" Google client's id and secret, with typing hidden (leave one blank to keep it), stores them, restarts the services that read them, and, once `api.runwinston.com` resolves, registers the bot's webhook at `https://api.runwinston.com/webhooks/telegram` with the generated webhook secret and prints Telegram's webhook info (`allowed_updates` includes reactions). Re-run just the webhook with `bun run prod:keys --webhook`.
+
 ## Setting a value
 
 Read the value from a prompt or a file, so it doesn't land in your shell history:
