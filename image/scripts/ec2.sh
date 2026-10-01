@@ -42,7 +42,7 @@ CONF
 
 # The data volume at /home/winston (§10). The instance has two EBS disks, the
 # root and the data volume; NVMe names (nvme0n1, nvme1n1) aren't stable, so
-# the data disk is "the disk that doesn't hold /". It's formatted only when
+# the data disk is "the disk that doesn't hold /" (waited for up to 3 minutes). It's formatted only when
 # blank (a new user), labelled winston-home, and mounted by label, so a volume
 # restored from a snapshot mounts as it is.
 install -d /usr/local/lib/winston
@@ -50,7 +50,7 @@ cat >/usr/local/lib/winston/mount-home.sh <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 root_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)")
-for _ in $(seq 1 60); do
+for _ in $(seq 1 180); do
   data_disk=$(lsblk -dno NAME,TYPE | awk -v root="$root_disk" '$2 == "disk" && $1 != root { print $1; exit }')
   [ -n "$data_disk" ] && break
   sleep 1
@@ -86,6 +86,14 @@ ExecStart=/usr/local/lib/winston/mount-home.sh
 WantedBy=multi-user.target
 UNIT
 systemctl enable winston-home.service
+# winstond runs the agent's commands in /home/winston, so it waits for the
+# volume (EC2 attaches it a few seconds after boot starts).
+install -d /etc/systemd/system/winstond.service.d
+cat >/etc/systemd/system/winstond.service.d/home.conf <<'UNIT'
+[Unit]
+Requires=winston-home.service
+After=winston-home.service
+UNIT
 
 # The agent's shell runs as winston, which mustn't reach the instance metadata
 # service: it serves the instance role's credentials and the user data (with

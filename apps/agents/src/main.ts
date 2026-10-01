@@ -28,6 +28,7 @@ import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
+import { ec2VmProvider } from "./vm/ec2-provider.ts";
 import {
   googleTokenRevoker,
   revokeConnectionTokenHandler,
@@ -62,11 +63,18 @@ const vm = gatewayClient({
 });
 const blobs = createBlobStore(config);
 
-const vmProvider = dockerVmProvider({
-  engine: dockerEngine(await dockerSocketPath()),
-  image: config.VM_IMAGE,
-  gatewayUrl: config.VM_GATEWAY_URL,
-});
+const vmProvider =
+  config.VM_PROVIDER === "ec2"
+    ? ec2VmProvider({
+        launchTemplateName: config.EC2_LAUNCH_TEMPLATE,
+        subnetIds: config.EC2_SUBNET_IDS,
+        gatewayUrl: config.VM_GATEWAY_URL,
+      })
+    : dockerVmProvider({
+        engine: dockerEngine(await dockerSocketPath()),
+        image: config.VM_IMAGE,
+        gatewayUrl: config.VM_GATEWAY_URL,
+      });
 
 const tokenVault = createTokenVault(config);
 

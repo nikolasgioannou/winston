@@ -9,6 +9,7 @@ import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
 import { helperFiles, runFileHelper } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
+import { readUserData } from "./user-data.ts";
 import { version } from "./version.ts";
 
 // Helper mode: winstond re-invokes itself as winston for file operations.
@@ -16,11 +17,20 @@ const [command] = Bun.argv.slice(2);
 if (command === "file-read" || command === "file-write")
   process.exit(await runFileHelper(Bun.argv.slice(2)));
 
+/** An unset or empty variable counts as absent. */
+const nonEmpty = (value: string | undefined) =>
+  value === "" ? undefined : value;
+
 // Docker passes these as environment variables (the unit's PassEnvironment=);
-// EC2 will pass them in instance user data. Either way, read them here.
-const gatewayUrl = process.env.WINSTON_GATEWAY_URL;
+// on EC2 they're in the instance's user data.
+const fromEnv = {
+  gatewayUrl: nonEmpty(process.env.WINSTON_GATEWAY_URL),
+  registrationToken: nonEmpty(process.env.WINSTON_REGISTRATION_TOKEN),
+};
+const settings = fromEnv.gatewayUrl ? fromEnv : await readUserData();
+const { gatewayUrl } = settings;
 if (!gatewayUrl) {
-  console.error("WINSTON_GATEWAY_URL isn't set");
+  console.error("WINSTON_GATEWAY_URL isn't set, and there's no user data");
   process.exit(1);
 }
 
@@ -38,14 +48,10 @@ async function cliVersion() {
   }
 }
 
-/** An unset or empty variable counts as absent. */
-const nonEmpty = (value: string | undefined) =>
-  value === "" ? undefined : value;
-
 const logger = createLogger("winstond", { pretty: false });
 const daemon = createDaemon({
   gatewayUrl,
-  registrationToken: nonEmpty(process.env.WINSTON_REGISTRATION_TOKEN),
+  registrationToken: settings.registrationToken,
   executor: createExecutor(),
   files: helperFiles(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),

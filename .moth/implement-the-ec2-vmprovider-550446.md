@@ -1,14 +1,14 @@
 ---
 id: "550446"
 title: Implement the EC2 VmProvider
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - m4
   - vm
 created_at: 2026-09-27T05:36:32.981Z
-updated_at: 2026-09-27T05:36:33.034Z
+updated_at: 2026-10-01T07:34:05.848Z
 blocked_by:
   - "2dd479"
   - "b9062e"
@@ -31,3 +31,5 @@ In `winstond`: on EC2, read the registration token and gateway URL from instance
 Select the provider by environment. Tests: the provider against a mocked EC2 client (create order, waiters, the volume surviving replace, and destroy removing snapshots), and `winstond`'s IMDSv2 reading.
 
 The real end-to-end check happens in the production cutover ticket.
+
+**Done (2026-10-01):** the data volume is created on its own and attached (so only it carries the data tag, and a replacement attaches the same one). Checked against real EC2: create, replace keeping the files, and destroy. winstond reads user data through IMDSv2. The registration round trip through the gateway waits for the go-live ticket, which needs the `gateway` DNS record.

@@ -25,9 +25,17 @@ const agentsConfigSchema = dbConfigSchema
       .int()
       .positive()
       .default(100_000),
+    /** Where users' VMs run: local Docker containers, or EC2 in production. */
+    VM_PROVIDER: z.enum(["docker", "ec2"]).default("docker"),
     /** The image local VMs run (`bun run image:build:local`). */
     VM_IMAGE: z.string().min(1).default("winston-vm:local"),
-    /** Where `winstond` dials the gateway from inside a local VM container. */
+    /** EC2: the Vm stack's launch template, and the public subnets VMs launch in. */
+    EC2_LAUNCH_TEMPLATE: z.string().min(1).default("winston-vm"),
+    EC2_SUBNET_IDS: z
+      .string()
+      .optional()
+      .transform((value) => value?.split(",").filter(Boolean) ?? []),
+    /** Where `winstond` dials the gateway: from inside a local container, or wss://gateway.runwinston.com. */
     VM_GATEWAY_URL: z.url().default("ws://host.docker.internal:3001"),
     /** The gateway's internal API, how agents reach users' VMs. */
     GATEWAY_INTERNAL_URL: z.url().default("http://127.0.0.1:3001"),
@@ -59,6 +67,11 @@ const agentsConfigSchema = dbConfigSchema
       path: ["FRONT_WINDOW_TARGET_TOKENS"],
       message: "must be below FRONT_WINDOW_MAX_TOKENS",
     },
+  )
+  .refine(
+    (config) =>
+      config.VM_PROVIDER !== "ec2" || config.EC2_SUBNET_IDS.length > 0,
+    { path: ["EC2_SUBNET_IDS"], message: "required when VM_PROVIDER is ec2" },
   );
 
 export function loadAgentsConfig() {
