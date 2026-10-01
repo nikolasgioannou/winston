@@ -212,6 +212,8 @@ export class ServicesStack extends Stack {
     // Ops: `bun run prod <command>` runs this as a one-off task, and deploys
     // run migrations with it (docs/runbooks/production.md).
     this.opsTaskDefinition = new FargateTaskDefinition(this, "opsTask", {
+      // Named, so GitHub's deploy role can run it (infra/src/ci.ts).
+      family: "winston-ops",
       cpu: 256,
       memoryLimitMiB: 512,
       runtimePlatform: {
@@ -228,6 +230,7 @@ export class ServicesStack extends Stack {
       logging: LogDrivers.awsLogs({
         streamPrefix: "ops",
         logGroup: new LogGroup(this, "opsLogs", {
+          logGroupName: "/winston/ops",
           retention: RetentionDays.ONE_MONTH,
         }),
       }),

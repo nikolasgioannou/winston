@@ -46,11 +46,11 @@ export function defineStacks(app: App, environment: Environment = production) {
     ...props("Edge", "Certificates"),
     domain: environment.domain,
   });
-  const ci = new CiStack(
-    app,
-    "Ci",
-    props("Ci", "Image repositories and GitHub's deploy role"),
-  );
+  const ci = new CiStack(app, "Ci", {
+    ...props("Ci", "Image repositories and GitHub's deploy roles"),
+    artifacts: data.artifacts,
+    signingKey: data.signingKey,
+  });
   const vm = new VmStack(app, "Vm", {
     ...props("Vm", "The user VMs' launch template, permissions and snapshots"),
     vmSecurityGroup: network.securityGroups.vm,

@@ -1,13 +1,13 @@
 ---
 id: "45b4ce"
 title: Let GitHub Actions deploy via OIDC
-status: todo
+status: done
 priority: none
 labels:
   - infra
   - m4
 created_at: 2026-09-27T05:36:33.119Z
-updated_at: 2026-09-27T05:36:33.154Z
+updated_at: 2026-10-01T08:01:40.914Z
 blocked_by:
   - "60490f"
 ---
@@ -23,3 +23,5 @@ Research the least-privilege shape for this role, given what the deploy workflow
 Also create a separate role for the manually triggered AMI workflow with only what Packer needs.
 
 Stack tests: the trust policy is limited to this repo and the `main` branch, and the deploy role doesn't have `*:*`. Verify with a trivial workflow step that assumes the role and runs `aws sts get-caller-identity`.
+
+**Done (2026-10-01):** both roles deployed; CI's deploy job assumes the deploy role and runs `aws sts get-caller-identity` (it grows into the deploy in e1a361).
