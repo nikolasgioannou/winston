@@ -23,6 +23,8 @@ That run checks, builds the images and runs `bun run deploy` (`scripts/deploy.ts
 
 A deploy takes about 10–15 minutes, most of it ECS rolling the four services.
 
+Running tasks keep working through it. While the old and new gateway overlap, each VM's calls go to whichever holds its socket (`vms.gateway_url`), and a VM that's reconnecting is waited on for up to 20 s, so Winston doesn't see its computer as down (docs/design.md §19).
+
 ## Watching
 
 - GitHub: the repository's Actions tab, or `gh run watch`.

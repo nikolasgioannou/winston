@@ -45,6 +45,12 @@ export const vms = snakeCase.table("vms", {
    * image than the current one is rolled onto it (§18).
    */
   imageId: text(),
+  /**
+   * The gateway holding the VM's websocket (its own address, e.g.
+   * http://10.0.1.7:3001), so agents reaches the VM through that one: while
+   * a deploy runs two gateways, only one has the connection.
+   */
+  gatewayUrl: text(),
   state: vmState().notNull().default("requested"),
   /** When `state` last changed, for timeouts (docs/design.md §17). */
   stateChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

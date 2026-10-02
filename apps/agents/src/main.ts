@@ -63,7 +63,7 @@ import {
   type CalendarFor,
 } from "./triggers/timers.ts";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
-import { connections } from "@winston/db/schema";
+import { connections, vms } from "@winston/db/schema";
 import { eq } from "drizzle-orm";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { deleteUserHandler } from "./accounts/delete-user.ts";
@@ -103,6 +103,14 @@ const telegram = grammySender(telegramApi);
 const vm = gatewayClient({
   baseUrl: config.GATEWAY_INTERNAL_URL,
   secret: config.GATEWAY_INTERNAL_SECRET,
+  // The gateway holding the VM's connection (a deploy briefly runs two).
+  locate: async (userId) =>
+    (
+      await db
+        .select({ gatewayUrl: vms.gatewayUrl })
+        .from(vms)
+        .where(eq(vms.userId, userId))
+    )[0]?.gatewayUrl,
 });
 const blobs = createBlobStore(config);
 

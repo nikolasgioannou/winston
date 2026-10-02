@@ -2,6 +2,7 @@
  * The gateway service: holds every VM's websocket, registers new VMs, and
  * serves the internal API (docs/design.md §9, §15).
  */
+import { networkInterfaces } from "node:os";
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
@@ -32,9 +33,23 @@ const accessToken = googleAccessTokens({
   },
   reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
 });
+/** This task's own address: in ECS, its network interface's private IPv4. */
+function ownUrl() {
+  if (config.GATEWAY_ADVERTISE_URL) return config.GATEWAY_ADVERTISE_URL;
+  if (config.GATEWAY_HOST !== "0.0.0.0")
+    return `http://${config.GATEWAY_HOST}:${String(config.GATEWAY_PORT)}`;
+  const address = Object.values(networkInterfaces())
+    .flat()
+    .find((nic) => nic?.family === "IPv4" && !nic.internal)?.address;
+  return address
+    ? `http://${address}:${String(config.GATEWAY_PORT)}`
+    : undefined;
+}
+const selfUrl = ownUrl();
 const gateway = createGateway({
   db,
   logger,
+  ...(selfUrl ? { selfUrl } : {}),
   internalSecret: config.GATEWAY_INTERNAL_SECRET,
   runTokenSecret: config.RUN_TOKEN_SECRET,
   ...(config.ARTIFACTS_BUCKET

@@ -39,15 +39,26 @@ export interface VmClient {
   releaseBrowser(userId: string, owner: string): Promise<void>;
 }
 
+/** How long a call keeps retrying while the VM is momentarily unavailable. */
+export const vmRetry = { forMs: 20_000, everyMs: 2_000 };
+
 export function gatewayClient({
   baseUrl,
   secret,
+  locate,
+  sleep = Bun.sleep,
 }: {
   baseUrl: string;
   secret: string;
+  /**
+   * The gateway holding a user's VM (recorded by the gateway itself), so a
+   * call reaches the one with the connection while a deploy runs two.
+   * Falls back to `baseUrl`.
+   */
+  locate?: (userId: string) => Promise<string | null | undefined>;
+  sleep?: (ms: number) => Promise<unknown>;
 }): VmClient {
   const headers = { Authorization: `Bearer ${secret}` };
-  const url = (path: string) => new URL(path, baseUrl).href;
 
   const failure = async (response: Response) => {
     const body = (await response.json().catch(() => undefined)) as
@@ -59,87 +70,106 @@ export function gatewayClient({
     );
   };
 
-  const browser = async (
-    userId: string,
-    action: "hold" | "release",
-    owner: string,
-  ) => {
-    const response = await fetch(
-      url(`/internal/vms/${userId}/browser/${action}`),
-      {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ owner }),
-      },
-    ).catch(() => {
-      throw new GatewayError(
-        "gateway_unreachable",
-        "Couldn't reach the gateway.",
-      );
-    });
-    if (!response.ok) throw await failure(response);
-    return (await response.json()) as {
-      window?: { windowId: string; targetId: string; url: string } | null;
-    };
-  };
+  /**
+   * Calls the gateway holding the user's VM. A VM that's momentarily away
+   * (a gateway deploy, winstond restarting after an update) is retried for
+   * a little while before the failure counts: a VM call is safe to repeat
+   * (an exec with the same id never runs twice).
+   */
+  async function request(userId: string, path: string, init: RequestInit = {}) {
+    const deadline = Date.now() + vmRetry.forMs;
+    for (;;) {
+      const base = (await locate?.(userId).catch(() => undefined)) ?? baseUrl;
+      let response: Response | undefined;
+      try {
+        response = await fetch(new URL(path, base).href, {
+          ...init,
+          headers: {
+            ...headers,
+            ...(init.headers as Record<string, string> | undefined),
+          },
+        });
+      } catch {
+        response = undefined;
+      }
+      const away = !response || response.status === 409;
+      if (!away || Date.now() >= deadline) {
+        if (!response)
+          throw new GatewayError(
+            "gateway_unreachable",
+            "The gateway isn't reachable.",
+          );
+        return response;
+      }
+      await sleep(vmRetry.everyMs);
+    }
+  }
+
+  const json = { "Content-Type": "application/json" };
 
   return {
     async holdBrowser(userId, owner) {
-      return (await browser(userId, "hold", owner)).window ?? null;
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/browser/hold`,
+        {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ owner }),
+        },
+      );
+      if (!response.ok) throw await failure(response);
+      return (
+        (
+          (await response.json()) as {
+            window?: { windowId: string; targetId: string; url: string } | null;
+          }
+        ).window ?? null
+      );
     },
     async releaseBrowser(userId, owner) {
-      await browser(userId, "release", owner);
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/browser/release`,
+        {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ owner }),
+        },
+      );
+      if (!response.ok) throw await failure(response);
     },
-    async exec(userId, request) {
-      const response = await fetch(url(`/internal/vms/${userId}/exec`), {
+    async exec(userId, request_) {
+      const response = await request(userId, `/internal/vms/${userId}/exec`, {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      }).catch(() => {
-        throw new GatewayError(
-          "gateway_unreachable",
-          "The gateway isn't reachable.",
-        );
+        headers: json,
+        body: JSON.stringify(request_),
       });
       if (!response.ok) throw await failure(response);
       return (await response.json()) as ExecResult;
     },
     async fetchExec(userId, execId) {
-      const response = await fetch(
-        url(`/internal/vms/${userId}/execs/${encodeURIComponent(execId)}`),
-        { headers },
-      ).catch(() => {
-        throw new GatewayError(
-          "gateway_unreachable",
-          "The gateway isn't reachable.",
-        );
-      });
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/execs/${encodeURIComponent(execId)}`,
+      );
       if (response.status === 404) return undefined;
       if (!response.ok) throw await failure(response);
       return (await response.json()) as ExecResult;
     },
     async writeFile(userId, path, bytes) {
-      const response = await fetch(
-        url(`/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`),
-        { method: "PUT", headers, body: bytes },
-      ).catch(() => {
-        throw new GatewayError(
-          "gateway_unreachable",
-          "The gateway isn't reachable.",
-        );
-      });
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`,
+        { method: "PUT", body: bytes },
+      );
       if (!response.ok) throw await failure(response);
     },
     async readFile(userId, path) {
-      const response = await fetch(
-        url(`/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`),
-        { headers },
-      ).catch(() => {
-        throw new GatewayError(
-          "gateway_unreachable",
-          "The gateway isn't reachable.",
-        );
-      });
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/files?path=${encodeURIComponent(path)}`,
+      );
       if (!response.ok) throw await failure(response);
       return new Uint8Array(await response.arrayBuffer());
     },

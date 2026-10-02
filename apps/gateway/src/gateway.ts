@@ -10,7 +10,7 @@ import {
 import { handoffs as handoffRows, runs, vms } from "@winston/db/schema";
 import { recordSystemEvent } from "@winston/db/system-events";
 import { resumeTask } from "@winston/db/tasks";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
@@ -93,9 +93,15 @@ export function createGateway({
   runTokenSecret,
   artifacts,
   connectors,
+  selfUrl,
 }: {
   db: DbOrTx;
   logger: Logger;
+  /**
+   * This gateway's own internal address, recorded on a VM while it holds the
+   * VM's websocket, so agents calls this gateway for that VM (§15).
+   */
+  selfUrl?: string;
   internalSecret: string;
   /** Verifies the run tokens CLI calls carry (agents signs them). */
   runTokenSecret: string;
@@ -315,6 +321,11 @@ export function createGateway({
         logger.info({ vmId }, "VM registered");
       }
       connections.add(vmId, ws);
+      if (selfUrl)
+        await db
+          .update(vms)
+          .set({ gatewayUrl: selfUrl })
+          .where(eq(vms.id, vmId));
       logger.info({ vmId }, "VM connected");
       execs.reconnected(vmId);
     },
@@ -349,6 +360,13 @@ export function createGateway({
       const ws = socket as VmSocket;
       connections.remove(ws.data.vmId, ws);
       handoffs.vmClosed(ws.data.vmId);
+      // Not here any more, unless another gateway has taken it meanwhile.
+      if (selfUrl && !connections.get(ws.data.vmId))
+        void db
+          .update(vms)
+          .set({ gatewayUrl: null })
+          .where(and(eq(vms.id, ws.data.vmId), eq(vms.gatewayUrl, selfUrl)))
+          .catch(() => undefined);
       if (!connections.get(ws.data.vmId)) updates.disconnected(ws.data.vmId);
       files.closed(ws);
       logger.info({ vmId: ws.data.vmId, code }, "VM disconnected");
