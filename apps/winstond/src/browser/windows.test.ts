@@ -80,6 +80,38 @@ function fakeChrome() {
             },
           });
         }
+        case "Page.getLayoutMetrics":
+          return answer({
+            cssVisualViewport: { clientWidth: 1280, clientHeight: 800 },
+            cssContentSize: { width: 1280, height: 20_000 },
+          });
+        case "Page.captureScreenshot":
+          return answer({ data: Buffer.from("png-bytes").toString("base64") });
+        case "Page.createIsolatedWorld":
+          return answer({ executionContextId: 7 });
+        case "Runtime.evaluate": {
+          const code = String(params.expression);
+          if (code.includes("boom"))
+            return answer({
+              result: { type: "object" },
+              exceptionDetails: {
+                text: "Uncaught",
+                exception: {
+                  description:
+                    "ReferenceError: boom is not defined\n    at <anonymous>",
+                },
+              },
+            });
+          if (code.includes("long"))
+            return answer({
+              result: { type: "string", value: "x".repeat(5_000) },
+            });
+          if (code.includes("nothing"))
+            return answer({ result: { type: "undefined" } });
+          return answer({
+            result: { type: "object", value: { title: "Example", n: 2 } },
+          });
+        }
         case "Page.getFrameTree":
           return answer({ frameTree: { frame: { id: "f" } } });
         case "Accessibility.getFullAXTree":
@@ -130,12 +162,18 @@ function fakeChrome() {
 
 function setup(now?: () => number) {
   let chrome = fakeChrome();
+  const saved: { path: string; bytes: string }[] = [];
   const browser = createBrowser({
     connect: () => Promise.resolve(chrome.cdp),
+    saveFile: (path, bytes) => {
+      saved.push({ path, bytes: Buffer.from(bytes).toString() });
+      return Promise.resolve();
+    },
     ...(now ? { now } : {}),
   });
   return {
     browser,
+    saved,
     chrome: () => chrome,
     /** Chrome crashes and systemd brings up a new one. */
     restartChrome: async () => {
@@ -318,5 +356,70 @@ describe("agent windows", () => {
     expect((await browser.windows(token("run_c"))).map((w) => w.id)).toEqual([
       live.window.id,
     ]);
+  });
+
+  test("a screenshot of a background window is saved under the caller's run and its path printed; a full page is capped", async () => {
+    const { browser, saved, chrome } = setup();
+    const theirs = await browser.open(token("run_a"), "a.test");
+    await browser.open(token("run_b"), "b.test");
+    // run_b peeks at run_a's window, which isn't in front.
+    const shot = await browser.screenshot(token("run_b"), {
+      window: theirs.window.id,
+    });
+    expect(shot.path).toMatch(
+      new RegExp(
+        `^/home/winston/\\.winston/screenshots/run_b/.+-${theirs.window.id}\\.png$`,
+      ),
+    );
+    expect(saved[0]).toEqual({
+      path: shot.path.replace("/home/winston/", ""),
+      bytes: "png-bytes",
+    });
+    expect([shot.width, shot.height, shot.fullPage, shot.clipped]).toEqual([
+      1280,
+      800,
+      false,
+      false,
+    ]);
+    const full = await browser.screenshot(token("run_b"), { fullPage: true });
+    expect([full.height, full.clipped]).toEqual([12_000, true]);
+    expect(
+      chrome()
+        .sent.filter((s) => s.method === "Page.captureScreenshot")
+        .at(-1)?.params,
+    ).toEqual({
+      format: "png",
+      captureBeyondViewport: true,
+      clip: { x: 0, y: 0, width: 1280, height: 12_000, scale: 1 },
+    });
+  });
+
+  test("eval prints the result as JSON, cut short when long, and says clearly when the script threw", async () => {
+    const { browser, chrome } = setup();
+    await browser.open(token("run_a"), "a.test");
+    const value = await browser.eval(token("run_a"), {
+      code: "document.title",
+    });
+    expect(value.value).toBe('{\n  "title": "Example",\n  "n": 2\n}');
+    // An expression is returned; it runs in the isolated world.
+    expect(
+      chrome().sent.find((s) => s.method === "Runtime.evaluate")?.params,
+    ).toMatchObject({
+      expression: "(async () => {\nreturn (document.title\n);\n})()",
+      contextId: 7,
+    });
+    const long = await browser.eval(token("run_a"), { code: "long" });
+    // 5,000 characters, plus the JSON string's two quotes.
+    expect([Array.from(long.value).length, long.more]).toEqual([4_000, 1_002]);
+    expect(
+      (await browser.eval(token("run_a"), { code: "nothing" })).value,
+    ).toBe("undefined");
+    const thrown = await failure(
+      browser.eval(token("run_a"), { code: "boom()" }),
+    );
+    expect(thrown.message).toBe(
+      "The script threw: ReferenceError: boom is not defined",
+    );
+    expect(thrown.hint).toContain("--page-world");
   });
 });

@@ -80,6 +80,26 @@ export function browserRpc(browser: Browser) {
         const window = text("window");
         const ref = text("ref") ?? "";
         switch (route) {
+          case "screenshot":
+            return reply(
+              200,
+              await browser.screenshot(token, {
+                window,
+                fullPage: body.fullPage === true,
+              }),
+            );
+          case "eval":
+            return reply(
+              200,
+              await browser.eval(
+                token,
+                {
+                  code: text("code") ?? "",
+                  pageWorld: body.pageWorld === true,
+                },
+                window,
+              ),
+            );
           case "click":
             return reply(200, await browser.click(token, ref, window));
           case "type":

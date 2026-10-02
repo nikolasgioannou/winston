@@ -14,7 +14,12 @@ const run = devtools && pages ? test : test.skip;
 
 const token = `${Buffer.from(JSON.stringify({ runId: "run_test", userId: "usr_1", kind: "background", exp: Date.now() + 3_600_000 })).toString("base64url")}.sig`;
 
+const saved = new Map<string, Uint8Array>();
 const browser = createBrowser({
+  saveFile: (path, bytes) => {
+    saved.set(path, bytes);
+    return Promise.resolve();
+  },
   connect: async () => {
     const version = (await (
       await fetch(`${devtools ?? ""}/json/version`)
@@ -163,6 +168,50 @@ describe("browser actions in Chrome", () => {
       expect(refused.code).toBe("invalid_request");
       expect(refused.hint).toBe(
         "Refs change as the page does; take a new snapshot and use a ref from it.",
+      );
+      await browser.close(token);
+    },
+    30_000,
+  );
+
+  run(
+    "a screenshot is a PNG of the viewport or the whole page; eval runs apart from the page unless asked",
+    async () => {
+      await browser.open(token, `${pages ?? ""}/actions.html`);
+      const shot = await browser.screenshot(token, {});
+      const png = saved.get(shot.path.replace("/home/winston/", ""));
+      expect(
+        Buffer.from(png ?? [])
+          .subarray(1, 4)
+          .toString(),
+      ).toBe("PNG");
+      const full = await browser.screenshot(token, { fullPage: true });
+      expect(full.height).toBeGreaterThan(shot.height);
+      expect(
+        (await browser.eval(token, { code: "document.title" })).value,
+      ).toBe('"Actions"');
+      expect(
+        (
+          await browser.eval(token, {
+            code: "const links = [...document.links]; return links.length",
+          })
+        ).value,
+      ).toBe("1");
+      // The page's own variables are only in its world.
+      expect(
+        (await browser.eval(token, { code: "window.appState" })).value,
+      ).toBe("undefined");
+      expect(
+        (
+          await browser.eval(token, {
+            code: "window.appState",
+            pageWorld: true,
+          })
+        ).value,
+      ).toBe('{\n  "cart": 3\n}');
+      const thrown = await failure(browser.eval(token, { code: "nope()" }));
+      expect(thrown.message).toBe(
+        "The script threw: ReferenceError: nope is not defined",
       );
       await browser.close(token);
     },

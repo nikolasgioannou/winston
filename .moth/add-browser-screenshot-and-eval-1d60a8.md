@@ -1,14 +1,14 @@
 ---
 id: "1d60a8"
 title: Add browser screenshot and eval
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - cli
   - m8
 created_at: 2026-09-27T05:42:03.798Z
-updated_at: 2026-09-27T05:42:03.834Z
+updated_at: 2026-10-02T02:19:10.096Z
 blocked_by:
   - "6b73c4"
 ---
@@ -18,3 +18,10 @@ Two tools the agent uses to verify and to escape (docs/design.md §5 Browser):
 - **`browser eval <js>`:** runs JavaScript in the page and prints the result (JSON-serialized, truncated like all output). Accepts `-` and `@path` for longer scripts. It's the code escape hatch that the research found was the biggest single quality gain for browser agents, used for extraction and bulk work. Run it without leaving `Runtime.enable` on (the approach from the CDP ticket), and in an isolated world where possible, so page scripts can't observe it.
 
 Tests: the screenshot path and file are produced for a background window, the full-page toggle, eval result serialization and truncation, and eval errors surfacing clearly.
+
+## As built
+
+- `browser screenshot [--full-page] [--window]`: per-target capture, PNG written as winston via winstond's file helper to `~/.winston/screenshots/<owner>/`, path printed; full page via `captureBeyondViewport`, capped at 12,000 px. Default viewport at scale 1.
+- `browser eval <js|-|@path> [--page-world]`: isolated world by default, page world via the document node (no `Runtime.enable` either way); expression or statement block (parsed with Bun's transpiler); JSON result cut at 4,000 chars; clear throw messages.
+- Tests: fake-Chrome unit tests and the real-Chrome harness test (docs/design.md §11).
+

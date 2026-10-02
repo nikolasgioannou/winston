@@ -68,6 +68,8 @@ export interface BrowserDeps {
   connect: () => Promise<Cdp>;
   downloadPath?: string;
   now?: () => number;
+  /** Saves a file in Winston's home, as winston (screenshots). */
+  saveFile?: (path: string, bytes: Uint8Array) => Promise<void>;
 }
 
 export type Browser = ReturnType<typeof createBrowser>;
@@ -537,6 +539,9 @@ export function createBrowser(deps: BrowserDeps) {
     allWindows: () => [...windows.values()],
     currentOf: (owner) => current.get(owner),
     now,
+    saveFile:
+      deps.saveFile ??
+      (() => Promise.reject(new Error("This browser can't save files."))),
   });
 
   return {

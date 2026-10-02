@@ -76,8 +76,19 @@ const daemon = createDaemon({
 daemon.start();
 const stopChromeWatch = watchChrome(logger);
 // The browser's state lives here, since every CLI call is a new process.
+const files = helperFiles();
 const browser = createBrowser({
   connect: async () => connectCdp(await browserSocketUrl()),
+  // Screenshots are written as winston, like every file in its home.
+  saveFile: (path, bytes) =>
+    files.write(
+      path,
+      {
+        size: bytes.length,
+        sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+      },
+      new Blob([bytes]).stream(),
+    ),
 });
 const browserSweep = setInterval(() => void browser.sweep(), 60_000);
 await serveCliSocket(

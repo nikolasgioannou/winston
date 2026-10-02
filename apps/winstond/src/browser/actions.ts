@@ -12,6 +12,8 @@
  */
 import type {
   BrowserActionResponse,
+  BrowserEvalResponse,
+  BrowserScreenshotResponse,
   BrowserWindowInfo,
 } from "@winston/domain/browser";
 import type { Cdp } from "./cdp.ts";
@@ -46,6 +48,30 @@ export interface ActionCore {
   allWindows: () => WindowEntry[];
   currentOf: (owner: string) => string | undefined;
   now: () => number;
+  /** Saves a file in Winston's home (as winston), at a path relative to it. */
+  saveFile: (path: string, bytes: Uint8Array) => Promise<void>;
+}
+
+export const captureLimits = {
+  /** A full-page screenshot stops here: taller pages are cut, and said to be. */
+  maxFullPageHeight: 12_000,
+  /** Characters of an eval result shown. */
+  evalChars: 4_000,
+};
+
+/**
+ * Script as typed: an expression (`document.title`) gives its value; a
+ * block of statements gives what it `return`s. Checked by parsing, not
+ * running.
+ */
+export function scriptBody(code: string) {
+  try {
+    // Parses only (Bun's transpiler); nothing runs here.
+    new Bun.Transpiler({ loader: "js" }).transformSync(`(${code}\n);`);
+    return `return (${code}\n);`;
+  } catch {
+    return code;
+  }
 }
 
 export const settleTimings = {
@@ -407,6 +433,161 @@ export function createActions(core: ActionCore) {
   }
 
   return {
+    async screenshot(
+      runToken: string,
+      request: { window?: string | undefined; fullPage?: boolean },
+    ): Promise<BrowserScreenshotResponse> {
+      const owner = core.caller(runToken);
+      // A peek at another run's window is fine: it changes nothing.
+      const entry = core.windowFor(owner, request.window, "look");
+      const { c, sessionId } = await core.sessionFor(entry);
+      const metrics = await c.send<{
+        cssVisualViewport: { clientWidth: number; clientHeight: number };
+        cssContentSize: { width: number; height: number };
+      }>("Page.getLayoutMetrics", {}, sessionId);
+      const full = request.fullPage === true;
+      const width = Math.round(metrics.cssVisualViewport.clientWidth);
+      const pageHeight = Math.round(metrics.cssContentSize.height);
+      const height = full
+        ? Math.min(pageHeight, captureLimits.maxFullPageHeight)
+        : Math.round(metrics.cssVisualViewport.clientHeight);
+      const shot = await unlessDialog(
+        entry,
+        c.send<{ data: string }>(
+          "Page.captureScreenshot",
+          {
+            format: "png",
+            ...(full
+              ? {
+                  captureBeyondViewport: true,
+                  clip: { x: 0, y: 0, width, height, scale: 1 },
+                }
+              : {}),
+          },
+          sessionId,
+        ),
+      );
+      if (!shot)
+        throw new BrowserFailure(
+          "invalid_request",
+          `${dialogText(pendingDialog(entry) ?? { type: "dialog", message: "", defaultPrompt: "" })}, so the page can't be captured.`,
+          "Answer it with winston browser dialog accept (or dismiss).",
+        );
+      const stamp = new Date(core.now()).toISOString().replace(/[:.]/g, "-");
+      const path = `.winston/screenshots/${owner}/${stamp}-${entry.id}.png`;
+      await core.saveFile(path, Buffer.from(shot.data, "base64"));
+      await core.refresh(entry).catch(() => undefined);
+      return {
+        window: core.info(entry, owner),
+        path: `/home/winston/${path}`,
+        width,
+        height,
+        fullPage: full,
+        clipped: full && pageHeight > height,
+      };
+    },
+
+    async eval(
+      runToken: string,
+      request: { code: string; pageWorld?: boolean },
+      windowId?: string,
+    ): Promise<BrowserEvalResponse> {
+      const owner = core.caller(runToken);
+      const entry = core.windowFor(owner, windowId, "own");
+      if (entry.dialog)
+        throw new BrowserFailure(
+          "invalid_request",
+          `${dialogText(entry.dialog)}, and it blocks the page until answered.`,
+          "Answer it with winston browser dialog accept (or dismiss).",
+        );
+      entry.lastUsedAt = core.now();
+      const { c, sessionId } = await core.sessionFor(entry);
+      const body = scriptBody(request.code);
+      interface Evaluated {
+        result: { type: string; value?: unknown; description?: string };
+        exceptionDetails?: {
+          text: string;
+          exception?: { description?: string };
+        };
+      }
+      let evaluated: Evaluated | undefined;
+      if (request.pageWorld) {
+        // The page's own world, for its variables: through its document
+        // node, so Runtime.enable stays off.
+        const { root } = await c.send<{ root: { backendNodeId: number } }>(
+          "DOM.getDocument",
+          { depth: 0 },
+          sessionId,
+        );
+        const { object } = await c.send<{ object: { objectId: string } }>(
+          "DOM.resolveNode",
+          { backendNodeId: root.backendNodeId },
+          sessionId,
+        );
+        evaluated = await unlessDialog(
+          entry,
+          c.send<Evaluated>(
+            "Runtime.callFunctionOn",
+            {
+              objectId: object.objectId,
+              functionDeclaration: `async function () {\n${body}\n}`,
+              returnByValue: true,
+              awaitPromise: true,
+            },
+            sessionId,
+          ),
+        );
+      } else {
+        const world = await worldFor(entry, c, {
+          sessionId,
+          backendNodeId: 0,
+          label: "",
+        });
+        evaluated = await unlessDialog(
+          entry,
+          c.send<Evaluated>(
+            "Runtime.evaluate",
+            {
+              expression: `(async () => {\n${body}\n})()`,
+              contextId: world,
+              returnByValue: true,
+              awaitPromise: true,
+              timeout: 30_000,
+            },
+            sessionId,
+          ),
+        );
+      }
+      if (!evaluated)
+        throw new BrowserFailure(
+          "invalid_request",
+          `The script opened a dialog. ${dialogText(pendingDialog(entry) ?? { type: "dialog", message: "", defaultPrompt: "" })}.`,
+          "Answer it with winston browser dialog accept (or dismiss).",
+        );
+      if (evaluated.exceptionDetails)
+        throw new BrowserFailure(
+          "invalid_request",
+          `The script threw: ${evaluated.exceptionDetails.exception?.description?.split("\n")[0] ?? evaluated.exceptionDetails.text}`,
+          request.pageWorld
+            ? "Fix the script and run it again."
+            : "Fix the script and run it again. It runs apart from the page's own scripts; add --page-world to reach their variables.",
+        );
+      const { result } = evaluated;
+      // JSON.stringify gives undefined for a function or a symbol.
+      const serialized = JSON.stringify(result.value, null, 2) as
+        string | undefined;
+      const json =
+        result.type === "undefined"
+          ? "undefined"
+          : (serialized ?? String(result.description));
+      const chars = Array.from(json);
+      return {
+        window: core.info(entry, owner),
+        value: chars.slice(0, captureLimits.evalChars).join(""),
+        more: Math.max(0, chars.length - captureLimits.evalChars),
+      };
+    },
+
     click(runToken: string, ref: string, windowId?: string) {
       let label = "";
       return act(

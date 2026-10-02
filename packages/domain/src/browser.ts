@@ -89,3 +89,22 @@ export interface BrowserActionResponse {
   /** Alerts and leave-page prompts answered automatically. */
   handledDialogs: string[];
 }
+
+export interface BrowserScreenshotResponse {
+  window: BrowserWindowInfo;
+  /** Where the PNG was saved on the VM, for view_image. */
+  path: string;
+  width: number;
+  height: number;
+  fullPage: boolean;
+  /** A full page cut short at the height limit. */
+  clipped: boolean;
+}
+
+export interface BrowserEvalResponse {
+  window: BrowserWindowInfo;
+  /** The result as JSON (`undefined` when there's none), maybe cut short. */
+  value: string;
+  /** Characters left out to keep the output bounded. */
+  more: number;
+}

@@ -1,6 +1,8 @@
 import type {
   BrowserActionResponse,
   BrowserCloseResponse,
+  BrowserEvalResponse,
+  BrowserScreenshotResponse,
   BrowserPageResponse,
   BrowserSnapshotResponse,
   BrowserWindowInfo,
@@ -422,6 +424,85 @@ export const browser: Resource = {
           ...(window ? { window } : {}),
         });
         return context.flags.json === true ? json(result) : actionText(result);
+      },
+    },
+    {
+      name: "screenshot",
+      summary:
+        "Save a PNG of the window and print its path (look at it with view_image)",
+      flags: [
+        {
+          name: "full-page",
+          description: "The whole page, not just what's in view",
+        },
+        {
+          name: "window",
+          value: "<win_id>",
+          description: "Another run's window, to look at",
+        },
+      ],
+      examples: [
+        "winston browser screenshot",
+        "winston browser screenshot --full-page",
+      ],
+      run: async (context) => {
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserScreenshotResponse>(
+          context,
+          "screenshot",
+          {
+            ...(window ? { window } : {}),
+            fullPage: context.flags["full-page"] === true,
+          },
+        );
+        if (context.flags.json === true) return json(result);
+        return [
+          `Saved ${result.path} (${String(result.width)}×${String(result.height)}${result.fullPage ? ", full page" : ""}).`,
+          result.clipped
+            ? "The page is taller than that; the rest was cut off."
+            : undefined,
+          "Look at it with view_image.",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      },
+    },
+    {
+      name: "eval",
+      summary:
+        "Run JavaScript in your window's page and print the result as JSON (text, - or @path)",
+      usage: "<js>",
+      flags: [
+        {
+          name: "page-world",
+          description:
+            "Run among the page's own scripts, to reach their variables (they can see it there)",
+        },
+        windowFlag,
+      ],
+      examples: [
+        "winston browser eval 'document.title'",
+        "winston browser eval '[...document.querySelectorAll(\"h2 a\")].map(a => ({ text: a.innerText, href: a.href }))'",
+        "winston browser eval @extract.js",
+      ],
+      run: async (context) => {
+        const raw = context.args.join(" ");
+        if (!raw)
+          throw CliError.usage(
+            "What should run? Pass JavaScript, - for stdin, or @path.",
+            "winston browser eval 'document.title'",
+          );
+        const code = await resolveText(raw, context.text);
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserEvalResponse>(context, "eval", {
+          code,
+          pageWorld: context.flags["page-world"] === true,
+          ...(window ? { window } : {}),
+        });
+        if (context.flags.json === true) return json(result);
+        return result.more > 0
+          ? `${result.value}\n… ${String(result.more)} more characters. Return less: filter or slice in the script.`
+          : result.value;
       },
     },
     {
