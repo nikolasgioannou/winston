@@ -9,6 +9,7 @@
  *   bun run prod migrate
  *   bun run prod vm:restore someone@example.com
  *   bun run prod vm:roll someone@example.com      (onto the current image, now)
+ *   bun run prod costs [--user <email>] [--month 2026-10]
  *
  * Anything that writes asks for confirmation first; `--yes` skips it (deploys).
  * `--image <tag>` runs on that image tag instead of the current one.
@@ -31,7 +32,14 @@ const args = Bun.argv
 const confirmed = Bun.argv.includes("--yes");
 const [command, subcommand] = args;
 
-const commands = ["migrate", "allowlist", "sql", "vm:restore", "vm:roll"];
+const commands = [
+  "migrate",
+  "allowlist",
+  "sql",
+  "vm:restore",
+  "vm:roll",
+  "costs",
+];
 if (!command || !commands.includes(command)) {
   console.error(`usage: bun run prod ${commands.join(" | ")} …`);
   process.exit(1);

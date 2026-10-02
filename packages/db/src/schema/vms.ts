@@ -54,6 +54,8 @@ export const vms = snakeCase.table("vms", {
   state: vmState().notNull().default("requested"),
   /** When `state` last changed, for timeouts (docs/design.md §17). */
   stateChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /** Up to when its running cost is in `cost_ledger` (the hourly VM cost job, §8). */
+  costAccruedAt: timestamp({ withTimezone: true }),
   /** Setup failures since the VM was last ready, to limit automatic retries (§17). */
   setupFailures: integer().notNull().default(0),
   /** The long-lived VM token `winstond` holds, hashed (§15). Looked up by hash. */

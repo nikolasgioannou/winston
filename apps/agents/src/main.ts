@@ -38,6 +38,7 @@ import { botApiFiles } from "./telegram/files.ts";
 import { openRouterTranscriber } from "./transcribe.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
+import { startVmCostJob } from "./vm/costs.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
 import { ec2VmProvider } from "./vm/ec2-provider.ts";
@@ -263,6 +264,7 @@ async function shutdown(signal: string) {
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
   clearInterval(rolloutSweeper);
+  stopVmCosts();
   scheduler.stop();
   reconciliation.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
@@ -298,6 +300,9 @@ const sweepRollout = () => {
 };
 const rolloutSweeper = setInterval(sweepRollout, rolloutEveryMs);
 sweepRollout();
+
+// Each user's computer goes into their spend, hour by hour (§8).
+const stopVmCosts = startVmCostJob(db, logger);
 
 worker.start();
 backgroundWorker.start();

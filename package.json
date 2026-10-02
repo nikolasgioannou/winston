@@ -10,6 +10,7 @@
   "scripts": {
     "allowlist": "bun --env-file=.env.local packages/db/src/allowlist-cli.ts",
     "check": "moth check && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run --filter @winston/web verify:build",
+    "costs": "bun --env-file=.env.local packages/db/src/costs-cli.ts",
     "db:down": "docker compose down",
     "db:generate": "bun run --filter @winston/db db:generate",
     "db:migrate": "bun run --filter @winston/db db:migrate",

@@ -8,6 +8,7 @@
  *   sql "<query>"                    a read-only query, rows printed as JSON
  *   vm:restore <email>               restore a user's VM from its latest snapshot
  *   vm:roll <email>                  move a user's VM onto the current image now
+ *   costs [--user <email>] [--month YYYY-MM]   spend, by category, agent, trigger and run
  */
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -15,6 +16,7 @@ import { restoreVmJob, rollVmJob } from "@winston/domain/jobs";
 import { eq } from "drizzle-orm";
 import { allowlistCommand } from "./allowlist-cli.ts";
 import { createDb, type Db } from "./client.ts";
+import { costsCommand } from "./costs.ts";
 import { loadDbConfig } from "./config.ts";
 import { enqueue } from "./queue.ts";
 import { users } from "./schema/index.ts";
@@ -39,6 +41,8 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
     }
     case "allowlist":
       return allowlistCommand(db, args);
+    case "costs":
+      return costsCommand(db, args);
     case "vm:roll": {
       const [email] = args;
       const [user] = email

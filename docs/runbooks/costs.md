@@ -22,7 +22,14 @@ AWS_PROFILE=winston-prod bun run infra:deploy
 
 AWS asks nothing to confirm a budget email address; check the alerts land by watching for the first one, or look at the budget in the Billing console (sign in to `winston-prod` through the access portal).
 
-**Where the money goes:** Cost Explorer in the Billing console, grouped by service. Per-user costs (model tokens, VM hours) are recorded in the database (§8).
+**Where the money goes:** Cost Explorer in the Billing console, grouped by service. Per-user costs (model tokens, Jev, transcription, VM hours) are recorded in the database (§8), and read with:
+
+```sh
+bun run prod costs                                   # everyone, this month
+bun run prod costs --user someone@example.com --month 2026-10
+```
+
+It prints spend by category, model spend by agent (front of house or background) and by what started the run, and the ten most expensive runs. `bun run costs` does the same on the local database.
 
 ## OpenRouter (models)
 

@@ -47,3 +47,23 @@ export function computeCostUsd(
     1_000_000
   );
 }
+
+/**
+ * What a user's computer costs on EC2, us-east-1 on-demand (checked
+ * 2026-10-02): the instance (`t3a.medium`, infra/src/vm.ts), its gp3 volumes
+ * (a 12 GiB root and the 20 GiB data volume, ec2-provider.ts) and its public
+ * IPv4 address. Snapshots and traffic are small and left out.
+ */
+export const vmPricing = {
+  instancePerHour: 0.0376,
+  gp3PerGibMonth: 0.08,
+  volumeGib: 12 + 20,
+  publicIpv4PerHour: 0.005,
+  hoursPerMonth: 730,
+};
+
+/** One VM-hour, all in. */
+export const vmCostPerHour =
+  vmPricing.instancePerHour +
+  vmPricing.publicIpv4PerHour +
+  (vmPricing.gp3PerGibMonth * vmPricing.volumeGib) / vmPricing.hoursPerMonth;
