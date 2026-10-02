@@ -17,6 +17,7 @@ import {
   type GoogleClaims,
   type GoogleClient,
 } from "./google.server";
+import { returnPath } from "./return-path";
 
 /** Why sign-in didn't work, as the sign-in page (/) shows it. */
 export type SignInProblem = "not_allowlisted" | "oauth";
@@ -107,10 +108,12 @@ export interface FlowCookies {
   state: string | undefined;
   codeVerifier: string | undefined;
   timezone: string | undefined;
+  /** Where to go after signing in, if a link brought them (`returnPath`). */
+  next?: string | undefined;
 }
 
 export type CallbackResult =
-  | { redirectTo: "/home"; sessionToken: string; userId: string }
+  | { redirectTo: string; sessionToken: string; userId: string }
   | { redirectTo: `/?error=${SignInProblem}` };
 
 /**
@@ -150,5 +153,9 @@ export async function completeGoogleSignIn(
   const result = await signInWithGoogle(deps.db, claims, cookies.timezone);
   if (result.outcome === "problem") return problem(result.problem);
   const { token } = await createSession(deps.db, result.userId);
-  return { redirectTo: "/home", sessionToken: token, userId: result.userId };
+  return {
+    redirectTo: returnPath(cookies.next) ?? "/home",
+    sessionToken: token,
+    userId: result.userId,
+  };
 }

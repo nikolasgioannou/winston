@@ -80,12 +80,14 @@ export const flowCookieNames = {
   state: "winston_oauth_state",
   codeVerifier: "winston_oauth_verifier",
   timezone: "winston_oauth_tz",
+  next: "winston_oauth_next",
 } as const;
 
 export function setFlowCookies(values: {
   state: string;
   codeVerifier: string;
   timezone: string | undefined;
+  next: string | undefined;
 }) {
   const options = {
     httpOnly: true,
@@ -98,6 +100,7 @@ export function setFlowCookies(values: {
   setCookie(flowCookieNames.codeVerifier, values.codeVerifier, options);
   if (values.timezone)
     setCookie(flowCookieNames.timezone, values.timezone, options);
+  if (values.next) setCookie(flowCookieNames.next, values.next, options);
 }
 
 /** The cookies that carry the connect flow between the two redirects. */
@@ -142,6 +145,7 @@ export function takeFlowCookies() {
     state: getCookie(flowCookieNames.state),
     codeVerifier: getCookie(flowCookieNames.codeVerifier),
     timezone: getCookie(flowCookieNames.timezone),
+    next: getCookie(flowCookieNames.next),
   };
   for (const name of Object.values(flowCookieNames))
     deleteCookie(name, { path: "/auth/google" });

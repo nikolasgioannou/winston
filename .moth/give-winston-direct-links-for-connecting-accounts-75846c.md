@@ -1,13 +1,13 @@
 ---
 id: "75846c"
 title: Give Winston direct links for connecting accounts
-status: backlog
+status: done
 priority: none
 labels:
   - m7
   - prompts
 created_at: 2026-10-01T23:53:50.394Z
-updated_at: 2026-10-01T23:53:55.733Z
+updated_at: 2026-10-02T01:10:40.248Z
 blocked_by:
   - "fa537d"
 ---
@@ -24,3 +24,11 @@ Found in go-live (2026-10-01): asked by voice for a link to connect Google, Wins
 - **Failures, no empty promises:** when a command fails (seen 2026-10-01: the gateway's stale Google client made every calendar call fail), Winston said three times "I'll check again in a bit and let you know" with no trigger behind it, and called it a service hiccup. The prompt should make him say plainly that it failed and that he'll look when asked, or set an actual `--at` trigger to retry, never promise without one. Add this to the eval.
 
 Tests: the command prints the right link per domain and refuses others; the sign-in redirect keeps the connect intent. Spot-check the prompt with a short eval: "send me a link to connect my calendar", and a `system.app.connected` for mail.
+
+## As built
+
+- `GET /v1/accounts/connect/:domain` (`connectLink` in `packages/vm-api/src/connections.ts`) and `winston accounts connect <mail|calendar>`; the empty `accounts list` points at it.
+- Signed-out connect links: `/auth/google/connect` sends the browser to `/?next=…`; `/auth/google/start` keeps `next` in a flow cookie and the callback returns there. `returnPath` (`apps/web/src/server/return-path.ts`) only allows `/auth/google/connect` on the site.
+- Front-of-house prompt: "Connecting accounts" under Mail and calendar, a narrower `system.app.connected`, and a new "When something fails" section. Retry triggers on failure were tried and dropped (duplicate announcements, still promised); the rule is ask, never promise.
+- Tests: route (link per domain, already connected, 400 otherwise), CLI (link, separate-connection note, usage error without a request), sign-in callback (connect `next` honored; other origins, `//host` and other paths ignored). Eval in docs/design.md (after "The soft layer as built"). A follow-up eval run once made a second trigger after misreading "Friday" (eval clock), noted, not addressed here.
+

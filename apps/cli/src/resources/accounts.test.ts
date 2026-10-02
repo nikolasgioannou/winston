@@ -95,8 +95,33 @@ describe("winston accounts", () => {
       Response.json({ accounts: [] }),
     );
     expect(none.out).toBe(
-      "No accounts are connected. The user can connect them at runwinston.com/accounts.",
+      "No accounts are connected. winston accounts connect mail (or calendar) gives a link to send the user.",
     );
+  });
+
+  test("connect prints the link for one domain and says the other is separate; anything else is a usage error", async () => {
+    const { out, requests } = await cli(
+      ["accounts", "connect", "calendar"],
+      () =>
+        Response.json({
+          domain: "calendar",
+          url: "https://runwinston.com/auth/google/connect?domain=calendar",
+          connected: [],
+        }),
+    );
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe(
+      "/v1/accounts/connect/calendar",
+    );
+    expect(out).toContain(
+      "  https://runwinston.com/auth/google/connect?domain=calendar",
+    );
+    expect(out).toContain("mail is a separate connection");
+    expect(out).toContain("No calendar account is connected yet.");
+    const bad = await cli(["accounts", "connect", "drive"], () =>
+      Response.json({}),
+    );
+    expect(bad.requests).toHaveLength(0);
+    expect(bad.code).toBe(1);
   });
 
   test("get shows each permission clearly as on, off or not granted, with where to fix it, then calendars and notes", async () => {

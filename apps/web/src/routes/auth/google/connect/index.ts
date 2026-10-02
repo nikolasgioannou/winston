@@ -22,9 +22,14 @@ export const Route = createFileRoute("/auth/google/connect/")({
       GET: async ({ request }) => {
         const redirect = (location: string) =>
           new Response(null, { status: 302, headers: { Location: location } });
+        const url = new URL(request.url);
         const user = await currentUser();
-        if (!user) return redirect("/");
-        const params = new URL(request.url).searchParams;
+        // Signed out (a link from Winston, say): sign in, then come back here.
+        if (!user)
+          return redirect(
+            `/?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`,
+          );
+        const params = url.searchParams;
         const reconnecting = await connectionToReconnect(
           database(),
           user.id,

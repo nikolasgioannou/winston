@@ -9,6 +9,7 @@ import type { DbOrTx } from "@winston/db/client";
 import { connections } from "@winston/db/schema";
 import {
   capabilitiesByDomain,
+  connectionDomains,
   unavailableCapabilities,
   type ConnectionProvider,
 } from "@winston/domain/connections";
@@ -17,6 +18,7 @@ import { Hono } from "hono";
 import {
   accountLinks,
   ApiFailure,
+  connectLink,
   describe,
   type ConnectionRow,
   type ConnectorDeps,
@@ -95,6 +97,33 @@ export function accountRoutes({
           asc(connections.externalEmail),
         );
       return c.json({ accounts: rows.map(summary) });
+    })
+    .get("/connect/:domain", async (c) => {
+      const domain = connectionDomains.find((d) => d === c.req.param("domain"));
+      if (!domain)
+        throw new ApiFailure(
+          "invalid_request",
+          `There's no "${c.req.param("domain")}" to connect.`,
+          `Connect ${connectionDomains.join(" or ")}.`,
+        );
+      if (!connectors)
+        throw new ApiFailure(
+          "unavailable",
+          "Connecting accounts isn't available here.",
+          null,
+        );
+      const rows = await db
+        .select({ email: connections.externalEmail })
+        .from(connections)
+        .where(
+          and(connected(c.get("run").userId), eq(connections.domain, domain)),
+        )
+        .orderBy(asc(connections.externalEmail));
+      return c.json({
+        domain,
+        url: connectLink(connectors.webPublicUrl, domain),
+        connected: rows.map((row) => row.email),
+      });
     })
     .get("/:id", async (c) => {
       const { userId } = c.get("run");

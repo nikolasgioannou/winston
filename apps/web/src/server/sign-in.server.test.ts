@@ -184,6 +184,28 @@ describe("completeGoogleSignIn", () => {
     });
   });
 
+  test("signing in from a connect link goes back to connecting; anywhere else is ignored", async () => {
+    await inRollback(db, async (tx) => {
+      await tx.insert(allowedEmails).values({ email: "ada@example.com" });
+      const after = async (next: string) =>
+        (
+          await completeGoogleSignIn(
+            deps(tx),
+            query({ code: "c", state: "st" }),
+            { ...cookies, next },
+          )
+        ).redirectTo;
+      expect(await after("/auth/google/connect?domain=calendar")).toBe(
+        "/auth/google/connect?domain=calendar",
+      );
+      expect(await after("https://evil.example/auth/google/connect")).toBe(
+        "/home",
+      );
+      expect(await after("//evil.example/auth/google/connect")).toBe("/home");
+      expect(await after("/accounts")).toBe("/home");
+    });
+  });
+
   test("a state that doesn't match, missing cookies, or Google's error go back to /", async () => {
     await inRollback(db, async (tx) => {
       await tx.insert(allowedEmails).values({ email: "ada@example.com" });

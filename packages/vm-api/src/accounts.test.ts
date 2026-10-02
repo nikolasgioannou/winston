@@ -28,6 +28,23 @@ interface Account {
 }
 
 describe("accounts routes", () => {
+  test("connect gives the domain's link and the accounts already connected for it", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await insertConnection(tx, user.id, { externalEmail: "me@example.com" });
+      const as = setupApi(tx).as(user.id);
+      expect(await (await as("/v1/accounts/connect/mail")).json()).toEqual({
+        domain: "mail",
+        url: "https://runwinston.com/auth/google/connect?domain=mail",
+        connected: ["me@example.com"],
+      });
+      expect(
+        await (await as("/v1/accounts/connect/calendar")).json(),
+      ).toMatchObject({ connected: [] });
+      expect((await as("/v1/accounts/connect/drive")).status).toBe(400);
+    });
+  });
+
   test("list shows connected accounts, mail first, leaving out disconnected ones", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

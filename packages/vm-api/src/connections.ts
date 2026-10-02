@@ -48,6 +48,15 @@ export class ApiFailure extends Error {
 
 const domainName = { mail: "mail", calendar: "calendar" } as const;
 
+/**
+ * The link that starts connecting a new Google account for one domain. Mail
+ * and calendar are separate connections, so each has its own. Signed-out
+ * visitors sign in first and come back to it.
+ */
+export function connectLink(webPublicUrl: string, domain: ConnectionDomain) {
+  return new URL(`/auth/google/connect?domain=${domain}`, webPublicUrl).href;
+}
+
 /** Links into the site for fixing a connection. */
 export function accountLinks(webPublicUrl: string, connectionId: string) {
   return {

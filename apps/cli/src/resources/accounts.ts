@@ -11,6 +11,10 @@ type Detail = InferResponseType<
   200
 >;
 type Account = Detail["accounts"][number];
+type ConnectLink = InferResponseType<
+  ApiClient["v1"]["accounts"]["connect"][":domain"]["$get"],
+  200
+>;
 
 const providerNames = { gmail: "Gmail", google_calendar: "Google Calendar" };
 const statusWords = {
@@ -103,8 +107,40 @@ export const accounts: Resource = {
           { limit: result.accounts.length || 1 },
         ).replace(
           /^Nothing found\.$/,
-          "No accounts are connected. The user can connect them at runwinston.com/accounts.",
+          "No accounts are connected. winston accounts connect mail (or calendar) gives a link to send the user.",
         );
+      },
+    },
+    {
+      name: "connect",
+      summary:
+        "A link to send the user that starts connecting a Google account's mail or calendar",
+      usage: "<mail|calendar>",
+      flags: [],
+      examples: [
+        "winston accounts connect calendar",
+        "winston accounts connect mail",
+      ],
+      run: async ({ client, flags, args }) => {
+        const [domain] = args;
+        if (domain !== "mail" && domain !== "calendar")
+          throw CliError.usage(
+            "Connect what? Pass mail or calendar.",
+            "Mail and calendar are separate connections, each with its own link.",
+          );
+        const result = await call<ConnectLink>(
+          client.v1.accounts.connect[":domain"].$get({ param: { domain } }),
+        );
+        if (flags.json === true) return json(result);
+        const other = domain === "mail" ? "calendar" : "mail";
+        return [
+          `Send the user this link to connect a Google account's ${domain}:`,
+          `  ${result.url}`,
+          `It connects ${domain} only; ${other} is a separate connection with its own link (winston accounts connect ${other}). It goes straight to Google's sign-in (signing in to Winston first if needed), and you'll get system.app.connected when it's done.`,
+          result.connected.length > 0
+            ? `Already connected for ${domain}: ${result.connected.join(", ")}.`
+            : `No ${domain} account is connected yet.`,
+        ].join("\n");
       },
     },
     {
