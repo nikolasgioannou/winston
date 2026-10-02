@@ -25,6 +25,8 @@ export interface LocalFiles {
 
 export interface Verb {
   name: string;
+  /** Other names it answers to, for the verb a caller is likely to guess (`list`). */
+  aliases?: string[];
   summary: string;
   /** Positional arguments in help, e.g. `<id>`. */
   usage?: string;

@@ -188,7 +188,9 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
       io.out(resourceHelp(resource));
       return 0;
     }
-    const verb = resource.verbs.find((v) => v.name === verbName);
+    const verb = resource.verbs.find(
+      (v) => v.name === verbName || v.aliases?.includes(verbName),
+    );
     if (!verb) {
       const guess = suggest(
         verbName,

@@ -71,7 +71,9 @@ export function createLocks(now: () => number) {
         throw new BrowserFailure(
           "conflict",
           `${domain} is in use by ${whose(held.owner)} (${held.windowId}), for up to ${String(minutes)} more min.`,
-          "Only one task acts on a site at a time. Wait and try again, or work on something else meanwhile.",
+          // Seen in use: told "up to 5 min", an agent slept 5 min while the
+          // site came free 30 s later. It frees as soon as that task is done.
+          "Only one task acts on a site at a time, and it's free as soon as that task is done with it, often sooner. Try again in 30 seconds (a short sleep, then retry), or work on something else meanwhile.",
         );
       }
       locks.set(domain, { owner, windowId, expiresAt: now() + lockTtlMs });

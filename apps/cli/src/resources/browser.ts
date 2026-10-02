@@ -143,6 +143,8 @@ export const browser: Resource = {
   verbs: [
     {
       name: "windows",
+      // Every other noun lists with `list`, so that's the natural guess.
+      aliases: ["list"],
       summary: "Every agent's window: id, owner, URL and title",
       flags: [],
       examples: ["winston browser windows"],

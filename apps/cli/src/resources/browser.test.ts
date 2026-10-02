@@ -124,6 +124,49 @@ describe("winston browser", () => {
     );
   });
 
+  test("list is windows by another name, as the verb every other noun uses", async () => {
+    const { out, requests } = await cli(["browser", "list"], () =>
+      Response.json({ windows: [win()] }),
+    );
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe(
+      "/v1/browser/windows",
+    );
+    expect(out).toContain("win_01k5x9q8f3e2d1c0b9a8z7y6x5");
+  });
+
+  test("autopilot sends the sub-goal and steps, and prints what it did and why it stopped", async () => {
+    const { out, requests } = await cli(
+      [
+        "browser",
+        "autopilot",
+        "open",
+        "the",
+        "first",
+        "result",
+        "--max-steps",
+        "5",
+      ],
+      () =>
+        Response.json({
+          actions: ['Clicked e3 (link "Bun").'],
+          stop: "commits",
+          reason: 'The next step commits something: e9 (button "Buy").',
+          window: win({ url: "https://example.com/p", title: "Bun" }),
+        }),
+    );
+    expect(await bodyOf(requests[0])).toEqual({
+      goal: "open the first result",
+      maxSteps: 5,
+    });
+    expect(out).toBe(
+      [
+        '- Clicked e3 (link "Bun").',
+        'Stopped (commits): The next step commits something: e9 (button "Buy").',
+        'Now at https://example.com/p ("Bun"). Snapshot next.',
+      ].join("\n"),
+    );
+  });
+
   test("timeouts read as seconds, minutes or milliseconds, capped at 2 minutes", () => {
     expect(timeoutMs("10s")).toBe(10_000);
     expect(timeoutMs("2m")).toBe(120_000);

@@ -1,14 +1,14 @@
 ---
 id: "26dfa2"
 title: Exercise real browser tasks end to end (with the founder)
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - collab
   - m8
 created_at: 2026-09-27T05:42:04.358Z
-updated_at: 2026-09-27T05:42:04.414Z
+updated_at: 2026-10-02T18:00:04.367Z
 blocked_by:
   - "3d5f3d"
   - "63475d"
@@ -23,3 +23,7 @@ Browser quality can't be unit-tested. It's judged on real tasks (docs/design.md 
 - **Crash resilience:** restart Chrome mid-task and watch recovery.
 
 Record observations in the docs: what worked, what didn't, memory use on the VM, and whether any sites block AWS IPs (the datacenter-IP risk in §Risks). Update the Risks section with real findings.
+
+## As built
+
+Run autonomously on 2026-10-02 at the founder's request, on the local stack (production code, real Opus and Jev), since production Winston answers the founder's own Telegram. Findings are in docs/design.md §8b ("Real browser tasks") and Risks ("Datacenter IPs"). In short: research, a booking flow stopped before confirming, same-site locks, Chrome restart recovery and autopilot all worked; fixes made here: the lock message no longer invites a 5-minute sleep, and `winston browser list` works. Left for the founder: a login handoff on their phone and the profile persisting into a second task, and the real-Chrome site check from the production VM (the command is in this session; plain curl shows OpenTable, Ticketmaster, Reddit and Zillow blocking AWS addresses).
