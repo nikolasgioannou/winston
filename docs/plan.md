@@ -251,7 +251,7 @@ The browser: Chrome on the VM, `winston browser`, domain locks, handoff links wi
 | 148a | `f6b5a6` | Keep Winston online through deploys                                          | `eadb89`                               |
 | 148  | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
 | 149  | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
-| 150  | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |
+| 150  | `b782bc` | Proxy Jev through the backend and log its decisions                          | `480aff`                               |
 | 151  | `91faf5` | Add browser autopilot, the Jev fast path                                     | `0451df`, `17f478`, `b782bc`           |
 | 152  | `3d5f3d` | Teach Winston to browse well                                                 | `1d60a8`, `732b45`, `91faf5`, `ff4636` |
 | 153  | `26dfa2` | Exercise real browser tasks end to end (with the founder) 🤝                 | `3d5f3d`, `63475d`                     |

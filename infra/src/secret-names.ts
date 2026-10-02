@@ -45,6 +45,8 @@ export const serviceSecrets = {
   },
   gateway: {
     GATEWAY_INTERNAL_SECRET: "gateway-internal-secret",
+    // Jev for the browser's autopilot, through OpenRouter (§5).
+    OPENROUTER_API_KEY: "openrouter-api-key",
     RUN_TOKEN_SECRET: "run-token-secret",
     // Trading connected accounts' refresh tokens for access tokens (mail, calendar).
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],

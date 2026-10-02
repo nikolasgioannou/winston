@@ -9,6 +9,7 @@
 - Browser use: Browser Use's open-source "jev-ultrafast" did a Google Flights search in 7.1 s with 101 protocol calls (previously 9.45 s and 1,092). The open-source `jev-browser` project makes one Jev call per step (which element to act on, P(goal met), P(stuck)). **A separate LLM types text**, because Jev can't.
 - **No standard benchmark results** (OSWorld, Mind2Web). Only vendor-run evals.
 - **On OpenRouter:** only `typesafe/jev-router` (added 2026-09-25), a _router_ that picks a model and effort for each request. Jev itself isn't served there.
+- **Update 2026-10-02:** OpenRouter now serves Jev itself through its decisions API (alpha): `POST https://openrouter.ai/api/alpha/decisions` with `{ model: "typesafe/jev-1.13", state, questions }`, answering `{ model, answers, usage: { input_tokens, output_tokens, cost }, provider: "TypeSafe" }`. A probe with a four-option choice and one noul took 266 ms and cost $0.0000186. (Found in `@jkudish/jev-agent-tools`, which also lists Cloudflare and Vercel AI Gateway as carriers.) Winston uses this (docs/design.md §5).
 - Fit for Winston: a possible fast, cheap **action picker** inside the browser loop, alongside an LLM. It can't be the agent.
 
 ## Browser/computer-use model standings

@@ -27,6 +27,8 @@ export const idPrefixes = {
   draft: "drf",
   attachment: "att",
   calendarEvent: "evt",
+  /** A call to Jev, the browser's fast decision model (§5). */
+  jevDecision: "jev",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;

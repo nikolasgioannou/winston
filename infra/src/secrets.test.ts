@@ -33,10 +33,12 @@ describe("secrets", () => {
 
   test("services see only what they need", () => {
     expect(namesFor("web").has("telegram-bot-token")).toBe(false);
-    expect(namesFor("gateway").has("openrouter-api-key")).toBe(false);
+    expect(namesFor("api").has("openrouter-api-key")).toBe(false);
+    // The gateway's OpenRouter key is for Jev (the browser's autopilot).
     expect([...namesFor("gateway")].sort()).toEqual([
       "gateway-internal-secret",
       "google-oauth",
+      "openrouter-api-key",
       "run-token-secret",
     ]);
     // The site signs people in; the gateway and agents refresh connected

@@ -15,6 +15,7 @@ import { z } from "zod";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
 import type { ConnectorDeps } from "@winston/vm-api/connections";
+import type { Jev } from "@winston/vm-api/jev";
 import { createExecs, VmUnavailableError } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
 import { createHandoffs, viewerCloseCodes, type Viewer } from "./handoffs.ts";
@@ -98,6 +99,7 @@ export function createGateway({
   artifacts,
   connectors,
   selfUrl,
+  jev,
 }: {
   db: DbOrTx;
   logger: Logger;
@@ -113,6 +115,8 @@ export function createGateway({
   artifacts?: Pick<UpdatesOptions, "loadManifest" | "presign">;
   /** Mail and calendar providers for the VM-facing API. */
   connectors?: ConnectorDeps;
+  /** Jev for `winston browser autopilot` (§5); absent without a key. */
+  jev?: Jev;
 }) {
   const connections = new Connections<VmSocket>();
   /** Sends a frame to a VM's live connection; returns that socket, or undefined if it isn't connected. */
@@ -150,6 +154,7 @@ export function createGateway({
   const vmApi = createVmApi({
     db,
     runTokenSecret,
+    jev,
     ...(connectors ? { connectors } : {}),
     ...(connectors
       ? {

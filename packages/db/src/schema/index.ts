@@ -8,6 +8,7 @@ export * from "./external-refs.ts";
 export * from "./front-state.ts";
 export * from "./handoffs.ts";
 export * from "./inbound-items.ts";
+export * from "./jev-decisions.ts";
 export * from "./jobs.ts";
 export * from "./model-calls.ts";
 export * from "./outbound-messages.ts";

@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./connections": "./src/connections.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./jev": "./src/jev.ts"
   },
   "scripts": {
     "typecheck": "tsc"

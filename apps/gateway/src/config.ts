@@ -31,6 +31,8 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   GATEWAY_INTERNAL_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+  /** Jev for the browser's autopilot, served by OpenRouter (§5). Optional: without it, autopilot is off. */
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
 });
 
 export function loadGatewayConfig() {

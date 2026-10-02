@@ -15,6 +15,7 @@ import { loadGatewayConfig } from "./config.ts";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
 import { privateAddress } from "./self-url.ts";
+import { openRouterJev } from "@winston/vm-api/jev";
 
 const config = loadGatewayConfig();
 const logger = createLogger("gateway", {
@@ -51,6 +52,9 @@ const gateway = createGateway({
   logger,
   ...(selfUrl ? { selfUrl } : {}),
   internalSecret: config.GATEWAY_INTERNAL_SECRET,
+  ...(config.OPENROUTER_API_KEY
+    ? { jev: openRouterJev({ apiKey: config.OPENROUTER_API_KEY }) }
+    : {}),
   runTokenSecret: config.RUN_TOKEN_SECRET,
   ...(config.ARTIFACTS_BUCKET
     ? { artifacts: s3Artifacts(config.ARTIFACTS_BUCKET) }

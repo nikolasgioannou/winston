@@ -21,6 +21,7 @@ import { accountRoutes } from "./accounts.ts";
 import { calendarRoutes } from "./calendar.ts";
 import { calendarWriteRoutes } from "./calendar-write.ts";
 import { eventRoutes } from "./events.ts";
+import { jevRoutes, type Jev } from "./jev.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
 import { taskRoutes, type TaskBrowser } from "./tasks.ts";
@@ -39,6 +40,7 @@ export function createVmApi({
   connectors,
   vmFiles,
   browser,
+  jev,
 }: {
   db: DbOrTx;
   runTokenSecret: string;
@@ -48,6 +50,8 @@ export function createVmApi({
   vmFiles?: VmFiles;
   /** Mail and calendar (docs/design.md §5); absent where nothing is connected, as in some tests. */
   connectors?: ConnectorDeps;
+  /** The browser's fast decision model (§5); absent without an OpenRouter key. */
+  jev?: Jev | undefined;
 }) {
   const app = new Hono<VmApiEnv>();
 
@@ -145,7 +149,8 @@ export function createVmApi({
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
     .route("/v1/tasks", taskRoutes({ db, browser }))
     .route("/v1/events", eventRoutes())
-    .route("/v1/triggers", triggerRoutes({ db }));
+    .route("/v1/triggers", triggerRoutes({ db }))
+    .route("/v1/jev", jevRoutes({ db, jev }));
 }
 
 export type { VmApiEnv } from "./env.ts";

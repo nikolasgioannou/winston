@@ -20,6 +20,7 @@ import type {
 import type { DbOrTx } from "@winston/db/client";
 import { mintRunToken } from "@winston/domain/run-token";
 import { createVmApi } from "./index.ts";
+import type { Jev } from "./jev.ts";
 
 export const testSecret = "vm-api-test-secret-0123456789abcdef";
 
@@ -304,6 +305,7 @@ export function fakeCalendar() {
 export function setupApi(
   tx: DbOrTx,
   vmFileContents: Record<string, string> = {},
+  extra: { jev?: Jev } = {},
 ) {
   const mail = fakeMail();
   const calendar = fakeCalendar();
@@ -311,6 +313,7 @@ export function setupApi(
   const app = createVmApi({
     db: tx,
     runTokenSecret: testSecret,
+    jev: extra.jev,
     connectors: {
       webPublicUrl: "https://runwinston.com",
       mail: () => mail.provider,
