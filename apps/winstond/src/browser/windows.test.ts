@@ -422,4 +422,26 @@ describe("agent windows", () => {
     );
     expect(thrown.hint).toContain("--page-world");
   });
+
+  test("a run acting on a site holds it: another run's navigation there is refused, its peeks aren't, and closing frees it", async () => {
+    const { browser } = setup();
+    const a = await browser.open(token("run_a"), "https://www.shop.test/cart");
+    expect(a.window.locks).toEqual(["shop.test"]);
+    await browser.open(token("run_b"), "https://news.test");
+    const refused = await failure(
+      browser.navigate(token("run_b"), { url: "https://checkout.shop.test" }),
+    );
+    expect(refused.code).toBe("conflict");
+    // Looking needs no lock.
+    expect(
+      (await browser.snapshot(token("run_b"), { window: a.window.id }))
+        .readOnly,
+    ).toBe(true);
+    await browser.screenshot(token("run_b"), { window: a.window.id });
+    await browser.close(token("run_a"));
+    const moved = await browser.navigate(token("run_b"), {
+      url: "https://checkout.shop.test",
+    });
+    expect(moved.window.locks).toEqual(["news.test", "shop.test"]);
+  });
 });

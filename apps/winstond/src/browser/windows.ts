@@ -21,6 +21,7 @@ import type {
 import { createId } from "@winston/shared/ids";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import { createActions } from "./actions.ts";
+import { createLocks } from "./locks.ts";
 import { formatSnapshot, readFrames } from "./snapshot.ts";
 import { BrowserFailure, browserTimings, type WindowEntry } from "./state.ts";
 
@@ -88,6 +89,8 @@ export function createBrowser(deps: BrowserDeps) {
   let cdp: Cdp | undefined;
   let connecting: Promise<Cdp> | undefined;
 
+  const locks = createLocks(now);
+
   const info = (entry: WindowEntry, owner: string): BrowserWindowInfo => ({
     id: entry.id,
     owner: entry.owner,
@@ -96,7 +99,14 @@ export function createBrowser(deps: BrowserDeps) {
     openedBy: entry.openedBy,
     current: current.get(owner) === entry.id,
     mine: entry.owner === owner,
+    locks: locks.heldFrom(entry.id),
   });
+
+  /** A run with no windows left gives up its sites. */
+  const releaseIfGone = (owner: string) => {
+    if (![...windows.values()].some((entry) => entry.owner === owner))
+      locks.release(owner);
+  };
 
   /** The owner's newest remaining window, after its current one goes. */
   function pickCurrent(owner: string) {
@@ -111,6 +121,7 @@ export function createBrowser(deps: BrowserDeps) {
     windows.delete(entry.id);
     byTarget.delete(entry.targetId);
     if (current.get(entry.owner) === entry.id) pickCurrent(entry.owner);
+    releaseIfGone(entry.owner);
   }
 
   function register(
@@ -300,7 +311,9 @@ export function createBrowser(deps: BrowserDeps) {
           lostWindows.add(entry.id);
           lostOwners.add(entry.owner);
         }
+        const owners = new Set([...windows.values()].map((e) => e.owner));
         windows.clear();
+        for (const owner of owners) locks.release(owner);
         byTarget.clear();
         current.clear();
       });
@@ -457,11 +470,15 @@ export function createBrowser(deps: BrowserDeps) {
     }
   }
 
-  async function goThroughHistory(entry: WindowEntry, step: -1 | 1) {
+  async function goThroughHistory(
+    entry: WindowEntry,
+    step: -1 | 1,
+    lock: (url: string) => unknown,
+  ) {
     const { c, sessionId } = await sessionFor(entry);
     const history = await c.send<{
       currentIndex: number;
-      entries: { id: number }[];
+      entries: { id: number; url: string }[];
     }>("Page.getNavigationHistory", {}, sessionId);
     const to = history.entries[history.currentIndex + step];
     if (!to)
@@ -471,6 +488,7 @@ export function createBrowser(deps: BrowserDeps) {
           ? "There's no page to go back to."
           : "There's no page to go forward to.",
       );
+    lock(to.url);
     const events = recordEvents(
       c,
       (e) =>
@@ -539,6 +557,7 @@ export function createBrowser(deps: BrowserDeps) {
     allWindows: () => [...windows.values()],
     currentOf: (owner) => current.get(owner),
     now,
+    lock: (owner, entry) => locks.acquire(entry.url, owner, entry.id),
     saveFile:
       deps.saveFile ??
       (() => Promise.reject(new Error("This browser can't save files."))),
@@ -575,6 +594,7 @@ export function createBrowser(deps: BrowserDeps) {
         null,
       );
       lostOwners.delete(owner);
+      if (url) locks.acquire(normalizeUrl(url), owner, entry.id);
       return pageCommand(owner, entry, () =>
         url ? navigateTo(entry, url) : Promise.resolve(true),
       );
@@ -588,10 +608,14 @@ export function createBrowser(deps: BrowserDeps) {
       const owner = caller(runToken);
       await connection();
       const entry = windowFor(owner, windowId, "own");
+      if (request.url)
+        locks.acquire(normalizeUrl(request.url), owner, entry.id);
       return pageCommand(owner, entry, () =>
         request.url
           ? navigateTo(entry, request.url)
-          : goThroughHistory(entry, request.back ? -1 : 1),
+          : goThroughHistory(entry, request.back ? -1 : 1, (url) =>
+              locks.acquire(url, owner, entry.id),
+            ),
       );
     },
 

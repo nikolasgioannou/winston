@@ -23,6 +23,8 @@ export interface BrowserWindowInfo {
   current: boolean;
   /** Whether the caller owns it. */
   mine: boolean;
+  /** Websites its run holds the lock for, acting from this window. */
+  locks: string[];
 }
 
 export interface BrowserWindowsResponse {

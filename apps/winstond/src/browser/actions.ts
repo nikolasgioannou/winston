@@ -48,6 +48,8 @@ export interface ActionCore {
   allWindows: () => WindowEntry[];
   currentOf: (owner: string) => string | undefined;
   now: () => number;
+  /** Takes (or renews) the lock for the site a window is on; exit 6 if taken. */
+  lock: (owner: string, entry: WindowEntry) => unknown;
   /** Saves a file in Winston's home (as winston), at a path relative to it. */
   saveFile: (path: string, bytes: Uint8Array) => Promise<void>;
 }
@@ -379,6 +381,8 @@ export function createActions(core: ActionCore) {
         `${dialogText(entry.dialog)}, and it blocks the page until answered.`,
         "Answer it with winston browser dialog accept (or dismiss).",
       );
+    // Acting on a site needs its lock (exit 6 if another task has it).
+    core.lock(owner, entry);
     const { c, sessionId } = await core.sessionFor(entry);
     const started = core.now();
     entry.lastUsedAt = started;
@@ -500,6 +504,7 @@ export function createActions(core: ActionCore) {
           `${dialogText(entry.dialog)}, and it blocks the page until answered.`,
           "Answer it with winston browser dialog accept (or dismiss).",
         );
+      core.lock(owner, entry);
       entry.lastUsedAt = core.now();
       const { c, sessionId } = await core.sessionFor(entry);
       const body = scriptBody(request.code);

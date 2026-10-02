@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@winston/domain": "workspace:*",
-    "@winston/shared": "workspace:*"
+    "@winston/shared": "workspace:*",
+    "tldts": "7.4.16"
   }
 }

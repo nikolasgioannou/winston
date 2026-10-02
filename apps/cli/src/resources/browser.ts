@@ -31,6 +31,7 @@ export function windowLine(window: BrowserWindowInfo) {
     window.id,
     whose,
     window.openedBy ? `opened by ${window.openedBy}` : undefined,
+    window.locks.length > 0 ? `holds ${window.locks.join(", ")}` : undefined,
     window.url,
     window.title ? `"${window.title}"` : undefined,
   );

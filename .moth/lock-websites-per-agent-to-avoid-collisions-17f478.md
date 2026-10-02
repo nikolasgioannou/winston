@@ -1,13 +1,13 @@
 ---
 id: "17f478"
 title: Lock websites per agent to avoid collisions
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - m8
 created_at: 2026-09-27T05:42:03.851Z
-updated_at: 2026-09-27T05:42:03.887Z
+updated_at: 2026-10-02T02:22:43.316Z
 blocked_by:
   - "0451df"
 ---
@@ -22,3 +22,11 @@ Implement domain locks in `winstond`:
 - `browser windows` shows who holds which domain.
 
 Tests: lock acquisition and release, the eTLD+1 grouping, TTL expiry, conflict exit codes, and peeks bypassing locks.
+
+## As built
+
+- `locks.ts`: eTLD+1 via `tldts` 7.4.16 (`allowPrivateDomains`), host for IP/localhost, nothing for blank/data pages. TTL 5 min, renewed per acting command; released when the run's windows all close or Chrome restarts.
+- Acquired by open/navigate (destination, history entry for back/forward), every action, and eval; never by snapshot, screenshot or peeks. Conflict: exit 6 naming the holder and window.
+- `browser windows` shows `holds <domain>`.
+- Tests: `locks.test.ts` and a registry test with two runs.
+

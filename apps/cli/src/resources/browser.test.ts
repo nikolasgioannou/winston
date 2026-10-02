@@ -10,6 +10,7 @@ const win = (overrides: Record<string, unknown> = {}) => ({
   openedBy: null,
   current: true,
   mine: true,
+  locks: [],
   ...overrides,
 });
 
