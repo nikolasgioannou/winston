@@ -11,7 +11,7 @@ This is the order in which Winston gets built. The tickets themselves live in `.
 1. **Take the next ticket in the order below** whose blockers are all done. `moth list --unblocked` shows what's available. The order below is the intended path, and `blocked_by` is the hard constraint.
 2. **Re-check before starting.** Read the ticket, the tickets it depends on, and the current design doc sections it points to. Tickets were all written up front, so earlier work may have changed things. If reality has moved, adjust the ticket first (`moth edit`), in the same commit as the work.
 3. **Claim it:** `moth move <id> in-progress`.
-4. **One ticket = one commit.** The commit contains the work, any doc updates, and the ticket moved to `done`. Push after committing. From M4 on, every push to `main` deploys to production, so every commit must leave the system working.
+4. **One ticket = one commit.** The commit contains the work, any doc updates, and the ticket moved to `done`. Push after committing. Every push is checked, and deploys are started by hand (`gh workflow run ci.yml`, decision #46), so every commit must leave `main` deployable.
 5. **Keep the docs true.** When implementation finds a better approach than Part 3's sketch, do the better thing and update `docs/design.md` in the same commit. **Invariants** (design.md Part 3) change only after discussing with the founder.
 6. **Collaborative tickets (🤝)** are done _with_ the founder: things that happen in their accounts (AWS, Google, DNS, Telegram), decisions they asked to make, and work they want to shape directly (the design system, the dev design view, the handoff page on real phones, prompt polish, go-live). Don't complete these alone.
 7. **New tools get researched properly.** Tickets that introduce a tool (a linter, formatter, framework, SDK, infrastructure tool) include research on its current configuration and how it fits with the rest before anything is set up.
@@ -33,7 +33,7 @@ This is the order in which Winston gets built. The tickets themselves live in `.
 | M8 Browser                 | 141–153 | Chrome, `winston browser`, locks, handoffs, Jev autopilot                                           |
 | M9 Rounding out            | 154–158 | History search, costs, prompt polish, docs sync                                                     |
 
-**158 tickets, 14 collaborative.**
+**161 tickets (three, numbered 140a, 147a and 148a, were added along the way), 13 collaborative.** Two early tickets were cancelled (`ac22b7`, `29521a`); their work went into others.
 
 ## The sequence
 
@@ -56,7 +56,7 @@ The repo, the toolchain, typed ids with tests, the pre-commit gate, the setup sc
 
 ### M1 — Talk to Winston (local)
 
-It starts with the database foundation (Drizzle with config, the first tables, the Postgres test harness, logging), each one used by the next ticket. Then: message @RunWinstonDevBot and the front of house replies, with steering, typing, a rolling window and failure handling. The user comes from a seed script.
+It starts with the database foundation (Drizzle with config, the first tables, the Postgres test harness, logging), each one used by the next ticket. Then: message @RunWinstonDevBot and the front of house replies, with steering, typing, a rolling window and failure handling. The user comes from a seed script. Replies go out as Telegram Rich Messages.
 
 | #   | Ticket   | Title                                                                       | Blocked by                                       |
 | --- | -------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -88,7 +88,7 @@ It starts with the database foundation (Drizzle with config, the first tables, t
 
 ### M2 — His computer (local)
 
-Winston gets his own (local Docker) computer: `winstond`, `gateway`, `bash`, `view_image`, the CLI skeleton, attachments in and out, and voice notes.
+Winston gets his own (local Docker) computer: `winstond`, `gateway`, `bash`, `view_image`, the CLI skeleton, attachments in and out, and voice notes. Replies also became streamed message by message, with `end_turn`.
 
 | #   | Ticket   | Title                                                                   | Blocked by                   |
 | --- | -------- | ----------------------------------------------------------------------- | ---------------------------- |
@@ -115,7 +115,7 @@ Winston gets his own (local Docker) computer: `winstond`, `gateway`, `bash`, `vi
 
 ### M3 — Accounts & website
 
-The web app: design system (with the founder), sign-in with the allowlist, the dev design view (with the founder), sidebar shell, home, Telegram linking, connected accounts and permissions, profile, deletion.
+The web app: design system (with the founder), sign-in with the allowlist, the dev design view (with the founder), sidebar shell, home, Telegram linking, connected accounts and permissions, profile, deletion. A batch of the founder's UI feedback (cards, dialogs, brand icons) followed.
 
 | #   | Ticket   | Title                                                                   | Blocked by                   |
 | --- | -------- | ----------------------------------------------------------------------- | ---------------------------- |
@@ -150,7 +150,7 @@ The web app: design system (with the founder), sign-in with the allowlist, the d
 
 ### M4 — Production
 
-Everything runs in AWS and every push to `main` deploys. It ends with go-live, and from then on the founder uses the real @RunWinstonBot daily.
+Everything runs in AWS, deployed by CI (on every push at first; by hand since 2026-10-02, decision #46). It ends with go-live, and from then on the founder uses the real @RunWinstonBot daily.
 
 | #   | Ticket   | Title                                                                          | Blocked by                                                                                                                                                     |
 | --- | -------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -169,7 +169,7 @@ Everything runs in AWS and every push to `main` deploys. It ends with go-live, a
 | 96  | `550446` | Implement the EC2 VmProvider                                                   | `2dd479`, `b9062e`                                                                                                                                             |
 | 97  | `9f2e3f` | Sign VM binaries and let winstond update itself                                | `245cbb`, `f25d3b`                                                                                                                                             |
 | 98  | `45b4ce` | Let GitHub Actions deploy via OIDC                                             | `60490f`                                                                                                                                                       |
-| 99  | `e1a361` | Deploy to production on every push to main                                     | `021c52`, `071e49`, `45b4ce`, `8203ff`, `9f2e3f`                                                                                                               |
+| 99  | `e1a361` | Deploy to production on every push to main (by hand since decision #46)        | `021c52`, `071e49`, `45b4ce`, `8203ff`, `9f2e3f`                                                                                                               |
 | 100 | `dd8241` | Add budget alerts and model spend limits                                       | `60490f`                                                                                                                                                       |
 | 101 | `1e6482` | Configure production Telegram, Google and API keys (with the founder) 🤝       | `071e49`, `2ca5a6`, `ef5b35`                                                                                                                                   |
 | 102 | `1867ba` | Run one-off admin commands in production                                       | `071e49`                                                                                                                                                       |
@@ -180,19 +180,19 @@ Everything runs in AWS and every push to `main` deploys. It ends with go-live, a
 
 Winston reads and acts on mail and calendars through `winston mail`, `winston calendar` and `winston accounts`, with server-enforced permissions, an audit log and confirm-first behaviour.
 
-| #   | Ticket   | Title                                                                    | Blocked by                   |
-| --- | -------- | ------------------------------------------------------------------------ | ---------------------------- |
-| 105 | `480aff` | Build the connector framework: providers, permission enforcement and the | `6882fb`, `8251fd`, `89a2b0` |
-| 106 | `6af84b` | Read mail from Gmail                                                     | `480aff`                     |
-| 107 | `fc5532` | Add winston mail list, search, get and download                          | `253db2`, `6af84b`           |
-| 108 | `d66d10` | Send, reply, forward and organize mail via Gmail                         | `6af84b`                     |
-| 109 | `837a29` | Add winston mail send, reply, forward, update and delete                 | `d66d10`, `fc5532`           |
-| 110 | `403364` | Read calendars from Google Calendar                                      | `480aff`                     |
-| 111 | `cfff20` | Create, update, delete and RSVP to calendar events                       | `403364`                     |
-| 112 | `c7b3fa` | Add the winston calendar commands                                        | `253db2`, `cfff20`           |
-| 113 | `fe870e` | Add winston accounts and the generic winston get                         | `480aff`                     |
-| 114 | `cca55d` | Decide which account settings Winston can change through the CLI 🤝      | `988f4d`, `fe870e`           |
-| 115 | `f6613f` | Teach Winston confirm-first and how to use mail and calendar             | `837a29`, `c7b3fa`, `fe870e` |
+| #   | Ticket   | Title                                                                              | Blocked by                   |
+| --- | -------- | ---------------------------------------------------------------------------------- | ---------------------------- |
+| 105 | `480aff` | Build the connector framework: providers, permission enforcement and the audit log | `6882fb`, `8251fd`, `89a2b0` |
+| 106 | `6af84b` | Read mail from Gmail                                                               | `480aff`                     |
+| 107 | `fc5532` | Add winston mail list, search, get and download                                    | `253db2`, `6af84b`           |
+| 108 | `d66d10` | Send, reply, forward and organize mail via Gmail                                   | `6af84b`                     |
+| 109 | `837a29` | Add winston mail send, reply, forward, update and delete                           | `d66d10`, `fc5532`           |
+| 110 | `403364` | Read calendars from Google Calendar                                                | `480aff`                     |
+| 111 | `cfff20` | Create, update, delete and RSVP to calendar events                                 | `403364`                     |
+| 112 | `c7b3fa` | Add the winston calendar commands                                                  | `253db2`, `cfff20`           |
+| 113 | `fe870e` | Add winston accounts and the generic winston get                                   | `480aff`                     |
+| 114 | `cca55d` | Decide which account settings Winston can change through the CLI 🤝                | `988f4d`, `fe870e`           |
+| 115 | `f6613f` | Teach Winston confirm-first and how to use mail and calendar                       | `837a29`, `c7b3fa`, `fe870e` |
 
 ### M6 — Background agents
 
@@ -213,7 +213,7 @@ Durable background agents: delegation, results through the front of house, `wins
 
 ### M7 — Triggers & events
 
-Proactivity: the event catalog, triggers (schedules and subscriptions), push notifications and sync for Gmail and Calendar, matching and batching, the scheduler, derived timers.
+Proactivity: the event catalog, triggers (schedules and subscriptions), push notifications and sync for Gmail and Calendar, matching and batching, the scheduler, derived timers, and direct links for connecting accounts.
 
 | #    | Ticket   | Title                                                       | Blocked by                   |
 | ---- | -------- | ----------------------------------------------------------- | ---------------------------- |
@@ -236,7 +236,7 @@ Proactivity: the event catalog, triggers (schedules and subscriptions), push not
 
 ### M8 — Browser
 
-The browser: Chrome on the VM, `winston browser`, domain locks, handoff links with a mobile live view, the full-desktop fallback, and the Jev autopilot.
+The browser: Chrome on the VM, `winston browser`, domain locks, handoff links with a mobile live view, the full-desktop fallback, and the Jev autopilot. Two operational tickets joined it: VMs roll onto new images by themselves, and Winston stays online through deploys.
 
 | #    | Ticket   | Title                                                                        | Blocked by                             |
 | ---- | -------- | ---------------------------------------------------------------------------- | -------------------------------------- |
@@ -258,7 +258,7 @@ The browser: Chrome on the VM, `winston browser`, domain locks, handoff links wi
 
 ### M9 — Rounding out
 
-History search, cost reporting, prompt polish from real use (with the founder), and a final docs sync.
+History search, cost reporting, prompt polish from real use, a decision on streaming replies (not adopted for now, decision #72), and a final docs sync. The remaining collaborative tickets were finished autonomously at the founder's request (2026-10-02), with their feedback to follow.
 
 | #   | Ticket   | Title                                                                  | Blocked by                   |
 | --- | -------- | ---------------------------------------------------------------------- | ---------------------------- |

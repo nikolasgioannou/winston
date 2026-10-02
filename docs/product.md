@@ -1,6 +1,6 @@
 # Winston — Product
 
-> Status: brainstorming. Captured through a structured Q&A ("grill me") session.
+> Status: built and in daily use since 2026-09-30. First captured through a structured Q&A ("grill me") session; kept in line with what was built (docs/design.md has the details).
 
 Winston is a personal executive assistant that lives in Telegram. You can chat with him, but he also acts on his own: he texts you before meetings, flags important emails, and follows up on things without being asked. He has his own computer and is excellent at using a web browser.
 
@@ -29,8 +29,8 @@ Winston is a personal executive assistant that lives in Telegram. You can chat w
 A small web app with a **sidebar**. All chat happens in Telegram.
 
 - **Home:** Winston's status, and the first-run setup checklist until everything is connected (computer ready, Telegram linked, first account connected).
-- **Connections:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server. Plus Telegram linking.
-- **You:** profile (first and last name, email, time zone) and account deletion (destroys the computer and wipes everything).
+- **Connected accounts:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server.
+- **Profile:** first and last name, email, time zone, Telegram linking, and account deletion (destroys the computer and wipes everything). Telegram is also linked from Home's setup checklist.
 - **No behavior-specific settings** (for example, no "ping me N minutes before meetings"). See §3.
 - **No history page.** Conversation lives in Telegram. Background runs and triggers are internal.
 
@@ -71,8 +71,9 @@ Examples of emergent behaviors:
 
 - Winston should be **exceptional at using a web browser**.
 - **Handoff:** when he gets stuck (a login, a CAPTCHA, 2FA, an ambiguous choice), he sends the user a **link**. The link opens a live view of his browser, where the user can take over and unblock him.
-- **Resume:** the user sends Winston a quick message when finished (for example, "done") and the task picks up where it left off.
-- Parallel background tasks can each have their own browser, so several handoff links may be open at once. Each link must make clear which task it belongs to.
+- **Resume:** the user taps **Done** on the live view, or sends Winston a quick message ("done"), and the task picks up where it left off.
+- **Full desktop:** for native pop-ups the tab's view can't show (dropdowns, file pickers), a button on the live view shows Winston's whole screen.
+- Parallel background tasks can each have their own browser, so several handoff links may be open at once. Winston's Telegram message with each link says which task it's for.
 
 ## 5. Personality & voice
 
@@ -114,11 +115,12 @@ Decided _not_ to build:
 - Public signup. Access is by email allowlist.
 - Google OAuth production verification. The app stays in testing mode.
 - Observability/eval tooling. The database is the record.
-- Spend caps, rate limits or concurrency limits (only a per-run step cap).
+- Per-user spend caps, rate limits or concurrency limits (only a per-run step cap). Account-wide, there is an OpenRouter monthly credit limit and AWS budget alerts; per-user spend is reported (`bun run prod costs`).
 
 ## Open questions
 
-- ~~Does Chrome with several agent windows fit comfortably in a 4 GB `t3a.medium`?~~ Measured 2026-10-01: five heavy sites peak at about 2 GB, so yes for now; revisit if many agents browse at once (docs/design.md §18).
-- Jev access: join TypeSafe's waitlist. The browser loop must work without it.
-- ~~Will the founder's work (Workspace) account allow connecting an unverified app?~~ Yes for `ni@nikolas.ai` (checked 2026-09-28; docs/runbooks/google-cloud.md).
-- Mobile quality of the handoff live view: test on iPhone and Android.
+- ~~Does Chrome with several agent windows fit comfortably in a 4 GB `t3a.medium`?~~ Measured locally (arm64 Docker, not yet on EC2): five heavy sites peak at about 2 GB (2026-10-01), a few windows of real tasks about 0.7 GB (2026-10-02). Yes for now; revisit if many agents browse at once (docs/design.md §18).
+- ~~Jev access~~ Answered 2026-10-02: OpenRouter serves Jev through its alpha decisions API, on the key Winston already has, so no waitlist. The endpoint is alpha and may change; the browser loop works without it.
+- ~~Will the founder's work (Workspace) account allow connecting an unverified app?~~ Yes for `ni@nikolas.ai` (checked 2026-09-28; docs/runbooks/google-cloud.md). That domain owns the Google Cloud project, so friends' work domains may still block it.
+- ~~Mobile quality of the handoff live view~~ The founder used it on their phone in production (2026-10-02): it worked well, and Done moved onto the page at their request. Android is untested; further tweaks come from use.
+- **Do sites block Winston's AWS address?** Plain requests from the production VM (2026-10-02): OpenTable didn't answer, Ticketmaster, Reddit and Zillow refused (403), Booking.com challenged; Amazon, Google Flights, Airbnb, LinkedIn and Wikipedia were fine. A check in the VM's real Chrome is still to do. A residential proxy for a few domains is likely needed for booking-style tasks on those sites.

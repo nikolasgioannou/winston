@@ -15,7 +15,7 @@ export AWS_PROFILE=winston-prod
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                        | api, agents          |
 | `winston/telegram-webhook-secret` | generated at creation                                                                                          | api                  |
-| `winston/openrouter-api-key`      | the production OpenRouter key                                                                                  | agents               |
+| `winston/openrouter-api-key`      | the production OpenRouter key (models, and Jev for the browser's autopilot)                                    | agents, gateway      |
 | `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md) | web, gateway, agents |
 | `winston/gateway-internal-secret` | generated at creation                                                                                          | agents, gateway      |
 | `winston/run-token-secret`        | generated at creation                                                                                          | agents, gateway      |
@@ -55,6 +55,6 @@ Running tasks keep the old value until they restart, so restart the services tha
     --secret-string "$(aws secretsmanager get-random-password --exclude-punctuation --password-length 48 --query RandomPassword --output text)"
   ```
   - `gateway-internal-secret` and `run-token-secret` are shared by agents and the gateway: calls fail between the two restarts, so do it at a quiet time.
-  - `telegram-webhook-secret`: after the restart, register the webhook again so Telegram sends the new value (`bun run telegram:webhook` with production settings).
+  - `telegram-webhook-secret`: after the restart, register the webhook again so Telegram sends the new value (`bun run prod:keys --webhook`).
 - **An external secret** (bot token, OpenRouter key, Google client): create the new credential with the provider, set it as above, restart, then revoke the old one.
 - **Checking a value** without printing it: `aws secretsmanager get-secret-value --secret-id <name> --query 'length(SecretString)'`.

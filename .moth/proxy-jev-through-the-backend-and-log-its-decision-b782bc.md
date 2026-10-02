@@ -6,10 +6,9 @@ priority: none
 labels:
   - backend
   - browser
-  - collab
   - m8
 created_at: 2026-09-27T05:42:04.100Z
-updated_at: 2026-10-02T16:36:02.299Z
+updated_at: 2026-10-02T18:35:05.126Z
 blocked_by:
   - "480aff"
 ---

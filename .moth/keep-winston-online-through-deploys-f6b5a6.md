@@ -8,7 +8,9 @@ labels:
   - m8
   - vm
 created_at: 2026-10-02T15:56:17.823Z
-updated_at: 2026-10-02T15:59:04.836Z
+updated_at: 2026-10-02T18:35:05.161Z
+blocked_by:
+  - "eadb89"
 ---
 
 Found in production on 2026-10-02: through every deploy Winston said "Your computer isn't reachable". The routing fix (vms.gateway_url, retries on 409) covers short commands while two gateways overlap. What still drops:

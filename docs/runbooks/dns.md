@@ -15,17 +15,17 @@
 
 The validation records stay forever: ACM renews the certificate automatically only while they resolve.
 
-**To add when the stacks exist** (each stack outputs its target):
+**The service records** (added at go-live; each target is a stack output):
 
-| Name      | Type  | Target                                                                                             | Added by              |
-| --------- | ----- | -------------------------------------------------------------------------------------------------- | --------------------- |
-| `@`       | CNAME | `ds6jyq6ch7zaz.cloudfront.net` (`Services.DistributionDomainName`)                                 | the CloudFront ticket |
-| `api`     | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
-| `gateway` | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | the Fargate ticket    |
+| Name      | Type  | Target                                                                                             | Proxied  |
+| --------- | ----- | -------------------------------------------------------------------------------------------------- | -------- |
+| `@`       | CNAME | `ds6jyq6ch7zaz.cloudfront.net` (`Services.DistributionDomainName`)                                 | DNS only |
+| `api`     | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | DNS only |
+| `gateway` | CNAME | `winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com` (`Services.LoadBalancerDnsName`) | DNS only |
 
-Cloudflare flattens a CNAME at the apex, so `@` can point at CloudFront. When a record is added, move it into the table above.
+Cloudflare flattens a CNAME at the apex, so `@` can point at CloudFront. If a stack is ever recreated, its target changes: update the record from the new output.
 
-Until a record exists, check an endpoint through the load balancer directly, with the right name for TLS and routing:
+To check an endpoint through the load balancer directly (debugging DNS), give the right name for TLS and routing:
 
 ```sh
 curl --resolve gateway.runwinston.com:443:$(dig +short winsto-LoadB-R01stAp91l7i-164878298.us-east-1.elb.amazonaws.com | head -1) https://gateway.runwinston.com/vm/connect   # 401: routed to the gateway

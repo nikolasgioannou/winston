@@ -101,7 +101,7 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
     }
     default:
       console.log(
-        "usage: migrate | allowlist list|add|remove … | sql <query> | vm:restore <email>",
+        "usage: migrate | allowlist list|add|remove … | sql <query> | vm:restore <email> | vm:roll <email> | costs [--user <email>] [--month YYYY-MM]",
       );
       return 1;
   }

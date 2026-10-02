@@ -39,8 +39,10 @@ Models are billed by OpenRouter, not AWS, so the AWS budget never sees them. Set
 2. **A low-balance alert for the account:** Settings → Notifications → **Low balance** → set the amount (default $100) and who gets it. It fires once when the balance drops below it.
 3. Keep the dev key separate with its own small limit, so local experiments never eat into production's.
 
+**Current state (2026-10-02):** the production key has a monthly credit limit, and the dev key a raised one; the email alerts (1 and 2) are deliberately off for now (the founder's call).
+
 When an OpenRouter limit is reached, Winston's model calls fail with a clear error in the logs and the model-call log; raise the limit or top up, nothing else needs to change.
 
-## TypeSafe (Jev)
+## Jev
 
-Jev isn't wired into Winston yet (M8). When it is, set the same two things on its account if it offers them (a spending cap and a low-balance alert), and add them here.
+Jev (the browser's autopilot model) is served by OpenRouter and billed to the same key, so the OpenRouter limit covers it; there's no separate TypeSafe account. Its calls show as `jev` in `bun run prod costs` (fractions of a cent each).

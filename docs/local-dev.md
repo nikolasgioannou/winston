@@ -9,7 +9,7 @@
 
 ## Editor
 
-The repo includes VS Code settings (`.vscode/`). Open the folder and accept the recommended extensions: ESLint, Prettier, Tailwind CSS IntelliSense and HashiCorp HCL. Files are formatted with the repo's Prettier on save, ESLint fixes apply when you save explicitly, and TypeScript uses the repo's version (accept the prompt to use the workspace version). Theme, font and other personal preferences stay in your user settings.
+The repo includes VS Code settings (`.vscode/`). Open the folder and accept the recommended extensions: ESLint, Prettier, Tailwind CSS IntelliSense, HashiCorp HCL and HashiCorp Terraform. Files are formatted with the repo's Prettier on save, ESLint fixes apply when you save explicitly, and TypeScript uses the repo's version (accept the prompt to use the workspace version). Theme, font and other personal preferences stay in your user settings.
 
 ## Running
 

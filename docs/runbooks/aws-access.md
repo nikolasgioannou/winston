@@ -61,7 +61,7 @@ The account was bootstrapped once for CDK, which created the `CDKToolkit` stack 
 cd infra && bunx cdk bootstrap aws://766577085959/us-east-1 --termination-protection --profile winston-prod
 ```
 
-Running it again upgrades the bootstrap stack in place; never delete it. GitHub's deploy role gets trusted later (the `Ci` stack).
+Running it again upgrades the bootstrap stack in place; never delete it. GitHub's deploy role is trusted through OIDC by the `Ci` stack (docs/runbooks/deploys.md).
 
 ## How it was set up
 
@@ -77,4 +77,4 @@ The Organization, Identity Center, the user and the permission set already exist
 
 - **Things to know about the Organization:** service control policies never apply to the management account, which is one reason it runs no workloads. Billing is consolidated: `winston-prod`'s costs are on the management account's bill. A member account can only leave four days after it was created, and a closed account blocks deleting the Organization for 90 days.
 - **Identity Center's region can't change** without deleting the instance and recreating every user and assignment.
-- **Open item:** the management account's root user has no MFA yet. The maintainer will add it.
+- **Open item (as of 2026-10-02, unconfirmed since):** the management account's root user had no MFA. The maintainer was to add it; confirm and remove this line.
