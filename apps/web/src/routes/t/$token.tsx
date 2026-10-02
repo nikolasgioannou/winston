@@ -132,6 +132,7 @@ function LiveView() {
     <HandoffPage
       state={state}
       onKeyboard={() => field.current?.focus()}
+      onDone={() => link.current?.done()}
       screen={
         <canvas
           ref={canvas}

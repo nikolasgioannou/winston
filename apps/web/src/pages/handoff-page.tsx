@@ -7,13 +7,15 @@ import type { LiveState } from "../handoff/input";
  * The live view a handoff link opens (docs/design.md §5, §20), on a phone
  * almost always: one tab of Winston's browser, live, to sign in, enter a
  * code or tap through what he can't. No sidebar and no sign-in: the link is
- * the credential. Resuming happens in Telegram, so the page only says so.
+ * the credential. Done hands the browser back (saying "done" in Telegram
+ * does too, the founder's call: tapping it here saves switching apps).
  */
 export function HandoffPage({
   state,
   screen,
   keyboard,
   onKeyboard,
+  onDone,
 }: {
   state: LiveState;
   /** The tab, drawn as frames arrive (a canvas). */
@@ -21,6 +23,8 @@ export function HandoffPage({
   /** The hidden field that brings up the phone's keyboard. */
   keyboard?: ReactNode;
   onKeyboard?: () => void;
+  /** Hands the browser back to Winston. */
+  onDone?: () => void;
 }) {
   const ended =
     state in endings ? endings[state as keyof typeof endings] : undefined;
@@ -45,11 +49,20 @@ export function HandoffPage({
         {screen}
       </div>
       <footer className="flex shrink-0 items-center gap-3 border-t border-border-subtle bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <p className="min-w-0 flex-1 text-sm text-fg-secondary">
-          Tell Winston in Telegram when you're done.
-        </p>
-        <Button onClick={onKeyboard} disabled={state !== "live"}>
+        <Button
+          className="flex-1"
+          onClick={onKeyboard}
+          disabled={state !== "live"}
+        >
           Keyboard
+        </Button>
+        <Button
+          className="flex-1"
+          variant="primary"
+          onClick={onDone}
+          disabled={state !== "live"}
+        >
+          Done
         </Button>
         {keyboard}
       </footer>
@@ -70,7 +83,7 @@ const endings = {
   ended: {
     icon: <CircleCheck />,
     title: "All done",
-    description: "Winston's carrying on in Telegram.",
+    description: "Winston's taking it from here.",
   },
   expired: {
     icon: <Clock />,

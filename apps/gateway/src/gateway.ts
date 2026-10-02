@@ -2,8 +2,14 @@ import type { DbOrTx } from "@winston/db/client";
 import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
-import { connectHandoff, reconnectHandoff } from "@winston/db/handoffs";
-import { runs, vms } from "@winston/db/schema";
+import {
+  connectHandoff,
+  reconnectHandoff,
+  resolveHandoffs,
+} from "@winston/db/handoffs";
+import { handoffs as handoffRows, runs, vms } from "@winston/db/schema";
+import { recordSystemEvent } from "@winston/db/system-events";
+import { resumeTask } from "@winston/db/tasks";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Connections } from "./connections.ts";
@@ -49,6 +55,15 @@ const viewerAuth = z.union([
     secret: z.string().min(1).max(200),
   }),
 ]);
+
+/** The live view's Done: `{ "type": "done" }`. */
+const isDone = (text: string) => {
+  try {
+    return (JSON.parse(text) as { type?: unknown }).type === "done";
+  } catch {
+    return false;
+  }
+};
 
 /** Close codes for a link that can't be opened (docs/design.md §5). */
 const refusals = {
@@ -163,6 +178,43 @@ export function createGateway({
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
 
+  /**
+   * The person tapped Done on the live view: the browser goes back to
+   * Winston. A parked task carries on, as when they say "done" in chat; the
+   * front of house hears it as an event and carries on itself. Either way
+   * the window is released and the page told it's over.
+   */
+  async function handBack(viewer: Viewer) {
+    const [row] = await db
+      .select({ runId: handoffRows.runId, userId: handoffRows.userId })
+      .from(handoffRows)
+      .where(eq(handoffRows.id, viewer.handoffId));
+    const [run] = row
+      ? await db
+          .select({ kind: runs.kind, status: runs.status })
+          .from(runs)
+          .where(eq(runs.id, row.runId))
+      : [];
+    if (!row || !run) return;
+    if (run.kind === "background") {
+      if (run.status === "parked")
+        await resumeTask(db, row.runId, "They tapped Done on the live view.");
+    } else {
+      await resolveHandoffs(db, row.runId);
+      await recordSystemEvent(db, {
+        userId: row.userId,
+        type: "system.handoff.done",
+        payload: { handoffId: viewer.handoffId },
+        sourceRef: `handoff:${viewer.handoffId}:done`,
+      });
+    }
+    logger.info(
+      { handoffId: viewer.handoffId },
+      "handed back from the live view",
+    );
+    handoffs.release(viewer.vmId, viewer.owner);
+  }
+
   /** Signs a live-view page in and starts its stream, or closes it saying why. */
   async function admitViewer(
     ws: ServerWebSocket<ViewerSocketData>,
@@ -269,8 +321,9 @@ export function createGateway({
     async message(socket, message) {
       if (isViewer(socket)) {
         if (typeof message !== "string") return;
-        if (socket.data.viewer) handoffs.input(socket.data.viewer, message);
-        else await admitViewer(socket, message);
+        if (!socket.data.viewer) await admitViewer(socket, message);
+        else if (isDone(message)) await handBack(socket.data.viewer);
+        else handoffs.input(socket.data.viewer, message);
         return;
       }
       const ws = socket as VmSocket;

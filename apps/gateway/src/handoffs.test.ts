@@ -1,6 +1,12 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { createHandoff } from "@winston/db/handoffs";
-import { handoffs, users } from "@winston/db/schema";
+import {
+  handoffs,
+  inboundItems,
+  runMessages,
+  runs,
+  users,
+} from "@winston/db/schema";
 import { insertRun, insertUser, testDb } from "@winston/db/testing";
 import { createVm, issueRegistrationToken } from "@winston/db/vms";
 import { applyVmEvent } from "@winston/db/vm-state";
@@ -234,6 +240,70 @@ describe("handoff live views", () => {
     });
     const nonsense = await page({ nope: true });
     expect((await nonsense.closed).code).toBe(4003);
+    vm.ws.close();
+  });
+
+  test("Done on the page carries a parked task on, or tells the front of house; either way the window goes back", async () => {
+    const vm = await connectedVm();
+    const task = await insertRun(db, vm.userId, {
+      kind: "background",
+      status: "parked",
+      waitingFor: "Sign in",
+    });
+    await db.insert(runMessages).values({
+      runId: task.id,
+      seq: 0,
+      role: "assistant",
+      content: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "c1",
+            toolName: "browser_handoff",
+            input: { reason: "Sign in" },
+          },
+        ],
+      },
+    });
+    const { token } = await createHandoff(db, {
+      runId: task.id,
+      userId: vm.userId,
+      windowId: "win_1",
+      targetId: "T1",
+      reason: "Sign in",
+    });
+    const viewer = await page({ token });
+    await vm.next("screencast.start");
+    const before = vm.frames.length;
+    viewer.ws.send(JSON.stringify({ type: "done" }));
+    expect((await viewer.closed).code).toBe(4000);
+    await vm.next("browser.release", before);
+    const [resumed] = await db.select().from(runs).where(eq(runs.id, task.id));
+    expect(resumed?.status).toBe("running");
+
+    const front = await insertRun(db, vm.userId, {
+      kind: "front",
+      status: "completed",
+    });
+    const second = await createHandoff(db, {
+      runId: front.id,
+      userId: vm.userId,
+      windowId: "win_2",
+      targetId: "T2",
+      reason: "Pick a seat",
+    });
+    const frontViewer = await page({ token: second.token });
+    await eventually(
+      () => vm.frames.filter((f) => f.type === "screencast.start").length > 1,
+    );
+    frontViewer.ws.send(JSON.stringify({ type: "done" }));
+    expect((await frontViewer.closed).code).toBe(4000);
+    const [item] = await db
+      .select()
+      .from(inboundItems)
+      .where(eq(inboundItems.type, "system.handoff.done"));
+    expect(item?.payload).toEqual({ handoffId: second.id });
     vm.ws.close();
   });
 });

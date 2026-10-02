@@ -115,6 +115,11 @@ export function connectLiveView({
       if (socket?.readyState === WebSocket.OPEN)
         socket.send(JSON.stringify(input));
     },
+    /** Hands the browser back to Winston; the page then hears it's over. */
+    done() {
+      if (socket?.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify({ type: "done" }));
+    },
     close() {
       stopped = true;
       clearTimeout(retry);

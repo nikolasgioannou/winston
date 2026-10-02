@@ -38,3 +38,5 @@ Built and checked end to end in the local VM at phone size (375×812): tap to cl
 
 **Left, with the founder:** try it on a real iPhone (and Android if available) in production, and iterate on the feel.
 
+**Founder feedback (2026-10-02):** it worked well in production on their phone; handing back should be on the page rather than a trip to Telegram. Added a **Done** button: the gateway resumes a parked task, or records `system.handoff.done` for the front of house, then releases the window. Decision #7 updated.
+

@@ -187,6 +187,15 @@ export const eventCatalog = define([
     filters: [],
   },
   {
+    type: "system.handoff.done",
+    domain: "system",
+    description:
+      "The user tapped Done on the live view of the front of house's browser.",
+    delivery: "always",
+    payload: z.object({ handoffId: z.string() }),
+    filters: [],
+  },
+  {
     type: "system.onboarding.completed",
     domain: "system",
     description: "The user linked Telegram from the website.",
