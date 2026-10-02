@@ -327,7 +327,6 @@ export function createGateway({
           .set({ gatewayUrl: selfUrl })
           .where(eq(vms.id, vmId));
       logger.info({ vmId }, "VM connected");
-      execs.reconnected(vmId);
     },
     async message(socket, message) {
       if (isViewer(socket)) {
@@ -369,6 +368,7 @@ export function createGateway({
           .catch(() => undefined);
       if (!connections.get(ws.data.vmId)) updates.disconnected(ws.data.vmId);
       files.closed(ws);
+      execs.closed(ws.data.vmId);
       logger.info({ vmId: ws.data.vmId, code }, "VM disconnected");
     },
   };

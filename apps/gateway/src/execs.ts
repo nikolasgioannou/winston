@@ -35,8 +35,8 @@ interface Pending {
 
 /**
  * Commands in flight on VMs (docs/design.md §15). Sends `exec`, collects the
- * streamed output until `exec.exit`, and if the VM reconnects mid-command,
- * asks for the buffered result (`exec.fetch`) instead of running it again.
+ * streamed output until `exec.exit`. A command cut off by its socket
+ * closing fails at once, to be retried by id (the VM never runs an id twice).
  */
 export function createExecs(
   send: (vmId: string, frame: GatewayToVmFrame) => boolean,
@@ -160,11 +160,15 @@ export function createExecs(
       return true;
     },
 
-    /** A VM (re)connected: ask it for the results of commands it was running. */
-    reconnected(vmId: string) {
+    /**
+     * A VM's socket closed: its commands fail now with `VmUnavailableError`
+     * rather than wait. The VM keeps running them, and the caller's retry
+     * with the same id (on whichever gateway the VM reconnects to) gets the
+     * result, never a second run.
+     */
+    closed(vmId: string) {
       for (const [execId, exec] of pending)
-        if (exec.vmId === vmId)
-          send(vmId, { id: newFrameId(), type: "exec.fetch", execId });
+        if (exec.vmId === vmId) settle(execId, new VmUnavailableError());
     },
 
     get size() {

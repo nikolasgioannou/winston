@@ -88,10 +88,11 @@ const screencasts = createScreencasts({
   newFrameId,
   logger,
 });
+const executor = createExecutor();
 const daemon = createDaemon({
   gatewayUrl,
   registrationToken: settings.registrationToken,
-  executor: createExecutor(),
+  executor,
   files: helperFiles(),
   tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
   versions,
@@ -100,6 +101,7 @@ const daemon = createDaemon({
       applyUpdate(frame, { dir, publicKeyPem: signingPublicKey, versions }),
     confirm: () => confirmUpdate(dir),
     restart: () => process.exit(0),
+    idle: () => !executor.busy() && !browser.hasWindows(),
   },
   browser: handoffFrames({
     browser,

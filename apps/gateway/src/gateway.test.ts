@@ -369,39 +369,35 @@ describe("gateway exec", () => {
     });
   });
 
-  test("after a reconnect mid-command, the buffered result is fetched instead of rerunning it", async () => {
+  test("a command cut off by the socket closing fails at once, and its retry by id reaches the VM again", async () => {
     const { userId, client, vmToken } = await readyVm();
-    const response = postExec(userId, { cmd: "make coffee", timeoutMs: 5_000 });
+    const body = { id: "xcut1", cmd: "make coffee", timeoutMs: 60_000 };
+    const response = postExec(userId, body);
     const exec = await client.next("exec");
-    client.send({
-      id: "o1",
-      type: "exec.output",
-      execId: exec.id,
-      stream: "stdout",
-      data: "partial",
-    });
     client.ws.close();
     await client.closed;
+    // No waiting out the timeout: the caller hears now and retries.
+    const cut = await response;
+    expect(cut.status).toBe(409);
+    expect(await cut.json()).toMatchObject({
+      error: { code: "vm_unavailable" },
+    });
 
+    // The retry carries the same id; the VM reports the first run's result.
     const again = await connect(vmToken);
-    const fetchFrame = await again.next("exec.fetch");
-    expect(fetchFrame).toMatchObject({ type: "exec.fetch", execId: exec.id });
-    expect(again.frames.some((frame) => frame.type === "exec")).toBe(false);
+    again.send(hello);
+    const retry = postExec(userId, body);
+    const resent = await again.next("exec");
+    expect(resent.id).toBe(exec.id);
     again.send({
-      id: "r1",
-      type: "exec.result",
+      id: "x2",
+      type: "exec.exit",
       execId: exec.id,
-      found: true,
-      stdout: "partial and the rest\n",
-      stderr: "",
       exitCode: 0,
       timedOut: false,
       truncated: false,
     });
-    expect(await (await response).json()).toMatchObject({
-      stdout: "partial and the rest\n",
-      exitCode: 0,
-    });
+    expect(await (await retry).json()).toMatchObject({ exitCode: 0 });
     again.ws.close();
   });
 

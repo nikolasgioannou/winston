@@ -710,6 +710,9 @@ export function createBrowser(deps: BrowserDeps) {
     /** The CDP connection, for the live view (screencast.ts). */
     connection,
 
+    /** Whether any window is open (its run's state lives only in memory). */
+    hasWindows: () => windows.size > 0,
+
     /** Closes windows left by runs that have ended (idle, token expired). */
     async sweep() {
       const at = now();

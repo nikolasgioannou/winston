@@ -1,4 +1,4 @@
-import type { ExecResult } from "@winston/domain/frames";
+import { newFrameId, type ExecResult } from "@winston/domain/frames";
 
 /** An error the gateway reported, with its code (`vm_unavailable`, `vm_unreachable`, …). */
 export class GatewayError extends Error {
@@ -15,7 +15,7 @@ export interface VmClient {
   exec(
     userId: string,
     request: {
-      /** Makes the command idempotent: the same id never runs twice. */
+      /** The command's id; the same id never runs twice. One is made when it's left out. */
       id?: string;
       cmd: string;
       cwd?: string;
@@ -39,8 +39,12 @@ export interface VmClient {
   releaseBrowser(userId: string, owner: string): Promise<void>;
 }
 
-/** How long a call keeps retrying while the VM is momentarily unavailable. */
-export const vmRetry = { forMs: 20_000, everyMs: 2_000 };
+/**
+ * How long a call keeps retrying, from its first failure, while the VM is
+ * momentarily unavailable: winstond restarting after an update (systemd waits
+ * 2 s) or reconnecting to another gateway.
+ */
+export const vmRetry = { forMs: 30_000, everyMs: 2_000 };
 
 export function gatewayClient({
   baseUrl,
@@ -74,10 +78,11 @@ export function gatewayClient({
    * Calls the gateway holding the user's VM. A VM that's momentarily away
    * (a gateway deploy, winstond restarting after an update) is retried for
    * a little while before the failure counts: a VM call is safe to repeat
-   * (an exec with the same id never runs twice).
+   * (an exec with the same id never runs twice). A long command cut off
+   * near its end gets the whole window too.
    */
   async function request(userId: string, path: string, init: RequestInit = {}) {
-    const deadline = Date.now() + vmRetry.forMs;
+    let deadline: number | undefined;
     for (;;) {
       const base = (await locate?.(userId).catch(() => undefined)) ?? baseUrl;
       let response: Response | undefined;
@@ -93,6 +98,7 @@ export function gatewayClient({
         response = undefined;
       }
       const away = !response || response.status === 409;
+      deadline ??= Date.now() + vmRetry.forMs;
       if (!away || Date.now() >= deadline) {
         if (!response)
           throw new GatewayError(
@@ -143,7 +149,8 @@ export function gatewayClient({
       const response = await request(userId, `/internal/vms/${userId}/exec`, {
         method: "POST",
         headers: json,
-        body: JSON.stringify(request_),
+        // The id makes a retry after a cut-off join or report the first run.
+        body: JSON.stringify({ ...request_, id: request_.id ?? newFrameId() }),
       });
       if (!response.ok) throw await failure(response);
       return (await response.json()) as ExecResult;

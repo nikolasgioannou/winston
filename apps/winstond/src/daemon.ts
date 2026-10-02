@@ -75,6 +75,13 @@ export interface DaemonOptions {
     confirm: () => Promise<void>;
     /** Hands over to the new winstond (systemd restarts the process). */
     restart: () => void;
+    /**
+     * Whether a restart would lose nothing: no command running or awaiting
+     * its retry, no browser window open. A new winstond waits for it.
+     */
+    idle: () => boolean;
+    /** How often to look again while it isn't idle. */
+    idleCheckMs?: number;
   };
   /**
    * Browser handoff frames (browser.hold/release, screencast, input):
@@ -156,6 +163,15 @@ export function createDaemon(options: DaemonOptions) {
     try {
       const { cliUpdated, winstondUpdated } = await updates.apply(frame);
       if (winstondUpdated) {
+        // The new binary is in place; it takes over once nothing would be lost.
+        if (!updates.idle())
+          logger.info(
+            { version: frame.version },
+            "winstond updated; restarting once idle",
+          );
+        while (!updates.idle() && !stopped)
+          await Bun.sleep(updates.idleCheckMs ?? 10_000);
+        if (stopped) return;
         logger.info({ version: frame.version }, "winstond updated; restarting");
         updates.restart();
         return;

@@ -170,7 +170,15 @@ export function createExecutor(
     return new Promise((resolve) => record.waiters.push(resolve));
   }
 
-  return { run, fetch };
+  return {
+    run,
+    fetch,
+    /**
+     * Whether a command is running or its result could still be asked for
+     * (kept five minutes): a restart now would lose it.
+     */
+    busy: () => results.size > 0,
+  };
 }
 
 export type Executor = ReturnType<typeof createExecutor>;

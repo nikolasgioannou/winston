@@ -87,6 +87,9 @@ describe.skipIf(!linux)("executor", () => {
     expect(await early).toMatchObject({ stdout: "finished\n", exitCode: 0 });
     expect(await executor.fetch("e2")).toMatchObject({ stdout: "finished\n" });
     expect(await executor.fetch("nope")).toBeUndefined();
+    // A kept result still counts: a restart now would lose it (an update waits).
+    expect(executor.busy()).toBe(true);
+    expect(createExecutor().busy()).toBe(false);
   });
 
   test("an id it has seen is never run again: the earlier command's result is reported", async () => {

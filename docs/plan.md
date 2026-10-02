@@ -248,6 +248,7 @@ The browser: Chrome on the VM, `winston browser`, domain locks, handoff links wi
 | 146  | `17f478` | Lock websites per agent to avoid collisions                                  | `0451df`                               |
 | 147  | `f0507c` | Create handoff links and stream a tab's screencast                           | `6b73c4`, `ac0f5f`                     |
 | 147a | `eadb89` | Roll VMs onto new images automatically                                       | `63475d`                               |
+| 148a | `f6b5a6` | Keep Winston online through deploys                                          | `eadb89`                               |
 | 148  | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
 | 149  | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
 | 150  | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |

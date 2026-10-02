@@ -120,13 +120,14 @@ async function start(
 }
 
 describe("winstond", () => {
-  test("an update: a new CLI is announced with a fresh hello; a new winstond restarts", async () => {
+  test("an update: a new CLI is announced with a fresh hello; a new winstond restarts once idle", async () => {
     const gateway = fakeGateway();
     running.push({ stop: () => void gateway.server.stop(true) });
     const applied: string[] = [];
     let restarts = 0;
     let confirms = 0;
     let replacesWinstond = false;
+    let idle = false;
     const daemon = createDaemon({
       gatewayUrl: gateway.url,
       registrationToken: "reg-1",
@@ -151,6 +152,8 @@ describe("winstond", () => {
         restart: () => {
           restarts++;
         },
+        idle: () => idle,
+        idleCheckMs: 10,
       },
       logger,
       backoff: () => 20,
@@ -187,6 +190,10 @@ describe("winstond", () => {
 
     replacesWinstond = true;
     announce("0.1.3+c");
+    // A command running (or its result still wanted): the restart waits.
+    await Bun.sleep(100);
+    expect(restarts).toBe(0);
+    idle = true;
     await eventually(() => restarts === 1);
     expect(applied).toEqual(["0.1.2+b", "0.1.3+c"]);
   });

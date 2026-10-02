@@ -23,7 +23,7 @@ That run checks, builds the images and runs `bun run deploy` (`scripts/deploy.ts
 
 A deploy takes about 10–15 minutes, most of it ECS rolling the four services.
 
-Running tasks keep working through it. While the old and new gateway overlap, each VM's calls go to whichever holds its socket (`vms.gateway_url`), and a VM that's reconnecting is waited on for up to 20 s, so Winston doesn't see its computer as down (docs/design.md §19).
+Winston stays online through it. The new task of each service starts before the old one stops, and the old agents task finishes its steps first. While the old and new gateway overlap, each VM's calls go to whichever holds its socket (`vms.gateway_url`); a command cut off when the socket moves fails at once and is retried by id on the new gateway, never run twice; a VM that's reconnecting is waited on for up to 30 s. The VMs' winstond takes its new version once it's idle, not mid-task (docs/design.md §10, §15, §19).
 
 ## Watching
 
