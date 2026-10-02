@@ -291,6 +291,16 @@ export const viewerInput = z.discriminatedUnion("kind", [
     kind: z.literal("text"),
     text: z.string().min(1).max(10_000),
   }),
+  /**
+   * The page's own size (CSS pixels and pixel ratio): the tab is shown at
+   * that size while it's watched, so a site lays out for the phone.
+   */
+  z.object({
+    kind: z.literal("viewport"),
+    width: z.number().int().min(200).max(4000),
+    height: z.number().int().min(200).max(4000),
+    scale: z.number().min(1).max(4),
+  }),
 ]);
 export type ViewerInput = z.infer<typeof viewerInput>;
 

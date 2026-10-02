@@ -163,6 +163,31 @@ describe("live views", () => {
     expect(chrome.sent[mark + 2]?.params).toMatchObject({ buttons: 1 });
   });
 
+  test("a tap's release never overtakes its press, however fast they arrive", async () => {
+    const { chrome, screencasts } = setup();
+    await screencasts.start("hnd_1", "TARGET1");
+    const mark = chrome.sent.length;
+    // Both arrive before either is replayed, as over a fast connection.
+    const down = screencasts.input("hnd_1", {
+      kind: "pointer",
+      action: "down",
+      x: 1,
+      y: 1,
+    });
+    const up = screencasts.input("hnd_1", {
+      kind: "pointer",
+      action: "up",
+      x: 1,
+      y: 1,
+    });
+    await Promise.all([down, up]);
+    expect(chrome.sent.slice(mark).map((s) => s.params.type)).toEqual([
+      "mouseMoved",
+      "mousePressed",
+      "mouseReleased",
+    ]);
+  });
+
   test("the tab closing ends the live view; stopping detaches without touching the agent", async () => {
     const { chrome, frames, screencasts } = setup();
     await screencasts.start("hnd_1", "TARGET1");

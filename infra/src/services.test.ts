@@ -97,7 +97,7 @@ describe("services stack", () => {
     expect(rules).toHaveLength(3);
   });
 
-  test("the gateway's internal API is never routed; only the VM websocket is", () => {
+  test("the gateway's internal API is never routed; only the VM websocket and live views are", () => {
     template.hasResourceProperties(
       "AWS::ElasticLoadBalancingV2::ListenerRule",
       {
@@ -108,7 +108,7 @@ describe("services stack", () => {
           },
           {
             Field: "path-pattern",
-            PathPatternConfig: { Values: ["/vm/connect"] },
+            PathPatternConfig: { Values: ["/vm/connect", "/handoff/connect"] },
           },
         ]),
       },

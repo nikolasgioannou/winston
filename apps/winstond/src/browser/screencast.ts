@@ -7,7 +7,9 @@
  * the agent's. A window in the background still paints (Chrome runs with
  * backgrounding off), and the page is told it has focus while it's watched,
  * so it behaves as if in front. The first frame is a screenshot: a
- * screencast only sends frames when something repaints.
+ * screencast only sends frames when something repaints. The page sends its
+ * size, and the tab is shown at that size (a phone gets the site's mobile
+ * layout, not a desktop shrunk to nothing).
  */
 import {
   screencastMessage,
@@ -34,6 +36,11 @@ interface Live {
   height: number;
   /** Whether a pointer is down (a drag sends moves with the button held). */
   pressed: boolean;
+  /**
+   * Input replays one at a time, in order: a tap's press takes two CDP
+   * calls, and its release mustn't overtake them (no click happens then).
+   */
+  queue: Promise<void>;
   stopListening: () => void;
 }
 
@@ -121,6 +128,7 @@ export function createScreencasts(deps: ScreencastDeps) {
         width: 0,
         height: 0,
         pressed: false,
+        queue: Promise.resolve(),
         stopListening: () => undefined,
       };
       view.stopListening = c.on((event: CdpEvent) => {
@@ -195,81 +203,14 @@ export function createScreencasts(deps: ScreencastDeps) {
 
     stop,
 
-    /** Replays what the person did on the live view into the tab. */
-    async input(handoffId: string, input: ViewerInput) {
+    /** Replays what the person did on the live view into the tab, in order. */
+    input(handoffId: string, input: ViewerInput) {
       const view = live.get(handoffId);
-      if (!view) return;
-      const c = await deps.connection();
-      const s = view.sessionId;
-      switch (input.kind) {
-        case "pointer": {
-          const at = { x: input.x, y: input.y };
-          if (input.action === "down") {
-            await c.send(
-              "Input.dispatchMouseEvent",
-              { type: "mouseMoved", ...at },
-              s,
-            );
-            await c.send(
-              "Input.dispatchMouseEvent",
-              {
-                type: "mousePressed",
-                ...at,
-                button: "left",
-                buttons: 1,
-                clickCount: 1,
-              },
-              s,
-            );
-            view.pressed = true;
-          } else if (input.action === "move") {
-            await c.send(
-              "Input.dispatchMouseEvent",
-              {
-                type: "mouseMoved",
-                ...at,
-                ...(view.pressed ? { button: "left", buttons: 1 } : {}),
-              },
-              s,
-            );
-          } else {
-            await c.send(
-              "Input.dispatchMouseEvent",
-              {
-                type: "mouseReleased",
-                ...at,
-                button: "left",
-                buttons: 0,
-                clickCount: 1,
-              },
-              s,
-            );
-            view.pressed = false;
-          }
-          return;
-        }
-        case "wheel":
-          await c.send(
-            "Input.dispatchMouseEvent",
-            {
-              type: "mouseWheel",
-              x: input.x,
-              y: input.y,
-              deltaX: input.deltaX,
-              deltaY: input.deltaY,
-            },
-            s,
-          );
-          return;
-        case "key": {
-          const key = parseKey(input.key);
-          if (key) await press(c, s, key);
-          return;
-        }
-        case "text":
-          await c.send("Input.insertText", { text: input.text }, s);
-          return;
-      }
+      if (!view) return Promise.resolve();
+      const next = view.queue.then(() => replay(view, input));
+      // One failed input doesn't stop the ones after it.
+      view.queue = next.catch(() => undefined);
+      return next;
     },
 
     /** Ends every live view (Chrome went away). */
@@ -277,6 +218,94 @@ export function createScreencasts(deps: ScreencastDeps) {
       for (const view of [...live.values()]) end(view, reason);
     },
   };
+
+  async function replay(view: Live, input: ViewerInput) {
+    const c = await deps.connection();
+    const s = view.sessionId;
+    switch (input.kind) {
+      case "pointer": {
+        const at = { x: input.x, y: input.y };
+        if (input.action === "down") {
+          await c.send(
+            "Input.dispatchMouseEvent",
+            { type: "mouseMoved", ...at },
+            s,
+          );
+          await c.send(
+            "Input.dispatchMouseEvent",
+            {
+              type: "mousePressed",
+              ...at,
+              button: "left",
+              buttons: 1,
+              clickCount: 1,
+            },
+            s,
+          );
+          view.pressed = true;
+        } else if (input.action === "move") {
+          await c.send(
+            "Input.dispatchMouseEvent",
+            {
+              type: "mouseMoved",
+              ...at,
+              ...(view.pressed ? { button: "left", buttons: 1 } : {}),
+            },
+            s,
+          );
+        } else {
+          await c.send(
+            "Input.dispatchMouseEvent",
+            {
+              type: "mouseReleased",
+              ...at,
+              button: "left",
+              buttons: 0,
+              clickCount: 1,
+            },
+            s,
+          );
+          view.pressed = false;
+        }
+        return;
+      }
+      case "wheel":
+        await c.send(
+          "Input.dispatchMouseEvent",
+          {
+            type: "mouseWheel",
+            x: input.x,
+            y: input.y,
+            deltaX: input.deltaX,
+            deltaY: input.deltaY,
+          },
+          s,
+        );
+        return;
+      case "key": {
+        const key = parseKey(input.key);
+        if (key) await press(c, s, key);
+        return;
+      }
+      case "text":
+        await c.send("Input.insertText", { text: input.text }, s);
+        return;
+      case "viewport":
+        // Only this live view's session sees it; when it detaches the tab
+        // is back at its own size for the agent.
+        await c.send(
+          "Emulation.setDeviceMetricsOverride",
+          {
+            width: input.width,
+            height: input.height,
+            deviceScaleFactor: Math.min(input.scale, 3),
+            mobile: input.width < 900,
+          },
+          s,
+        );
+        return;
+    }
+  }
 }
 
 export type Screencasts = ReturnType<typeof createScreencasts>;

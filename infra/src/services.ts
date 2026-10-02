@@ -151,6 +151,7 @@ export class ServicesStack extends Stack {
         WEB_HOST: "0.0.0.0",
         WEB_PORT: String(servicePorts.web),
         WEB_PUBLIC_URL: publicUrl,
+        GATEWAY_PUBLIC_URL: `wss://gateway.${domain}`,
         TELEGRAM_BOT_USERNAME: "RunWinstonBot",
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
       },
@@ -318,12 +319,12 @@ export class ServicesStack extends Stack {
       conditions: [ListenerCondition.hostHeaders([`api.${domain}`])],
       action: ListenerAction.forward([targets("api")]),
     });
-    // Only the VM websocket; the gateway's internal API is never routed.
+    // The VM websocket and handoff live views; the internal API is never routed.
     listener.addAction("Gateway", {
       priority: 20,
       conditions: [
         ListenerCondition.hostHeaders([`gateway.${domain}`]),
-        ListenerCondition.pathPatterns(["/vm/connect"]),
+        ListenerCondition.pathPatterns(["/vm/connect", "/handoff/connect"]),
       ],
       action: ListenerAction.forward([targets("gateway")]),
     });

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
+import { Route as TTokenRouteImport } from './routes/t/$token'
 import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
 import { Route as AuthedProfileIndexRouteImport } from './routes/_authed/profile/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
@@ -39,6 +40,11 @@ const AuthedHomeRoute = AuthedHomeRouteImport.update({
 const AuthSignOutRoute = AuthSignOutRouteImport.update({
   id: '/auth/sign-out',
   path: '/auth/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TTokenRoute = TTokenRouteImport.update({
+  id: '/t/$token',
+  path: '/t/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAccountsIndexRoute = AuthedAccountsIndexRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/_authed/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
+  '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/auth/sign-out'
+    | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/auth/sign-out'
+    | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/_authed/home'
     | '/auth/sign-out'
+    | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
     | '/dev/design/frame'
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   AuthSignOutRoute: typeof AuthSignOutRoute
+  TTokenRoute: typeof TTokenRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
   AuthGoogleStartRoute: typeof AuthGoogleStartRoute
   DevDesignFrameRoute: typeof DevDesignFrameRoute
@@ -207,6 +220,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/sign-out'
       fullPath: '/auth/sign-out'
       preLoaderRoute: typeof AuthSignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t/$token': {
+      id: '/t/$token'
+      path: '/t/$token'
+      fullPath: '/t/$token'
+      preLoaderRoute: typeof TTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/accounts/': {
@@ -287,6 +307,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   AuthSignOutRoute: AuthSignOutRoute,
+  TTokenRoute: TTokenRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
   AuthGoogleStartRoute: AuthGoogleStartRoute,
   DevDesignFrameRoute: DevDesignFrameRoute,

@@ -14,6 +14,8 @@ const webConfigSchema = dbConfigSchema
      * makes cookies Secure.
      */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
+    /** The gateway's address for handoff live views (§5): wss://gateway.runwinston.com. */
+    GATEWAY_PUBLIC_URL: z.url().default("ws://localhost:3001"),
     /** The bot Connect Telegram opens: @RunWinstonBot in production. */
     TELEGRAM_BOT_USERNAME: z
       .string()
