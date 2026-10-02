@@ -1,14 +1,14 @@
 ---
 id: "1796c0"
 title: Stream replies with Telegram rich message drafts (with the founder)
-status: todo
+status: done
 priority: none
 labels:
   - collab
   - m9
   - telegram
 created_at: 2026-09-27T23:08:56.633Z
-updated_at: 2026-09-27T23:09:11.231Z
+updated_at: 2026-10-02T18:25:08.142Z
 blocked_by:
   - "d3a1a9"
 ---
@@ -23,3 +23,11 @@ Research and prototype first:
 - Whether streaming still earns its keep for short replies, or only for long ones (for example, start streaming only once a reply passes some length).
 
 Then, with the user, decide whether to adopt it, and if so implement it behind the existing delivery path, update §4 and the decision log (revisiting #14), and keep the typing indicator for silent or tool-only stretches.
+
+## As built
+
+Decided autonomously at the founder's request (2026-10-02): **not adopted for now**, recorded as decision #72 (revisits #14 and keeps it), with the draft research added to docs/research/telegram-rich-messages.md and §4 updated.
+
+- **How drafts behave** (Bot API 10.3): `draft_id` updates animate in place; the draft is a ~30 s preview that vanishes when the bot sends a message; empty `sendMessageDraft` text shows "Thinking…"; 10.3 adds `can_stop`/`keep_on_stop`; no documented rate limit.
+- **Why not now:** the front of house never shows a refused output, and some refusals are a safety filter cutting a response mid-stream, so a draft would show exactly what's meant to stay hidden; replies are mostly a few sentences sent whole within seconds, with the typing indicator meanwhile; a dropped step's draft would linger up to 30 s unless replaced.
+- **If revisited:** switch the front of house to `streamText` through the gateway (recording intact), draft only once a reply passes a length threshold, replace a dropped step's draft with a "Thinking…" draft, keep the typing indicator for silent stretches.

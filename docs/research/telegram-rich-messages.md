@@ -41,3 +41,13 @@ Checked on desktop. A second test (same day) confirmed the same rendering on the
 - Rich Messages can replace the Markdown-to-HTML converter: send the model's Markdown as-is, with a plain-text fallback on errors, splitting only past 32,768 characters. Tables and real lists become available.
 - The prompt should still avoid headings in ordinary replies. Images and inline HTML both render, so model output must have them neutralized before sending.
 - Drafts make streaming possible, which the design currently rules out (§4, decision #14). That needs its own decision.
+
+## Drafts in detail (checked 2026-10-02, Bot API 10.3)
+
+- `sendRichMessageDraft(chat_id, draft_id, rich_message, can_stop?, keep_on_stop?)` and its plain twin `sendMessageDraft(chat_id, draft_id, text?, …)`; private chats only; both return `True`.
+- `draft_id` is any non-zero integer: updates with the same id animate in place; a new id replaces the draft without animation.
+- The draft is a temporary ~30-second preview. It disappears when the bot sends a message, so the real message (`sendRichMessage`) is what persists. An abandoned draft just fades out.
+- `sendMessageDraft` with empty text shows a "Thinking…" placeholder.
+- 10.3 added `can_stop` (a stop button; the bot gets a `stopped_message_generation` update) and `keep_on_stop` (the partial draft stays briefly after a stop).
+- No rate limit is documented for draft updates.
+- **Decision:** not adopted for now (docs/design.md decision #72): refused outputs must never be shown, and some are cut mid-stream; most replies are short.
