@@ -21,4 +21,6 @@ Found in go-live (2026-10-01): asked by voice for a link to connect Google, Wins
   - `system.app.connected` acknowledgement: say what was connected (its domain), no claims about the rest.
 - Reconnect links already exist (`reconnectUrl` on auth_expiring/expired); keep them as they are.
 
+- **Failures, no empty promises:** when a command fails (seen 2026-10-01: the gateway's stale Google client made every calendar call fail), Winston said three times "I'll check again in a bit and let you know" with no trigger behind it, and called it a service hiccup. The prompt should make him say plainly that it failed and that he'll look when asked, or set an actual `--at` trigger to retry, never promise without one. Add this to the eval.
+
 Tests: the command prints the right link per domain and refuses others; the sign-in redirect keeps the connect intent. Spot-check the prompt with a short eval: "send me a link to connect my calendar", and a `system.app.connected` for mail.
