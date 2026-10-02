@@ -283,9 +283,10 @@ describe("agent windows", () => {
       sessionId: "s-t1",
     });
     expect(await snapshotOf()).toBe('button "Go" [e2]');
-    expect((await failure(browser.target(token("run_a"), "e1"))).code).toBe(
-      "not_found",
-    );
+    // The old ref is gone, so an action with it is refused, not misdirected.
+    const refused = await failure(browser.click(token("run_a"), "e1"));
+    expect(refused.message).toStartWith("There's no e1 in your last snapshot");
+    expect(refused.code).toBe("invalid_request");
   });
 
   test("after Chrome restarts, a run's next command says its window was closed, once", async () => {

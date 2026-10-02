@@ -30,7 +30,8 @@ export function browserRpc(browser: Browser) {
     body: string | null;
     runToken: string;
   }): Promise<RpcResponse> => {
-    const route = request.path.slice(browserPathPrefix.length).split("?")[0];
+    const route =
+      request.path.slice(browserPathPrefix.length).split("?")[0] ?? "";
     let body: Record<string, unknown> = {};
     try {
       body = request.body
@@ -46,7 +47,7 @@ export function browserRpc(browser: Browser) {
     try {
       if (request.method === "GET" && route === "windows")
         return reply(200, { windows: await browser.windows(request.runToken) });
-      const one = /^windows\/([^/]+)$/.exec(route ?? "");
+      const one = /^windows\/([^/]+)$/.exec(route);
       if (request.method === "GET" && one?.[1])
         return reply(200, {
           window: await browser.window(request.runToken, one[1]),
@@ -74,6 +75,88 @@ export function browserRpc(browser: Browser) {
             full: body.full === true,
           }),
         );
+      if (request.method === "POST") {
+        const token = request.runToken;
+        const window = text("window");
+        const ref = text("ref") ?? "";
+        switch (route) {
+          case "click":
+            return reply(200, await browser.click(token, ref, window));
+          case "type":
+            return reply(
+              200,
+              await browser.type(
+                token,
+                ref,
+                text("text") ?? "",
+                { clear: body.clear === true, submit: body.submit === true },
+                window,
+              ),
+            );
+          case "select":
+            return reply(
+              200,
+              await browser.select(token, ref, text("option") ?? "", window),
+            );
+          case "press":
+            return reply(
+              200,
+              await browser.press(token, text("key") ?? "", window),
+            );
+          case "scroll":
+            return reply(
+              200,
+              await browser.scroll(
+                token,
+                {
+                  ...(text("to") ? { to: text("to") } : {}),
+                  up: body.up === true,
+                },
+                window,
+              ),
+            );
+          case "click-xy":
+            return reply(
+              200,
+              await browser.clickXY(
+                token,
+                Number(body.x),
+                Number(body.y),
+                window,
+              ),
+            );
+          case "wait":
+            return reply(
+              200,
+              await browser.wait(
+                token,
+                {
+                  ...(text("text") ? { text: text("text") } : {}),
+                  ...(text("ref") ? { ref: text("ref") } : {}),
+                  timeoutMs:
+                    typeof body.timeoutMs === "number"
+                      ? body.timeoutMs
+                      : 10_000,
+                },
+                window,
+              ),
+            );
+          case "dialog":
+            return reply(
+              200,
+              await browser.dialog(
+                token,
+                {
+                  accept: body.accept === true,
+                  ...(text("text") !== undefined ? { text: text("text") } : {}),
+                },
+                window,
+              ),
+            );
+          default:
+            break;
+        }
+      }
       if (request.method === "POST" && route === "close")
         return reply(
           200,

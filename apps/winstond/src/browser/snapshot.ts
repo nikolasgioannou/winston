@@ -30,6 +30,13 @@ export interface AxNode {
 /** One frame's tree, with its child frames by their `<iframe>`'s node. */
 export interface AxFrame {
   sessionId: string;
+  /** The frame's id (absent in recorded fixtures). */
+  frameId?: string;
+  /**
+   * A cross-site frame's `<iframe>`, in its parent's session: its own
+   * coordinates start there.
+   */
+  ownerInParent?: { sessionId: string; backendNodeId: number };
   nodes: AxNode[];
   /** Child frames, keyed by the owning `<iframe>`'s backend node id. */
   children: { owner: number; frame: AxFrame }[];
@@ -39,6 +46,11 @@ export interface AxFrame {
 export interface RefTarget {
   sessionId: string;
   backendNodeId: number;
+  frameId?: string | undefined;
+  /** How the snapshot showed it: `button "Sign in"`. */
+  label: string;
+  /** For a cross-site frame, the `<iframe>` its coordinates are relative to. */
+  offsetFrom?: { sessionId: string; backendNodeId: number } | undefined;
 }
 
 /** Elements an agent acts on: they get refs. */
@@ -190,6 +202,9 @@ export function formatSnapshot(
         const target = {
           sessionId: frame.sessionId,
           backendNodeId: node.backendDOMNodeId,
+          frameId: frame.frameId,
+          label: `${role}${quoted}`,
+          offsetFrom: frame.ownerInParent,
         };
         let ref = "";
         if (options.refs) {
@@ -310,6 +325,7 @@ export async function readFrames(
   async function build(node: FrameTree, isRoot: boolean): Promise<AxFrame> {
     const frame: AxFrame = {
       sessionId,
+      frameId: node.frame.id,
       nodes: await tree(sessionId, isRoot ? undefined : node.frame.id),
       children: [],
     };
@@ -338,6 +354,9 @@ export async function readFrames(
         owner: at,
         frame: {
           sessionId: childSession,
+          // A cross-site frame's target id is its frame id.
+          frameId: targetId,
+          ownerInParent: { sessionId, backendNodeId: at },
           nodes: await tree(childSession),
           children: [],
         },

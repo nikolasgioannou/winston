@@ -12,7 +12,6 @@
  *
  * Nothing here calls `Runtime.enable`, which pages can detect.
  */
-import type { ApiErrorCode } from "@winston/domain/api-errors";
 import type {
   BrowserCloseResponse,
   BrowserPageResponse,
@@ -21,39 +20,11 @@ import type {
 } from "@winston/domain/browser";
 import { createId } from "@winston/shared/ids";
 import type { Cdp, CdpEvent } from "./cdp.ts";
-import { formatSnapshot, readFrames, type RefTarget } from "./snapshot.ts";
+import { createActions } from "./actions.ts";
+import { formatSnapshot, readFrames } from "./snapshot.ts";
+import { BrowserFailure, browserTimings, type WindowEntry } from "./state.ts";
 
-/** A browser command that can't be done, as the CLI should report it. */
-export class BrowserFailure extends Error {
-  constructor(
-    readonly code: ApiErrorCode,
-    message: string,
-    readonly hint: string | null = null,
-  ) {
-    super(message);
-    this.name = "BrowserFailure";
-  }
-}
-
-interface WindowEntry {
-  id: string;
-  targetId: string;
-  owner: string;
-  openedBy: string | null;
-  url: string;
-  title: string;
-  createdAt: number;
-  lastUsedAt: number;
-  /** The flat CDP session, once attached. */
-  sessionId?: string;
-  /** Cross-site frames' sessions (auto-attached), by target id. */
-  frames: Map<string, string>;
-  /** Refs from the owner's last snapshot, valid until the next. */
-  refs: Map<string, RefTarget>;
-  /** Every ref given in this window, by node, so a node keeps its ref. */
-  refByNode: Map<string, string>;
-  nextRef: number;
-}
+export { BrowserFailure, browserTimings };
 
 interface TargetInfo {
   targetId: string;
@@ -62,18 +33,6 @@ interface TargetInfo {
   title: string;
   openerId?: string;
 }
-
-export const browserTimings = {
-  /** How long a navigation waits for the page's load event. */
-  loadTimeoutMs: 30_000,
-  /** After load, how long it waits for the network to quiet down. */
-  settleMs: 2_000,
-  /** Snapshot lines shown, by default and with --full. */
-  snapshotLines: 300,
-  fullSnapshotLines: 600,
-  /** A window unused this long, whose run's last token has expired, is closed. */
-  idleMs: 30 * 60_000,
-};
 
 /** The owner a run token names: `front`, or the background run's id. */
 export function ownerOf(runToken: string): { owner: string; exp: number } {
@@ -170,6 +129,10 @@ export function createBrowser(deps: BrowserDeps) {
       refs: new Map(),
       refByNode: new Map(),
       nextRef: 1,
+      lastNetwork: 0,
+      loadingFrames: new Set(),
+      handledDialogs: [],
+      worlds: new Map(),
     };
     windows.set(entry.id, entry);
     byTarget.set(entry.targetId, entry.id);
@@ -177,7 +140,70 @@ export function createBrowser(deps: BrowserDeps) {
     return entry;
   }
 
+  /** The window a page-level event belongs to (its page or one of its frames). */
+  const windowOfSession = (sessionId: string | undefined) =>
+    sessionId === undefined
+      ? undefined
+      : [...windows.values()].find(
+          (entry) =>
+            entry.sessionId === sessionId ||
+            [...entry.frames.values()].includes(sessionId),
+        );
+
+  function onPageEvent(event: CdpEvent) {
+    const entry = windowOfSession(event.sessionId);
+    if (!entry) return;
+    switch (event.method) {
+      case "Network.requestWillBeSent":
+      case "Network.loadingFinished":
+      case "Network.loadingFailed":
+        entry.lastNetwork = now();
+        return;
+      case "Page.frameStartedLoading":
+        entry.loadingFrames.add(String(event.params.frameId));
+        return;
+      case "Page.frameStoppedLoading":
+        entry.loadingFrames.delete(String(event.params.frameId));
+        return;
+      case "Page.javascriptDialogOpening": {
+        const type = String(event.params.type);
+        const text = (value: unknown) =>
+          typeof value === "string" ? value : "";
+        const message = text(event.params.message);
+        // Alerts need no decision, and leaving the page is what the agent
+        // asked for; answering them keeps the page from hanging.
+        if (type === "alert" || type === "beforeunload") {
+          entry.handledDialogs.push(
+            type === "alert"
+              ? `The page showed an alert: "${message}" (dismissed).`
+              : "The page asked to confirm leaving it (allowed).",
+          );
+          void cdp
+            ?.send(
+              "Page.handleJavaScriptDialog",
+              { accept: true },
+              event.sessionId,
+            )
+            .catch(() => undefined);
+          return;
+        }
+        entry.dialog = {
+          type,
+          message,
+          defaultPrompt: text(event.params.defaultPrompt),
+        };
+        return;
+      }
+      case "Page.javascriptDialogClosed":
+        entry.dialog = undefined;
+        return;
+      default:
+        return;
+    }
+  }
+
   function onEvent(event: CdpEvent) {
+    onPageEvent(event);
     const target = event.params.targetInfo as TargetInfo | undefined;
     switch (event.method) {
       case "Target.targetCreated": {
@@ -209,13 +235,18 @@ export function createBrowser(deps: BrowserDeps) {
         // A new document in a window: its node ids mean nothing any more
         // (Chrome reuses them across sites), so it gets fresh refs. Numbers
         // keep counting up, so a ref never names two elements in a window.
-        const frame = event.params.frame as { parentId?: string } | undefined;
+        const frame = event.params.frame as
+          { id?: string; parentId?: string } | undefined;
+        const entry = windowOfSession(event.sessionId);
+        // The frame's isolated world went with its old document.
+        if (entry && frame?.id)
+          entry.worlds.delete(`${String(event.sessionId)}:${frame.id}`);
         if (frame?.parentId !== undefined) return;
-        for (const entry of windows.values())
-          if (entry.sessionId === event.sessionId) {
-            entry.refByNode.clear();
-            entry.refs.clear();
-          }
+        if (entry && entry.sessionId === event.sessionId) {
+          entry.refByNode.clear();
+          entry.refs.clear();
+          entry.worlds.clear();
+        }
         return;
       }
       case "Target.attachedToTarget": {
@@ -335,6 +366,8 @@ export function createBrowser(deps: BrowserDeps) {
       { enabled: true },
       sessionId,
     );
+    // Requests tell when a page has settled after an action.
+    await c.send("Network.enable", {}, sessionId);
     // Cross-site frames get sessions of their own, for snapshots and actions.
     await c.send(
       "Target.setAutoAttach",
@@ -495,7 +528,20 @@ export function createBrowser(deps: BrowserDeps) {
     return owner;
   }
 
+  const actions = createActions({
+    caller,
+    windowFor,
+    sessionFor,
+    refresh,
+    info,
+    allWindows: () => [...windows.values()],
+    currentOf: (owner) => current.get(owner),
+    now,
+  });
+
   return {
+    ...actions,
+
     async windows(runToken: string) {
       const owner = caller(runToken);
       await connection();
@@ -592,21 +638,6 @@ export function createBrowser(deps: BrowserDeps) {
         more: Math.max(0, lines.length - cap),
         readOnly: !own,
       };
-    },
-
-    /** Where a ref from the caller's last snapshot points (for actions). */
-    async target(runToken: string, ref: string, windowId?: string) {
-      const owner = caller(runToken);
-      await connection();
-      const entry = windowFor(owner, windowId, "own");
-      const target = entry.refs.get(ref);
-      if (!target)
-        throw new BrowserFailure(
-          "not_found",
-          `There's no ${ref} in your last snapshot of ${entry.id}.`,
-          "Refs change as the page does; take a new snapshot and use a ref from it.",
-        );
-      return { window: entry, target };
     },
 
     /** Closes windows left by runs that have ended (idle, token expired). */

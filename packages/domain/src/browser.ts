@@ -70,3 +70,22 @@ export interface BrowserSnapshotResponse {
   /** A peek at another run's window: no refs, nothing to act on. */
   readOnly: boolean;
 }
+
+/** What an action (click, type, select, press, scroll, wait) answers. */
+export interface BrowserActionResponse {
+  /** What was done: `Clicked e5 (button "Sign in").` */
+  did: string;
+  /** Anything worth knowing about how it went. */
+  note?: string;
+  window: BrowserWindowInfo;
+  /** Whether the window's URL changed. */
+  navigated: boolean;
+  /** False when the page was still busy when the wait ended. */
+  settled: boolean;
+  /** Windows the page opened meanwhile; the newest became current. */
+  opened: BrowserWindowInfo[];
+  /** A confirm or prompt waiting for an answer (browser dialog). */
+  dialog: { type: string; message: string; defaultPrompt: string } | null;
+  /** Alerts and leave-page prompts answered automatically. */
+  handledDialogs: string[];
+}
