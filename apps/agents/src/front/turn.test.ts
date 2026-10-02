@@ -158,6 +158,7 @@ async function scenario(
           vm: vm.client,
           runTokenSecret: testRunTokenSecret,
           blobs: testBlobs,
+          webPublicUrl: "https://runwinston.com",
           telegram,
           timers,
           retryDelayMs: 0,

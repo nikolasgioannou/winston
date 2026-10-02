@@ -11,6 +11,8 @@ export const idPrefixes = {
   task: "task",
   /** A schedule or subscription Winston set for himself (§3). */
   trigger: "trg",
+  /** A live-view link handing a browser window to the user (§5). */
+  handoff: "hnd",
   /** A provider event, before matching subscriptions (§3). */
   event: "evn",
   /** Inbound items and outbound messages together form the history (`hist_`). */

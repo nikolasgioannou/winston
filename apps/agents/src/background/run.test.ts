@@ -62,6 +62,7 @@ async function setup(
     gateway: fake.gateway,
     vm,
     runTokenSecret: testRunTokenSecret,
+    webPublicUrl: "https://runwinston.com",
     blobs,
     retryDelayMs: 0,
   };
@@ -449,6 +450,7 @@ describe("background runs", () => {
         gateway: fake.gateway,
         vm: vm.client,
         runTokenSecret: testRunTokenSecret,
+        webPublicUrl: "https://runwinston.com",
         blobs,
         retryDelayMs: 0,
       };
@@ -458,6 +460,63 @@ describe("background runs", () => {
         cancelledToolNote,
       );
       expect((await runOf(tx, runId))?.status).toBe("cancelled");
+    });
+  });
+
+  test("a handoff with a browser window holds it for the user and puts a live-view link in task.needs_user", async () => {
+    await inRollback(db, async (tx) => {
+      const held: string[] = [];
+      const vm: VmClient = {
+        ...fakeVmClient().client,
+        holdBrowser: (_userId, owner) => {
+          held.push(owner);
+          return Promise.resolve({
+            windowId: "win_1",
+            targetId: "T1",
+            url: "https://opentable.com",
+          });
+        },
+      };
+      const { deps, runId, userId } = await setup(
+        tx,
+        [
+          {
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "call_handoff",
+                      type: "function",
+                      function: {
+                        name: "browser_handoff",
+                        arguments: JSON.stringify({
+                          reason: "Sign in to OpenTable.",
+                        }),
+                      },
+                    },
+                  ],
+                },
+                finish_reason: "tool_calls",
+              },
+            ],
+          },
+        ],
+        vm,
+      );
+      expect(await drive(deps, runId)).toEqual(["parked"]);
+      // A background run's windows are named by its id on the VM.
+      expect(held).toEqual([runId]);
+      const [item] = await tx
+        .select({ payload: inboundItems.payload })
+        .from(inboundItems)
+        .where(eq(inboundItems.userId, userId));
+      expect((item?.payload as { link?: string }).link).toStartWith(
+        "https://runwinston.com/t/",
+      );
     });
   });
 
@@ -672,6 +731,7 @@ describe("background runs", () => {
         gateway: fake.gateway,
         vm: fakeVmClient().client,
         runTokenSecret: testRunTokenSecret,
+        webPublicUrl: "https://runwinston.com",
         blobs,
         retryDelayMs: 0,
       };

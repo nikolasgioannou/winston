@@ -200,6 +200,7 @@ const worker = createWorker({
       vm,
       runTokenSecret: config.RUN_TOKEN_SECRET,
       blobs,
+      webPublicUrl: config.WEB_PUBLIC_URL,
       window: {
         maxTokens: config.FRONT_WINDOW_MAX_TOKENS,
         targetTokens: config.FRONT_WINDOW_TARGET_TOKENS,
@@ -219,6 +220,7 @@ const backgroundWorker = createWorker({
       vm,
       runTokenSecret: config.RUN_TOKEN_SECRET,
       blobs,
+      webPublicUrl: config.WEB_PUBLIC_URL,
     }),
   },
   concurrency: config.BACKGROUND_CONCURRENCY,

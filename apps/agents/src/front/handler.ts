@@ -27,6 +27,7 @@ export function frontTurnHandler(deps: {
   vm: VmClient;
   runTokenSecret: string;
   blobs: BlobStore;
+  webPublicUrl: string;
   timers?: Timers;
   window?: WindowBudget;
 }): JobHandler {

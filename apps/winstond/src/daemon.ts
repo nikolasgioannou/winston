@@ -2,6 +2,7 @@ import {
   gatewayToVmFrame,
   newFrameId,
   parseFrame,
+  type GatewayToVmFrame,
   type VmToGatewayFrame,
   type UpdateAvailableFrame,
 } from "@winston/domain/frames";
@@ -44,6 +45,19 @@ const unavailableResponse: RpcResponse = {
   ),
 };
 
+/** The gateway's frames for the browser handoff. */
+export type BrowserFrame = Extract<
+  GatewayToVmFrame,
+  {
+    type:
+      | "browser.hold"
+      | "browser.release"
+      | "screencast.start"
+      | "screencast.stop"
+      | "input";
+  }
+>;
+
 export interface DaemonOptions {
   gatewayUrl: string;
   /** From the environment on first boot; unused once a VM token is stored. */
@@ -61,6 +75,17 @@ export interface DaemonOptions {
     confirm: () => Promise<void>;
     /** Hands over to the new winstond (systemd restarts the process). */
     restart: () => void;
+  };
+  /**
+   * Browser handoff frames (browser.hold/release, screencast, input):
+   * winstond's browser answers them; absent in tests that don't need it.
+   */
+  browser?: {
+    handle(
+      frame: BrowserFrame,
+      /** Replies to the gateway on the live connection. */
+      reply: (frame: VmToGatewayFrame) => void,
+    ): void;
   };
   logger: Logger;
   /** For tests: faster reconnects and pings. */
@@ -362,6 +387,16 @@ export function createDaemon(options: DaemonOptions) {
         answer(frame.replyTo, { status: frame.status, body: frame.body });
       } else if (frame.type === "update.available") {
         void update(ws, frame);
+      } else if (
+        frame.type === "browser.hold" ||
+        frame.type === "browser.release" ||
+        frame.type === "screencast.start" ||
+        frame.type === "screencast.stop" ||
+        frame.type === "input"
+      ) {
+        options.browser?.handle(frame, (reply) => {
+          send(ws, reply);
+        });
       } else if (frame.type === "ping") {
         send(ws, { id: newFrameId(), type: "pong", replyTo: frame.id });
       } else if (frame.type === "error") {
@@ -394,7 +429,18 @@ export function createDaemon(options: DaemonOptions) {
     });
   }
 
+  /** Sends binary to the gateway on whatever connection is live now. */
+  const sendBinary = (data: Uint8Array) => {
+    if (socket?.readyState === WebSocket.OPEN) socket.send(data);
+  };
+  /** Sends a frame on whatever connection is live now (dropped if none). */
+  const sendFrame = (frame: VmToGatewayFrame) => {
+    if (socket?.readyState === WebSocket.OPEN) send(socket, frame);
+  };
+
   return {
+    sendBinary,
+    sendFrame,
     /**
      * Forwards a CLI call to the backend over the websocket (docs/design.md
      * §15) and resolves with its response. When the backend isn't reachable,

@@ -12,6 +12,7 @@ type Task = Page["tasks"][number];
 type Detail = InferResponseType<Tasks[":id"]["$get"], 200>;
 type Cancelled = InferResponseType<Tasks[":id"]["cancel"]["$post"], 200>;
 type Resumed = InferResponseType<Tasks[":id"]["resume"]["$post"], 200>;
+type Linked = InferResponseType<Tasks[":id"]["link"]["$post"], 200>;
 type Updated = InferResponseType<Tasks[":id"]["$patch"], 200>;
 
 const efforts = ["low", "medium", "high", "xhigh"] as const;
@@ -255,6 +256,22 @@ export const task: Resource = {
           }),
         );
         return flags.json === true ? json(result) : `Resumed ${result.id}.`;
+      },
+    },
+    {
+      name: "link",
+      summary:
+        "A fresh live-view link to a parked task's browser, when the last one expired or was used",
+      usage: "<task_id>",
+      flags: [],
+      examples: ["winston task link task_01k5…"],
+      run: async ({ client, flags, args }) => {
+        const result = await call<Linked>(
+          client.v1.tasks[":id"].link.$post({ param: { id: needId(args) } }),
+        );
+        return flags.json === true
+          ? json(result)
+          : `Send the user this link to ${result.id}'s browser: ${result.link}\nIt works once, for ${String(result.expiresInMinutes)} minutes.`;
       },
     },
   ],

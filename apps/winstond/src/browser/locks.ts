@@ -78,6 +78,22 @@ export function createLocks(now: () => number) {
       return domain;
     },
 
+    /**
+     * Keeps a run's locks while the user has its window (a handoff): they
+     * don't lapse until `unpin`, so no other task takes the site meanwhile.
+     */
+    pin(owner: string) {
+      for (const lock of locks.values())
+        if (lock.owner === owner) lock.expiresAt = Infinity;
+    },
+
+    /** The handoff is over: the run's locks lapse as usual again. */
+    unpin(owner: string) {
+      for (const lock of locks.values())
+        if (lock.owner === owner && lock.expiresAt === Infinity)
+          lock.expiresAt = now() + lockTtlMs;
+    },
+
     /** Frees every lock a run holds (its windows are all closed). */
     release(owner: string) {
       for (const [domain, lock] of locks)

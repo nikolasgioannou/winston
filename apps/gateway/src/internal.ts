@@ -6,6 +6,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { VmUnavailableError, VmUnreachableError, type Execs } from "./execs.ts";
 import { FileTransferError, type FileTransfers } from "./files.ts";
+import type { Handoffs } from "./handoffs.ts";
 import { maxFileBytes } from "./limits.ts";
 import type { Updates } from "./updates.ts";
 
@@ -30,6 +31,7 @@ export function internalRoutes({
   execs,
   files,
   updates,
+  handoffs,
 }: {
   db: DbOrTx;
   secret: string;
@@ -37,6 +39,7 @@ export function internalRoutes({
   execs: Execs;
   files: FileTransfers;
   updates?: Pick<Updates, "ready">;
+  handoffs?: Pick<Handoffs, "hold" | "release">;
 }) {
   const expected = Buffer.from(`Bearer ${secret}`);
   const authorized = (header: string | undefined) => {
@@ -178,6 +181,52 @@ export function internalRoutes({
             );
           throw error;
         }
+      })
+      // Browser handoff (§5): hold a run's current window for the user, or let it go.
+      .post("/vms/:userId/browser/hold", async (c) => {
+        const body = z
+          .object({ owner: z.string().min(1).max(64) })
+          .safeParse(await c.req.json().catch(() => undefined));
+        if (!body.success || !handoffs)
+          return c.json(
+            {
+              error: { code: "invalid_request", message: "owner is required" },
+            },
+            400,
+          );
+        const vmId = await vmIdFor(c.req.param("userId"));
+        if (!vmId) return notFound(c);
+        try {
+          return c.json({ window: await handoffs.hold(vmId, body.data.owner) });
+        } catch (error) {
+          if (error instanceof VmUnavailableError)
+            return c.json(
+              { error: { code: "vm_unavailable", message: error.message } },
+              409,
+            );
+          if (error instanceof VmUnreachableError)
+            return c.json(
+              { error: { code: "vm_unreachable", message: error.message } },
+              504,
+            );
+          throw error;
+        }
+      })
+      .post("/vms/:userId/browser/release", async (c) => {
+        const body = z
+          .object({ owner: z.string().min(1).max(64) })
+          .safeParse(await c.req.json().catch(() => undefined));
+        if (!body.success || !handoffs)
+          return c.json(
+            {
+              error: { code: "invalid_request", message: "owner is required" },
+            },
+            400,
+          );
+        const vmId = await vmIdFor(c.req.param("userId"));
+        if (!vmId) return notFound(c);
+        handoffs.release(vmId, body.data.owner);
+        return c.json({ released: true });
       })
       .get("/vms/:userId/files", async (c) => {
         const path = c.req.query("path");

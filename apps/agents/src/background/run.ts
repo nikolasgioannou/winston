@@ -116,6 +116,8 @@ export interface BackgroundDeps {
   vm: VmClient;
   runTokenSecret: string;
   blobs: BlobStore;
+  /** The site, for handoff links (`/t/<token>`). */
+  webPublicUrl: string;
   /** For tests: the pause before a quick retry. */
   retryDelayMs?: number;
   /** For tests: the context size that triggers a compaction. */
@@ -317,6 +319,22 @@ export async function runBackgroundStep(
     return { type: "text", value: interruptedNote };
   };
 
+  /**
+   * The run's browser window, held for the user while it's parked (§5), for
+   * a live-view link; undefined when it has none or the VM can't be reached.
+   */
+  const heldWindow = async () => {
+    try {
+      const window = await deps.vm.holdBrowser(run.userId, runId);
+      return window
+        ? { ...window, webPublicUrl: deps.webPublicUrl }
+        : undefined;
+    } catch (error) {
+      logger.warn({ err: error }, "holding the browser for a handoff failed");
+      return undefined;
+    }
+  };
+
   // A step that died after the model asked for tools (§9, crash safety).
   const lastEntry = log.at(-1);
   const unanswered =
@@ -330,7 +348,13 @@ export async function runBackgroundStep(
     );
     const handoff = unanswered.find((call) => call.toolName === handoffTool);
     if (handoff) {
-      await parkTask(db, runId, reasonOf(handoff), run.stepCount);
+      await parkTask(
+        db,
+        runId,
+        reasonOf(handoff),
+        run.stepCount,
+        await heldWindow(),
+      );
       return "parked";
     }
     const recovered = [];
@@ -481,7 +505,13 @@ export async function runBackgroundStep(
   // Handed over to the user: park, with the call unanswered until resumed.
   const handoff = calls.find((call) => call.toolName === handoffTool);
   if (handoff) {
-    await parkTask(db, runId, reasonOf(handoff), run.stepCount + 1);
+    await parkTask(
+      db,
+      runId,
+      reasonOf(handoff),
+      run.stepCount + 1,
+      await heldWindow(),
+    );
     logger.info("handed over to the user; parked");
     return "parked";
   }

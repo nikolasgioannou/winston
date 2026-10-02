@@ -125,5 +125,7 @@ export const taskNeedsUserPayloadSchema = z.object({
   brief: z.string(),
   /** What the user needs to do, in the agent's words. */
   reason: z.string(),
+  /** The live view of the agent's browser window, when it has one. */
+  link: z.string().optional(),
 });
 export type TaskNeedsUserPayload = z.infer<typeof taskNeedsUserPayloadSchema>;

@@ -27,6 +27,16 @@ export interface VmClient {
   fetchExec(userId: string, execId: string): Promise<ExecResult | undefined>;
   writeFile(userId: string, path: string, bytes: Uint8Array): Promise<void>;
   readFile(userId: string, path: string): Promise<Uint8Array>;
+  /**
+   * Holds a run's current browser window for the user (browser handoff);
+   * null when it has none. `owner` is `front` or the run id.
+   */
+  holdBrowser(
+    userId: string,
+    owner: string,
+  ): Promise<{ windowId: string; targetId: string; url: string } | null>;
+  /** Lets a run's held windows go and ends their live views. */
+  releaseBrowser(userId: string, owner: string): Promise<void>;
 }
 
 export function gatewayClient({
@@ -49,7 +59,37 @@ export function gatewayClient({
     );
   };
 
+  const browser = async (
+    userId: string,
+    action: "hold" | "release",
+    owner: string,
+  ) => {
+    const response = await fetch(
+      url(`/internal/vms/${userId}/browser/${action}`),
+      {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ owner }),
+      },
+    ).catch(() => {
+      throw new GatewayError(
+        "gateway_unreachable",
+        "Couldn't reach the gateway.",
+      );
+    });
+    if (!response.ok) throw await failure(response);
+    return (await response.json()) as {
+      window?: { windowId: string; targetId: string; url: string } | null;
+    };
+  };
+
   return {
+    async holdBrowser(userId, owner) {
+      return (await browser(userId, "hold", owner)).window ?? null;
+    },
+    async releaseBrowser(userId, owner) {
+      await browser(userId, "release", owner);
+    },
     async exec(userId, request) {
       const response = await fetch(url(`/internal/vms/${userId}/exec`), {
         method: "POST",

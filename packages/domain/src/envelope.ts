@@ -198,6 +198,7 @@ export function renderTaskResult(item: TaskItem, timeZone: string) {
       at,
       `  <task${attributes({ id: item.payload.taskId })}>${escapeText(item.payload.brief)}</task>`,
       element("reason", item.payload.reason),
+      ...(item.payload.link ? [element("link", item.payload.link)] : []),
     ]);
   const { payload } = item;
   return envelope(item.type, [

@@ -146,6 +146,7 @@ export function createBrowser(deps: BrowserDeps) {
       loadingFrames: new Set(),
       handledDialogs: [],
       worlds: new Map(),
+      heldForUser: false,
     };
     windows.set(entry.id, entry);
     byTarget.set(entry.targetId, entry.id);
@@ -348,6 +349,12 @@ export function createBrowser(deps: BrowserDeps) {
           "winston browser windows lists them.",
         );
       }
+      if (access === "own" && entry.heldForUser)
+        throw new BrowserFailure(
+          "invalid_request",
+          `You handed ${windowId} to the user; it's theirs until they're done.`,
+          "Wait for them, or open another window for something else.",
+        );
       if (access === "own" && entry.owner !== owner)
         throw new BrowserFailure(
           "invalid_request",
@@ -358,6 +365,12 @@ export function createBrowser(deps: BrowserDeps) {
     }
     const id = current.get(owner);
     const entry = id ? windows.get(id) : undefined;
+    if (entry?.heldForUser && access === "own")
+      throw new BrowserFailure(
+        "invalid_request",
+        `You handed ${entry.id} to the user; it's theirs until they're done.`,
+        "Wait for them, or open another window for something else.",
+      );
     if (entry) return entry;
     if (lostOwners.delete(owner)) throw restarted();
     throw new BrowserFailure(
@@ -669,11 +682,40 @@ export function createBrowser(deps: BrowserDeps) {
       };
     },
 
+    /**
+     * Hands an owner's current window to the user (a handoff): the agent
+     * can't act in it, and its site locks stay put, until `release`. Null
+     * when the owner has no window.
+     */
+    hold(owner: string) {
+      const id = current.get(owner);
+      const entry = id ? windows.get(id) : undefined;
+      if (!entry) return null;
+      entry.heldForUser = true;
+      entry.lastUsedAt = now();
+      locks.pin(owner);
+      return { windowId: entry.id, targetId: entry.targetId, url: entry.url };
+    },
+
+    /** The user is done: the owner's windows are its own again. */
+    release(owner: string) {
+      for (const entry of windows.values())
+        if (entry.owner === owner && entry.heldForUser) {
+          entry.heldForUser = false;
+          entry.lastUsedAt = now();
+        }
+      locks.unpin(owner);
+    },
+
+    /** The CDP connection, for the live view (screencast.ts). */
+    connection,
+
     /** Closes windows left by runs that have ended (idle, token expired). */
     async sweep() {
       const at = now();
       const stale = [...windows.values()].filter(
         (entry) =>
+          !entry.heldForUser &&
           at - entry.lastUsedAt > browserTimings.idleMs &&
           at > (ownerExp.get(entry.owner) ?? 0),
       );

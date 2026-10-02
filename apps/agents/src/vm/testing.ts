@@ -21,6 +21,8 @@ export function fakeVmClient(
       });
     },
     fetchExec: () => Promise.resolve(undefined),
+    holdBrowser: () => Promise.resolve(null),
+    releaseBrowser: () => Promise.resolve(),
     writeFile: () => Promise.resolve(),
     // Any file reads as 50 KB of bytes, enough to notice if it were stored inline.
     readFile: () => Promise.resolve(new Uint8Array(50_000).fill(7)),

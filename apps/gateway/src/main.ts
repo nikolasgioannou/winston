@@ -11,9 +11,8 @@ import { createTokenVault } from "@winston/shared/token-vault";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
 import { loadGatewayConfig } from "./config.ts";
-import { createGateway } from "./gateway.ts";
+import { createGateway, type GatewaySocketData } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
-import type { VmSocketData } from "./vm-socket.ts";
 
 const config = loadGatewayConfig();
 const logger = createLogger("gateway", {
@@ -63,7 +62,7 @@ const refreshUpdates = () => {
 };
 refreshUpdates();
 const updateChecker = setInterval(refreshUpdates, 60_000);
-const server = Bun.serve<VmSocketData>({
+const server = Bun.serve<GatewaySocketData>({
   hostname: config.GATEWAY_HOST,
   port: config.GATEWAY_PORT,
   fetch: gateway.fetch,

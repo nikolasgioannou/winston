@@ -444,4 +444,39 @@ describe("agent windows", () => {
     });
     expect(moved.window.locks).toEqual(["news.test", "shop.test"]);
   });
+
+  test("a window held for the user can't be acted in, keeps its site, and is the run's again once released", async () => {
+    let clock = Date.now();
+    const { browser } = setup(() => clock);
+    const a = await browser.open(
+      token("run_a", "background", clock + 60 * 60_000),
+      "https://shop.test",
+    );
+    expect(browser.hold("run_a")).toEqual({
+      windowId: a.window.id,
+      targetId: "t1",
+      url: "https://shop.test",
+    });
+    expect(browser.hold("run_z")).toBeNull();
+    const refused = await failure(
+      browser.navigate(token("run_a"), { url: "https://shop.test/2" }),
+    );
+    expect(refused.message).toBe(
+      `You handed ${a.window.id} to the user; it's theirs until they're done.`,
+    );
+    // Long past the lock's 5 minutes, the site is still the run's.
+    clock += 60 * 60_000;
+    await browser.open(token("run_b"), "https://news.test");
+    expect(
+      (
+        await failure(
+          browser.navigate(token("run_b"), { url: "https://shop.test" }),
+        )
+      ).code,
+    ).toBe("conflict");
+    // Nor is a held window swept as idle.
+    expect(await browser.sweep()).toEqual([]);
+    browser.release("run_a");
+    await browser.navigate(token("run_a"), { url: "https://shop.test/2" });
+  });
 });

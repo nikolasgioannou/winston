@@ -16,6 +16,7 @@
     "./run-state": "./src/run-state.ts",
     "./schema": "./src/schema/index.ts",
     "./system-events": "./src/system-events.ts",
+    "./handoffs": "./src/handoffs.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram-link-tokens": "./src/telegram-link-tokens.ts",
     "./testing": "./src/testing.ts",

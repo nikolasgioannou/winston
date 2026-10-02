@@ -11,7 +11,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { replacedCloseCode } from "./connections.ts";
 import { createGateway } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
-import type { VmSocketData } from "./vm-socket.ts";
+import type { GatewaySocketData } from "./gateway.ts";
 
 // The server handles requests on its own connections, so these tests commit
 // real rows and delete their users afterwards.
@@ -23,7 +23,7 @@ const logger = createLogger("gateway-test", {
 const internalSecret = "internal-secret-0123456789abcdefghijklmnop";
 const runTokenSecret = "gateway-test-run-token-secret-0123456789";
 const gateway = createGateway({ db, logger, internalSecret, runTokenSecret });
-const server = Bun.serve<VmSocketData>({
+const server = Bun.serve<GatewaySocketData>({
   port: 0,
   fetch: gateway.fetch,
   websocket: gateway.websocket,

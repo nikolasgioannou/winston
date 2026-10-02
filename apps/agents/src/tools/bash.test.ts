@@ -17,6 +17,8 @@ function fakeVm(answer: Partial<ExecResult> | GatewayError) {
   const files: { path: string; text: string }[] = [];
   const vm: VmClient = {
     fetchExec: () => Promise.resolve(undefined),
+    holdBrowser: () => Promise.resolve(null),
+    releaseBrowser: () => Promise.resolve(),
     exec: (_userId, request) => {
       execs.push(request);
       if (answer instanceof GatewayError) return Promise.reject(answer);

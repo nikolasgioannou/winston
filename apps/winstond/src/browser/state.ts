@@ -64,4 +64,6 @@ export interface WindowEntry {
   handledDialogs: string[];
   /** Isolated worlds for looking at the page, by session and frame. */
   worlds: Map<string, number>;
+  /** Handed to the user (a handoff): the agent can't act in it. */
+  heldForUser: boolean;
 }

@@ -86,6 +86,7 @@ async function withUser(
           vm: fakeVmClient().client,
           runTokenSecret: testRunTokenSecret,
           blobs: testBlobs,
+          webPublicUrl: "https://runwinston.com",
           telegram,
           timers: noTimers,
           retryDelayMs: 0,

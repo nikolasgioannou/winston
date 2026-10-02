@@ -1,14 +1,14 @@
 ---
 id: "f0507c"
 title: Create handoff links and stream a tab's screencast
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - browser
   - m8
 created_at: 2026-09-27T05:42:03.904Z
-updated_at: 2026-09-27T05:42:03.958Z
+updated_at: 2026-10-02T02:47:03.738Z
 blocked_by:
   - "6b73c4"
   - "ac0f5f"
@@ -24,3 +24,12 @@ Build the backend side:
 - **While a handoff is active, the agent must not act on that window.** Coordinate with the domain lock: the handoff holds it.
 
 Tests: token lifecycle (single use, deadline, revocation), the gateway relay with a fake page and fake VM, and input frames mapped to CDP calls.
+
+## As built
+
+- `handoffs` table and `@winston/db/handoffs` (create, single-use connect with a reconnect secret, 15-min deadline, resolve on resume/cancel/finish, front-of-house resolution on the user's next message, latest for fresh links).
+- Background park holds the run's window (`browser.hold` via the gateway's internal API) and puts the link in `task.needs_user`; the front of house's handoff sends its link to the user directly. `winston task link <id>` for a fresh one.
+- Gateway: `/handoff/connect` page socket (auth by first message, close codes), relay of binary frames and validated input for that handoff only, hold/release, release on resume/cancel (vm-api hook).
+- winstond: hold/release in the registry (acting refused, locks pinned, no idle sweep), `screencast.ts` (own CDP session, focus emulation, first-frame screenshot, acked JPEG screencast, input replay), `handoff-frames.ts`, daemon routing and binary sends.
+- Tests: db token lifecycle, gateway relay with a fake page and fake VM (frames, input, single use, reconnect, release, expiry), winstond screencast and input mapping, registry hold, agents' handoff tools. Checked against real Chrome in the local VM (background window streams, input replays).
+

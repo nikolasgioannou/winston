@@ -23,7 +23,7 @@ import { calendarWriteRoutes } from "./calendar-write.ts";
 import { eventRoutes } from "./events.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
-import { taskRoutes } from "./tasks.ts";
+import { taskRoutes, type TaskBrowser } from "./tasks.ts";
 import { triggerRoutes } from "./triggers.ts";
 import { z } from "zod";
 
@@ -38,9 +38,12 @@ export function createVmApi({
   runTokenSecret,
   connectors,
   vmFiles,
+  browser,
 }: {
   db: DbOrTx;
   runTokenSecret: string;
+  /** Handing a parked task's browser over (the gateway's handoff registry). */
+  browser?: TaskBrowser;
   /** Writing files onto the user's VM (attachments): the gateway's file transfer. */
   vmFiles?: VmFiles;
   /** Mail and calendar (docs/design.md §5); absent where nothing is connected, as in some tests. */
@@ -140,7 +143,7 @@ export function createVmApi({
     .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }))
     .route("/v1/calendar", calendarRoutes({ db, connectors }))
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
-    .route("/v1/tasks", taskRoutes({ db }))
+    .route("/v1/tasks", taskRoutes({ db, browser }))
     .route("/v1/events", eventRoutes())
     .route("/v1/triggers", triggerRoutes({ db }));
 }

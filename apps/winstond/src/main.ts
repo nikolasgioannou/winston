@@ -3,9 +3,12 @@
  * one talking to the backend (docs/design.md §10, §15). Runs as the
  * `winstond` user under systemd.
  */
+import { newFrameId } from "@winston/domain/frames";
 import { createLogger } from "@winston/shared/logger";
 import { browserSocketUrl, connectCdp } from "./browser/cdp.ts";
+import { handoffFrames } from "./browser/handoff-frames.ts";
 import { browserRpc, isBrowserPath } from "./browser/rpc.ts";
+import { createScreencasts } from "./browser/screencast.ts";
 import { createBrowser } from "./browser/windows.ts";
 import { watchChrome } from "./chrome-watch.ts";
 import { serveCliSocket } from "./cli-socket.ts";
@@ -58,23 +61,6 @@ const logger = createLogger("winstond", { pretty: false });
 /** winstond's own directory, which holds both binaries (updater.ts). */
 const dir = process.env.WINSTOND_DIR ?? "/usr/local/lib/winstond";
 const versions = { winstond: version, cli: await cliVersion() };
-const daemon = createDaemon({
-  gatewayUrl,
-  registrationToken: settings.registrationToken,
-  executor: createExecutor(),
-  files: helperFiles(),
-  tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
-  versions,
-  updates: {
-    apply: (frame) =>
-      applyUpdate(frame, { dir, publicKeyPem: signingPublicKey, versions }),
-    confirm: () => confirmUpdate(dir),
-    restart: () => process.exit(0),
-  },
-  logger,
-});
-daemon.start();
-const stopChromeWatch = watchChrome(logger);
 // The browser's state lives here, since every CLI call is a new process.
 const files = helperFiles();
 const browser = createBrowser({
@@ -90,6 +76,43 @@ const browser = createBrowser({
       new Blob([bytes]).stream(),
     ),
 });
+// The live view of a handed-over tab streams through the daemon's connection.
+const screencasts = createScreencasts({
+  connection: () => browser.connection(),
+  sendBinary: (message) => {
+    daemon.sendBinary(message);
+  },
+  sendFrame: (frame) => {
+    daemon.sendFrame(frame);
+  },
+  newFrameId,
+  logger,
+});
+const daemon = createDaemon({
+  gatewayUrl,
+  registrationToken: settings.registrationToken,
+  executor: createExecutor(),
+  files: helperFiles(),
+  tokens: tokenStore(process.env.WINSTOND_TOKEN_PATH ?? "/etc/winstond/token"),
+  versions,
+  updates: {
+    apply: (frame) =>
+      applyUpdate(frame, { dir, publicKeyPem: signingPublicKey, versions }),
+    confirm: () => confirmUpdate(dir),
+    restart: () => process.exit(0),
+  },
+  browser: handoffFrames({
+    browser,
+    screencasts,
+    sendFrame: (frame) => {
+      daemon.sendFrame(frame);
+    },
+    logger,
+  }),
+  logger,
+});
+daemon.start();
+const stopChromeWatch = watchChrome(logger);
 const browserSweep = setInterval(() => void browser.sweep(), 60_000);
 await serveCliSocket(
   process.env.WINSTOND_SOCKET ?? "/run/winstond/winstond.sock",

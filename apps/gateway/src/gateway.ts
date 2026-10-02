@@ -2,13 +2,16 @@ import type { DbOrTx } from "@winston/db/client";
 import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
-import { vms } from "@winston/db/schema";
+import { connectHandoff, reconnectHandoff } from "@winston/db/handoffs";
+import { runs, vms } from "@winston/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
 import type { ConnectorDeps } from "@winston/vm-api/connections";
 import { createExecs, VmUnavailableError } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
+import { createHandoffs, viewerCloseCodes, type Viewer } from "./handoffs.ts";
 import { internalRoutes } from "./internal.ts";
 import { createUpdates, type UpdatesOptions } from "./updates.ts";
 import {
@@ -22,7 +25,46 @@ import {
 /** Frames are small today; file transfers will chunk within this. */
 export const maxFrameBytes = 1024 * 1024;
 
+/** A live-view page's socket: it signs in with its first message. */
+export interface ViewerSocketData {
+  kind: "viewer";
+  viewer?: Viewer;
+  authTimer?: Timer;
+}
+
+export type GatewaySocketData = VmSocketData | ViewerSocketData;
+
 type VmSocket = ServerWebSocket<VmSocketData>;
+type GatewaySocket = ServerWebSocket<GatewaySocketData>;
+
+const isViewer = (ws: GatewaySocket): ws is ServerWebSocket<ViewerSocketData> =>
+  "kind" in ws.data;
+
+/** How the live-view page signs in: its link's token, or its reconnect secret. */
+const viewerAuth = z.union([
+  z.object({ type: z.literal("auth"), token: z.string().min(1).max(200) }),
+  z.object({
+    type: z.literal("auth"),
+    handoff: z.string().min(1).max(64),
+    secret: z.string().min(1).max(200),
+  }),
+]);
+
+/** Close codes for a link that can't be opened (docs/design.md §5). */
+const refusals = {
+  unknown: [4003, "This link isn't valid."],
+  used: [4003, "This link has already been opened."],
+  expired: [4004, "This link expired. Ask Winston for a new one."],
+  ended: [viewerCloseCodes.ended, "This handoff is over."],
+} as const;
+
+const refuse = (
+  ws: ServerWebSocket<ViewerSocketData>,
+  why: keyof typeof refusals,
+) => {
+  const [code, reason] = refusals[why];
+  ws.close(code, reason);
+};
 
 /**
  * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`,
@@ -63,6 +105,10 @@ export function createGateway({
     logger,
   });
   const files = createFileTransfers(sendTo);
+  const handoffs = createHandoffs({
+    send: (vmId, frame) => sendTo(vmId, frame) !== undefined,
+    logger,
+  });
   const vmIdOf = async (userId: string) => {
     const [vm] = await db
       .select({ id: vms.id })
@@ -75,6 +121,22 @@ export function createGateway({
     db,
     runTokenSecret,
     ...(connectors ? { connectors } : {}),
+    ...(connectors
+      ? {
+          browser: {
+            webPublicUrl: connectors.webPublicUrl,
+            hold: async (userId: string, owner: string) =>
+              handoffs.hold(await vmIdOf(userId), owner),
+            release: (userId: string, owner: string) => {
+              void vmIdOf(userId)
+                .then((vmId) => {
+                  handoffs.release(vmId, owner);
+                })
+                .catch(() => undefined);
+            },
+          },
+        }
+      : {}),
     // Attachments travel to and from the user's VM through the file transfer.
     vmFiles: {
       async read(userId, path) {
@@ -96,9 +158,73 @@ export function createGateway({
     execs,
     files,
     updates,
+    handoffs,
   });
   const send = (ws: VmSocket, frame: GatewayToVmFrame) =>
     ws.send(JSON.stringify(frame));
+
+  /** Signs a live-view page in and starts its stream, or closes it saying why. */
+  async function admitViewer(
+    ws: ServerWebSocket<ViewerSocketData>,
+    text: string,
+  ) {
+    clearTimeout(ws.data.authTimer);
+    let auth: z.infer<typeof viewerAuth>;
+    try {
+      auth = viewerAuth.parse(JSON.parse(text));
+    } catch {
+      refuse(ws, "unknown");
+      return;
+    }
+    let row;
+    let viewerSecret: string | undefined;
+    if ("token" in auth) {
+      const result = await connectHandoff(db, auth.token);
+      if (!result.ok) {
+        refuse(ws, result.reason);
+        return;
+      }
+      row = result.handoff;
+      viewerSecret = result.viewerSecret;
+    } else {
+      row = await reconnectHandoff(db, auth.handoff, auth.secret);
+      if (!row) {
+        refuse(ws, "used");
+        return;
+      }
+    }
+    const [vm] = await db
+      .select({ id: vms.id })
+      .from(vms)
+      .where(eq(vms.userId, row.userId));
+    const [run] = await db
+      .select({ kind: runs.kind })
+      .from(runs)
+      .where(eq(runs.id, row.runId));
+    if (!vm || !run) {
+      refuse(ws, "ended");
+      return;
+    }
+    const viewer: Viewer = {
+      handoffId: row.id,
+      vmId: vm.id,
+      // winstond names the front of house's windows `front`, others by run id.
+      owner: run.kind === "front" ? "front" : row.runId,
+      targetId: row.targetId,
+      socket: ws,
+    };
+    ws.data.viewer = viewer;
+    // The page keeps this to reconnect; the link itself is used up.
+    if (viewerSecret)
+      ws.send(
+        JSON.stringify({
+          type: "session",
+          handoff: row.id,
+          secret: viewerSecret,
+        }),
+      );
+    handoffs.connect(viewer);
+  }
   /** Liveness for the load balancer, like api's: the process answers and Postgres is reachable. */
   const health = async () => {
     try {
@@ -110,11 +236,19 @@ export function createGateway({
     }
   };
 
-  const websocket: WebSocketHandler<VmSocketData> = {
+  const websocket: WebSocketHandler<GatewaySocketData> = {
     maxPayloadLength: maxFrameBytes,
     // VMs ping every 20 s; a socket silent for a minute is gone.
     idleTimeout: 60,
-    async open(ws) {
+    async open(socket) {
+      if (isViewer(socket)) {
+        // A page that doesn't sign in within 10 s is dropped.
+        socket.data.authTimer = setTimeout(() => {
+          refuse(socket, "unknown");
+        }, 10_000);
+        return;
+      }
+      const ws = socket as VmSocket;
       const { vmId, registrationHash } = ws.data;
       if (registrationHash) {
         const vmToken = await register(db, vmId, registrationHash);
@@ -132,26 +266,36 @@ export function createGateway({
       logger.info({ vmId }, "VM connected");
       execs.reconnected(vmId);
     },
-    async message(ws, message) {
+    async message(socket, message) {
+      if (isViewer(socket)) {
+        if (typeof message !== "string") return;
+        if (socket.data.viewer) handoffs.input(socket.data.viewer, message);
+        else await admitViewer(socket, message);
+        return;
+      }
+      const ws = socket as VmSocket;
       if (typeof message !== "string") {
-        send(ws, {
-          id: newFrameId(),
-          type: "error",
-          code: "unsupported",
-          message: "binary frames aren't supported yet",
-        });
+        // Binary from a VM is a screencast frame for a live view.
+        handoffs.frame(ws.data.vmId, new Uint8Array(message));
         return;
       }
       const vmLogger = logger.child({ vmId: ws.data.vmId });
       for (const reply of await handleVmFrame(
-        { db, logger: vmLogger, execs, files, vmApi, updates },
+        { db, logger: vmLogger, execs, files, vmApi, updates, handoffs },
         ws.data,
         message,
       ))
         send(ws, reply);
     },
-    close(ws, code) {
+    close(socket, code) {
+      if (isViewer(socket)) {
+        clearTimeout(socket.data.authTimer);
+        if (socket.data.viewer) handoffs.disconnected(socket.data.viewer);
+        return;
+      }
+      const ws = socket as VmSocket;
       connections.remove(ws.data.vmId, ws);
+      handoffs.vmClosed(ws.data.vmId);
       if (!connections.get(ws.data.vmId)) updates.disconnected(ws.data.vmId);
       files.closed(ws);
       logger.info({ vmId: ws.data.vmId, code }, "VM disconnected");
@@ -164,8 +308,16 @@ export function createGateway({
     execs,
     files,
     websocket,
-    fetch: async (request: Request, server: Server<VmSocketData>) => {
+    handoffs,
+    fetch: async (request: Request, server: Server<GatewaySocketData>) => {
       const url = new URL(request.url);
+      // The handoff page's live view; it signs in over the socket.
+      if (url.pathname === "/handoff/connect")
+        return server.upgrade(request, {
+          data: { kind: "viewer" } satisfies ViewerSocketData,
+        })
+          ? undefined
+          : new Response("expected a websocket", { status: 400 });
       if (url.pathname === "/vm/connect") {
         const data = await authenticateVm(
           db,

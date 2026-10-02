@@ -12,6 +12,11 @@
  * written. Otherwise it isn't sent, its tool calls don't run, and the model
  * continues with the new input in view.
  */
+import {
+  createHandoff,
+  handoffLink,
+  resolveFrontHandoffs,
+} from "@winston/db/handoffs";
 import type { DbOrTx } from "@winston/db/client";
 import {
   frontState,
@@ -144,6 +149,8 @@ export interface FrontTurnDeps {
   runTokenSecret: string;
   /** Where images from tool results are kept, instead of inline in `run_messages`. */
   blobs: BlobStore;
+  /** The site, for handoff links (`/t/<token>`). */
+  webPublicUrl: string;
   /** For tests: the typing indicator's timers. */
   timers?: Timers;
   /** The rolling window's size; the defaults suit production. */
@@ -174,12 +181,21 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     if (!created) throw new Error("Creating a run returned no row.");
     const log = new RunLog(created.id);
     const input = await log.claim(tx, userId, items, user.timezone, deps.blobs);
-    return [{ log, input }];
+    // The user wrote: a browser they took over from the front of house is
+    // theirs no longer ("done" is their next message, §5).
+    const handedBack = items.some((item) => item.type === "user_message")
+      ? await resolveFrontHandoffs(tx, userId)
+      : [];
+    return [{ log, input, handedBack }];
   });
   if (!run) return undefined;
-  const { log, input } = run;
+  const { log, input, handedBack } = run;
   const runId = log.runId;
   const logger = deps.logger.child({ runId });
+  if (handedBack.length > 0)
+    deps.vm.releaseBrowser(userId, "front").catch((error: unknown) => {
+      logger.warn({ err: error }, "releasing the handed-over browser failed");
+    });
   // "Typing…" shows work between messages (§4).
   const typing = startTyping(
     () => telegram.sendChatAction(user.chatId, "typing"),
@@ -282,7 +298,36 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       delegateTool({ db, logger, userId, runId }),
       () => stream.dropStep,
     ),
-    browser_handoff: unlessDropped(frontHandoffTool, () => stream.dropStep),
+    browser_handoff: unlessDropped(
+      frontHandoffTool({
+        hold: () => deps.vm.holdBrowser(userId, "front"),
+        createLink: async (window, reason) =>
+          handoffLink(
+            deps.webPublicUrl,
+            (
+              await createHandoff(db, {
+                runId,
+                userId,
+                windowId: window.windowId,
+                targetId: window.targetId,
+                reason,
+              })
+            ).token,
+          ),
+        sendLink: (text) =>
+          deliverReply({
+            db,
+            logger,
+            telegram,
+            userId,
+            runId,
+            chatId: user.chatId,
+            text,
+          }),
+        logger,
+      }),
+      () => stream.dropStep,
+    ),
     end_turn: unlessDropped(endTurnTool, () => stream.dropStep),
   };
   const attempt = async (profile: ModelProfile) => {

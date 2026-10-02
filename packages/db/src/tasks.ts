@@ -7,6 +7,7 @@
 import { runStepJob } from "@winston/domain/jobs";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
+import { createHandoff, handoffLink, resolveHandoffs } from "./handoffs.ts";
 import { enqueue } from "./queue.ts";
 import { applyRunEvent } from "./run-state.ts";
 import { runMessages, runs } from "./schema/index.ts";
@@ -41,6 +42,7 @@ export async function finishTask(
     const result = report.trim() || "The task ended without a report.";
     const status = await applyRunEvent(tx, runId, event, { result });
     if (!status) return undefined;
+    await resolveHandoffs(tx, runId);
     const [run] = await tx
       .select({
         userId: runs.userId,
@@ -88,6 +90,8 @@ export async function parkTask(
   reason: string,
   /** Distinguishes this handoff from the run's earlier ones. */
   step: number,
+  /** The browser window the user takes over, for a live-view link. */
+  window?: { windowId: string; targetId: string; webPublicUrl: string },
 ) {
   return db.transaction(async (tx) => {
     if (!(await applyRunEvent(tx, runId, "park"))) return false;
@@ -97,10 +101,29 @@ export async function parkTask(
       .where(eq(runs.id, runId))
       .returning({ userId: runs.userId, brief: runs.brief });
     if (!run) throw new Error(`No run ${runId}`);
+    const link = window
+      ? handoffLink(
+          window.webPublicUrl,
+          (
+            await createHandoff(tx, {
+              runId,
+              userId: run.userId,
+              windowId: window.windowId,
+              targetId: window.targetId,
+              reason,
+            })
+          ).token,
+        )
+      : undefined;
     await recordSystemEvent(tx, {
       userId: run.userId,
       type: "task.needs_user",
-      payload: { taskId: runId, brief: briefPreview(run.brief), reason },
+      payload: {
+        taskId: runId,
+        brief: briefPreview(run.brief),
+        reason,
+        ...(link ? { link } : {}),
+      },
       sourceRef: `task:${runId}:parked:${String(step)}`,
     });
     return true;
@@ -158,6 +181,8 @@ export async function resumeTask(
   return db.transaction(async (tx) => {
     const status = await applyRunEvent(tx, runId, "resume");
     if (!status) return false;
+    // The user is done with the browser: the live view ends.
+    await resolveHandoffs(tx, runId);
     const [run] = await tx
       .update(runs)
       .set({ waitingFor: null })

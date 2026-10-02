@@ -66,6 +66,7 @@ function startWorkers(count: number, delayMs = 0) {
     vm: fakeVmClient().client,
     runTokenSecret: testRunTokenSecret,
     blobs: testBlobs,
+    webPublicUrl: "https://runwinston.com",
     telegram,
     timers: noTimers,
   });

@@ -12,6 +12,7 @@ import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { Execs } from "./execs.ts";
 import type { FileTransfers } from "./files.ts";
+import type { Handoffs } from "./handoffs.ts";
 import type { VmApi } from "@winston/vm-api";
 import type { Updates } from "./updates.ts";
 
@@ -86,11 +87,13 @@ export async function handleVmFrame(
     files,
     vmApi,
     updates,
+    handoffs,
   }: {
     db: DbOrTx;
     logger: Logger;
     execs: Execs;
     files: FileTransfers;
+    handoffs: Handoffs;
     vmApi: VmApi;
     updates?: Pick<Updates, "hello">;
   },
@@ -109,7 +112,12 @@ export async function handleVmFrame(
     ];
   const frame = parsed.frame;
   const { vmId } = vm;
-  if (execs.handle(vmId, frame) || files.handle(vmId, frame)) return [];
+  if (
+    execs.handle(vmId, frame) ||
+    files.handle(vmId, frame) ||
+    handoffs.handle(vmId, frame)
+  )
+    return [];
 
   switch (frame.type) {
     case "hello": {
@@ -182,7 +190,9 @@ export async function handleVmFrame(
     case "file.chunk":
     case "file.done":
     case "file.error":
-      // Handled by the exec and file registries above.
+    case "browser.held":
+    case "screencast.ended":
+      // Handled by the exec, file and handoff registries above.
       return [];
     case "error":
       logger.warn(

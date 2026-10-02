@@ -36,6 +36,7 @@ async function job(replies: Record<string, unknown>[]) {
     gateway: fake.gateway,
     vm: fakeVmClient().client,
     runTokenSecret: testRunTokenSecret,
+    webPublicUrl: "https://runwinston.com",
     blobs: localBlobStore(`${tmpdir()}/winston-test-blobs`),
     retryDelayMs: 0,
   });
@@ -110,6 +111,7 @@ describe("the run_step job", () => {
           gateway: fake.gateway,
           vm: fakeVmClient().client,
           runTokenSecret: testRunTokenSecret,
+          webPublicUrl: "https://runwinston.com",
           blobs: localBlobStore(`${tmpdir()}/winston-test-blobs`),
         }),
       },

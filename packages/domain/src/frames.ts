@@ -208,6 +208,131 @@ export const pongFrame = z.object({
   replyTo: frameId,
 });
 
+/**
+ * Browser handoff (§5): the gateway asks winstond to hold a run's current
+ * window for the user (the agent can't act in it meanwhile), and later to
+ * let it go. `owner` is how winstond names runs: `front`, or a run id.
+ */
+export const browserHoldFrame = z.object({
+  ...base,
+  type: z.literal("browser.hold"),
+  owner: z.string().min(1).max(64),
+});
+
+/** The window held, or null when the run has no browser window. */
+export const browserHeldFrame = z.object({
+  ...base,
+  type: z.literal("browser.held"),
+  replyTo: frameId,
+  window: z
+    .object({
+      windowId: z.string(),
+      targetId: z.string(),
+      url: z.string(),
+    })
+    .nullable(),
+});
+
+export const browserReleaseFrame = z.object({
+  ...base,
+  type: z.literal("browser.release"),
+  owner: z.string().min(1).max(64),
+});
+
+/**
+ * The live view of one window's tab: frames come back as binary messages
+ * (`screencastMessage`), and input from the page goes the other way.
+ */
+export const screencastStartFrame = z.object({
+  ...base,
+  type: z.literal("screencast.start"),
+  handoffId: z.string().min(1).max(64),
+  targetId: z.string().min(1).max(64),
+});
+
+export const screencastStopFrame = z.object({
+  ...base,
+  type: z.literal("screencast.stop"),
+  handoffId: z.string().min(1).max(64),
+});
+
+/** The tab went away (closed, or Chrome restarted): the live view is over. */
+export const screencastEndedFrame = z.object({
+  ...base,
+  type: z.literal("screencast.ended"),
+  handoffId: z.string().min(1).max(64),
+  reason: z.string().max(200),
+});
+
+/**
+ * What the person does on the live view, in the tab's CSS pixels: a pointer
+ * (mouse or a finger, which becomes the mouse), the wheel, a key, or text
+ * from the phone's keyboard.
+ */
+export const viewerInput = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("pointer"),
+    action: z.enum(["down", "move", "up"]),
+    x: z.number(),
+    y: z.number(),
+  }),
+  z.object({
+    kind: z.literal("wheel"),
+    x: z.number(),
+    y: z.number(),
+    deltaX: z.number(),
+    deltaY: z.number(),
+  }),
+  z.object({
+    kind: z.literal("key"),
+    key: z.string().min(1).max(32),
+  }),
+  z.object({
+    kind: z.literal("text"),
+    text: z.string().min(1).max(10_000),
+  }),
+]);
+export type ViewerInput = z.infer<typeof viewerInput>;
+
+export const inputFrame = z.object({
+  ...base,
+  type: z.literal("input"),
+  handoffId: z.string().min(1).max(64),
+  input: viewerInput,
+});
+
+/** A screencast frame's facts, ahead of its JPEG in the binary message. */
+export const screencastHeader = z.object({
+  handoffId: z.string().min(1).max(64),
+  /** The tab's viewport in CSS pixels, to map the page's touches back. */
+  width: z.number(),
+  height: z.number(),
+});
+export type ScreencastHeader = z.infer<typeof screencastHeader>;
+
+/** A binary screencast message: its JSON header, a newline, then the JPEG. */
+export function screencastMessage(header: ScreencastHeader, jpeg: Uint8Array) {
+  const head = new TextEncoder().encode(`${JSON.stringify(header)}\n`);
+  const message = new Uint8Array(head.length + jpeg.length);
+  message.set(head);
+  message.set(jpeg, head.length);
+  return message;
+}
+
+/** Reads a binary screencast message; undefined if it isn't one. */
+export function parseScreencastMessage(message: Uint8Array) {
+  const newline = message.indexOf(10);
+  if (newline < 0) return undefined;
+  try {
+    const header = screencastHeader.parse(
+      JSON.parse(new TextDecoder().decode(message.subarray(0, newline))),
+    );
+    return { header, jpeg: message.subarray(newline + 1) };
+  } catch {
+    return undefined;
+  }
+}
+
 export const vmToGatewayFrame = z.discriminatedUnion("type", [
   helloFrame,
   execOutputFrame,
@@ -217,6 +342,8 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   fileDoneFrame,
   fileErrorFrame,
   rpcRequestFrame,
+  browserHeldFrame,
+  screencastEndedFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -232,6 +359,11 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   fileEndFrame,
   rpcResponseFrame,
   updateAvailableFrame,
+  browserHoldFrame,
+  browserReleaseFrame,
+  screencastStartFrame,
+  screencastStopFrame,
+  inputFrame,
   pingFrame,
   pongFrame,
   errorFrame,

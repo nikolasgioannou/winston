@@ -2,9 +2,14 @@
  * The `browser_handoff` tool (docs/design.md §1, Browser handoff; §5): the
  * agent hands over to the user for something only they can do, and stops.
  * A background run parks until `task resume`; a front-of-house turn simply
- * ends, and the user's reply arrives as the next message. The live-view link
- * comes with the browser (M8).
+ * ends, and the user's reply arrives as the next message.
+ *
+ * When the agent has a browser window, it's held for the user (the agent
+ * can't act in it) and a live-view link is made: a background run's goes in
+ * its `task.needs_user` item; the front of house's is sent to the user right
+ * away, since the turn ends with the call.
  */
+import type { Logger } from "@winston/shared/logger";
 import { handoffTool } from "@winston/db/tasks";
 import type { ToolDefinition } from "@winston/prompts";
 import { tool } from "ai";
@@ -35,15 +40,44 @@ export const backgroundHandoffTool = tool({
   outputSchema: z.string(),
 });
 
+/** The message that carries the front of house's handoff link. */
+export const handoffLinkMessage = (link: string) =>
+  `Here's the browser, to take over: ${link}\n(The link works once, for 15 minutes. Tell me when you're done.)`;
+
 /**
  * For the front of house: the call ends the turn, and it has an `execute` so
  * the call and its result are both stored (the next turn needs both).
  */
-export const frontHandoffTool = tool({
-  description,
-  inputSchema,
-  execute: () =>
-    Promise.resolve(
-      "Handed over. Your turn ends here; the user's reply comes as their next message.",
-    ),
-});
+export function frontHandoffTool(deps: {
+  hold: () => Promise<{ windowId: string; targetId: string } | null>;
+  createLink: (
+    window: { windowId: string; targetId: string },
+    reason: string,
+  ) => Promise<string>;
+  sendLink: (text: string) => Promise<unknown>;
+  logger: Logger;
+}) {
+  return tool({
+    description,
+    inputSchema,
+    execute: async ({ reason }) => {
+      const ends =
+        "Your turn ends here; the user's reply comes as their next message.";
+      let window: { windowId: string; targetId: string } | null = null;
+      try {
+        window = await deps.hold();
+      } catch (error) {
+        deps.logger.warn(
+          { err: error },
+          "holding the browser for a handoff failed",
+        );
+      }
+      if (!window)
+        return `Handed over, without a live view (you have no browser window). ${ends}`;
+      await deps.sendLink(
+        handoffLinkMessage(await deps.createLink(window, reason)),
+      );
+      return `Handed over: the user was sent a live-view link to your browser window. ${ends}`;
+    },
+  });
+}
