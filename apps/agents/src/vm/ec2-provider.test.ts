@@ -80,7 +80,9 @@ function fakeEc2() {
         launches.push(input);
         const instanceId = id("i");
         instances.set(instanceId, { state: "pending", describes: 0 });
-        return { Instances: [{ InstanceId: instanceId }] };
+        return {
+          Instances: [{ InstanceId: instanceId, ImageId: "ami-current" }],
+        };
       },
       DescribeInstancesCommand: (input) => {
         const instanceId = (input.InstanceIds as string[])[0] ?? "";
@@ -164,6 +166,15 @@ function fakeEc2() {
 const provider = (ec2: ReturnType<typeof fakeEc2>, timeoutMs = 1000) =>
   ec2VmProvider({
     client: ec2.client,
+    // The AMI workflow's parameter.
+    ssm: {
+      send: (command: { input: { Name?: string } }) =>
+        Promise.resolve(
+          command.input.Name === "/winston/vm-ami"
+            ? { Parameter: { Value: "ami-newest" } }
+            : {},
+        ),
+    },
     launchTemplateName: "winston-vm",
     subnetIds: ["subnet-a", "subnet-b"],
     gatewayUrl: "wss://gateway.runwinston.com",
@@ -173,12 +184,18 @@ const provider = (ec2: ReturnType<typeof fakeEc2>, timeoutMs = 1000) =>
   });
 
 describe("ec2VmProvider", () => {
+  test("the current image is the one the AMI workflow recorded", async () => {
+    expect(await provider(fakeEc2()).currentImage()).toBe("ami-newest");
+  });
+
   test("create makes a tagged data volume, launches in its zone with the boot settings, and attaches it", async () => {
     const ec2 = fakeEc2();
-    const { instanceId, dataVolumeId } = await provider(ec2).create({
+    const { instanceId, dataVolumeId, imageId } = await provider(ec2).create({
       userId: "usr_1",
       registrationToken: "reg_1",
     });
+    // The AMI it launched from, so a newer one rolls it.
+    expect(imageId).toBe("ami-current");
 
     expect(ec2.volumes.get(dataVolumeId)).toMatchObject({
       AvailabilityZone: "us-east-1a",

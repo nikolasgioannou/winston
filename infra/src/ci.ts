@@ -189,7 +189,7 @@ export class CiStack extends Stack {
     props.artifacts.grantPut(this.deployRole, "vm/*");
     props.signingKey.grant(this.deployRole, "kms:Sign");
 
-    // Building the AMI by hand (.github/workflows/ami.yml): what Packer's
+    // Building the AMI (CI when image/ changes, or ami.yml by hand): what Packer's
     // amazon-ebs builder needs, and recording the AMI.
     this.amiRole = new Role(this, "AmiRole", {
       roleName: "winston-github-ami",

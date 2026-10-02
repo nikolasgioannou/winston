@@ -13,6 +13,8 @@ Every push to `main` deploys to production (docs/design.md §8b). There's no sta
    4. Sets `/winston/image-tag` to the commit and deploys the Services stack (`--force`, since only the parameter changed). ECS rolls each service with the deployment circuit breaker. If a service doesn't get healthy, ECS and CloudFormation roll back, and the script puts the parameter back.
    5. Publishes the VM binaries (`bun run vm:publish`); the gateway offers them to every connected VM within a minute.
 
+4. **`ami`** (beside `images` and `deploy`, only when something under `image/` changed): builds the VM image with Packer (`bun run image:build:ami`, about 15 minutes) and records it in `/winston/vm-ami`. New VMs launch from it, and agents moves each existing VM onto it in its user's quiet hours (3–5 am in their time zone), when nothing's running and no handoff is live: a new instance from the new image on the same data volume, so notes, files and logins carry over. See docs/design.md §18.
+
 A deploy takes about 10–15 minutes, most of it ECS rolling the four services.
 
 ## Watching

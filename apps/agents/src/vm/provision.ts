@@ -56,14 +56,14 @@ export async function provisionVm(
     .select({ dataVolumeId: vms.dataVolumeId })
     .from(vms)
     .where(eq(vms.id, vm.id));
-  const { instanceId, dataVolumeId } = await provider.create({
+  const { instanceId, dataVolumeId, imageId } = await provider.create({
     userId,
     registrationToken,
     dataVolumeId: current?.dataVolumeId ?? undefined,
   });
   await db
     .update(vms)
-    .set({ provider: provider.kind, instanceId, dataVolumeId })
+    .set({ provider: provider.kind, instanceId, dataVolumeId, imageId })
     .where(eq(vms.id, vm.id));
   // Registering before the instance starts, so a fast-booting winstond never
   // finds the VM still provisioning.

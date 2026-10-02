@@ -238,21 +238,22 @@ Proactivity: the event catalog, triggers (schedules and subscriptions), push not
 
 The browser: Chrome on the VM, `winston browser`, domain locks, handoff links with a mobile live view, the full-desktop fallback, and the Jev autopilot.
 
-| #   | Ticket   | Title                                                                        | Blocked by                             |
-| --- | -------- | ---------------------------------------------------------------------------- | -------------------------------------- |
-| 141 | `63475d` | Run Chrome on the VM under systemd                                           | `961613`, `ce9145`                     |
-| 142 | `6b73c4` | Connect the CLI to Chrome and manage agent windows                           | `63475d`, `fe870e`                     |
-| 143 | `5f5b39` | Snapshot pages as compact element lists with refs                            | `6b73c4`                               |
-| 144 | `0451df` | Act on pages: click, type, select, press, scroll, wait                       | `5f5b39`                               |
-| 145 | `1d60a8` | Add browser screenshot and eval                                              | `6b73c4`                               |
-| 146 | `17f478` | Lock websites per agent to avoid collisions                                  | `0451df`                               |
-| 147 | `f0507c` | Create handoff links and stream a tab's screencast                           | `6b73c4`, `ac0f5f`                     |
-| 148 | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
-| 149 | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
-| 150 | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |
-| 151 | `91faf5` | Add browser autopilot, the Jev fast path                                     | `0451df`, `17f478`, `b782bc`           |
-| 152 | `3d5f3d` | Teach Winston to browse well                                                 | `1d60a8`, `732b45`, `91faf5`, `ff4636` |
-| 153 | `26dfa2` | Exercise real browser tasks end to end (with the founder) 🤝                 | `3d5f3d`, `63475d`                     |
+| #    | Ticket   | Title                                                                        | Blocked by                             |
+| ---- | -------- | ---------------------------------------------------------------------------- | -------------------------------------- |
+| 141  | `63475d` | Run Chrome on the VM under systemd                                           | `961613`, `ce9145`                     |
+| 142  | `6b73c4` | Connect the CLI to Chrome and manage agent windows                           | `63475d`, `fe870e`                     |
+| 143  | `5f5b39` | Snapshot pages as compact element lists with refs                            | `6b73c4`                               |
+| 144  | `0451df` | Act on pages: click, type, select, press, scroll, wait                       | `5f5b39`                               |
+| 145  | `1d60a8` | Add browser screenshot and eval                                              | `6b73c4`                               |
+| 146  | `17f478` | Lock websites per agent to avoid collisions                                  | `0451df`                               |
+| 147  | `f0507c` | Create handoff links and stream a tab's screencast                           | `6b73c4`, `ac0f5f`                     |
+| 147a | `eadb89` | Roll VMs onto new images automatically                                       | `63475d`                               |
+| 148  | `ff4636` | Build the handoff live-view page and test it on phones (with the founder) 🤝 | `7b6af9`, `f0507c`                     |
+| 149  | `732b45` | Offer a full-desktop fallback for native browser dialogs                     | `f0507c`                               |
+| 150  | `b782bc` | Proxy Jev through the backend and log its decisions (with the founder for 🤝 | `480aff`                               |
+| 151  | `91faf5` | Add browser autopilot, the Jev fast path                                     | `0451df`, `17f478`, `b782bc`           |
+| 152  | `3d5f3d` | Teach Winston to browse well                                                 | `1d60a8`, `732b45`, `91faf5`, `ff4636` |
+| 153  | `26dfa2` | Exercise real browser tasks end to end (with the founder) 🤝                 | `3d5f3d`, `63475d`                     |
 
 ### M9 — Rounding out
 

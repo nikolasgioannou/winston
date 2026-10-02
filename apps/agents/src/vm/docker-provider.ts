@@ -44,6 +44,16 @@ export function dockerVmProvider({
     return response;
   };
 
+  /** The local image's id: a rebuilt image is a new one. */
+  const imageIdOf = async () => {
+    const response = await engine.request(
+      "GET",
+      `/images/${encodeURIComponent(image)}/json`,
+    );
+    if (response.status !== 200) return null;
+    return (response.body as { Id?: string } | undefined)?.Id ?? null;
+  };
+
   return {
     kind: "docker",
 
@@ -93,8 +103,14 @@ export function dockerVmProvider({
           createPath,
           errorMessage(created.body),
         );
-      return { instanceId: id, dataVolumeId: volume };
+      return {
+        instanceId: id,
+        dataVolumeId: volume,
+        imageId: await imageIdOf(),
+      };
     },
+
+    currentImage: imageIdOf,
 
     async start(instanceId) {
       // 304: already running.

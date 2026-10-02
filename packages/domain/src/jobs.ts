@@ -110,6 +110,13 @@ export const provisionVmJob = {
  * vm:restore <email>`. One attempt: a half-done restore needs a look, not a
  * blind retry.
  */
+/** Moves a VM onto the current image (a new instance, same data volume). */
+export const rollVmJob = {
+  type: "roll_vm",
+  dedupeKey: (userId: string) => `roll_vm:${userId}`,
+  maxAttempts: 1,
+} as const;
+
 export const restoreVmJob = {
   type: "restore_vm",
   dedupeKey: (userId: string) => `restore_vm:${userId}`,

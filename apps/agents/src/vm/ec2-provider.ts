@@ -14,13 +14,20 @@ import {
   TerminateInstancesCommand,
   type Volume,
 } from "@aws-sdk/client-ec2";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import type { VmInstanceStatus, VmProvider } from "./provider.ts";
 
 /** What the provider sends commands through: `EC2Client`, or a fake in tests. */
 export type Ec2Sender = Pick<EC2Client, "send">;
 
+/** Where the current AMI is read: `SSMClient`, or a fake in tests. */
+export type SsmSender = Pick<SSMClient, "send">;
+
 export interface Ec2ProviderOptions {
   client?: Ec2Sender;
+  ssm?: SsmSender;
+  /** The parameter the AMI workflow records the newest image in. */
+  amiParameter?: string;
   /** The Vm stack's launch template, `winston-vm`. */
   launchTemplateName: string;
   /** The public subnets, one per availability zone. */
@@ -61,6 +68,8 @@ const notFound = (error: unknown) =>
  */
 export function ec2VmProvider({
   client = new EC2Client(),
+  ssm = new SSMClient(),
+  amiParameter = "/winston/vm-ami",
   launchTemplateName,
   subnetIds,
   gatewayUrl,
@@ -229,7 +238,18 @@ export function ec2VmProvider({
       await waitFor(`volume ${volumeId} to attach`, async () =>
         (await describeVolume(volumeId))?.State === "in-use" ? true : undefined,
       );
-      return { instanceId, dataVolumeId: volumeId };
+      return {
+        instanceId,
+        dataVolumeId: volumeId,
+        imageId: Instances[0]?.ImageId ?? null,
+      };
+    },
+
+    async currentImage() {
+      const { Parameter } = await ssm.send(
+        new GetParameterCommand({ Name: amiParameter }),
+      );
+      return Parameter?.Value ?? null;
     },
 
     async start(instanceId) {

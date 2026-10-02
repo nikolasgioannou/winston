@@ -38,6 +38,10 @@ describe("dockerVmProvider", () => {
     const { engine, calls } = stubEngine([
       ["POST /volumes/create", { status: 201, body: {} }],
       ["POST /containers/create", { status: 201, body: { Id: "abc123" } }],
+      [
+        "GET /images/winston-vm%3Alocal/json",
+        { status: 200, body: { Id: "sha256:img1" } },
+      ],
     ]);
     const provider = dockerVmProvider({ engine, ...options });
     expect(
@@ -45,6 +49,8 @@ describe("dockerVmProvider", () => {
     ).toEqual({
       instanceId: "abc123",
       dataVolumeId: "winston-home-usr_1",
+      // The image it was built from, so a rebuilt image rolls it.
+      imageId: "sha256:img1",
     });
     expect(calls[0]).toMatchObject({
       path: "/volumes/create",

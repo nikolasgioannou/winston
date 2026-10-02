@@ -1,8 +1,9 @@
 name: AMI
 
 # Builds and registers the production VM AMI (docs/design.md §18), then
-# records it in /winston/vm-ami. Run by hand from the Actions tab; new VMs
-# launch from it, existing ones keep theirs and update in place.
+# records it in /winston/vm-ami. CI does this whenever image/ changes; this
+# workflow is for a rebuild by hand (say, for the base image's updates).
+# Agents moves existing VMs onto it in their users' quiet hours.
 on:
   workflow_dispatch:
 

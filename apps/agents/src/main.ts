@@ -14,6 +14,7 @@ import {
   frontTurnJob,
   provisionVmJob,
   restoreVmJob,
+  rollVmJob,
   revokeConnectionTokenJob,
   runStepJob,
   syncConnectionJob,
@@ -72,6 +73,12 @@ import {
 } from "@winston/connectors/grants";
 import { provisionVmHandler, restoreVmHandler } from "./vm/provision.ts";
 import {
+  parseHours,
+  rolloutEveryMs,
+  rollVmHandler,
+  sweepRollouts,
+} from "./vm/rollout.ts";
+import {
   expireTriggerHandler,
   fireScheduleHandler,
   startScheduler,
@@ -99,6 +106,10 @@ const vm = gatewayClient({
 });
 const blobs = createBlobStore(config);
 
+/** When VMs move onto a new image: the quiet hours on EC2, any time locally. */
+const rolloutHours = parseHours(
+  config.VM_ROLLOUT_HOURS ?? (config.VM_PROVIDER === "ec2" ? "3-5" : "0-24"),
+);
 const vmProvider =
   config.VM_PROVIDER === "ec2"
     ? ec2VmProvider({
@@ -138,6 +149,7 @@ const worker = createWorker({
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
     [restoreVmJob.type]: restoreVmHandler(vmProvider),
+    [rollVmJob.type]: rollVmHandler(vmProvider, rolloutHours),
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
       revoke: googleTokenRevoker(),
@@ -242,6 +254,7 @@ async function shutdown(signal: string) {
     process.exit(1);
   }, config.SHUTDOWN_TIMEOUT_MS);
   clearInterval(grantSweeper);
+  clearInterval(rolloutSweeper);
   scheduler.stop();
   reconciliation.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
@@ -266,6 +279,17 @@ const sweepGrants = () => {
 };
 const grantSweeper = setInterval(sweepGrants, grantSweepMs);
 sweepGrants();
+
+// VMs move onto a new image by themselves, in their users' quiet hours (§18).
+const sweepRollout = () => {
+  sweepRollouts(db, logger, vmProvider, rolloutHours).catch(
+    (error: unknown) => {
+      logger.error({ err: error }, "sweeping VM rollouts failed");
+    },
+  );
+};
+const rolloutSweeper = setInterval(sweepRollout, rolloutEveryMs);
+sweepRollout();
 
 worker.start();
 backgroundWorker.start();

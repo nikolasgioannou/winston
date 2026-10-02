@@ -17,7 +17,14 @@ export interface VmProvider {
   }): Promise<{
     instanceId: string;
     dataVolumeId: string;
+    /** The image it was built from (EC2: its AMI; Docker: the image id). */
+    imageId: string | null;
   }>;
+  /**
+   * The image new instances are built from now (EC2: `/winston/vm-ami`;
+   * Docker: the local image's id). A VM on another one is rolled onto it.
+   */
+  currentImage(): Promise<string | null>;
   start(instanceId: string): Promise<void>;
   stop(instanceId: string): Promise<void>;
   /** Removes the instance. The data volume stays; account deletion removes it. */

@@ -39,6 +39,12 @@ export const vms = snakeCase.table("vms", {
   /** The container or instance, once one exists. */
   instanceId: text(),
   dataVolumeId: text(),
+  /**
+   * The image the instance was built from (EC2: its AMI; Docker: the image
+   * id). Unknown for instances from before it was recorded. A VM on another
+   * image than the current one is rolled onto it (§18).
+   */
+  imageId: text(),
   state: vmState().notNull().default("requested"),
   /** When `state` last changed, for timeouts (docs/design.md §17). */
   stateChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

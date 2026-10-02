@@ -1,0 +1,1 @@
+ALTER TABLE "vms" ADD COLUMN "image_id" text;

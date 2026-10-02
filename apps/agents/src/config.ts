@@ -29,6 +29,15 @@ const agentsConfigSchema = dbConfigSchema
     VM_PROVIDER: z.enum(["docker", "ec2"]).default("docker"),
     /** The image local VMs run (`bun run image:build:local`). */
     VM_IMAGE: z.string().min(1).default("winston-vm:local"),
+    /**
+     * When VMs move onto a new image, in each user's time zone, as
+     * "from-to" hours. Defaults: 3-5 (the quiet hours) on EC2, any time
+     * locally.
+     */
+    VM_ROLLOUT_HOURS: z
+      .string()
+      .regex(/^\d{1,2}-\d{1,2}$/, "hours as from-to, e.g. 3-5")
+      .optional(),
     /** EC2: the Vm stack's launch template, and the public subnets VMs launch in. */
     EC2_LAUNCH_TEMPLATE: z.string().min(1).default("winston-vm"),
     EC2_SUBNET_IDS: z

@@ -18,7 +18,7 @@ const logger = createLogger("agents-test", {
 });
 
 /** A provider that records what it was asked, optionally failing on create. */
-function fakeProvider(options: { failCreate?: boolean } = {}) {
+function fakeProvider(options: { failCreate?: boolean; image?: string } = {}) {
   const tokens: string[] = [];
   const started: string[] = [];
   const destroyed: string[] = [];
@@ -34,8 +34,10 @@ function fakeProvider(options: { failCreate?: boolean } = {}) {
       return Promise.resolve({
         instanceId: `inst-${String(tokens.length)}`,
         dataVolumeId: dataVolumeId ?? "vol-1",
+        imageId: options.image ?? "img-1",
       });
     },
+    currentImage: () => Promise.resolve(options.image ?? "img-1"),
     start: (instanceId) => {
       started.push(instanceId);
       return Promise.resolve();

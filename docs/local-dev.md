@@ -25,7 +25,7 @@ bun dev
 bun run image:build:local
 ```
 
-Then move the VM onto the new image. Its files in `/home/winston` are kept:
+Agents moves the VM onto the new image by itself within 15 minutes, whenever it isn't busy (locally there are no quiet hours). Its files in `/home/winston` are kept. To move it right away:
 
 ```bash
 bun run vm:reset
