@@ -1,13 +1,13 @@
 ---
 id: "3d5f3d"
 title: Teach Winston to browse well
-status: todo
+status: done
 priority: none
 labels:
   - m8
   - prompts
 created_at: 2026-09-27T05:42:04.247Z
-updated_at: 2026-09-27T05:42:04.341Z
+updated_at: 2026-10-02T16:53:19.065Z
 blocked_by:
   - "1d60a8"
   - "732b45"
@@ -24,3 +24,9 @@ Browser use is a core strength of the product, so the background prompt (and a s
 - **Front of house:** quick read-only peeks at a background agent's window are fine. Anything more gets delegated.
 
 Keep the prompt static, and shorter than your instinct says. `--help` carries command details.
+
+## As built
+
+- `packages/prompts/src/background.md`: a "The browser" section under "Your computer" covering strategy (own window, snapshot then refs, screenshot + `view_image`, `eval`/Python for extraction, `autopilot` for routine stretches, `click-xy` last), site notes at `~/notes/sites/<domain>.md` (structure left to Winston), mandatory screenshot verification after committing actions, `browser_handoff` (say exactly what's needed, snapshot after), and manners (domain locks, close the window, confirm-first: prepare and stop before the final click).
+- `packages/prompts/src/front-of-house.md`: a short "The browser" section: quick looks in its own window (its bash has 10 s), delegate anything longer, `browser_handoff` for its window, read-only peeks at a task's window, confirm-first. "You can't yet browse the web" is gone; that section is now "Staying honest".
+- Command details stay in `--help`. Real-use review comes with 26dfa2 and 62e3d2.
