@@ -1,13 +1,13 @@
 ---
 id: "c0cba0"
 title: "Go live: first production deploy and end-to-end check (with the founder)"
-status: todo
+status: done
 priority: none
 labels:
   - collab
   - m4
 created_at: 2026-09-27T05:36:33.552Z
-updated_at: 2026-09-27T05:42:59.290Z
+updated_at: 2026-10-02T18:30:01.801Z
 blocked_by:
   - "0e0c6c"
   - "1867ba"
@@ -42,3 +42,17 @@ The checklist:
 10. Push a trivial change and watch it deploy, including a CLI change reaching the VM via self-update.
 
 Record anything surprising in the docs. Done when the founder is comfortable using production day to day.
+
+## As built
+
+Closed 2026-10-02 at the founder's request to finish the remaining tickets; production has been in daily use since go-live (2026-09-30 onwards). From the checklist, in practice:
+
+1–4. Done with the founder: allowlisted, signed in at runwinston.com, the EC2 VM provisioned and reached `ready`, Telegram connected through @RunWinstonBot.
+5. Daily chat in production; replies, the typing indicator and steering are in use. (Reactions weren't separately checked.)
+6. The computer in use: notes saved and read (e.g. passport details, flight plans), commands run. Photo/PDF/voice weren't individually confirmed on production; they're covered by tests and local checks.
+7. Gmail and Google Calendar connected in production (and the calendar `invalid_client` fixed along the way: `prod:keys` now restarts the services that read a secret).
+8. Model calls are logged with costs; `bun run prod costs` reads them (46ee9b).
+9. The AWS budget alerts exist; the OpenRouter monthly limit was set; OpenRouter email alerts were skipped (the founder's call).
+10. Deploys work end to end (now started by hand, decision #46) and VM binaries self-update; image changes roll in quiet hours (eadb89).
+
+Surprises found and fixed along the way are in their own commits: deploy cancellations read as failures, `prod:keys` not restarting the gateway, the org policy on the Gmail publisher binding, and the gateway routing during deploys (f6b5a6).
