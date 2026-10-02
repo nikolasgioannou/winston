@@ -24,4 +24,12 @@ describe("keepLineBreaks", () => {
       "Run this:  \n```sh\nls -la\ncd ~\n```\nThen that.",
     );
   });
+
+  test("a table keeps its rows and has blank lines around it, so it renders as a table", () => {
+    const text =
+      "**Summary:**\n| Site | Result |\n|---|---|\n| OpenTable | loads |\n| Reddit | blocked |\nThat's all.";
+    expect(keepLineBreaks(text)).toBe(
+      "**Summary:**\n\n| Site | Result |\n|---|---|\n| OpenTable | loads |\n| Reddit | blocked |\n\nThat's all.",
+    );
+  });
 });
