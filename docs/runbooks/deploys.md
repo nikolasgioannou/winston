@@ -1,10 +1,16 @@
 # Deploys
 
-Every push to `main` deploys to production (docs/design.md §8b). There's no staging and no manual release step: `.github/workflows/ci.yml` runs the checks, builds the images, and runs `bun run deploy` (`scripts/deploy.ts`) with GitHub's deploy role.
+Deploys are started by hand (docs/design.md §8b; the founder's call, 2026-10-02, since a 13-minute deploy after every commit was too slow): **Actions → CI → Run workflow** on `main`, or:
+
+```bash
+gh workflow run ci.yml --ref main
+```
+
+That run checks, builds the images and runs `bun run deploy` (`scripts/deploy.ts`) with GitHub's deploy role, deploying `main` as it is, however many commits have landed since the last deploy. Every push to `main` still runs the checks (and builds the VM image when `image/` changed), so `main` is always deployable. There's no staging.
 
 ## What a deploy does
 
-1. **`check`:** `bun run check`, the same as the pre-commit hook. A failure stops everything.
+1. **`check`:** `bun run check`, the same as the pre-commit hook. A failure stops everything. (On a push, this is the whole run, apart from `ami`.)
 2. **`images`:** builds `api`, `agents`, `gateway`, `web` and `ops` on native ARM64 runners and pushes each to ECR as `winston/<image>:<commit SHA>`, with GitHub's layer cache. Tags are immutable; an image already pushed for this commit (a re-run) is skipped.
 3. **`deploy`** (one at a time: a newer push waits for the running one):
    1. Checks every image for this commit is in ECR.
@@ -13,7 +19,7 @@ Every push to `main` deploys to production (docs/design.md §8b). There's no sta
    4. Sets `/winston/image-tag` to the commit and deploys the Services stack (`--force`, since only the parameter changed). ECS rolls each service with the deployment circuit breaker. If a service doesn't get healthy, ECS and CloudFormation roll back, and the script puts the parameter back.
    5. Publishes the VM binaries (`bun run vm:publish`); the gateway offers them to every connected VM within a minute.
 
-4. **`ami`** (beside `images` and `deploy`, only when something under `image/` changed): builds the VM image with Packer (`bun run image:build:ami`, about 15 minutes) and records it in `/winston/vm-ami`. New VMs launch from it, and agents moves each existing VM onto it in its user's quiet hours (3–5 am in their time zone), when nothing's running and no handoff is live: a new instance from the new image on the same data volume, so notes, files and logins carry over. To move one now instead: `bun run prod vm:roll <email>` (skipped if it's current or busy). See docs/design.md §18.
+4. **`ami`** (on pushes, not deploys, and only when something under `image/` changed): builds the VM image with Packer (`bun run image:build:ami`, about 15 minutes) and records it in `/winston/vm-ami`. New VMs launch from it, and agents moves each existing VM onto it in its user's quiet hours (3–5 am in their time zone), when nothing's running and no handoff is live: a new instance from the new image on the same data volume, so notes, files and logins carry over. To move one now instead: `bun run prod vm:roll <email>` (skipped if it's current or busy). See docs/design.md §18.
 
 A deploy takes about 10–15 minutes, most of it ECS rolling the four services.
 

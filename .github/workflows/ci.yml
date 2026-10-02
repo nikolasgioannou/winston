@@ -1,8 +1,13 @@
 name: CI
 
+# Every push to main is checked (and builds the VM image when image/
+# changed). Deploying is by hand: Actions → CI → Run workflow (or
+# `gh workflow run ci.yml`), which checks, builds the service images and
+# deploys that commit (docs/runbooks/deploys.md).
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,6 +48,7 @@ jobs:
   # image that's already pushed (a re-run) is skipped.
   images:
     needs: check
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
@@ -86,6 +92,7 @@ jobs:
   # user's quiet hours, so image changes ship like everything else.
   ami:
     needs: check
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
       group: ami
@@ -123,8 +130,9 @@ jobs:
 
   # Production, after the checks pass and the images are pushed
   # (docs/runbooks/deploys.md). GitHub's OIDC token is exchanged for the
-  # deploy role (infra/src/ci.ts); no AWS keys are stored in GitHub. A newer
-  # push waits for the running deploy rather than interleaving with it.
+  # deploy role (infra/src/ci.ts); no AWS keys are stored in GitHub. Only a
+  # run started by hand gets here; a second waits for the running deploy
+  # rather than interleaving with it.
   deploy:
     needs: images
     runs-on: ubuntu-24.04-arm
