@@ -83,8 +83,14 @@ export function gatewayClient({
    */
   async function request(userId: string, path: string, init: RequestInit = {}) {
     let deadline: number | undefined;
+    // A recorded gateway that can't be reached (gone, or a wrong address)
+    // isn't trusted for the next attempt: the shared name is tried instead.
+    let skipLocated = false;
     for (;;) {
-      const base = (await locate?.(userId).catch(() => undefined)) ?? baseUrl;
+      const located: string | null | undefined = skipLocated
+        ? undefined
+        : await locate?.(userId).catch(() => undefined);
+      const base: string = located ?? baseUrl;
       let response: Response | undefined;
       try {
         response = await fetch(new URL(path, base).href, {
@@ -97,6 +103,7 @@ export function gatewayClient({
       } catch {
         response = undefined;
       }
+      skipLocated = !response && Boolean(located);
       const away = !response || response.status === 409;
       deadline ??= Date.now() + vmRetry.forMs;
       if (!away || Date.now() >= deadline) {

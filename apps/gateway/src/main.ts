@@ -14,6 +14,7 @@ import { s3Artifacts } from "./artifacts.ts";
 import { loadGatewayConfig } from "./config.ts";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
+import { privateAddress } from "./self-url.ts";
 
 const config = loadGatewayConfig();
 const logger = createLogger("gateway", {
@@ -38,14 +39,13 @@ function ownUrl() {
   if (config.GATEWAY_ADVERTISE_URL) return config.GATEWAY_ADVERTISE_URL;
   if (config.GATEWAY_HOST !== "0.0.0.0")
     return `http://${config.GATEWAY_HOST}:${String(config.GATEWAY_PORT)}`;
-  const address = Object.values(networkInterfaces())
-    .flat()
-    .find((nic) => nic?.family === "IPv4" && !nic.internal)?.address;
+  const address = privateAddress(networkInterfaces());
   return address
     ? `http://${address}:${String(config.GATEWAY_PORT)}`
     : undefined;
 }
 const selfUrl = ownUrl();
+logger.info({ selfUrl }, "advertising this gateway to agents");
 const gateway = createGateway({
   db,
   logger,

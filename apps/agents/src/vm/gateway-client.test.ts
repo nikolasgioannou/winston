@@ -132,4 +132,17 @@ describe("the gateway client", () => {
       vmRetry.forMs = saved;
     }
   });
+
+  test("a recorded gateway that can't be reached falls back to the shared name", async () => {
+    calls.length = 0;
+    const client = gatewayClient({
+      baseUrl: holding.url.href,
+      secret: "s",
+      // Nothing listens here (as with Fargate's metadata address).
+      locate: () => Promise.resolve("http://127.0.0.1:1"),
+      sleep: () => Promise.resolve(),
+    });
+    expect(await client.exec("usr_1", request)).toEqual(result);
+    expect(calls).toEqual(["holding"]);
+  });
 });
