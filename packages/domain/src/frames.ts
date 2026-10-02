@@ -311,6 +311,59 @@ export const inputFrame = z.object({
   input: viewerInput,
 });
 
+/**
+ * The full-desktop fallback (docs/design.md §5): a tunnel to the VM's VNC
+ * server (localhost only) for the page's noVNC client, open only while its
+ * handoff is connected. Its bytes go as binary `desktopMessage`s both ways.
+ */
+export const desktopOpenFrame = z.object({
+  ...base,
+  type: z.literal("desktop.open"),
+  handoffId: z.string().min(1).max(64),
+});
+
+export const desktopCloseFrame = z.object({
+  ...base,
+  type: z.literal("desktop.close"),
+  handoffId: z.string().min(1).max(64),
+});
+
+/** The VNC connection ended (or never opened). */
+export const desktopClosedFrame = z.object({
+  ...base,
+  type: z.literal("desktop.closed"),
+  handoffId: z.string().min(1).max(64),
+  reason: z.string().max(200),
+});
+
+const desktopHeader = z.object({ desktop: z.string().min(1).max(64) });
+
+/** A binary desktop message: `{"desktop":<handoffId>}`, a newline, then VNC bytes. */
+export function desktopMessage(handoffId: string, bytes: Uint8Array) {
+  const head = new TextEncoder().encode(
+    `${JSON.stringify({ desktop: handoffId })}\n`,
+  );
+  const message = new Uint8Array(head.length + bytes.length);
+  message.set(head);
+  message.set(bytes, head.length);
+  return message;
+}
+
+/** Reads a binary desktop message; undefined if it isn't one. */
+export function parseDesktopMessage(message: Uint8Array) {
+  const newline = message.indexOf(10);
+  // A header is short; anything else (a JPEG's bytes) isn't one.
+  if (newline < 0 || newline > 100) return undefined;
+  try {
+    const header = desktopHeader.parse(
+      JSON.parse(new TextDecoder().decode(message.subarray(0, newline))),
+    );
+    return { handoffId: header.desktop, bytes: message.subarray(newline + 1) };
+  } catch {
+    return undefined;
+  }
+}
+
 /** A screencast frame's facts, ahead of its JPEG in the binary message. */
 export const screencastHeader = z.object({
   handoffId: z.string().min(1).max(64),
@@ -354,6 +407,7 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   rpcRequestFrame,
   browserHeldFrame,
   screencastEndedFrame,
+  desktopClosedFrame,
   pingFrame,
   pongFrame,
   errorFrame,
@@ -374,6 +428,8 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   screencastStartFrame,
   screencastStopFrame,
   inputFrame,
+  desktopOpenFrame,
+  desktopCloseFrame,
   pingFrame,
   pongFrame,
   errorFrame,

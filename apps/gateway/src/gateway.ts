@@ -35,6 +35,8 @@ export const maxFrameBytes = 1024 * 1024;
 export interface ViewerSocketData {
   kind: "viewer";
   viewer?: Viewer;
+  /** The full-desktop fallback's socket (noVNC), not the tab's live view. */
+  desktop?: boolean;
   authTimer?: Timer;
 }
 
@@ -53,6 +55,8 @@ const viewerAuth = z.union([
     type: z.literal("auth"),
     handoff: z.string().min(1).max(64),
     secret: z.string().min(1).max(200),
+    /** The full desktop: only with the secret, i.e. once the link is open. */
+    desktop: z.literal(true).optional(),
   }),
 ]);
 
@@ -128,6 +132,11 @@ export function createGateway({
   const files = createFileTransfers(sendTo);
   const handoffs = createHandoffs({
     send: (vmId, frame) => sendTo(vmId, frame) !== undefined,
+    sendBinary: (vmId, message) => {
+      const ws = connections.get(vmId);
+      ws?.send(message);
+      return ws !== undefined;
+    },
     logger,
   });
   const vmIdOf = async (userId: string) => {
@@ -272,6 +281,11 @@ export function createGateway({
       socket: ws,
     };
     ws.data.viewer = viewer;
+    if ("desktop" in auth && auth.desktop) {
+      ws.data.desktop = true;
+      handoffs.openDesktop(viewer);
+      return;
+    }
     // The page keeps this to reconnect; the link itself is used up.
     if (viewerSecret)
       ws.send(
@@ -330,6 +344,11 @@ export function createGateway({
     },
     async message(socket, message) {
       if (isViewer(socket)) {
+        if (socket.data.desktop && socket.data.viewer) {
+          if (typeof message !== "string")
+            handoffs.desktopInput(socket.data.viewer, new Uint8Array(message));
+          return;
+        }
         if (typeof message !== "string") return;
         if (!socket.data.viewer) await admitViewer(socket, message);
         else if (isDone(message)) await handBack(socket.data.viewer);
@@ -353,7 +372,9 @@ export function createGateway({
     close(socket, code) {
       if (isViewer(socket)) {
         clearTimeout(socket.data.authTimer);
-        if (socket.data.viewer) handoffs.disconnected(socket.data.viewer);
+        if (socket.data.viewer && socket.data.desktop)
+          handoffs.desktopDisconnected(socket.data.viewer);
+        else if (socket.data.viewer) handoffs.disconnected(socket.data.viewer);
         return;
       }
       const ws = socket as VmSocket;

@@ -11,6 +11,8 @@ import { insertRun, insertUser, testDb } from "@winston/db/testing";
 import { createVm, issueRegistrationToken } from "@winston/db/vms";
 import { applyVmEvent } from "@winston/db/vm-state";
 import {
+  desktopMessage,
+  parseDesktopMessage,
   parseScreencastMessage,
   screencastMessage,
   type GatewayToVmFrame,
@@ -59,8 +61,14 @@ async function connectedVm() {
   const ws = new WebSocket(`ws://${base}/vm/connect`, {
     headers: { Authorization: `Bearer ${registration}` },
   } as unknown as string[]);
+  const binaries: Uint8Array[] = [];
+  ws.binaryType = "arraybuffer";
   ws.addEventListener("message", (event) => {
-    frames.push(JSON.parse(String(event.data)) as GatewayToVmFrame);
+    if (typeof event.data !== "string") {
+      binaries.push(new Uint8Array(event.data as ArrayBuffer));
+      return;
+    }
+    frames.push(JSON.parse(event.data) as GatewayToVmFrame);
   });
   await new Promise((resolve) => {
     ws.addEventListener("open", resolve);
@@ -70,6 +78,7 @@ async function connectedVm() {
     userId: user.id,
     ws,
     frames,
+    binaries,
     next: async (type: GatewayToVmFrame["type"], after = 0) => {
       await eventually(() => frames.slice(after).some((f) => f.type === type));
       const found = frames.slice(after).find((f) => f.type === type);
@@ -304,6 +313,53 @@ describe("handoff live views", () => {
       .from(inboundItems)
       .where(eq(inboundItems.type, "system.handoff.done"));
     expect(item?.payload).toEqual({ handoffId: second.id });
+    vm.ws.close();
+  });
+
+  test("the full desktop opens only with a connected handoff's session, and relays VNC bytes intact", async () => {
+    const vm = await connectedVm();
+    const run = await insertRun(db, vm.userId, { kind: "background" });
+    const { id, token } = await createHandoff(db, {
+      runId: run.id,
+      userId: vm.userId,
+      windowId: "win_1",
+      targetId: "T1",
+      reason: "Pick a file",
+    });
+    // Before the link is opened there's no session to sign in with.
+    const early = await page({ handoff: id, secret: "guess", desktop: true });
+    expect((await early.closed).code).toBe(4003);
+
+    const viewer = await page({ token });
+    await eventually(() => viewer.texts.length > 0);
+    const { secret } = viewer.texts[0] as { secret: string };
+    const desktop = await page({ handoff: id, secret, desktop: true });
+    const open = await vm.next("desktop.open");
+    expect(open).toMatchObject({ handoffId: id });
+
+    // VNC bytes from the VM reach the page bare; the page's go back wrapped.
+    const greeting = new TextEncoder().encode("RFB 003.008\n");
+    vm.ws.send(desktopMessage(id, greeting));
+    await eventually(() => desktop.binaries.length > 0);
+    expect(new TextDecoder().decode(desktop.binaries[0])).toBe("RFB 003.008\n");
+    desktop.ws.send(new Uint8Array([1, 0, 255]));
+    await eventually(() => vm.binaries.length > 0);
+    const back = parseDesktopMessage(vm.binaries[0] ?? new Uint8Array());
+    expect(back?.handoffId).toBe(id);
+    expect([...(back?.bytes ?? [])]).toEqual([1, 0, 255]);
+
+    // The task carrying on closes the desktop with the live view.
+    const before = vm.frames.length;
+    await internal(`/vms/${vm.userId}/browser/release`, { owner: run.id });
+    expect((await desktop.closed).code).toBe(4000);
+    await vm.next("desktop.close", before);
+    // And with the handoff over, the session no longer opens one.
+    await db
+      .update(handoffs)
+      .set({ status: "resolved" })
+      .where(eq(handoffs.id, id));
+    const late = await page({ handoff: id, secret, desktop: true });
+    expect((await late.closed).code).toBe(4003);
     vm.ws.close();
   });
 });

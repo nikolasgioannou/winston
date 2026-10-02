@@ -54,7 +54,9 @@ export type BrowserFrame = Extract<
       | "browser.release"
       | "screencast.start"
       | "screencast.stop"
-      | "input";
+      | "input"
+      | "desktop.open"
+      | "desktop.close";
   }
 >;
 
@@ -93,6 +95,10 @@ export interface DaemonOptions {
       /** Replies to the gateway on the live connection. */
       reply: (frame: VmToGatewayFrame) => void,
     ): void;
+    /** A binary message from the gateway (the desktop fallback's bytes). */
+    binary(message: Uint8Array): void;
+    /** The gateway connection dropped. */
+    disconnected(): void;
   };
   logger: Logger;
   /** For tests: faster reconnects and pings. */
@@ -288,7 +294,14 @@ export function createDaemon(options: DaemonOptions) {
     });
 
     ws.addEventListener("message", (event) => {
-      const parsed = parseFrame(gatewayToVmFrame, String(event.data));
+      if (typeof event.data !== "string") {
+        const data = event.data as ArrayBuffer | Uint8Array;
+        options.browser?.binary(
+          data instanceof Uint8Array ? data : new Uint8Array(data),
+        );
+        return;
+      }
+      const parsed = parseFrame(gatewayToVmFrame, event.data);
       if (!parsed.ok) {
         logger.warn(
           { error: parsed.error },
@@ -408,7 +421,9 @@ export function createDaemon(options: DaemonOptions) {
         frame.type === "browser.release" ||
         frame.type === "screencast.start" ||
         frame.type === "screencast.stop" ||
-        frame.type === "input"
+        frame.type === "input" ||
+        frame.type === "desktop.open" ||
+        frame.type === "desktop.close"
       ) {
         options.browser?.handle(frame, (reply) => {
           send(ws, reply);
@@ -428,6 +443,7 @@ export function createDaemon(options: DaemonOptions) {
       // Calls waiting on this connection won't get an answer.
       for (const id of [...calls.keys()]) answer(id, unavailableResponse);
       if (socket === ws) socket = undefined;
+      options.browser?.disconnected();
       if (!opened) {
         // Refused before opening: network trouble, or the token was rejected.
         // Try the other credential next time, if there is one.

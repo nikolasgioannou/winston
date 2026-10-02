@@ -18,9 +18,15 @@ function SampleScreen() {
   );
 }
 
-const state = (label: string, value: LiveState) => ({
+const state = (label: string, value: LiveState, desktop?: boolean) => ({
   label,
-  render: () => <HandoffPage state={value} screen={<SampleScreen />} />,
+  render: () => (
+    <HandoffPage
+      state={value}
+      screen={<SampleScreen />}
+      desktop={{ open: desktop ?? false, onToggle: () => undefined }}
+    />
+  ),
 });
 
 /** The handoff live view for the dev design view. */
@@ -30,6 +36,7 @@ export const handoffFixtures: PageFixtures = {
   states: {
     connecting: state("Connecting", "connecting"),
     live: state("Live", "live"),
+    desktop: state("Full desktop", "live", true),
     reconnecting: state("Reconnecting", "reconnecting"),
     ended: state("Done", "ended"),
     expired: state("Expired", "expired"),

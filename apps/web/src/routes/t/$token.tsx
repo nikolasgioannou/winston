@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import type { ScreencastHeader } from "@winston/domain/frames";
+import type { ScreencastHeader, ViewerInput } from "@winston/domain/frames";
 import { useEffect, useRef, useState } from "react";
 import { browserSessions, connectLiveView } from "../../handoff/connection";
+import { openDesktop, type Desktop } from "../../handoff/desktop";
 import {
   createGestures,
   keyInput,
@@ -39,6 +40,9 @@ function LiveView() {
   );
   const typed = useRef("");
   const gestures = useRef<ReturnType<typeof createGestures>>(undefined);
+  const [showDesktop, setShowDesktop] = useState(false);
+  const desktopArea = useRef<HTMLDivElement>(null);
+  const desktop = useRef<Desktop | undefined>(undefined);
 
   useEffect(() => {
     // Draws frames as they arrive. While one decodes, only the newest one
@@ -123,6 +127,37 @@ function LiveView() {
     };
   }, [state]);
 
+  // The full desktop, while it's showing and the view is live: its own
+  // socket, signed in with this page's session.
+  useEffect(() => {
+    const session = link.current?.session();
+    const target = desktopArea.current;
+    if (!showDesktop || state !== "live" || !session || !target) return;
+    let cancelled = false;
+    void openDesktop({
+      url,
+      session,
+      target,
+      onEnded: () => {
+        setShowDesktop(false);
+      },
+    }).then((opened) => {
+      if (cancelled) opened.close();
+      else desktop.current = opened;
+    });
+    return () => {
+      cancelled = true;
+      desktop.current?.close();
+      desktop.current = undefined;
+    };
+  }, [showDesktop, state, url]);
+
+  /** Typing goes to the full desktop while it's showing, else to the tab. */
+  const type = (input: ViewerInput) => {
+    if (showDesktop) desktop.current?.type(input);
+    else link.current?.send(input);
+  };
+
   const point = (event: { clientX: number; clientY: number }) => ({
     x: event.clientX,
     y: event.clientY,
@@ -133,30 +168,39 @@ function LiveView() {
       state={state}
       onKeyboard={() => field.current?.focus()}
       onDone={() => link.current?.done()}
+      desktop={{
+        open: showDesktop,
+        onToggle: () => {
+          setShowDesktop((open) => !open);
+        },
+      }}
       screen={
-        <canvas
-          ref={canvas}
-          className="block size-auto max-h-full max-w-full touch-none select-none"
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            gestures.current?.down(point(event), event.pointerType);
-          }}
-          onPointerMove={(event) => {
-            gestures.current?.move(point(event), event.pointerType);
-          }}
-          onPointerUp={(event) => {
-            gestures.current?.up(point(event), event.pointerType);
-          }}
-          onPointerCancel={() => {
-            gestures.current?.cancel();
-          }}
-          onWheel={(event) => {
-            gestures.current?.wheel(point(event), event.deltaX, event.deltaY);
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-          }}
-        />
+        <>
+          {showDesktop && <div ref={desktopArea} className="size-full" />}
+          <canvas
+            ref={canvas}
+            className={`${showDesktop ? "hidden" : "block"} size-auto max-h-full max-w-full touch-none select-none`}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              gestures.current?.down(point(event), event.pointerType);
+            }}
+            onPointerMove={(event) => {
+              gestures.current?.move(point(event), event.pointerType);
+            }}
+            onPointerUp={(event) => {
+              gestures.current?.up(point(event), event.pointerType);
+            }}
+            onPointerCancel={() => {
+              gestures.current?.cancel();
+            }}
+            onWheel={(event) => {
+              gestures.current?.wheel(point(event), event.deltaX, event.deltaY);
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+            }}
+          />
+        </>
       }
       keyboard={
         // Off to the side but focusable, so it brings up the keyboard; 16px
@@ -171,8 +215,9 @@ function LiveView() {
           spellCheck={false}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing) return;
-            const send = (key: string) =>
-              link.current?.send({ kind: "key", key });
+            const send = (key: string) => {
+              type({ kind: "key", key });
+            };
             if (event.key === "Enter") {
               event.preventDefault();
               send("Enter");
@@ -189,13 +234,12 @@ function LiveView() {
               event.key === "Backspace" ? undefined : keyInput(event.key);
             if (key) {
               event.preventDefault();
-              link.current?.send(key);
+              type(key);
             }
           }}
           onInput={(event) => {
             const now = event.currentTarget.value;
-            for (const input of textChange(typed.current, now))
-              link.current?.send(input);
+            for (const input of textChange(typed.current, now)) type(input);
             typed.current = now;
           }}
           onBlur={(event) => {

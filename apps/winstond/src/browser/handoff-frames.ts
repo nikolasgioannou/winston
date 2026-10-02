@@ -2,20 +2,27 @@
  * The gateway's browser handoff frames (docs/design.md §5, §15): hold a
  * run's window for the user, let it go, and run that tab's live view.
  */
-import { newFrameId, type VmToGatewayFrame } from "@winston/domain/frames";
+import {
+  newFrameId,
+  parseDesktopMessage,
+  type VmToGatewayFrame,
+} from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { BrowserFrame } from "../daemon.ts";
+import type { Desktops } from "./desktop.ts";
 import type { Screencasts } from "./screencast.ts";
 import type { Browser } from "./windows.ts";
 
 export function handoffFrames({
   browser,
   screencasts,
+  desktops,
   sendFrame,
   logger,
 }: {
   browser: Pick<Browser, "hold" | "release">;
   screencasts: Screencasts;
+  desktops: Pick<Desktops, "open" | "write" | "close" | "closeAll">;
   /** Sends on the live connection (a live view can end any time). */
   sendFrame: (frame: VmToGatewayFrame) => void;
   logger: Logger;
@@ -63,7 +70,22 @@ export function handoffFrames({
               );
             });
           return;
+        case "desktop.open":
+          desktops.open(frame.handoffId);
+          return;
+        case "desktop.close":
+          desktops.close(frame.handoffId);
+          return;
       }
+    },
+
+    binary(message: Uint8Array) {
+      const parsed = parseDesktopMessage(message);
+      if (parsed) desktops.write(parsed.handoffId, parsed.bytes);
+    },
+
+    disconnected() {
+      desktops.closeAll();
     },
   };
 }

@@ -115,6 +115,8 @@ export function connectLiveView({
       if (socket?.readyState === WebSocket.OPEN)
         socket.send(JSON.stringify(input));
     },
+    /** The session to sign other sockets in with (the full desktop). */
+    session: () => session,
     /** Hands the browser back to Winston; the page then hears it's over. */
     done() {
       if (socket?.readyState === WebSocket.OPEN)

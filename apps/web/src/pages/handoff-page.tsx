@@ -1,5 +1,18 @@
-import { Button, EmptyState, StatusPill, type StatusTone } from "@winston/ui";
-import { CircleCheck, Clock, Link2Off, MonitorSmartphone } from "lucide-react";
+import {
+  Button,
+  EmptyState,
+  IconButton,
+  StatusPill,
+  type StatusTone,
+} from "@winston/ui";
+import {
+  AppWindow,
+  CircleCheck,
+  Clock,
+  Link2Off,
+  Monitor,
+  MonitorSmartphone,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import type { LiveState } from "../handoff/input";
 
@@ -9,6 +22,8 @@ import type { LiveState } from "../handoff/input";
  * code or tap through what he can't. No sidebar and no sign-in: the link is
  * the credential. Done hands the browser back (saying "done" in Telegram
  * does too, the founder's call: tapping it here saves switching apps).
+ * A quiet header button switches to the full desktop, for native dialogs
+ * the tab's view can't show.
  */
 export function HandoffPage({
   state,
@@ -16,6 +31,7 @@ export function HandoffPage({
   keyboard,
   onKeyboard,
   onDone,
+  desktop,
 }: {
   state: LiveState;
   /** The tab, drawn as frames arrive (a canvas). */
@@ -25,6 +41,8 @@ export function HandoffPage({
   onKeyboard?: () => void;
   /** Hands the browser back to Winston. */
   onDone?: () => void;
+  /** The full-desktop fallback: whether it's showing, and the switch. */
+  desktop?: { open: boolean; onToggle: () => void };
 }) {
   const ended =
     state in endings ? endings[state as keyof typeof endings] : undefined;
@@ -43,7 +61,21 @@ export function HandoffPage({
     <main className="flex h-dvh flex-col bg-surface-sunken">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-border-subtle bg-surface px-4">
         <span className="text-sm font-semibold text-fg">Winston</span>
-        <StatusPill tone={status.tone}>{status.label}</StatusPill>
+        <div className="flex items-center gap-2">
+          <StatusPill tone={status.tone}>
+            {desktop?.open ? "Full desktop" : status.label}
+          </StatusPill>
+          {desktop && (
+            <IconButton
+              size="sm"
+              label={desktop.open ? "Back to the tab" : "Show the full desktop"}
+              onClick={desktop.onToggle}
+              disabled={state !== "live"}
+            >
+              {desktop.open ? <AppWindow /> : <Monitor />}
+            </IconButton>
+          )}
+        </div>
       </header>
       <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-hidden">
         {screen}

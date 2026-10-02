@@ -6,6 +6,7 @@
 import { newFrameId } from "@winston/domain/frames";
 import { createLogger } from "@winston/shared/logger";
 import { browserSocketUrl, connectCdp } from "./browser/cdp.ts";
+import { createDesktops } from "./browser/desktop.ts";
 import { handoffFrames } from "./browser/handoff-frames.ts";
 import { browserRpc, isBrowserPath } from "./browser/rpc.ts";
 import { createScreencasts } from "./browser/screencast.ts";
@@ -106,6 +107,15 @@ const daemon = createDaemon({
   browser: handoffFrames({
     browser,
     screencasts,
+    desktops: createDesktops({
+      sendBinary: (message) => {
+        daemon.sendBinary(message);
+      },
+      sendFrame: (frame) => {
+        daemon.sendFrame(frame);
+      },
+      logger,
+    }),
     sendFrame: (frame) => {
       daemon.sendFrame(frame);
     },

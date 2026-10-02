@@ -5,7 +5,9 @@
  * but that tab's frames one way and the person's input the other.
  */
 import {
+  desktopMessage,
   newFrameId,
+  parseDesktopMessage,
   parseScreencastMessage,
   viewerInput,
   type GatewayToVmFrame,
@@ -49,10 +51,13 @@ export interface HeldWindow {
 
 export function createHandoffs({
   send,
+  sendBinary,
   logger,
 }: {
   /** Sends a frame to a VM; false if it isn't connected. */
   send: (vmId: string, frame: GatewayToVmFrame) => boolean;
+  /** Sends a binary message to a VM; false if it isn't connected. */
+  sendBinary: (vmId: string, message: Uint8Array) => boolean;
   logger: Logger;
 }) {
   const holds = new Map<
@@ -60,6 +65,16 @@ export function createHandoffs({
     { resolve: (window: HeldWindow | null) => void; timer: Timer }
   >();
   const viewers = new Map<string, Viewer>();
+  /** Full-desktop fallbacks (noVNC), by handoff: at most one each. */
+  const desktops = new Map<string, Viewer>();
+
+  function closeDesktop(handoffId: string, code: number, reason: string) {
+    const desktop = desktops.get(handoffId);
+    if (!desktop) return;
+    desktops.delete(handoffId);
+    send(desktop.vmId, { id: newFrameId(), type: "desktop.close", handoffId });
+    desktop.socket.close(code, reason);
+  }
 
   function stop(viewer: Viewer, code: number, reason: string) {
     if (viewers.get(viewer.handoffId) !== viewer) return;
@@ -70,6 +85,7 @@ export function createHandoffs({
       handoffId: viewer.handoffId,
     });
     viewer.socket.close(code, reason);
+    closeDesktop(viewer.handoffId, code, reason);
   }
 
   return {
@@ -95,6 +111,13 @@ export function createHandoffs({
       for (const viewer of [...viewers.values()])
         if (viewer.vmId === vmId && viewer.owner === owner)
           stop(viewer, viewerCloseCodes.ended, "The task carried on.");
+      for (const desktop of [...desktops.values()])
+        if (desktop.vmId === vmId && desktop.owner === owner)
+          closeDesktop(
+            desktop.handoffId,
+            viewerCloseCodes.ended,
+            "The task carried on.",
+          );
       send(vmId, { id: newFrameId(), type: "browser.release", owner });
     },
 
@@ -152,8 +175,59 @@ export function createHandoffs({
       });
     },
 
-    /** A binary message from a VM: a screencast frame, for its page only. */
+    /**
+     * A page opened the full desktop (its handoff is connected): tunnel its
+     * VNC client to the VM's VNC server.
+     */
+    openDesktop(desktop: Viewer) {
+      closeDesktop(
+        desktop.handoffId,
+        viewerCloseCodes.replaced,
+        "Opened elsewhere.",
+      );
+      desktops.set(desktop.handoffId, desktop);
+      const opened = send(desktop.vmId, {
+        id: newFrameId(),
+        type: "desktop.open",
+        handoffId: desktop.handoffId,
+      });
+      if (!opened) {
+        desktops.delete(desktop.handoffId);
+        desktop.socket.close(
+          viewerCloseCodes.vmOffline,
+          "The computer isn't connected right now.",
+        );
+      }
+    },
+
+    /** Bytes from the page's VNC client, for the VM. */
+    desktopInput(desktop: Viewer, bytes: Uint8Array) {
+      if (desktops.get(desktop.handoffId) !== desktop) return;
+      sendBinary(desktop.vmId, desktopMessage(desktop.handoffId, bytes));
+    },
+
+    /** The page closed the full desktop. */
+    desktopDisconnected(desktop: Viewer) {
+      if (desktops.get(desktop.handoffId) !== desktop) return;
+      desktops.delete(desktop.handoffId);
+      send(desktop.vmId, {
+        id: newFrameId(),
+        type: "desktop.close",
+        handoffId: desktop.handoffId,
+      });
+    },
+
+    /**
+     * A binary message from a VM: desktop bytes or a screencast frame, for
+     * its page only.
+     */
     frame(vmId: string, message: Uint8Array) {
+      const tunnelled = parseDesktopMessage(message);
+      if (tunnelled) {
+        const desktop = desktops.get(tunnelled.handoffId);
+        if (desktop?.vmId === vmId) desktop.socket.send(tunnelled.bytes);
+        return;
+      }
       const parsed = parseScreencastMessage(message);
       const viewer = parsed ? viewers.get(parsed.header.handoffId) : undefined;
       // A frame for another VM's handoff never reaches its page.
@@ -185,6 +259,14 @@ export function createHandoffs({
         }
         return true;
       }
+      if (frame.type === "desktop.closed") {
+        const desktop = desktops.get(frame.handoffId);
+        if (desktop?.vmId === vmId) {
+          desktops.delete(frame.handoffId);
+          desktop.socket.close(viewerCloseCodes.ended, frame.reason);
+        }
+        return true;
+      }
       return false;
     },
 
@@ -196,6 +278,14 @@ export function createHandoffs({
           viewer.socket.close(
             viewerCloseCodes.vmOffline,
             "The computer disconnected; reconnecting.",
+          );
+        }
+      for (const desktop of [...desktops.values()])
+        if (desktop.vmId === vmId) {
+          desktops.delete(desktop.handoffId);
+          desktop.socket.close(
+            viewerCloseCodes.vmOffline,
+            "The computer disconnected.",
           );
         }
     },

@@ -22,11 +22,12 @@ repo_add_once="false"
 repo_reenable_on_distupgrade="false"
 CONF
 
-# Xvfb for the display, and fonts beyond the base set so pages in Chinese,
-# Japanese and Korean render (Latin and emoji come from base.sh).
+# Xvfb for the display, x11vnc to show it for the full-desktop fallback, and
+# fonts beyond the base set so pages in Chinese, Japanese and Korean render
+# (Latin and emoji come from base.sh).
 apt-get update
 apt-get install -y --no-install-recommends \
-  google-chrome-stable xvfb fonts-noto-cjk
+  google-chrome-stable xvfb x11vnc fonts-noto-cjk
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
@@ -97,7 +98,27 @@ MemoryMax=2560M
 [Install]
 WantedBy=multi-user.target
 UNIT
-systemctl enable xvfb.service chrome.service
+# The display over VNC, for the handoff page's full-desktop fallback
+# (docs/design.md §5): native dialogs the tab's screencast can't show.
+# Localhost only, and no password: nothing outside the VM can reach it, and
+# winstond tunnels it to the page only while a handoff is connected.
+cat >/etc/systemd/system/vnc.service <<'UNIT'
+[Unit]
+Description=VNC view of display :99 (localhost only)
+Requires=xvfb.service
+After=xvfb.service
+
+[Service]
+User=winston
+Group=winston
+ExecStart=/usr/bin/x11vnc -display :99 -localhost -rfbport 5900 -forever -shared -nopw -quiet
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl enable xvfb.service chrome.service vnc.service
 
 # A Chrome left running on replaced files misbehaves, so after any package
 # change, restart it if the binary is newer than the running Chrome.
