@@ -728,7 +728,7 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 **Delivery and plumbing**
 
 - TypeScript, compiled to a single binary with `bun build --compile`, baked into the AMI and **self-updated by `winstond`** (§10). A version handshake guarantees the CLI matches the system prompt.
-- A thin client: every call goes CLI → unix socket → `winstond` → websocket → `gateway` → backend API (connected apps, triggers, history, tasks, the Jev proxy for `autopilot`). The exception is `winston browser`, which talks to local Chrome over CDP directly (§15).
+- A thin client: every call goes CLI → unix socket → `winstond` → websocket → `gateway` → backend API (connected apps, triggers, history, tasks, the Jev proxy for `autopilot`). The exception is `winston browser`: `winstond` answers `/v1/browser/…` itself, holding the CDP connection to the local Chrome and the window registry (the CLI exits after every command, and refs and windows must outlive it), so browser calls never leave the VM (§15).
 - Every invocation carries **`WINSTON_RUN_TOKEN`** from its environment, so the backend attributes each call to an agent run (audit log, cost ledger).
 - The front of house's `bash` calls time out at ~10 s. Background agents have no short timeout.
 
@@ -936,6 +936,14 @@ browser autopilot "<subgoal>" [--max-steps <n>]         Jev fast path: prints th
 ```
 
 - Commands without `--window` act on the run's own window. Downloads land in `~/downloads`.
+- **As built (6b73c4)** (`apps/winstond/src/browser/`, `apps/cli/src/resources/browser.ts`, protocol types in `@winston/domain/browser`):
+  - **Raw CDP** over Bun's built-in WebSocket (`cdp.ts`, about 150 lines; no library, so nothing to check for Bun compatibility or binary size): one browser-level socket from `/json/version`, flat page sessions (`Target.attachToTarget` with `flatten`). `Page.enable` and lifecycle events only; **`Runtime.enable` is never called**, since pages can detect it.
+  - **Windows** (`windows.ts`): `browser open` creates a real window (`Target.createTarget` with `newWindow: true`, blank first, then navigates once attached so the load is seen) and makes it the caller's **current** window, where commands act without `--window`. Ownership comes from the run token's payload, read without its signature: the front of house is one owner (`front`) across turns, a background run is its run id. That's coordination between agents that all run as `winston`, who can reach DevTools anyway, so it isn't a security boundary. Another run's window can be looked up (`browser get`, later snapshot and screenshot) but not navigated or closed. `win_` is in the `winston get` registry.
+  - **Navigation** waits for that load's `load` lifecycle event (30 s), then up to 2 s for `networkAlmostIdle`; a page still loading is reported, not failed. A navigation error (`net::ERR_NAME_NOT_RESOLVED`) fails with the address; `net::ERR_ABORTED` (a download) doesn't. Back and forward use the navigation history and also accept a back/forward-cache restore, which fires no load.
+  - **Popups:** with target discovery on, a page opened by one of a run's windows (`window.open`, `target=_blank`) joins that run with `opened by`, becomes its current window, and the command that caused it says so.
+  - **Chrome restarts:** the socket closing clears the registry; each run's next command (or one naming a lost window) gets "Chrome restarted, so your window was closed", once.
+  - **Cleanup:** every minute, windows unused for 30 minutes whose owner's newest run token has expired are closed (a run's tokens last its command plus 5 minutes, so a live run keeps renewing).
+  - **Checked** in the local VM against real Chrome (open, navigate, back, another run's window refused, a bad address, close, a Chrome restart), plus unit tests against a fake Chrome. Chrome's popup blocker stopped a script-opened popup without a user gesture, as it should; popups from real clicks are checked with the click command (0451df).
 - Handoff is not a CLI command. It's the native `browser_handoff` tool, because it has to end the loop.
 
 #### `winston accounts`

@@ -34,6 +34,34 @@ export function apiClient(options: {
 export type ApiClient = ReturnType<typeof apiClient>;
 
 /**
+ * Calls winstond answers itself rather than forwarding (the browser,
+ * `@winston/domain/browser`): plain JSON over the same socket, with the
+ * same run token.
+ */
+export function localClient(options: Parameters<typeof apiClient>[0]) {
+  const transport =
+    options.fetch ??
+    ((input: string | URL | Request, init?: RequestInit) =>
+      fetch(input, { ...init, unix: options.socketPath }));
+  return {
+    request(method: "GET" | "POST", path: string, body?: unknown) {
+      return transport(`http://winstond${path}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.runToken
+            ? { Authorization: `Bearer ${options.runToken}` }
+            : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    },
+  };
+}
+
+export type LocalClient = ReturnType<typeof localClient>;
+
+/**
  * Awaits a call and returns its JSON, or throws the backend's error as a
  * CliError (with its exit code). A socket that can't be reached is a
  * transient failure (exit 5).

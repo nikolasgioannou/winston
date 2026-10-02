@@ -2,7 +2,7 @@
  * Runs one `winston` invocation: finds the command, parses its flags,
  * prints the result or the error, and returns the exit code.
  */
-import type { ApiClient } from "./client.ts";
+import type { ApiClient, LocalClient } from "./client.ts";
 import type { LocalFiles, Resource, Verb } from "./commands.ts";
 import { CliError } from "./errors.ts";
 import {
@@ -12,6 +12,7 @@ import {
   type TextSources,
 } from "./flags.ts";
 import { accounts } from "./resources/accounts.ts";
+import { browser } from "./resources/browser.ts";
 import { calendar } from "./resources/calendar.ts";
 import { events } from "./resources/events.ts";
 import { mail } from "./resources/mail.ts";
@@ -29,6 +30,7 @@ export const resources: Resource[] = [
   task,
   trigger,
   events,
+  browser,
 ];
 
 /** Every prefix `winston get` knows, as `msg_, thr_, …`. */
@@ -62,6 +64,7 @@ export interface Io {
   text: TextSources;
   files: LocalFiles;
   client: () => ApiClient;
+  local: () => LocalClient;
 }
 
 const pad = (text: string, width: number) => text.padEnd(width);
@@ -134,6 +137,7 @@ async function runVerb(
   io.out(
     await verb.run({
       client: io.client(),
+      local: io.local(),
       flags,
       args: positionals,
       text: io.text,

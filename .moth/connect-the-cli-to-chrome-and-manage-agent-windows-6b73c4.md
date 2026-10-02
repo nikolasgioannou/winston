@@ -1,14 +1,14 @@
 ---
 id: "6b73c4"
 title: Connect the CLI to Chrome and manage agent windows
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - cli
   - m8
 created_at: 2026-09-27T05:42:03.620Z
-updated_at: 2026-09-27T05:42:03.675Z
+updated_at: 2026-10-02T01:33:44.627Z
 blocked_by:
   - "63475d"
   - "fe870e"
@@ -32,3 +32,12 @@ Commands in this ticket:
 Commands act on the run's own window by default. Register `win_` with the `winston get` resolver. Research how to handle pages that open new windows (`window.open`, `target=_blank`): attach them to the same run, and make that visible.
 
 Tests: registry ownership and cleanup, commands defaulting to the run's window, and the navigation wait logic against a local test page served inside the VM or a test harness Chrome.
+
+## As built
+
+- winstond answers `/v1/browser/*` on its socket (CDP connection and window registry live there); protocol in `@winston/domain/browser`; the CLI got a `local` client beside the typed backend client.
+- Raw CDP over Bun's WebSocket (no library); `Runtime.enable` never called.
+- Commands: `browser windows`, `get`, `open [<url>]`, `navigate <url>|--back|--forward [--window]`, `close [--window]`; `win_` registered with `winston get`.
+- Ownership: run token payload (front of house = `front`); others' windows are look-only. Popups join the opener's run and become current. Cleanup: idle 30 min and the owner's tokens expired.
+- Tests: unit tests against a fake Chrome (ownership, defaults, popups, load wait, slow and bad pages, restart, cleanup); real Chrome in the local VM by hand. Popups from real clicks to recheck in 0451df.
+

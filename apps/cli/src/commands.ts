@@ -2,11 +2,13 @@
  * The command table: every resource, its verbs, their flags and real
  * examples (§11). `winston <resource> <verb> [<id>] [--flags]`.
  */
-import type { ApiClient } from "./client.ts";
+import type { ApiClient, LocalClient } from "./client.ts";
 import type { FlagSpec, FlagValues, TextSources } from "./flags.ts";
 
 export interface Context {
   client: ApiClient;
+  /** winstond's own calls (the browser). */
+  local: LocalClient;
   flags: FlagValues;
   /** Positionals after the verb, e.g. an id. */
   args: string[];

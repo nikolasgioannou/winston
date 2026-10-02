@@ -4,6 +4,9 @@
  * `winstond` user under systemd.
  */
 import { createLogger } from "@winston/shared/logger";
+import { browserSocketUrl, connectCdp } from "./browser/cdp.ts";
+import { browserRpc, isBrowserPath } from "./browser/rpc.ts";
+import { createBrowser } from "./browser/windows.ts";
 import { watchChrome } from "./chrome-watch.ts";
 import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
@@ -72,14 +75,21 @@ const daemon = createDaemon({
 });
 daemon.start();
 const stopChromeWatch = watchChrome(logger);
+// The browser's state lives here, since every CLI call is a new process.
+const browser = createBrowser({
+  connect: async () => connectCdp(await browserSocketUrl()),
+});
+const browserSweep = setInterval(() => void browser.sweep(), 60_000);
 await serveCliSocket(
   process.env.WINSTOND_SOCKET ?? "/run/winstond/winstond.sock",
   (request) => daemon.rpc(request),
+  { handles: isBrowserPath, rpc: browserRpc(browser) },
 );
 
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   process.on(signal, () => {
     daemon.stop();
     stopChromeWatch();
+    clearInterval(browserSweep);
     process.exit(0);
   });

@@ -4,7 +4,7 @@ import {
   apiErrors,
   type ApiErrorCode,
 } from "@winston/domain/api-errors";
-import { apiClient } from "./client.ts";
+import { apiClient, localClient } from "./client.ts";
 import { run, type Io } from "./cli.ts";
 import { parseFlags, resolveText, standardFlags } from "./flags.ts";
 import { json, list } from "./output.ts";
@@ -26,6 +26,16 @@ async function cli(
   const out: string[] = [];
   const err: string[] = [];
   const requests: Request[] = [];
+  const socket = {
+    socketPath: "/unused",
+    runToken: "run-token",
+    fetch: async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const request = new Request(url, init);
+      requests.push(request);
+      return backend(request);
+    },
+  };
   const io: Io = {
     out: (text) => out.push(text),
     err: (text) => err.push(text),
@@ -38,17 +48,8 @@ async function cli(
       cwd: "/home/winston",
       exists: () => Promise.resolve(false),
     },
-    client: () =>
-      apiClient({
-        socketPath: "/unused",
-        runToken: "run-token",
-        fetch: async (input, init) => {
-          const url = input instanceof Request ? input.url : String(input);
-          const request = new Request(url, init);
-          requests.push(request);
-          return backend(request);
-        },
-      }),
+    client: () => apiClient(socket),
+    local: () => localClient(socket),
   };
   const code = await run(argv, io);
   return { code, out: out.join("\n"), err: err.join("\n"), requests };
