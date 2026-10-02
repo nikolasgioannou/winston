@@ -1,7 +1,7 @@
 ---
 id: "ff4636"
 title: Build the handoff live-view page and test it on phones (with the founder)
-status: in-progress
+status: done
 priority: none
 labels:
   - browser
@@ -9,7 +9,7 @@ labels:
   - m8
   - web
 created_at: 2026-09-27T05:42:03.975Z
-updated_at: 2026-10-02T04:57:24.037Z
+updated_at: 2026-10-02T18:30:56.120Z
 blocked_by:
   - "7b6af9"
   - "f0507c"
@@ -40,3 +40,7 @@ Built and checked end to end in the local VM at phone size (375×812): tap to cl
 
 **Founder feedback (2026-10-02):** it worked well in production on their phone; handing back should be on the page rather than a trip to Telegram. Added a **Done** button: the gateway resumes a parked task, or records `system.handoff.done` for the front of house, then releases the window. Decision #7 updated.
 
+
+## Done (2026-10-02)
+
+Closed at the founder's request to finish the remaining tickets: they used it on their phone in production and it worked well, and their one change (Done on the page) shipped. The full-desktop link came with 732b45 (a header button). Further feel tweaks come from their feedback as they use it.
