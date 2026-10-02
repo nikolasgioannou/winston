@@ -26,4 +26,17 @@ describe("sanitizeRichMarkdown", () => {
       "**Dana** moved to 4 < 5pm. 3 <= 4, a -> b.\n\n- one\n\n| a | b |\n| - | - |";
     expect(sanitizeRichMarkdown(text)).toBe(text);
   });
+
+  test("dollar signs outside code are escaped, so amounts never read as math", () => {
+    expect(
+      sanitizeRichMarkdown(
+        "You've paid $201.73 of that $248, so about **$46** more.",
+      ),
+    ).toBe(
+      "You've paid &#36;201.73 of that &#36;248, so about **&#36;46** more.",
+    );
+    expect(
+      sanitizeRichMarkdown("Run `echo $HOME` then:\n```sh\nls $PWD\n```\n$5"),
+    ).toBe("Run `echo $HOME` then:\n```sh\nls $PWD\n```\n&#36;5");
+  });
 });

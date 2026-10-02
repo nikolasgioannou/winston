@@ -5,6 +5,9 @@
  *
  * - Images become ordinary links (`![alt](url)` → `[alt](url)`).
  * - Anything that could start an HTML tag becomes text (`<b` → `&lt;b`).
+ * - Dollar signs outside code become `&#36;`: Rich Messages read `$…$` as
+ *   math, so "$201.73 of that $248" arrived as an italic formula with its
+ *   spaces gone (seen in production). In code, math isn't parsed anyway.
  *
  * Applied everywhere, deliberately without a Markdown parser: a parser that
  * disagreed with Telegram's in an edge case could skip an image Telegram
@@ -12,5 +15,12 @@
  * shows as `&lt;tag>`.
  */
 export function sanitizeRichMarkdown(markdown: string) {
-  return markdown.replaceAll("![", "[").replace(/<(?=[A-Za-z/!?])/g, "&lt;");
+  const safe = markdown
+    .replaceAll("![", "[")
+    .replace(/<(?=[A-Za-z/!?])/g, "&lt;");
+  // Fenced blocks and inline code spans keep their dollars.
+  return safe
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replaceAll("$", "&#36;")))
+    .join("");
 }
