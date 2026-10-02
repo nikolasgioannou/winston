@@ -4,6 +4,7 @@
  * `winstond` user under systemd.
  */
 import { createLogger } from "@winston/shared/logger";
+import { watchChrome } from "./chrome-watch.ts";
 import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
@@ -70,6 +71,7 @@ const daemon = createDaemon({
   logger,
 });
 daemon.start();
+const stopChromeWatch = watchChrome(logger);
 await serveCliSocket(
   process.env.WINSTOND_SOCKET ?? "/run/winstond/winstond.sock",
   (request) => daemon.rpc(request),
@@ -78,5 +80,6 @@ await serveCliSocket(
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   process.on(signal, () => {
     daemon.stop();
+    stopChromeWatch();
     process.exit(0);
   });

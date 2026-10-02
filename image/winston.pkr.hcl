@@ -49,6 +49,7 @@ locals {
     "${path.root}/scripts/users.sh",
     "${path.root}/scripts/cli.sh",
     "${path.root}/scripts/winstond.sh",
+    "${path.root}/scripts/chrome.sh",
     "${path.root}/scripts/ec2.sh",
   ]
 }

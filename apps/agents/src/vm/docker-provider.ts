@@ -68,6 +68,12 @@ export function dockerVmProvider({
             `${volume}:/home/winston`,
           ],
           Tmpfs: { "/run": "", "/run/lock": "" },
+          // Chrome uses /dev/shm heavily; Docker's default 64 MB crashes tabs.
+          ShmSize: 1024 * 1024 * 1024,
+          // Docker's default seccomp profile blocks the namespaces Chrome's
+          // sandbox needs. Lifting it for this local stand-in keeps the
+          // sandbox on (no --no-sandbox); EC2 runs a normal kernel.
+          SecurityOpt: ["seccomp=unconfined"],
           ExtraHosts: ["host.docker.internal:host-gateway"],
           RestartPolicy: { Name: "unless-stopped" },
         },

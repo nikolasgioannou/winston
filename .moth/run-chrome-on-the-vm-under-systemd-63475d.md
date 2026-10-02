@@ -1,14 +1,14 @@
 ---
 id: "63475d"
 title: Run Chrome on the VM under systemd
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - m8
   - vm
 created_at: 2026-09-27T05:42:03.548Z
-updated_at: 2026-09-27T05:42:03.603Z
+updated_at: 2026-10-02T01:21:43.721Z
 blocked_by:
   - "961613"
   - "ce9145"
@@ -32,3 +32,12 @@ Check the open question from product.md: **does Chrome with several windows fit 
 Done when Chrome runs on both the local image and the AMI, survives a crash via restart, and the profile persists across restarts.
 
 Architecture: the local image is arm64 (docs/design.md §18), while production is x86_64. Check whether Google publishes Chrome stable for linux-arm64 today. If not, decide with the user between Chromium locally (and Chrome in production), or another way to keep the local and production browsers alike (profile format and CDP behaviour matter).
+
+## As built
+
+- `image/scripts/chrome.sh`: Chrome stable from Google's repository (published for arm64 too, same version, so no Chromium locally), Xvfb, CJK fonts; `xvfb` and `chrome` units as `winston`, profile on the data volume, DevTools on localhost:9222, memory limit 2.5 GB, restart after upgrades. On EC2 the build smoke-tests Chrome with its sandbox, and unattended-upgrades covers Google's repository.
+- `winstond` (`chrome-watch.ts`): CDP probe every 30 s, `sudo systemctl restart chrome.service` after 60 s silent; skipped on images without Chrome.
+- Local container: 1 GB shm and seccomp unconfined (keeps Chrome's sandbox on).
+- Checked locally: crash restart, hang restart by winstond, profile across container restarts, localhost-only DevTools. Memory with 5 heavy sites: ~2 GB peak, fits 4 GB (product.md question answered).
+- The AMI is built and checked after this commit (AMI workflow); existing production VMs get Chrome only on a new instance (the founder's next VM restore).
+

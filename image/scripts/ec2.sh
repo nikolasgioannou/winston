@@ -23,7 +23,8 @@ if [ ! -f /swapfile ]; then
 fi
 
 # Ubuntu security updates, unattended, at a quiet hour: 08:00 UTC is 3–4 am
-# in New York. No automatic reboots; Chrome's apt repository joins in M8.
+# in New York. No automatic reboots. Chrome's repository is included, so
+# browser security fixes land the same way (chrome.sh restarts Chrome after).
 apt-get install -y --no-install-recommends unattended-upgrades
 cat >/etc/apt/apt.conf.d/20auto-upgrades <<'CONF'
 APT::Periodic::Update-Package-Lists "1";
@@ -31,6 +32,7 @@ APT::Periodic::Unattended-Upgrade "1";
 CONF
 cat >/etc/apt/apt.conf.d/52winston-unattended-upgrades <<'CONF'
 Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Origins-Pattern { "origin=Google LLC,suite=stable"; };
 CONF
 install -d /etc/systemd/system/apt-daily-upgrade.timer.d
 cat >/etc/systemd/system/apt-daily-upgrade.timer.d/quiet-hour.conf <<'CONF'
@@ -90,6 +92,13 @@ systemctl enable winston-home.service
 # volume (EC2 attaches it a few seconds after boot starts).
 install -d /etc/systemd/system/winstond.service.d
 cat >/etc/systemd/system/winstond.service.d/home.conf <<'UNIT'
+[Unit]
+Requires=winston-home.service
+After=winston-home.service
+UNIT
+# Chrome's profile is on the volume too.
+install -d /etc/systemd/system/chrome.service.d
+cat >/etc/systemd/system/chrome.service.d/home.conf <<'UNIT'
 [Unit]
 Requires=winston-home.service
 After=winston-home.service

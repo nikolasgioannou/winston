@@ -118,7 +118,7 @@ Decided _not_ to build:
 
 ## Open questions
 
-- Does Chrome with several agent windows fit comfortably in a 4 GB `t3a.medium`? Measure before choosing the default size.
+- ~~Does Chrome with several agent windows fit comfortably in a 4 GB `t3a.medium`?~~ Measured 2026-10-01: five heavy sites peak at about 2 GB, so yes for now; revisit if many agents browse at once (docs/design.md §18).
 - Jev access: join TypeSafe's waitlist. The browser loop must work without it.
 - ~~Will the founder's work (Workspace) account allow connecting an unverified app?~~ Yes for `ni@nikolas.ai` (checked 2026-09-28; docs/runbooks/google-cloud.md).
 - Mobile quality of the handoff live view: test on iPhone and Android.

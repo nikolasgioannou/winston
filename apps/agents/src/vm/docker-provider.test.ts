@@ -64,6 +64,8 @@ describe("dockerVmProvider", () => {
           "winston-home-usr_1:/home/winston",
         ],
         Tmpfs: { "/run": "", "/run/lock": "" },
+        ShmSize: 1024 * 1024 * 1024,
+        SecurityOpt: ["seccomp=unconfined"],
       },
     });
   });
