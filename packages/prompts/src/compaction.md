@@ -12,7 +12,7 @@ What has been done, in order, briefly.
 
 ## Current state
 
-Where things stand right now: what's open or in progress, files written, drafts made, anything half-done.
+Where things stand right now: what's open or in progress, files written, drafts made, anything half-done, and the browser: each open window (`win_…`) with its URL and what it's for, and anything handed to the user.
 
 ## Tried and failed
 
