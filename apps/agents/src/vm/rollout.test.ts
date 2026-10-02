@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import { createHandoff } from "@winston/db/handoffs";
-import { handoffs, vms } from "@winston/db/schema";
+import { handoffs, runs, vms } from "@winston/db/schema";
 import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
 import { createVm } from "@winston/db/vms";
 import { createLogger } from "@winston/shared/logger";
@@ -130,6 +130,51 @@ describe("image rollouts", () => {
         instanceId: "inst-new",
         imageId: "ami-new",
       });
+    });
+  });
+
+  test("a forced roll moves it outside the quiet hours, but still not while it's busy", async () => {
+    await inRollback(db, async (tx) => {
+      const userId = await readyVm(tx, "ami-old", "UTC");
+      const replaced: string[] = [];
+      const provider = {
+        kind: "docker",
+        currentImage: () => Promise.resolve("ami-new"),
+        create: () =>
+          Promise.resolve({
+            instanceId: "inst-new",
+            dataVolumeId: "vol-1",
+            imageId: "ami-new",
+          }),
+        start: () => Promise.resolve(),
+        destroy: (instanceId: string) => {
+          replaced.push(instanceId);
+          return Promise.resolve();
+        },
+      } as unknown as VmProvider;
+      // Hours that never come.
+      const never = { from: 0, to: 0 };
+      const roll = (now: boolean) =>
+        rollVmHandler(
+          provider,
+          never,
+        )({
+          job: { userId, payload: now ? { now: true } : {} } as never,
+          db: tx as never,
+          logger,
+          extendLease: () => Promise.resolve(true),
+        });
+      await insertRun(tx, userId, { kind: "background", status: "running" });
+      await roll(true);
+      expect(replaced).toEqual([]);
+      await tx
+        .update(runs)
+        .set({ status: "completed" })
+        .where(eq(runs.userId, userId));
+      await roll(false);
+      expect(replaced).toEqual([]);
+      await roll(true);
+      expect(replaced).toEqual(["inst-old"]);
     });
   });
 });

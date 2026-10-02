@@ -130,7 +130,10 @@ export function rollVmHandler(
     if (!userId) throw new Error("roll_vm job has no user");
     const current = await provider.currentImage();
     if (!current) return;
-    if (!(await vmsToRoll(db, current, hours)).includes(userId)) {
+    // `bun run prod vm:roll` moves it now: any hour, but still not while busy.
+    const now = (job.payload as { now?: unknown } | null)?.now === true;
+    const window = now ? parseHours("0-24") : hours;
+    if (!(await vmsToRoll(db, current, window)).includes(userId)) {
       logger.info("not rolling: the VM is current, busy, or out of its hours");
       return;
     }

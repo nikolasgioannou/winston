@@ -7,10 +7,11 @@
  *   allowlist list|add|remove …      who may sign in
  *   sql "<query>"                    a read-only query, rows printed as JSON
  *   vm:restore <email>               restore a user's VM from its latest snapshot
+ *   vm:roll <email>                  move a user's VM onto the current image now
  */
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { restoreVmJob } from "@winston/domain/jobs";
+import { restoreVmJob, rollVmJob } from "@winston/domain/jobs";
 import { eq } from "drizzle-orm";
 import { allowlistCommand } from "./allowlist-cli.ts";
 import { createDb, type Db } from "./client.ts";
@@ -38,6 +39,30 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
     }
     case "allowlist":
       return allowlistCommand(db, args);
+    case "vm:roll": {
+      const [email] = args;
+      const [user] = email
+        ? await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, email.trim().toLowerCase()))
+        : [];
+      if (!user) {
+        console.log(`usage: vm:roll <email of an existing user>`);
+        return 1;
+      }
+      // Now rather than in the quiet hours; still not while it's busy.
+      await enqueue(db, rollVmJob.type, {
+        userId: user.id,
+        payload: { now: true },
+        dedupeKey: rollVmJob.dedupeKey(user.id),
+        maxAttempts: rollVmJob.maxAttempts,
+      });
+      console.log(
+        "Queued: the VM moves onto the current image unless it's current or busy (agents logs say which).",
+      );
+      return 0;
+    }
     case "vm:restore": {
       const [email] = args;
       const [user] = email
