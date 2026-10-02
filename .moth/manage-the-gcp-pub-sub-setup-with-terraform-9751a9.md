@@ -1,14 +1,14 @@
 ---
 id: "9751a9"
 title: Manage the GCP Pub/Sub setup with Terraform
-status: in-progress
+status: done
 priority: none
 labels:
   - infra
   - m7
   - tooling
 created_at: 2026-09-27T05:40:24.303Z
-updated_at: 2026-10-01T18:54:49.681Z
+updated_at: 2026-10-02T00:36:14.555Z
 blocked_by:
   - "e1a361"
   - "ef5b35"
@@ -45,4 +45,6 @@ Waiting on the founder (needs their Google sign-in, and installing Terraform and
 4. Set `GMAIL_PUSH_TOPIC`, `GMAIL_PUSH_SERVICE_ACCOUNT` and `GMAIL_PUSH_AUDIENCE` from `terraform output` (production values in the Services stack, dev in `.env.local`).
 
 Then move this ticket to done.
+
+**Applied (2026-10-01)** by the founder, prod and dev; lock files committed. The Gmail publisher binding first failed on the organization's Domain restricted sharing policy; lifted for the project during the apply and restored (now in the runbook). Prod outputs match the Services stack's values; the production Gmail watch was set up by the next `watch_connection` retry.
 

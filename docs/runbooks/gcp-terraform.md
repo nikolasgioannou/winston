@@ -27,6 +27,14 @@ Both live in the `winston-510100` project. Each root has its own state in S3: `s
    aws sso login --profile winston-prod
    ```
 
+4. **The organization policy that blocks Gmail.** Newer Google Workspace organizations enforce **Domain restricted sharing** (`iam.allowedPolicyMemberDomains`), which refuses any IAM member outside the organization. Gmail's publisher, `gmail-api-push@system.gserviceaccount.com`, is Google's, so the topic binding fails with "is not in permitted organization". Google checks the policy only when a binding is added, so lift it for the project just while applying:
+   1. You need **Organization Policy Administrator**, granted at the organization (`nikolas.ai`), not the project: IAM → pick the organization → edit your user → add the role.
+   2. With `winston-510100` selected: IAM & Admin → Organization Policies → `iam.allowedPolicyMemberDomains` → Manage policy → Override parent's policy, Replace, add a rule **Allow All** → Set policy. Wait a minute.
+   3. Apply (below), prod and dev.
+   4. Put it back: Manage policy → **Inherit parent's policy** → Set policy. The bindings stay.
+
+   Only a new topic binding needs this (a new environment, or recreating a topic). Applied 2026-10-01 this way.
+
 ## Plan and apply
 
 For each environment (`prod`, then `dev`):
