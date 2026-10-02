@@ -7,7 +7,10 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { newId } from "../ids.ts";
 import { connections } from "./connections.ts";
+import { searchable, tsvector } from "./search.ts";
 import { runs } from "./runs.ts";
 import { users } from "./users.ts";
 
@@ -27,6 +30,11 @@ export const auditLog = snakeCase.table(
   "audit_log",
   {
     id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    /** Its id in history search (`hist_`, §2), like messages and events. */
+    historyId: text()
+      .notNull()
+      .unique()
+      .$default(() => newId("historyItem")),
     userId: text()
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -48,10 +56,17 @@ export const auditLog = snakeCase.table(
     resultRef: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp({ withTimezone: true }),
+    /** History search (§2): what was done, to what, and any error. */
+    tsv: tsvector().generatedAlwaysAs(() =>
+      searchable(
+        sql`action || ' ' || summary || ' ' || coalesce(target_ref, '') || ' ' || coalesce(error, '')`,
+      ),
+    ),
   },
   (t) => [
     index().on(t.userId, t.createdAt),
     // Matching provider changes to Winston's own writes (M7).
     index().on(t.connectionId, t.createdAt),
+    index().using("gin", t.tsv),
   ],
 );

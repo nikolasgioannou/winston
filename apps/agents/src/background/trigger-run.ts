@@ -24,7 +24,7 @@ import {
 } from "@winston/domain/triggers";
 import { formatInTimeZone } from "@winston/shared/time";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { toEnvelopeItems } from "../front/envelopes.ts";
+import { toEnvelopeItems } from "@winston/db/envelopes";
 import { startBackgroundRun } from "./run.ts";
 
 /** How many recent messages the read-only tail holds (§16). */

@@ -1,14 +1,14 @@
 ---
 id: "35c1ed"
 title: Add winston history search and get
-status: todo
+status: done
 priority: none
 labels:
   - cli
   - db
   - m9
 created_at: 2026-09-27T05:42:36.143Z
-updated_at: 2026-09-27T05:42:36.220Z
+updated_at: 2026-10-02T18:09:52.942Z
 blocked_by:
   - "1fd02f"
   - "d66d10"
@@ -28,3 +28,14 @@ Build:
 Update the front-of-house prompt briefly: use `winston history search` when something may have scrolled out of the window.
 
 Tests: search across each type, ranking sanity, date filters, `--context` windows, envelope rendering identical to the context path, and user scoping (never another user's rows).
+
+## As built
+
+- **FTS:** stored generated `tsvector` columns (no triggers) with GIN indexes on `inbound_items` (`jsonb_to_tsvector` over the payload's strings), `outbound_messages` and `audit_log`. Each is `english` || `simple`, so stems and exact names, emails and ids both match; queries are `websearch_to_tsquery` in both configurations, ORed. Run results needed no column: task reports are already `task.completed` inbound items.
+- **Kinds:** `message` (the user's and Winston's), `event`, `task`, `action`; `event` was added because inbound events are searchable too.
+- **Rendering:** the same path as the context window (`toEnvelopeItems`, moved to `@winston/db/envelopes`, then `renderBatch`); Winston's messages render as `winston.message`, actions as `winston.action`. Each result is printed under its `hist_` id.
+- **Ids:** audit rows got `history_id` (`hist_`), backfilled in the migration for existing rows, so actions work with `history get` and `winston get`.
+- **Ranking:** `ts_rank` rounded to two places, then newest first; offset cursors.
+- `history get <hist_id> --context n` (msg_ ids are mail; `winston mail get` covers those). Neighbours are ordered by the stored time to the microsecond.
+- Prompts: front of house searches before saying it doesn't know; the background prompt mentions it in a line.
+- Tests: each kind, stemming and exact ids, ranking, type and date filters, cursors, `--context`, envelopes identical to the context path, user scoping; CLI output and `winston get hist_…` routing.

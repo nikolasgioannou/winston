@@ -1,5 +1,10 @@
-import type { DbOrTx } from "@winston/db/client";
-import { inboundItems, outboundMessages } from "@winston/db/schema";
+/**
+ * Stored inbound items as envelope items (docs/design.md §4): one path for
+ * the front of house's context window and for history search, so both read
+ * the same.
+ */
+import type { DbOrTx } from "./client.ts";
+import { inboundItems, outboundMessages } from "./schema/index.ts";
 import type { EnvelopeItem, ReplyContext } from "@winston/domain/envelope";
 import {
   taskNeedsUserPayloadSchema,

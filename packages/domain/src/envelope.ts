@@ -208,6 +208,41 @@ export function renderTaskResult(item: TaskItem, timeZone: string) {
   ]);
 }
 
+/**
+ * A message Winston sent the user, for history search (§2). In the context
+ * window his own messages are his turns, not envelopes; search shows them in
+ * the same shape as everything else.
+ */
+export function renderSentMessage(
+  item: { sentAt: Date; text: string },
+  timeZone: string,
+) {
+  return envelope("winston.message", [
+    element("sent_at", formatInTimeZone(item.sentAt, timeZone)),
+    element("text", item.text),
+  ]);
+}
+
+/** Something Winston did in a connected app (an audit log row), for history search. */
+export function renderAction(
+  item: {
+    occurredAt: Date;
+    action: string;
+    summary: string;
+    outcome: string;
+    error?: string | null;
+  },
+  timeZone: string,
+) {
+  return envelope("winston.action", [
+    element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
+    element("action", item.action),
+    element("summary", item.summary),
+    element("outcome", item.outcome),
+    ...(item.error ? [element("error", item.error)] : []),
+  ]);
+}
+
 /** Renders a batch of items as the content of one user-role message. */
 export function renderBatch(items: readonly EnvelopeItem[], timeZone: string) {
   return items

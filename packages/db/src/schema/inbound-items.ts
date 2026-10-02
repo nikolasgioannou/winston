@@ -6,7 +6,9 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { newId } from "../ids.ts";
+import { tsvector } from "./search.ts";
 import { runs } from "./runs.ts";
 import { users } from "./users.ts";
 
@@ -37,6 +39,15 @@ export const inboundItems = snakeCase.table(
     /** The run that handled it; unset until then. */
     consumedByRunId: text().references(() => runs.id, { onDelete: "set null" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** History search (§2): every string in the payload (a message's text, an event's fields, a task's report). */
+    tsv: tsvector().generatedAlwaysAs(
+      () =>
+        sql`jsonb_to_tsvector('english'::regconfig, payload, '["string"]') || jsonb_to_tsvector('simple'::regconfig, payload, '["string"]')`,
+    ),
   },
-  (t) => [index().on(t.userId, t.consumedByRunId)],
+  (t) => [
+    index().on(t.userId, t.consumedByRunId),
+    index().on(t.userId, t.occurredAt),
+    index().using("gin", t.tsv),
+  ],
 );

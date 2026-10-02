@@ -15,6 +15,7 @@ import { accounts } from "./resources/accounts.ts";
 import { browser } from "./resources/browser.ts";
 import { calendar } from "./resources/calendar.ts";
 import { events } from "./resources/events.ts";
+import { history } from "./resources/history.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
 import { task } from "./resources/task.ts";
@@ -30,6 +31,7 @@ export const resources: Resource[] = [
   task,
   trigger,
   events,
+  history,
   browser,
 ];
 

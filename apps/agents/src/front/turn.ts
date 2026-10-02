@@ -69,7 +69,7 @@ import {
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { startTyping, type Timers } from "../telegram/typing.ts";
-import { toEnvelopeItems } from "./envelopes.ts";
+import { toEnvelopeItems } from "@winston/db/envelopes";
 import {
   defaultWindowBudget,
   trimWindow,

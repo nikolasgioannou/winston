@@ -9,6 +9,7 @@
     "./client": "./src/client.ts",
     "./config": "./src/config.ts",
     "./connections": "./src/connections.ts",
+    "./envelopes": "./src/envelopes.ts",
     "./external-refs": "./src/external-refs.ts",
     "./ids": "./src/ids.ts",
     "./profile": "./src/profile.ts",
