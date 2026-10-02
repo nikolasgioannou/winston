@@ -1,5 +1,6 @@
 import type {
   BrowserActionResponse,
+  BrowserAutopilotResponse,
   BrowserCloseResponse,
   BrowserEvalResponse,
   BrowserScreenshotResponse,
@@ -67,6 +68,19 @@ export function snapshotText(result: BrowserSnapshotResponse) {
       `… ${String(result.more)} more lines (a long page). Act on what's here, or scroll and snapshot again.`,
     );
   return lines.join("\n");
+}
+
+/** What autopilot did, why it stopped, and where the window is now. */
+export function autopilotText(result: BrowserAutopilotResponse) {
+  const did =
+    result.actions.length > 0
+      ? result.actions.map((action) => `- ${action}`)
+      : ["Nothing done."];
+  return [
+    ...did,
+    `Stopped (${result.stop}): ${result.reason}`,
+    `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}. Snapshot next.`,
+  ].join("\n");
 }
 
 /** What an action did, and what the agent should know before its next step. */
@@ -504,6 +518,55 @@ export const browser: Resource = {
         return result.more > 0
           ? `${result.value}\n… ${String(result.more)} more characters. Return less: filter or slice in the script.`
           : result.value;
+      },
+    },
+    {
+      name: "autopilot",
+      summary:
+        "Let the fast model click toward a sub-goal; it hands back when unsure, at typing, or before anything that commits",
+      usage: "<subgoal>",
+      flags: [
+        {
+          name: "max-steps",
+          value: "<n>",
+          description: "At most this many clicks (default 8, at most 20)",
+        },
+        windowFlag,
+      ],
+      examples: [
+        'winston browser autopilot "open the first search result"',
+        'winston browser autopilot "get to the checkout page" --max-steps 12',
+      ],
+      run: async (context) => {
+        const goal = context.args.join(" ").trim();
+        if (!goal)
+          throw CliError.usage(
+            "What's the sub-goal? Say it in a few words.",
+            'winston browser autopilot "open the first search result"',
+          );
+        const steps = textFlag(context.flags, "max-steps");
+        const maxSteps = steps === undefined ? undefined : Number(steps);
+        if (
+          maxSteps !== undefined &&
+          (!Number.isInteger(maxSteps) || maxSteps < 1)
+        )
+          throw CliError.usage(
+            "--max-steps takes a whole number, like 8.",
+            'winston browser autopilot "open the first result" --max-steps 8',
+          );
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserAutopilotResponse>(
+          context,
+          "autopilot",
+          {
+            goal,
+            ...(maxSteps ? { maxSteps } : {}),
+            ...(window ? { window } : {}),
+          },
+        );
+        return context.flags.json === true
+          ? json(result)
+          : autopilotText(result);
       },
     },
     {

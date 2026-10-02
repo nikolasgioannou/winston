@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { costLedger, jevDecisions } from "@winston/db/schema";
 import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
-import { openRouterJev } from "./jev.ts";
+import { openRouterJev, siteReliability } from "./jev.ts";
 import { setupApi } from "./testing.ts";
 
 const db = await testDb();
@@ -167,6 +167,69 @@ describe("the Jev proxy", () => {
       });
       expect(tooMany.status).toBe(400);
       expect(openRouter.sent).toEqual([]);
+    });
+  });
+
+  test("outcomes are recorded on the caller's own decisions, and a site turns unreliable when most picks are overridden", async () => {
+    await inRollback(db, async (tx) => {
+      const { user, call } = await setup(tx);
+      const other = await insertUser(tx);
+      const insert = (
+        userId: string,
+        outcome: "verified" | "overridden" | "unknown",
+        domain = "shop.example",
+      ) =>
+        tx
+          .insert(jevDecisions)
+          .values({
+            userId,
+            runId: null,
+            domain,
+            question: {},
+            outcome,
+            latencyMs: 300,
+          })
+          .returning({ id: jevDecisions.id })
+          .then((rows) => rows[0]?.id ?? "");
+      const mine = await insert(user.id, "unknown");
+      const theirs = await insert(other.id, "unknown");
+      const recorded = await call("/v1/jev/outcome", {
+        method: "POST",
+        body: {
+          decisions: [
+            { id: mine, action: 'click e3 (link "Bun")' },
+            { id: theirs, action: null },
+          ],
+          outcome: "verified",
+        },
+      });
+      expect(recorded.status).toBe(200);
+      const rows = await tx.select().from(jevDecisions);
+      expect(rows.find((r) => r.id === mine)).toMatchObject({
+        outcome: "verified",
+        action: 'click e3 (link "Bun")',
+      });
+      expect(rows.find((r) => r.id === theirs)?.outcome).toBe("unknown");
+
+      const site = async () =>
+        (await (await call("/v1/jev/sites/shop.example")).json()) as {
+          reliable: boolean;
+          decided: number;
+        };
+      // Too few decided picks to judge: still on.
+      for (let i = 0; i < 3; i++) await insert(user.id, "overridden");
+      expect(await site()).toMatchObject({ reliable: true, decided: 4 });
+      for (let i = 0; i < siteReliability.minDecided; i++)
+        await insert(user.id, "overridden");
+      expect((await site()).reliable).toBe(false);
+      // Another site is unaffected.
+      expect(
+        (
+          (await (await call("/v1/jev/sites/other.example")).json()) as {
+            reliable: boolean;
+          }
+        ).reliable,
+      ).toBe(true);
     });
   });
 });

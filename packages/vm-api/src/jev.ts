@@ -9,6 +9,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { costLedger, jevDecisions } from "@winston/db/schema";
 import { apiError, apiErrors } from "@winston/domain/api-errors";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { VmApiEnv } from "./env.ts";
@@ -139,64 +140,135 @@ export function openRouterJev({
   };
 }
 
+/**
+ * Per-site reliability (§5): over a site's last decided picks, Jev is off
+ * there once at least `minDecided` are known and most were overridden.
+ */
+export const siteReliability = {
+  window: 30,
+  minDecided: 6,
+  maxOverridden: 0.5,
+};
+
+const outcomeBody = z.object({
+  decisions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(64),
+        /** What was done with the pick, e.g. `click e5 (link "Bun")`; null if nothing. */
+        action: z.string().max(300).nullable(),
+      }),
+    )
+    .min(1)
+    .max(50),
+  outcome: z.enum(["verified", "overridden"]),
+});
+
 export function jevRoutes({ db, jev }: { db: DbOrTx; jev?: Jev | undefined }) {
-  return new Hono<VmApiEnv>().post("/decide", async (c) => {
-    const body = jevRequest.safeParse(
-      await c.req.json().catch(() => undefined),
-    );
-    if (!body.success)
-      return c.json(
-        apiError("invalid_request", z.prettifyError(body.error)),
-        apiErrors.invalid_request.status,
-      );
-    const unavailable = (message: string) =>
-      c.json(
-        apiError(
-          "unavailable",
-          message,
-          "Drive the page yourself: snapshot, then act on refs.",
-        ),
-        apiErrors.unavailable.status,
-      );
-    if (!jev) return unavailable("Jev isn't set up here.");
-    const { userId, runId } = c.get("run");
-    const { state, questions, domain } = body.data;
-    const started = performance.now();
-    let reply: JevReply | undefined;
-    let error: string | undefined;
-    try {
-      reply = await jev.decide({ state, questions });
-    } catch (failure) {
-      if (!(failure instanceof JevUnavailableError)) throw failure;
-      error = failure.message;
-    }
-    const latencyMs = Math.round(performance.now() - started);
-    const [decision] = await db
-      .insert(jevDecisions)
-      .values({
-        userId,
-        runId,
-        domain: domain ?? null,
-        question: { state, questions },
-        answer: reply?.answers ?? null,
-        model: reply?.model ?? null,
-        error: error ?? null,
-        latencyMs,
-      })
-      .returning({ id: jevDecisions.id });
-    if (!reply || !decision) return unavailable(error ?? "Jev failed.");
-    if (reply.costUsd > 0)
-      await db.insert(costLedger).values({
-        userId,
-        runId,
-        category: "jev",
-        costUsd: reply.costUsd.toFixed(6),
+  return new Hono<VmApiEnv>()
+    .get("/sites/:domain", async (c) => {
+      const recent = await db
+        .select({ outcome: jevDecisions.outcome })
+        .from(jevDecisions)
+        .where(
+          and(
+            eq(jevDecisions.domain, c.req.param("domain")),
+            ne(jevDecisions.outcome, "unknown"),
+          ),
+        )
+        .orderBy(desc(jevDecisions.createdAt))
+        .limit(siteReliability.window);
+      const overridden = recent.filter(
+        (d) => d.outcome === "overridden",
+      ).length;
+      return c.json({
+        decided: recent.length,
+        overridden,
+        reliable:
+          recent.length < siteReliability.minDecided ||
+          overridden / recent.length <= siteReliability.maxOverridden,
       });
-    return c.json({
-      decisionId: decision.id,
-      answers: reply.answers,
-      model: reply.model,
-      latencyMs,
+    })
+    .post("/outcome", async (c) => {
+      const body = outcomeBody.safeParse(
+        await c.req.json().catch(() => undefined),
+      );
+      if (!body.success)
+        return c.json(
+          apiError("invalid_request", z.prettifyError(body.error)),
+          apiErrors.invalid_request.status,
+        );
+      const { userId } = c.get("run");
+      for (const { id, action } of body.data.decisions)
+        await db
+          .update(jevDecisions)
+          .set({ action, outcome: body.data.outcome })
+          .where(
+            and(
+              eq(jevDecisions.id, id),
+              // Only this user's decisions.
+              eq(jevDecisions.userId, userId),
+            ),
+          );
+      return c.json({ recorded: body.data.decisions.length });
+    })
+    .post("/decide", async (c) => {
+      const body = jevRequest.safeParse(
+        await c.req.json().catch(() => undefined),
+      );
+      if (!body.success)
+        return c.json(
+          apiError("invalid_request", z.prettifyError(body.error)),
+          apiErrors.invalid_request.status,
+        );
+      const unavailable = (message: string) =>
+        c.json(
+          apiError(
+            "unavailable",
+            message,
+            "Drive the page yourself: snapshot, then act on refs.",
+          ),
+          apiErrors.unavailable.status,
+        );
+      if (!jev) return unavailable("Jev isn't set up here.");
+      const { userId, runId } = c.get("run");
+      const { state, questions, domain } = body.data;
+      const started = performance.now();
+      let reply: JevReply | undefined;
+      let error: string | undefined;
+      try {
+        reply = await jev.decide({ state, questions });
+      } catch (failure) {
+        if (!(failure instanceof JevUnavailableError)) throw failure;
+        error = failure.message;
+      }
+      const latencyMs = Math.round(performance.now() - started);
+      const [decision] = await db
+        .insert(jevDecisions)
+        .values({
+          userId,
+          runId,
+          domain: domain ?? null,
+          question: { state, questions },
+          answer: reply?.answers ?? null,
+          model: reply?.model ?? null,
+          error: error ?? null,
+          latencyMs,
+        })
+        .returning({ id: jevDecisions.id });
+      if (!reply || !decision) return unavailable(error ?? "Jev failed.");
+      if (reply.costUsd > 0)
+        await db.insert(costLedger).values({
+          userId,
+          runId,
+          category: "jev",
+          costUsd: reply.costUsd.toFixed(6),
+        });
+      return c.json({
+        decisionId: decision.id,
+        answers: reply.answers,
+        model: reply.model,
+        latencyMs,
+      });
     });
-  });
 }

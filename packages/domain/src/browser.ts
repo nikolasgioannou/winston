@@ -110,3 +110,25 @@ export interface BrowserEvalResponse {
   /** Characters left out to keep the output bounded. */
   more: number;
 }
+
+/** Why autopilot handed back (docs/design.md §5, Jev fast path). */
+export type AutopilotStop =
+  | "goal_met"
+  | "stuck"
+  | "unsure"
+  | "needs_typing"
+  | "commits"
+  | "max_steps"
+  | "unreliable"
+  | "unavailable"
+  | "failed";
+
+/** What `winston browser autopilot` answers. */
+export interface BrowserAutopilotResponse {
+  /** What it did, in order: `Clicked e5 (link "Bun").` */
+  actions: string[];
+  stop: AutopilotStop;
+  /** Why it stopped, for the agent: `The next step commits something: e9 (button "Place order").` */
+  reason: string;
+  window: BrowserWindowInfo;
+}

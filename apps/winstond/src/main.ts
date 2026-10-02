@@ -6,6 +6,7 @@
 import { newFrameId } from "@winston/domain/frames";
 import { createLogger } from "@winston/shared/logger";
 import { browserSocketUrl, connectCdp } from "./browser/cdp.ts";
+import { createAutopilot } from "./browser/autopilot.ts";
 import { createDesktops } from "./browser/desktop.ts";
 import { handoffFrames } from "./browser/handoff-frames.ts";
 import { browserRpc, isBrowserPath } from "./browser/rpc.ts";
@@ -129,7 +130,17 @@ const browserSweep = setInterval(() => void browser.sweep(), 60_000);
 await serveCliSocket(
   process.env.WINSTOND_SOCKET ?? "/run/winstond/winstond.sock",
   (request) => daemon.rpc(request),
-  { handles: isBrowserPath, rpc: browserRpc(browser) },
+  {
+    handles: isBrowserPath,
+    rpc: browserRpc(
+      browser,
+      createAutopilot({
+        snapshot: (runToken, window) => browser.snapshot(runToken, { window }),
+        click: (runToken, ref, window) => browser.click(runToken, ref, window),
+        backend: (request) => daemon.rpc(request),
+      }),
+    ),
+  },
 );
 
 for (const signal of ["SIGTERM", "SIGINT"] as const)

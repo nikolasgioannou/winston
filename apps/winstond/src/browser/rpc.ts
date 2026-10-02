@@ -5,6 +5,7 @@
 import { apiError, apiErrors } from "@winston/domain/api-errors";
 import { browserPathPrefix } from "@winston/domain/browser";
 import type { RpcMethod, RpcResponse } from "../daemon.ts";
+import type { Autopilot } from "./autopilot.ts";
 import { CdpError } from "./cdp.ts";
 import { BrowserFailure, type Browser } from "./windows.ts";
 
@@ -23,7 +24,20 @@ export function isBrowserPath(path: string) {
   return path.startsWith(browserPathPrefix);
 }
 
-export function browserRpc(browser: Browser) {
+/** Routes that act in a window: the agent's next move after autopilot. */
+const acting = new Set([
+  "navigate",
+  "click",
+  "type",
+  "select",
+  "press",
+  "scroll",
+  "click-xy",
+  "eval",
+  "dialog",
+]);
+
+export function browserRpc(browser: Browser, autopilot?: Autopilot) {
   return async (request: {
     method: RpcMethod;
     path: string;
@@ -44,7 +58,27 @@ export function browserRpc(browser: Browser) {
     }
     const text = (name: string) =>
       typeof body[name] === "string" ? body[name] : undefined;
+    if (request.method === "POST" && acting.has(route))
+      autopilot?.observe(request.runToken, route, body);
     try {
+      if (request.method === "POST" && route === "autopilot" && autopilot) {
+        const goal = text("goal")?.trim();
+        if (!goal)
+          throw new BrowserFailure(
+            "invalid_request",
+            "What's the sub-goal? Say it in a few words.",
+          );
+        return reply(
+          200,
+          await autopilot.run(request.runToken, {
+            goal,
+            ...(typeof body.maxSteps === "number"
+              ? { maxSteps: body.maxSteps }
+              : {}),
+            window: text("window"),
+          }),
+        );
+      }
       if (request.method === "GET" && route === "windows")
         return reply(200, { windows: await browser.windows(request.runToken) });
       const one = /^windows\/([^/]+)$/.exec(route);
