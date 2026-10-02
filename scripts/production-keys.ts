@@ -17,6 +17,7 @@ import { $ } from "bun";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { serviceSecrets, type Service } from "../infra/src/secret-names.ts";
 
 const env = {
   ...process.env,
@@ -24,6 +25,15 @@ const env = {
   AWS_PROFILE: process.env.AWS_PROFILE ?? "winston-prod",
 };
 const domain = "runwinston.com";
+
+/** The services that read a secret, from the same table the stack uses. */
+const readersOf = (secret: string) =>
+  (Object.keys(serviceSecrets) as Service[]).filter((service) =>
+    Object.values(serviceSecrets[service]).some(
+      (ref: string | readonly [string, string]) =>
+        (typeof ref === "string" ? ref : ref[0]) === secret,
+    ),
+  );
 
 /** Asks a question with the terminal's echo off. */
 async function askHidden(question: string) {
@@ -71,7 +81,7 @@ if (identity.exitCode !== 0 || identity.text().trim() !== "766577085959") {
   process.exit(1);
 }
 
-const changed = new Set<string>();
+const changed = new Set<Service>();
 if (!Bun.argv.includes("--webhook")) {
   console.log(
     "Production keys. Typing is hidden; blank keeps the current value.\n",
@@ -84,13 +94,13 @@ if (!Bun.argv.includes("--webhook")) {
       process.exit(1);
     }
     await putSecret("winston/telegram-bot-token", botToken);
-    changed.add("api").add("agents");
+    for (const service of readersOf("telegram-bot-token")) changed.add(service);
   }
 
   const openRouter = await askHidden("Production OpenRouter API key: ");
   if (openRouter) {
     await putSecret("winston/openrouter-api-key", openRouter);
-    changed.add("agents");
+    for (const service of readersOf("openrouter-api-key")) changed.add(service);
   }
 
   const clientId = await askHidden(
@@ -104,7 +114,7 @@ if (!Bun.argv.includes("--webhook")) {
       "winston/google-oauth",
       JSON.stringify({ clientId, clientSecret }),
     );
-    changed.add("web");
+    for (const service of readersOf("google-oauth")) changed.add(service);
   }
 
   if (changed.size > 0) {
