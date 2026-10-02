@@ -1,0 +1,527 @@
+{
+  "sessionId": "main",
+  "nodes": [
+    {
+      "nodeId": "14",
+      "role": { "type": "internalRole", "value": "RootWebArea" },
+      "name": { "value": "Sign in" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "focused", "value": { "value": true } },
+        {
+          "name": "url",
+          "value": { "value": "http://localhost:8001/form.html" }
+        }
+      ],
+      "childIds": ["16"],
+      "backendDOMNodeId": 14
+    },
+    {
+      "nodeId": "16",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["20"],
+      "backendDOMNodeId": 16
+    },
+    {
+      "nodeId": "20",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["21"],
+      "backendDOMNodeId": 20
+    },
+    {
+      "nodeId": "21",
+      "role": { "type": "role", "value": "main" },
+      "childIds": ["22", "2"],
+      "backendDOMNodeId": 21
+    },
+    {
+      "nodeId": "22",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Sign in to Acme" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["50"],
+      "backendDOMNodeId": 22
+    },
+    {
+      "nodeId": "2",
+      "role": { "type": "role", "value": "form" },
+      "childIds": [
+        "23",
+        "25",
+        "27",
+        "10",
+        "31",
+        "6",
+        "11",
+        "12",
+        "45",
+        "47",
+        "13"
+      ],
+      "backendDOMNodeId": 2
+    },
+    {
+      "nodeId": "50",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Sign in to Acme" },
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 50
+    },
+    {
+      "nodeId": "23",
+      "role": { "type": "internalRole", "value": "LabelText" },
+      "childIds": ["51", "3"],
+      "backendDOMNodeId": 23
+    },
+    {
+      "nodeId": "25",
+      "role": { "type": "internalRole", "value": "LabelText" },
+      "childIds": ["53", "4"],
+      "backendDOMNodeId": 25
+    },
+    {
+      "nodeId": "27",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["7", "54"],
+      "backendDOMNodeId": 27
+    },
+    {
+      "nodeId": "7",
+      "role": { "type": "role", "value": "checkbox" },
+      "name": { "value": "Remember me" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "checked", "value": { "value": "true" } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "backendDOMNodeId": 7
+    },
+    {
+      "nodeId": "54",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "backendDOMNodeId": 54
+    },
+    {
+      "nodeId": "10",
+      "role": { "type": "role", "value": "group" },
+      "name": { "value": "Plan" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "childIds": ["28", "29", "30"],
+      "backendDOMNodeId": 10
+    },
+    {
+      "nodeId": "31",
+      "role": { "type": "internalRole", "value": "LabelText" },
+      "childIds": ["58", "5"],
+      "backendDOMNodeId": 31
+    },
+    {
+      "nodeId": "6",
+      "role": { "type": "role", "value": "textbox" },
+      "name": { "value": "Notes" },
+      "value": { "value": "Hello" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "editable", "value": { "value": "plaintext" } },
+        { "name": "settable", "value": { "value": true } },
+        { "name": "multiline", "value": { "value": true } },
+        { "name": "readonly", "value": { "value": false } },
+        { "name": "required", "value": { "value": false } }
+      ],
+      "childIds": ["44"],
+      "backendDOMNodeId": 6
+    },
+    {
+      "nodeId": "11",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Sign in" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["60"],
+      "backendDOMNodeId": 11
+    },
+    {
+      "nodeId": "12",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Delete account" },
+      "properties": [
+        { "name": "disabled", "value": { "value": true } },
+        { "name": "invalid", "value": { "value": "false" } }
+      ],
+      "childIds": ["61"],
+      "backendDOMNodeId": 12
+    },
+    {
+      "nodeId": "45",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["62", "46", "64"],
+      "backendDOMNodeId": 45
+    },
+    {
+      "nodeId": "47",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Custom div button" },
+      "properties": [{ "name": "focusable", "value": { "value": true } }],
+      "childIds": ["65"],
+      "backendDOMNodeId": 47
+    },
+    {
+      "nodeId": "13",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Shadow button" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["66"],
+      "backendDOMNodeId": 13
+    },
+    {
+      "nodeId": "-1000000002",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Sign in to Acme" }
+    },
+    {
+      "nodeId": "51",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Email " },
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 51
+    },
+    {
+      "nodeId": "3",
+      "role": { "type": "role", "value": "textbox" },
+      "name": { "value": "Email" },
+      "value": { "value": "ada@example.com" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "editable", "value": { "value": "plaintext" } },
+        { "name": "settable", "value": { "value": true } },
+        { "name": "multiline", "value": { "value": false } },
+        { "name": "readonly", "value": { "value": false } },
+        { "name": "required", "value": { "value": false } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "childIds": ["24"],
+      "backendDOMNodeId": 3
+    },
+    {
+      "nodeId": "53",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Password " },
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 53
+    },
+    {
+      "nodeId": "4",
+      "role": { "type": "role", "value": "textbox" },
+      "name": { "value": "Password" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "editable", "value": { "value": "plaintext" } },
+        { "name": "settable", "value": { "value": true } },
+        { "name": "multiline", "value": { "value": false } },
+        { "name": "readonly", "value": { "value": false } },
+        { "name": "required", "value": { "value": false } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "childIds": ["26"],
+      "backendDOMNodeId": 4
+    },
+    {
+      "nodeId": "28",
+      "role": { "type": "internalRole", "value": "Legend" },
+      "childIds": ["55"],
+      "backendDOMNodeId": 28
+    },
+    {
+      "nodeId": "29",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["8", "56"],
+      "backendDOMNodeId": 29
+    },
+    {
+      "nodeId": "8",
+      "role": { "type": "role", "value": "radio" },
+      "name": { "value": "Free" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "checked", "value": { "value": "true" } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "backendDOMNodeId": 8
+    },
+    {
+      "nodeId": "56",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "backendDOMNodeId": 56
+    },
+    {
+      "nodeId": "30",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["9", "57"],
+      "backendDOMNodeId": 30
+    },
+    {
+      "nodeId": "9",
+      "role": { "type": "role", "value": "radio" },
+      "name": { "value": "Pro" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "checked", "value": { "value": "false" } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "backendDOMNodeId": 9
+    },
+    {
+      "nodeId": "57",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "backendDOMNodeId": 57
+    },
+    {
+      "nodeId": "58",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Country " },
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 58
+    },
+    {
+      "nodeId": "5",
+      "role": { "type": "role", "value": "combobox" },
+      "name": { "value": "Country" },
+      "value": { "value": "Cyprus" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "hasPopup", "value": { "value": "menu" } },
+        { "name": "expanded", "value": { "value": false } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "childIds": ["34"],
+      "backendDOMNodeId": 5
+    },
+    {
+      "nodeId": "44",
+      "role": { "type": "role", "value": "generic" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["59"],
+      "backendDOMNodeId": 44
+    },
+    {
+      "nodeId": "60",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Sign in" },
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 60
+    },
+    {
+      "nodeId": "61",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Delete account" },
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 61
+    },
+    {
+      "nodeId": "62",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "By signing in you agree to our " },
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 62
+    },
+    {
+      "nodeId": "46",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "terms" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/terms" } }
+      ],
+      "childIds": ["63"],
+      "backendDOMNodeId": 46
+    },
+    {
+      "nodeId": "64",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "." },
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 64
+    },
+    {
+      "nodeId": "65",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Custom div button" },
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 65
+    },
+    {
+      "nodeId": "66",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Shadow button" },
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 66
+    },
+    {
+      "nodeId": "-1000000003",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Email " }
+    },
+    {
+      "nodeId": "24",
+      "role": { "type": "role", "value": "generic" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["52"],
+      "backendDOMNodeId": 24
+    },
+    {
+      "nodeId": "-1000000005",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Password " }
+    },
+    {
+      "nodeId": "26",
+      "role": { "type": "role", "value": "generic" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "backendDOMNodeId": 26
+    },
+    {
+      "nodeId": "55",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Plan" },
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 55
+    },
+    {
+      "nodeId": "-1000000010",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Country " }
+    },
+    {
+      "nodeId": "34",
+      "role": { "type": "internalRole", "value": "MenuListPopup" },
+      "childIds": ["35"],
+      "backendDOMNodeId": 34
+    },
+    {
+      "nodeId": "59",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Hello" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 59
+    },
+    {
+      "nodeId": "-1000000012",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Sign in" }
+    },
+    {
+      "nodeId": "-1000000013",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Delete account" }
+    },
+    {
+      "nodeId": "-1000000014",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "By signing in you agree to our " }
+    },
+    {
+      "nodeId": "63",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "terms" },
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 63
+    },
+    {
+      "nodeId": "-1000000016",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "." }
+    },
+    {
+      "nodeId": "-1000000017",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Custom div button" }
+    },
+    {
+      "nodeId": "-1000000018",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Shadow button" }
+    },
+    {
+      "nodeId": "52",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "ada@example.com" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 52
+    },
+    {
+      "nodeId": "-1000000007",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Plan" }
+    },
+    {
+      "nodeId": "35",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["38", "41"],
+      "backendDOMNodeId": 35
+    },
+    {
+      "nodeId": "38",
+      "role": { "type": "role", "value": "option" },
+      "name": { "value": "Canada" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "selected", "value": { "value": false } }
+      ],
+      "backendDOMNodeId": 38
+    },
+    {
+      "nodeId": "41",
+      "role": { "type": "role", "value": "option" },
+      "name": { "value": "Cyprus" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "selected", "value": { "value": true } }
+      ],
+      "backendDOMNodeId": 41
+    },
+    {
+      "nodeId": "-1000000011",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Hello" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }]
+    },
+    {
+      "nodeId": "-1000000015",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "terms" }
+    },
+    {
+      "nodeId": "-1000000004",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "ada@example.com" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }]
+    }
+  ],
+  "children": []
+}

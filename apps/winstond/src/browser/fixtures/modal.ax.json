@@ -1,0 +1,227 @@
+{
+  "sessionId": "main",
+  "nodes": [
+    {
+      "nodeId": "2",
+      "role": { "type": "internalRole", "value": "RootWebArea" },
+      "name": { "value": "Checkout" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "focused", "value": { "value": true } },
+        {
+          "name": "url",
+          "value": { "value": "http://localhost:8001/modal.html" }
+        }
+      ],
+      "childIds": ["3"],
+      "backendDOMNodeId": 2
+    },
+    {
+      "nodeId": "3",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["7"],
+      "backendDOMNodeId": 3
+    },
+    {
+      "nodeId": "7",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["8", "12"],
+      "backendDOMNodeId": 7
+    },
+    {
+      "nodeId": "8",
+      "role": { "type": "role", "value": "main" },
+      "childIds": ["9", "10", "11"],
+      "backendDOMNodeId": 8
+    },
+    {
+      "nodeId": "12",
+      "role": { "type": "role", "value": "dialog" },
+      "name": { "value": "Confirm your order" },
+      "properties": [
+        { "name": "modal", "value": { "value": true } },
+        { "name": "labelledby", "value": {} }
+      ],
+      "childIds": ["13", "14", "15", "16", "17"],
+      "backendDOMNodeId": 12
+    },
+    {
+      "nodeId": "9",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Your cart" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["18"],
+      "backendDOMNodeId": 9
+    },
+    {
+      "nodeId": "10",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Checkout" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["19"],
+      "backendDOMNodeId": 10
+    },
+    {
+      "nodeId": "11",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Keep shopping" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/more" } }
+      ],
+      "childIds": ["20"],
+      "backendDOMNodeId": 11
+    },
+    {
+      "nodeId": "13",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Confirm your order" },
+      "properties": [{ "name": "level", "value": { "value": 2 } }],
+      "childIds": ["21"],
+      "backendDOMNodeId": 13
+    },
+    {
+      "nodeId": "14",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["22"],
+      "backendDOMNodeId": 14
+    },
+    {
+      "nodeId": "15",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Options" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "hasPopup", "value": { "value": "menu" } },
+        { "name": "expanded", "value": { "value": false } }
+      ],
+      "childIds": ["23"],
+      "backendDOMNodeId": 15
+    },
+    {
+      "nodeId": "16",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Place order" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["24"],
+      "backendDOMNodeId": 16
+    },
+    {
+      "nodeId": "17",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Close" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["25"],
+      "backendDOMNodeId": 17
+    },
+    {
+      "nodeId": "18",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Your cart" },
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 18
+    },
+    {
+      "nodeId": "19",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Checkout" },
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 19
+    },
+    {
+      "nodeId": "20",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Keep shopping" },
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 20
+    },
+    {
+      "nodeId": "21",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Confirm your order" },
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 21
+    },
+    {
+      "nodeId": "22",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Total: $42.00" },
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 22
+    },
+    {
+      "nodeId": "23",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Options" },
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 23
+    },
+    {
+      "nodeId": "24",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Place order" },
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 24
+    },
+    {
+      "nodeId": "25",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "×" },
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 25
+    },
+    {
+      "nodeId": "-1000000002",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Your cart" }
+    },
+    {
+      "nodeId": "-1000000003",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Checkout" }
+    },
+    {
+      "nodeId": "-1000000004",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Keep shopping" }
+    },
+    {
+      "nodeId": "-1000000005",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Confirm your order" }
+    },
+    {
+      "nodeId": "-1000000006",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Total: $42.00" }
+    },
+    {
+      "nodeId": "-1000000007",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Options" }
+    },
+    {
+      "nodeId": "-1000000008",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Place order" }
+    },
+    {
+      "nodeId": "-1000000009",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "×" }
+    }
+  ],
+  "children": []
+}

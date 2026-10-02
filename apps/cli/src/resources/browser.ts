@@ -1,6 +1,7 @@
 import type {
   BrowserCloseResponse,
   BrowserPageResponse,
+  BrowserSnapshotResponse,
   BrowserWindowInfo,
   BrowserWindowsResponse,
 } from "@winston/domain/browser";
@@ -45,6 +46,21 @@ export function pageResult(result: BrowserPageResponse) {
   for (const opened of result.opened)
     lines.push(
       `It opened ${opened.id} (${opened.url}), now your current window. Close it with winston browser close when you're done.`,
+    );
+  return lines.join("\n");
+}
+
+/** A snapshot: the window, then the page, bounded. */
+export function snapshotText(result: BrowserSnapshotResponse) {
+  const head = result.readOnly
+    ? `Read-only peek at ${result.window.id} (task ${result.window.owner}): no refs, since you can't act in it.`
+    : record(result.window.id, result.window.title || undefined);
+  const lines = [head, `  ${result.window.url}`, ...result.lines];
+  if (result.lines.length === 0)
+    lines.push("(Nothing to act on here yet: the page may still be loading.)");
+  if (result.more > 0)
+    lines.push(
+      `… ${String(result.more)} more lines (a long page). Act on what's here, or scroll and snapshot again.`,
     );
   return lines.join("\n");
 }
@@ -145,6 +161,41 @@ export const browser: Resource = {
           ...(window ? { window } : {}),
         });
         return context.flags.json === true ? json(result) : pageResult(result);
+      },
+    },
+    {
+      name: "snapshot",
+      summary:
+        "What's on the page to act on, each with a ref (e1, e2…) for click, type and select",
+      flags: [
+        {
+          name: "full",
+          description: "Include the page's text, not just what can be acted on",
+        },
+        {
+          name: "window",
+          value: "<win_id>",
+          description: "Another run's window, to look at (read-only, no refs)",
+        },
+      ],
+      examples: [
+        "winston browser snapshot",
+        "winston browser snapshot --full",
+        "winston browser snapshot --window win_01k5…",
+      ],
+      run: async (context) => {
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserSnapshotResponse>(
+          context,
+          "snapshot",
+          {
+            ...(window ? { window } : {}),
+            full: context.flags.full === true,
+          },
+        );
+        return context.flags.json === true
+          ? json(result)
+          : snapshotText(result);
       },
     },
     {

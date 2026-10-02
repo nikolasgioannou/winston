@@ -55,3 +55,18 @@ export interface BrowserCloseResponse {
   /** The caller's current window afterwards, if it has another. */
   current: string | null;
 }
+
+export interface BrowserSnapshotRequest {
+  window?: string;
+  full?: boolean;
+}
+
+export interface BrowserSnapshotResponse {
+  window: BrowserWindowInfo;
+  /** The page as indented lines; refs look like `[e3]`. */
+  lines: string[];
+  /** Lines left out to keep the output bounded. */
+  more: number;
+  /** A peek at another run's window: no refs, nothing to act on. */
+  readOnly: boolean;
+}

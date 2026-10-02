@@ -1,0 +1,458 @@
+{
+  "sessionId": "main",
+  "nodes": [
+    {
+      "nodeId": "3",
+      "role": { "type": "internalRole", "value": "RootWebArea" },
+      "name": { "value": "Search: tacos" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "focused", "value": { "value": true } },
+        {
+          "name": "url",
+          "value": { "value": "http://localhost:8001/results.html" }
+        }
+      ],
+      "childIds": ["4"],
+      "backendDOMNodeId": 3
+    },
+    {
+      "nodeId": "4",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["8"],
+      "backendDOMNodeId": 4
+    },
+    {
+      "nodeId": "8",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["9", "18"],
+      "backendDOMNodeId": 8
+    },
+    {
+      "nodeId": "9",
+      "role": { "type": "role", "value": "banner" },
+      "childIds": ["10", "2", "17"],
+      "backendDOMNodeId": 9
+    },
+    {
+      "nodeId": "18",
+      "role": { "type": "role", "value": "main" },
+      "childIds": ["19", "20", "21", "34"],
+      "backendDOMNodeId": 18
+    },
+    {
+      "nodeId": "10",
+      "role": { "type": "role", "value": "navigation" },
+      "name": { "value": "Main" },
+      "childIds": ["11", "37", "12"],
+      "backendDOMNodeId": 10
+    },
+    {
+      "nodeId": "2",
+      "role": { "type": "role", "value": "searchbox" },
+      "name": { "value": "Search" },
+      "value": { "value": "tacos" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "editable", "value": { "value": "plaintext" } },
+        { "name": "settable", "value": { "value": true } }
+      ],
+      "childIds": ["13"],
+      "backendDOMNodeId": 2
+    },
+    {
+      "nodeId": "17",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Search" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["40"],
+      "backendDOMNodeId": 17
+    },
+    {
+      "nodeId": "19",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Results for \"tacos\"" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["41"],
+      "backendDOMNodeId": 19
+    },
+    {
+      "nodeId": "20",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["42"],
+      "backendDOMNodeId": 20
+    },
+    {
+      "nodeId": "21",
+      "role": { "type": "role", "value": "list" },
+      "childIds": ["22", "26", "30"],
+      "backendDOMNodeId": 21
+    },
+    {
+      "nodeId": "34",
+      "role": { "type": "role", "value": "navigation" },
+      "name": { "value": "Pagination" },
+      "childIds": ["35"],
+      "backendDOMNodeId": 34
+    },
+    {
+      "nodeId": "11",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Home" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/" } }
+      ],
+      "childIds": ["36"],
+      "backendDOMNodeId": 11
+    },
+    {
+      "nodeId": "37",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": " " },
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 37
+    },
+    {
+      "nodeId": "12",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Deals" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/deals" } }
+      ],
+      "childIds": ["38"],
+      "backendDOMNodeId": 12
+    },
+    {
+      "nodeId": "13",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["15"],
+      "backendDOMNodeId": 13
+    },
+    {
+      "nodeId": "15",
+      "role": { "type": "role", "value": "generic" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["39"],
+      "backendDOMNodeId": 15
+    },
+    {
+      "nodeId": "40",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Search" },
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 40
+    },
+    {
+      "nodeId": "41",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Results for \"tacos\"" },
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 41
+    },
+    {
+      "nodeId": "42",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "About 3 results" },
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 42
+    },
+    {
+      "nodeId": "22",
+      "role": { "type": "role", "value": "listitem" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["43", "23", "25"],
+      "backendDOMNodeId": 22
+    },
+    {
+      "nodeId": "26",
+      "role": { "type": "role", "value": "listitem" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["46", "27", "29"],
+      "backendDOMNodeId": 26
+    },
+    {
+      "nodeId": "30",
+      "role": { "type": "role", "value": "listitem" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["49", "31", "33"],
+      "backendDOMNodeId": 30
+    },
+    {
+      "nodeId": "35",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Next page" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        {
+          "name": "url",
+          "value": { "value": "http://localhost:8001/results.html?p=2" }
+        }
+      ],
+      "childIds": ["52"],
+      "backendDOMNodeId": 35
+    },
+    {
+      "nodeId": "36",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Home" },
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 36
+    },
+    {
+      "nodeId": "-1000000003",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": " " }
+    },
+    {
+      "nodeId": "38",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Deals" },
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 38
+    },
+    {
+      "nodeId": "39",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "tacos" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }],
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 39
+    },
+    {
+      "nodeId": "-1000000006",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Search" }
+    },
+    {
+      "nodeId": "-1000000007",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Results for \"tacos\"" }
+    },
+    {
+      "nodeId": "-1000000008",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "About 3 results" }
+    },
+    {
+      "nodeId": "43",
+      "role": { "type": "internalRole", "value": "ListMarker" },
+      "name": { "value": "• " },
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 43
+    },
+    {
+      "nodeId": "23",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Taqueria El Sol" },
+      "properties": [{ "name": "level", "value": { "value": 2 } }],
+      "childIds": ["24"],
+      "backendDOMNodeId": 23
+    },
+    {
+      "nodeId": "25",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["45"],
+      "backendDOMNodeId": 25
+    },
+    {
+      "nodeId": "46",
+      "role": { "type": "internalRole", "value": "ListMarker" },
+      "name": { "value": "• " },
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 46
+    },
+    {
+      "nodeId": "27",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Taco Libre" },
+      "properties": [{ "name": "level", "value": { "value": 2 } }],
+      "childIds": ["28"],
+      "backendDOMNodeId": 27
+    },
+    {
+      "nodeId": "29",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["48"],
+      "backendDOMNodeId": 29
+    },
+    {
+      "nodeId": "49",
+      "role": { "type": "internalRole", "value": "ListMarker" },
+      "name": { "value": "• " },
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 49
+    },
+    {
+      "nodeId": "31",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "La Cocina" },
+      "properties": [{ "name": "level", "value": { "value": 2 } }],
+      "childIds": ["32"],
+      "backendDOMNodeId": 31
+    },
+    {
+      "nodeId": "33",
+      "role": { "type": "role", "value": "paragraph" },
+      "childIds": ["51"],
+      "backendDOMNodeId": 33
+    },
+    {
+      "nodeId": "52",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Next page" },
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 52
+    },
+    {
+      "nodeId": "-1000000002",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Home" }
+    },
+    {
+      "nodeId": "-1000000004",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Deals" }
+    },
+    {
+      "nodeId": "-1000000005",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "tacos" },
+      "properties": [{ "name": "editable", "value": { "value": "plaintext" } }]
+    },
+    {
+      "nodeId": "-1000000009",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" }
+    },
+    {
+      "nodeId": "24",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Taqueria El Sol" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/r/1" } }
+      ],
+      "childIds": ["44"],
+      "backendDOMNodeId": 24
+    },
+    {
+      "nodeId": "45",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Mission St · 4.6 stars · Open now" },
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 45
+    },
+    {
+      "nodeId": "-1000000012",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" }
+    },
+    {
+      "nodeId": "28",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "Taco Libre" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/r/2" } }
+      ],
+      "childIds": ["47"],
+      "backendDOMNodeId": 28
+    },
+    {
+      "nodeId": "48",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Valencia St · 4.3 stars" },
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 48
+    },
+    {
+      "nodeId": "-1000000015",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" }
+    },
+    {
+      "nodeId": "32",
+      "role": { "type": "role", "value": "link" },
+      "name": { "value": "La Cocina" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "url", "value": { "value": "http://localhost:8001/r/3" } }
+      ],
+      "childIds": ["50"],
+      "backendDOMNodeId": 32
+    },
+    {
+      "nodeId": "51",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "24th St · 4.8 stars · Closes soon" },
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 51
+    },
+    {
+      "nodeId": "-1000000018",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Next page" }
+    },
+    {
+      "nodeId": "44",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Taqueria El Sol" },
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 44
+    },
+    {
+      "nodeId": "-1000000011",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Mission St · 4.6 stars · Open now" }
+    },
+    {
+      "nodeId": "47",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Taco Libre" },
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 47
+    },
+    {
+      "nodeId": "-1000000014",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Valencia St · 4.3 stars" }
+    },
+    {
+      "nodeId": "50",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "La Cocina" },
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 50
+    },
+    {
+      "nodeId": "-1000000017",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "24th St · 4.8 stars · Closes soon" }
+    },
+    {
+      "nodeId": "-1000000010",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Taqueria El Sol" }
+    },
+    {
+      "nodeId": "-1000000013",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Taco Libre" }
+    },
+    {
+      "nodeId": "-1000000016",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "La Cocina" }
+    }
+  ],
+  "children": []
+}

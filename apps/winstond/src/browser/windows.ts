@@ -16,10 +16,12 @@ import type { ApiErrorCode } from "@winston/domain/api-errors";
 import type {
   BrowserCloseResponse,
   BrowserPageResponse,
+  BrowserSnapshotResponse,
   BrowserWindowInfo,
 } from "@winston/domain/browser";
 import { createId } from "@winston/shared/ids";
 import type { Cdp, CdpEvent } from "./cdp.ts";
+import { formatSnapshot, readFrames, type RefTarget } from "./snapshot.ts";
 
 /** A browser command that can't be done, as the CLI should report it. */
 export class BrowserFailure extends Error {
@@ -44,6 +46,13 @@ interface WindowEntry {
   lastUsedAt: number;
   /** The flat CDP session, once attached. */
   sessionId?: string;
+  /** Cross-site frames' sessions (auto-attached), by target id. */
+  frames: Map<string, string>;
+  /** Refs from the owner's last snapshot, valid until the next. */
+  refs: Map<string, RefTarget>;
+  /** Every ref given in this window, by node, so a node keeps its ref. */
+  refByNode: Map<string, string>;
+  nextRef: number;
 }
 
 interface TargetInfo {
@@ -59,6 +68,9 @@ export const browserTimings = {
   loadTimeoutMs: 30_000,
   /** After load, how long it waits for the network to quiet down. */
   settleMs: 2_000,
+  /** Snapshot lines shown, by default and with --full. */
+  snapshotLines: 300,
+  fullSnapshotLines: 600,
   /** A window unused this long, whose run's last token has expired, is closed. */
   idleMs: 30 * 60_000,
 };
@@ -154,6 +166,10 @@ export function createBrowser(deps: BrowserDeps) {
       title: target.title,
       createdAt: now(),
       lastUsedAt: now(),
+      frames: new Map(),
+      refs: new Map(),
+      refByNode: new Map(),
+      nextRef: 1,
     };
     windows.set(entry.id, entry);
     byTarget.set(entry.targetId, entry.id);
@@ -189,10 +205,34 @@ export function createBrowser(deps: BrowserDeps) {
         if (entry) forget(entry);
         return;
       }
-      case "Target.detachedFromTarget": {
+      case "Page.frameNavigated": {
+        // A new document in a window: its node ids mean nothing any more
+        // (Chrome reuses them across sites), so it gets fresh refs. Numbers
+        // keep counting up, so a ref never names two elements in a window.
+        const frame = event.params.frame as { parentId?: string } | undefined;
+        if (frame?.parentId !== undefined) return;
         for (const entry of windows.values())
+          if (entry.sessionId === event.sessionId) {
+            entry.refByNode.clear();
+            entry.refs.clear();
+          }
+        return;
+      }
+      case "Target.attachedToTarget": {
+        // A cross-site frame in one of our pages (auto-attach).
+        const child = event.params.targetInfo as TargetInfo | undefined;
+        if (child?.type !== "iframe") return;
+        for (const entry of windows.values())
+          if (entry.sessionId === event.sessionId)
+            entry.frames.set(child.targetId, String(event.params.sessionId));
+        return;
+      }
+      case "Target.detachedFromTarget": {
+        for (const entry of windows.values()) {
           if (entry.sessionId === event.params.sessionId)
             delete entry.sessionId;
+          entry.frames.delete(String(event.params.targetId));
+        }
         return;
       }
       default:
@@ -288,13 +328,19 @@ export function createBrowser(deps: BrowserDeps) {
       "Target.attachToTarget",
       { targetId: entry.targetId, flatten: true },
     );
+    entry.sessionId = sessionId;
     await c.send("Page.enable", {}, sessionId);
     await c.send(
       "Page.setLifecycleEventsEnabled",
       { enabled: true },
       sessionId,
     );
-    entry.sessionId = sessionId;
+    // Cross-site frames get sessions of their own, for snapshots and actions.
+    await c.send(
+      "Target.setAutoAttach",
+      { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
+      sessionId,
+    );
     return { c, sessionId };
   }
 
@@ -508,6 +554,59 @@ export function createBrowser(deps: BrowserDeps) {
       await c.send("Target.closeTarget", { targetId: entry.targetId });
       forget(entry);
       return { closed: entry.id, current: current.get(owner) ?? null };
+    },
+
+    async snapshot(
+      runToken: string,
+      request: { window?: string | undefined; full?: boolean },
+    ): Promise<BrowserSnapshotResponse> {
+      const owner = caller(runToken);
+      await connection();
+      const entry = windowFor(owner, request.window, "look");
+      const own = entry.owner === owner;
+      if (own) entry.lastUsedAt = now();
+      const { c, sessionId } = await sessionFor(entry);
+      const frames = await readFrames(c, sessionId, entry.frames);
+      const { lines, refs } = formatSnapshot(frames, {
+        full: request.full === true,
+        refs: own,
+        refFor: (target) => {
+          const key = `${target.sessionId}:${String(target.backendNodeId)}`;
+          let ref = entry.refByNode.get(key);
+          if (!ref) {
+            ref = `e${String(entry.nextRef++)}`;
+            entry.refByNode.set(key, ref);
+          }
+          return ref;
+        },
+      });
+      // A peek leaves the owner's refs alone.
+      if (own) entry.refs = refs;
+      await refresh(entry);
+      const cap = request.full
+        ? browserTimings.fullSnapshotLines
+        : browserTimings.snapshotLines;
+      return {
+        window: info(entry, owner),
+        lines: lines.slice(0, cap),
+        more: Math.max(0, lines.length - cap),
+        readOnly: !own,
+      };
+    },
+
+    /** Where a ref from the caller's last snapshot points (for actions). */
+    async target(runToken: string, ref: string, windowId?: string) {
+      const owner = caller(runToken);
+      await connection();
+      const entry = windowFor(owner, windowId, "own");
+      const target = entry.refs.get(ref);
+      if (!target)
+        throw new BrowserFailure(
+          "not_found",
+          `There's no ${ref} in your last snapshot of ${entry.id}.`,
+          "Refs change as the page does; take a new snapshot and use a ref from it.",
+        );
+      return { window: entry, target };
     },
 
     /** Closes windows left by runs that have ended (idle, token expired). */

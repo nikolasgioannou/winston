@@ -1,14 +1,14 @@
 ---
 id: "5f5b39"
 title: Snapshot pages as compact element lists with refs
-status: todo
+status: done
 priority: none
 labels:
   - browser
   - cli
   - m8
 created_at: 2026-09-27T05:42:03.691Z
-updated_at: 2026-09-27T05:42:03.728Z
+updated_at: 2026-10-02T01:48:21.097Z
 blocked_by:
   - "6b73c4"
 ---
@@ -25,3 +25,12 @@ Build:
 - Output is bounded like all CLI output.
 
 Tests: snapshot golden files for a set of saved test pages (a form, a search results page, a modal, an iframe), ref resolution, and peeks working without acquiring anything.
+
+## As built
+
+- `apps/winstond/src/browser/snapshot.ts`: accessibility tree to compact lines with refs on interactive elements; containers and headings for orientation; options inline; `--full` adds text. Frames: same-process by frame id, cross-site via auto-attached sessions, spliced at their `<iframe>` (`DOM.getFrameOwner`).
+- Refs in winstond's registry (`{session, backendNodeId}`), stable per node, reset after main-frame navigation (Chrome reuses node ids across sites), numbers never reused in a window. `target()` resolves them for 0451df.
+- `browser snapshot [--full] [--window]`; a peek is read-only, without refs, and doesn't touch the owner's state. Output capped at 300/600 lines.
+- Tests: golden files (form, results, modal, iframes) from Chrome's recorded trees in `fixtures/`, ref stability, fresh refs after navigation, peeks.
+- Found and fixed on the way (in 63475d's unit): Chrome refused to start on a moved profile volume (stale `SingletonLock` from another host); the unit now clears it before each start. Also noted the AMI built and passed its sandbox check.
+

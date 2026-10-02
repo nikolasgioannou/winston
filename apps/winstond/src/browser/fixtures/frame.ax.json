@@ -1,0 +1,272 @@
+{
+  "sessionId": "main",
+  "nodes": [
+    {
+      "nodeId": "3",
+      "role": { "type": "internalRole", "value": "RootWebArea" },
+      "name": { "value": "Embedded" },
+      "properties": [
+        { "name": "focusable", "value": { "value": true } },
+        { "name": "focused", "value": { "value": true } },
+        {
+          "name": "url",
+          "value": { "value": "http://localhost:8001/frame.html" }
+        }
+      ],
+      "childIds": ["6"],
+      "backendDOMNodeId": 3
+    },
+    {
+      "nodeId": "6",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["10"],
+      "backendDOMNodeId": 6
+    },
+    {
+      "nodeId": "10",
+      "ignored": true,
+      "role": { "type": "role", "value": "none" },
+      "childIds": ["11", "12", "13", "14"],
+      "backendDOMNodeId": 10
+    },
+    {
+      "nodeId": "11",
+      "role": { "type": "role", "value": "heading" },
+      "name": { "value": "Booking" },
+      "properties": [{ "name": "level", "value": { "value": 1 } }],
+      "childIds": ["15"],
+      "backendDOMNodeId": 11
+    },
+    {
+      "nodeId": "12",
+      "role": { "type": "internalRole", "value": "Iframe" },
+      "name": { "value": "Same-site widget" },
+      "backendDOMNodeId": 12
+    },
+    {
+      "nodeId": "13",
+      "role": { "type": "internalRole", "value": "Iframe" },
+      "name": { "value": "Payment" },
+      "backendDOMNodeId": 13
+    },
+    {
+      "nodeId": "14",
+      "role": { "type": "role", "value": "button" },
+      "name": { "value": "Book now" },
+      "properties": [
+        { "name": "invalid", "value": { "value": "false" } },
+        { "name": "focusable", "value": { "value": true } }
+      ],
+      "childIds": ["16"],
+      "backendDOMNodeId": 14
+    },
+    {
+      "nodeId": "15",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Booking" },
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 15
+    },
+    {
+      "nodeId": "16",
+      "role": { "type": "internalRole", "value": "StaticText" },
+      "name": { "value": "Book now" },
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 16
+    },
+    {
+      "nodeId": "-1000000002",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Booking" }
+    },
+    {
+      "nodeId": "-1000000003",
+      "role": { "type": "internalRole", "value": "InlineTextBox" },
+      "name": { "value": "Book now" }
+    }
+  ],
+  "children": [
+    {
+      "owner": 12,
+      "frame": {
+        "sessionId": "main",
+        "nodes": [
+          {
+            "nodeId": "4",
+            "role": { "type": "internalRole", "value": "RootWebArea" },
+            "properties": [
+              { "name": "focusable", "value": { "value": true } },
+              { "name": "url", "value": { "value": "about:srcdoc" } }
+            ],
+            "childIds": ["17"],
+            "backendDOMNodeId": 4
+          },
+          {
+            "nodeId": "17",
+            "ignored": true,
+            "role": { "type": "role", "value": "none" },
+            "childIds": ["19"],
+            "backendDOMNodeId": 17
+          },
+          {
+            "nodeId": "19",
+            "role": { "type": "role", "value": "generic" },
+            "childIds": ["20", "2"],
+            "backendDOMNodeId": 19
+          },
+          {
+            "nodeId": "20",
+            "role": { "type": "role", "value": "button" },
+            "name": { "value": "Inside same-site frame" },
+            "properties": [
+              { "name": "invalid", "value": { "value": "false" } },
+              { "name": "focusable", "value": { "value": true } }
+            ],
+            "childIds": ["22"],
+            "backendDOMNodeId": 20
+          },
+          {
+            "nodeId": "2",
+            "role": { "type": "role", "value": "textbox" },
+            "name": { "value": "Promo code" },
+            "properties": [
+              { "name": "invalid", "value": { "value": "false" } },
+              { "name": "focusable", "value": { "value": true } },
+              { "name": "editable", "value": { "value": "plaintext" } },
+              { "name": "settable", "value": { "value": true } },
+              { "name": "multiline", "value": { "value": false } },
+              { "name": "readonly", "value": { "value": false } },
+              { "name": "required", "value": { "value": false } }
+            ],
+            "childIds": ["21"],
+            "backendDOMNodeId": 2
+          },
+          {
+            "nodeId": "22",
+            "role": { "type": "internalRole", "value": "StaticText" },
+            "name": { "value": "Inside same-site frame" },
+            "childIds": ["-1000000004"],
+            "backendDOMNodeId": 22
+          },
+          {
+            "nodeId": "21",
+            "role": { "type": "role", "value": "generic" },
+            "properties": [
+              { "name": "editable", "value": { "value": "plaintext" } }
+            ],
+            "backendDOMNodeId": 21
+          },
+          {
+            "nodeId": "-1000000004",
+            "role": { "type": "internalRole", "value": "InlineTextBox" },
+            "name": { "value": "Inside same-site frame" }
+          }
+        ],
+        "children": []
+      }
+    },
+    {
+      "owner": 13,
+      "frame": {
+        "sessionId": "main-frame2",
+        "nodes": [
+          {
+            "nodeId": "2",
+            "role": { "type": "internalRole", "value": "RootWebArea" },
+            "name": { "value": "Pay" },
+            "properties": [
+              { "name": "focusable", "value": { "value": true } },
+              {
+                "name": "url",
+                "value": { "value": "http://127.0.0.1:8002/pay.html" }
+              }
+            ],
+            "childIds": ["3"],
+            "backendDOMNodeId": 2
+          },
+          {
+            "nodeId": "3",
+            "ignored": true,
+            "role": { "type": "role", "value": "none" },
+            "childIds": ["7"],
+            "backendDOMNodeId": 3
+          },
+          {
+            "nodeId": "7",
+            "role": { "type": "role", "value": "generic" },
+            "childIds": ["8", "10"],
+            "backendDOMNodeId": 7
+          },
+          {
+            "nodeId": "8",
+            "role": { "type": "internalRole", "value": "LabelText" },
+            "childIds": ["11", "1"],
+            "backendDOMNodeId": 8
+          },
+          {
+            "nodeId": "10",
+            "role": { "type": "role", "value": "button" },
+            "name": { "value": "Pay $42" },
+            "properties": [
+              { "name": "invalid", "value": { "value": "false" } },
+              { "name": "focusable", "value": { "value": true } }
+            ],
+            "childIds": ["12"],
+            "backendDOMNodeId": 10
+          },
+          {
+            "nodeId": "11",
+            "role": { "type": "internalRole", "value": "StaticText" },
+            "name": { "value": "Card number " },
+            "childIds": ["-1000000002"],
+            "backendDOMNodeId": 11
+          },
+          {
+            "nodeId": "1",
+            "role": { "type": "role", "value": "textbox" },
+            "name": { "value": "Card number" },
+            "properties": [
+              { "name": "invalid", "value": { "value": "false" } },
+              { "name": "focusable", "value": { "value": true } },
+              { "name": "editable", "value": { "value": "plaintext" } },
+              { "name": "settable", "value": { "value": true } },
+              { "name": "multiline", "value": { "value": false } },
+              { "name": "readonly", "value": { "value": false } },
+              { "name": "required", "value": { "value": false } },
+              { "name": "labelledby", "value": {} }
+            ],
+            "childIds": ["9"],
+            "backendDOMNodeId": 1
+          },
+          {
+            "nodeId": "12",
+            "role": { "type": "internalRole", "value": "StaticText" },
+            "name": { "value": "Pay $42" },
+            "childIds": ["-1000000003"],
+            "backendDOMNodeId": 12
+          },
+          {
+            "nodeId": "-1000000002",
+            "role": { "type": "internalRole", "value": "InlineTextBox" },
+            "name": { "value": "Card number " }
+          },
+          {
+            "nodeId": "9",
+            "role": { "type": "role", "value": "generic" },
+            "properties": [
+              { "name": "editable", "value": { "value": "plaintext" } }
+            ],
+            "backendDOMNodeId": 9
+          },
+          {
+            "nodeId": "-1000000003",
+            "role": { "type": "internalRole", "value": "InlineTextBox" },
+            "name": { "value": "Pay $42" }
+          }
+        ],
+        "children": []
+      }
+    }
+  ]
+}

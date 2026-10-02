@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8" /><title>Sign in</title>
+<main>
+  <h1>Sign in to Acme</h1>
+  <form>
+    <label
+      >Email <input type="email" name="email" value="ada@example.com"
+    /></label>
+    <label>Password <input type="password" name="pw" /></label>
+    <label><input type="checkbox" checked /> Remember me</label>
+    <fieldset>
+      <legend>Plan</legend>
+      <label><input type="radio" name="p" checked /> Free</label
+      ><label><input type="radio" name="p" /> Pro</label>
+    </fieldset>
+    <label
+      >Country
+      <select>
+        <option>Canada</option>
+        <option selected>Cyprus</option>
+      </select></label
+    >
+    <textarea aria-label="Notes">Hello</textarea>
+    <button type="submit">Sign in</button>
+    <button disabled>Delete account</button>
+    <p>By signing in you agree to our <a href="/terms">terms</a>.</p>
+    <div role="button" tabindex="0" onclick="1">Custom div button</div>
+    <my-widget></my-widget>
+  </form>
+</main>
+<script>
+  customElements.define(
+    "my-widget",
+    class extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: "open" }).innerHTML =
+          "<button>Shadow button</button>";
+      }
+    },
+  );
+</script>

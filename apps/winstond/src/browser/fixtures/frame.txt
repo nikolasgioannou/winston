@@ -1,0 +1,8 @@
+heading "Booking" [h1]
+frame "Same-site widget"
+  button "Inside same-site frame" [e1]
+  textbox "Promo code" [e2]
+frame "Payment"
+  textbox "Card number" [e3]
+  button "Pay $42" [e4]
+button "Book now" [e5]

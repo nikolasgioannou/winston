@@ -66,6 +66,14 @@ export function browserRpc(browser: Browser) {
             text("window"),
           ),
         );
+      if (request.method === "POST" && route === "snapshot")
+        return reply(
+          200,
+          await browser.snapshot(request.runToken, {
+            window: text("window"),
+            full: body.full === true,
+          }),
+        );
       if (request.method === "POST" && route === "close")
         return reply(
           200,

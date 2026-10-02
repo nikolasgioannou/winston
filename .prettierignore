@@ -4,3 +4,5 @@
 packages/db/migrations/
 # TanStack Router generates the route tree.
 **/routeTree*.gen.ts
+# Recorded browser fixtures stay as Chrome saw them.
+apps/winstond/src/browser/fixtures/

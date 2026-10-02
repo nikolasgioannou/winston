@@ -71,6 +71,10 @@ WorkingDirectory=/home/winston
 # package can tell whether it's running an old binary (below).
 RuntimeDirectory=chrome
 ExecStartPre=/usr/bin/touch /run/chrome/started
+# The profile's lock names the machine it was taken on. On a new instance
+# (a restored volume) Chrome would see it as "in use on another computer"
+# and refuse to start; systemd runs one Chrome only, so it's always stale.
+ExecStartPre=/usr/bin/rm -f /home/winston/.config/winston-chrome/SingletonLock /home/winston/.config/winston-chrome/SingletonCookie /home/winston/.config/winston-chrome/SingletonSocket
 ExecStart=/usr/bin/google-chrome-stable \
   --user-data-dir=/home/winston/.config/winston-chrome \
   --remote-debugging-port=9222 \

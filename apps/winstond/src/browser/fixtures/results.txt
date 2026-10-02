@@ -1,0 +1,14 @@
+banner
+  navigation "Main"
+    link "Home" [e1]
+    link "Deals" [e2]
+  searchbox "Search" [e3] = "tacos"
+  button "Search" [e4]
+main
+  heading "Results for "tacos"" [h1]
+  list
+    link "Taqueria El Sol" [e5] [h2]
+    link "Taco Libre" [e6] [h2]
+    link "La Cocina" [e7] [h2]
+  navigation "Pagination"
+    link "Next page" [e8]

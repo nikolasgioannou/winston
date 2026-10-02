@@ -80,6 +80,20 @@ function fakeChrome() {
             },
           });
         }
+        case "Page.getFrameTree":
+          return answer({ frameTree: { frame: { id: "f" } } });
+        case "Accessibility.getFullAXTree":
+          return answer({
+            nodes: [
+              { nodeId: "1", role: { value: "RootWebArea" }, childIds: ["2"] },
+              {
+                nodeId: "2",
+                role: { value: "button" },
+                name: { value: "Go" },
+                backendDOMNodeId: 7,
+              },
+            ],
+          });
         case "Page.getNavigationHistory":
           // Every window here is on its first page.
           return answer({ currentIndex: 0, entries: [{ id: 0 }] });
@@ -251,6 +265,27 @@ describe("agent windows", () => {
       browser.navigate(token("run_a"), { back: true }),
     );
     expect(none.message).toBe("There's no page to go back to.");
+  });
+
+  test("a new document in the window gets fresh refs, never reusing a number", async () => {
+    const { browser, chrome } = setup();
+    await browser.open(token("run_a"), "a.test");
+    // Chrome hands out the same node ids on the next site.
+    const snapshotOf = async () => {
+      const result = await browser.snapshot(token("run_a"), {});
+      return result.lines.join("\n");
+    };
+    expect(await snapshotOf()).toBe('button "Go" [e1]');
+    expect(await snapshotOf()).toBe('button "Go" [e1]');
+    chrome().emit({
+      method: "Page.frameNavigated",
+      params: { frame: { id: "f" } },
+      sessionId: "s-t1",
+    });
+    expect(await snapshotOf()).toBe('button "Go" [e2]');
+    expect((await failure(browser.target(token("run_a"), "e1"))).code).toBe(
+      "not_found",
+    );
   });
 
   test("after Chrome restarts, a run's next command says its window was closed, once", async () => {
