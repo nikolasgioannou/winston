@@ -255,10 +255,20 @@ describe("agent windows", () => {
   });
 
   test("a page the window opens joins the same run and becomes its current window", async () => {
-    const { browser, chrome } = setup();
+    // A clock that moves on every read, as a slow machine's does between steps.
+    let tick = Date.now();
+    const { browser, chrome } = setup(() => tick++);
     const a = await browser.open(token("run_a"), "a.test");
-    // The page opens a popup while navigating (target=_blank, window.open).
+    // The page opens a popup while navigating (target=_blank, window.open):
+    // once the navigation is under way, so it's newer than the command.
     const navigating = browser.navigate(token("run_a"), { url: "a.test/2" });
+    while (
+      !chrome().sent.some(
+        (m) =>
+          m.method === "Page.navigate" && m.params.url === "https://a.test/2",
+      )
+    )
+      await Bun.sleep(1);
     chrome().emit({
       method: "Target.targetCreated",
       params: {
