@@ -89,7 +89,7 @@ Tests:
   - **Watching and control:** watch-only while Winston drives; "Your turn: <reason>" with Keyboard, Done and the full desktop when it's handed over. Take over works on any window; Give back returns a taken-over one.
   - **Many viewers:** several pages can watch; control is the last taker's.
   - **Chat ends nothing on the page.**
-  - **Also:** in the sidebar; old `/t/<token>` links redirect here; the dev design view has its states.
+  - **Also:** reached only from Winston's links, not the sidebar (the founder's call after launch); old `/t/<token>` links redirect here; the dev design view has its states.
 - **Gateway auth by viewer ticket, not a signed token:**
   - **What a ticket is:** `viewer_tickets` rows, hashed, with a minute's life, used once, issued by the page's server function.
   - **Why not a signed token:** the two services already share the database, so no new shared secret or infrastructure was needed. A reconnect gets a fresh ticket.

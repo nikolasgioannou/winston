@@ -70,7 +70,7 @@ Examples of emergent behaviors:
 ### Browser use (a core strength)
 
 - Winston should be **exceptional at using a web browser**.
-- **Watching:** the user can open **Winston's browser** (signed in, on their phone or laptop) and watch any of his windows live while he works, and take one over themselves at any time.
+- **Watching:** from a link Winston sends, the user opens **Winston's browser** (signed in, on their phone or laptop) and can watch any of his windows live while he works, and take one over themselves at any time. It isn't in the site's navigation: the links are the way in.
 - **Handoff:** when he gets stuck (a login, a CAPTCHA, 2FA, an ambiguous choice), he sends the user a **link** to that window on the browser page, with a button that signs them in through Telegram. It's their turn there.
 - **Resume:** the user taps **Done** on the page, or sends Winston a quick message ("done"), and the task picks up where it left off. The page keeps showing the window afterwards.
 - **Full desktop:** for native pop-ups the tab's view can't show (dropdowns, file pickers), a button on the page shows Winston's whole screen.
