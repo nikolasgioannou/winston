@@ -56,7 +56,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
-import type { ModelGateway, ModelProfile } from "../model/gateway.ts";
+import {
+  modelProfiles,
+  type ModelGateway,
+  type ModelProfile,
+} from "../model/gateway.ts";
 import { storableMessage, type BlobStore } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
@@ -72,6 +76,7 @@ import { startTyping, type Timers } from "../telegram/typing.ts";
 import { toEnvelopeItems } from "@winston/db/envelopes";
 import {
   defaultWindowBudget,
+  shortened,
   trimWindow,
   type WindowBudget,
 } from "./window.ts";
@@ -133,10 +138,10 @@ const prompt = promptVersion("front-of-house", [
   browserHandoffDefinition,
   endTurnDefinition,
 ]);
-const instructions = cacheBreakpoint({
-  role: "system" as const,
-  content: systemPrompts["front-of-house"],
-});
+const instructions = cacheBreakpoint(
+  { role: "system" as const, content: systemPrompts["front-of-house"] },
+  modelProfiles.front.cacheTtl,
+);
 
 export interface FrontTurnDeps {
   db: DbOrTx;
@@ -157,6 +162,8 @@ export interface FrontTurnDeps {
   window?: WindowBudget;
   /** For tests: the pause before a quick retry. */
   retryDelayMs?: number;
+  /** For tests: each model call's time limit. */
+  callTimeoutMs?: number;
 }
 
 /** Runs a turn over the user's unconsumed input. Returns the run id, or nothing if there was no input. */
@@ -210,7 +217,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     deps.window ?? defaultWindowBudget,
     logger,
   );
-  const window = await loadWindow(db, userId, input.id);
+  const { rows: window, stubBefore } = await loadWindow(db, userId, input.id);
   const messages: ModelMessage[] = [
     ...window.map((row) => row.content),
     input.message,
@@ -341,15 +348,16 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
           contextRange: () => ({
             fromMessageId: window[0]?.id ?? input.id,
             toMessageId: log.lastStoredId,
+            stubBeforeMessageId: stubBefore,
           }),
         },
         stepOffset: steps,
         instructions,
-        messages: withRollingBreakpoint(messages),
+        messages: withRollingBreakpoint(messages, modelProfiles.front.cacheTtl),
         tools,
         stopWhen: isStepCount(1),
         onLanguageModelCallEnd: deliverStepText,
-        timeout: frontCallTimeoutMs,
+        timeout: deps.callTimeoutMs ?? frontCallTimeoutMs,
       });
     } finally {
       steps += 1;
@@ -493,18 +501,19 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
             contextRange: () => ({
               fromMessageId: window[0]?.id ?? input.id,
               toMessageId: log.lastStoredId,
+              stubBeforeMessageId: stubBefore,
             }),
           },
           stepOffset: steps,
           instructions,
-          messages: withRollingBreakpoint([
-            ...messages,
-            { role: "user", content: briefRequest },
-          ]),
+          messages: withRollingBreakpoint(
+            [...messages, { role: "user", content: briefRequest }],
+            modelProfiles.front.cacheTtl,
+          ),
           tools,
           toolChoice: "none",
           stopWhen: isStepCount(1),
-          timeout: frontCallTimeoutMs,
+          timeout: deps.callTimeoutMs ?? frontCallTimeoutMs,
         });
         steps += 1;
         const taskId = await startBackgroundRun(db, {
@@ -830,12 +839,20 @@ async function lockUnconsumed(tx: DbOrTx, userId: string) {
     .for("update");
 }
 
-/** The user's front-of-house stream from the window start, up to (not including) `beforeId`. */
+/**
+ * The user's front-of-house stream from the window start, up to (not
+ * including) `beforeId`, with long tool output before the stub boundary
+ * shortened.
+ */
 async function loadWindow(db: DbOrTx, userId: string, beforeId: number) {
   const [state] = await db
-    .select({ start: frontState.windowStartMessageId })
+    .select({
+      start: frontState.windowStartMessageId,
+      stubBefore: frontState.stubBeforeMessageId,
+    })
     .from(frontState)
     .where(eq(frontState.userId, userId));
+  const stubBefore = state?.stubBefore ?? 0;
   const rows = await db
     .select({ id: runMessages.id, content: runMessages.content })
     .from(runMessages)
@@ -853,10 +870,16 @@ async function loadWindow(db: DbOrTx, userId: string, beforeId: number) {
     )
     .orderBy(asc(runMessages.id));
   // Stored as the AI SDK returned them.
-  return rows.map((row) => ({
-    id: row.id,
-    content: row.content as ModelMessage,
-  }));
+  return {
+    rows: rows.map((row) => {
+      const message = row.content as ModelMessage;
+      return {
+        id: row.id,
+        content: row.id < stubBefore ? shortened(message) : message,
+      };
+    }),
+    stubBefore,
+  };
 }
 
 async function finishRun(

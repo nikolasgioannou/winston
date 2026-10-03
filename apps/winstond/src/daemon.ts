@@ -147,6 +147,7 @@ export function createDaemon(options: DaemonOptions) {
   const send = (ws: WebSocket, frame: VmToGatewayFrame) => {
     ws.send(JSON.stringify(frame));
   };
+  /** Tells the gateway what runs here: on connecting, and when the CLI changes. */
   const hello = (ws: WebSocket) => {
     send(ws, {
       id: newFrameId(),
@@ -155,7 +156,10 @@ export function createDaemon(options: DaemonOptions) {
       winstondVersion: options.versions.winstond,
       capabilities: [],
     });
-    // Connected and accepted: a just-installed winstond works.
+  };
+  /** Connected and accepted: says hello, and a just-installed winstond works. */
+  const accepted = (ws: WebSocket) => {
+    hello(ws);
     void options.updates?.confirm().catch((error: unknown) => {
       logger.warn({ err: error }, "confirming the update failed");
     });
@@ -168,6 +172,13 @@ export function createDaemon(options: DaemonOptions) {
     updating = true;
     try {
       const { cliUpdated, winstondUpdated } = await updates.apply(frame);
+      // Commands run the new CLI from now on, so the gateway stops holding
+      // work for it at once, even while winstond waits to restart.
+      if (cliUpdated) {
+        options.versions.cli = frame.version;
+        logger.info({ version: frame.version }, "CLI updated");
+        if (ws.readyState === WebSocket.OPEN) hello(ws);
+      }
       if (winstondUpdated) {
         // The new binary is in place; it takes over once nothing would be lost.
         if (!updates.idle())
@@ -180,12 +191,6 @@ export function createDaemon(options: DaemonOptions) {
         if (stopped) return;
         logger.info({ version: frame.version }, "winstond updated; restarting");
         updates.restart();
-        return;
-      }
-      if (cliUpdated) {
-        options.versions.cli = frame.version;
-        logger.info({ version: frame.version }, "CLI updated");
-        if (ws.readyState === WebSocket.OPEN) hello(ws);
       }
     } catch (error) {
       // The old binaries keep working; the gateway lets work through.
@@ -287,7 +292,7 @@ export function createDaemon(options: DaemonOptions) {
         "connected to the gateway",
       );
       // With a stored token, say hello now; when registering, after the VM token is safely stored.
-      if (!chosen.registering) hello(ws);
+      if (!chosen.registering) accepted(ws);
       pinger = setInterval(() => {
         send(ws, { id: newFrameId(), type: "ping" });
       }, options.pingEveryMs ?? pingIntervalMs);
@@ -316,7 +321,7 @@ export function createDaemon(options: DaemonOptions) {
             registrationToken = undefined;
             preferRegistration = false;
             logger.info("registered; VM token stored");
-            hello(ws);
+            accepted(ws);
           },
           (error: unknown) => {
             logger.error({ err: error }, "storing the VM token failed");

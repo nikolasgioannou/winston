@@ -27,7 +27,11 @@ async function runFor(tx: DbOrTx) {
   return testRun({
     runId: run.id,
     userId: user.id,
-    contextRange: () => ({ fromMessageId: 3, toMessageId: 7 }),
+    contextRange: () => ({
+      fromMessageId: 3,
+      toMessageId: 7,
+      stubBeforeMessageId: 5,
+    }),
   });
 }
 
@@ -51,6 +55,7 @@ describe("dbModelCallSink", () => {
         promptHash: run.prompt.hash,
         contextFromMessageId: 3,
         contextToMessageId: 7,
+        contextStubBeforeMessageId: 5,
         inputTokens: 1200,
         cachedTokens: 1000,
         cacheWriteTokens: 150,
@@ -88,7 +93,8 @@ describe("dbModelCallSink", () => {
         .from(modelCalls)
         .where(eq(modelCalls.runId, run.runId));
       // 50 uncached × $2 + 1000 cached × $0.20 + 150 written × $2.50 + 40 out × $10, per million.
-      expect(call?.costUsd).toBe("0.001075");
+      // The front of house caches for an hour, so its writes cost $4/M, not $2.50/M.
+      expect(call?.costUsd).toBe("0.001300");
     });
   });
 

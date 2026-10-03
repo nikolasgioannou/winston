@@ -42,7 +42,8 @@ export function recordStep<Tools extends ToolSet>(
     reasoningTokens: usage.outputTokenDetails.reasoningTokens ?? 0,
     costUsd: metadata.data?.usage?.cost,
     stopReason: stopReason(step),
-    latencyMs: Math.round(step.performance.stepTimeMs),
+    // The model's own time: a step's tool calls run after it, on their clock.
+    latencyMs: Math.round(step.performance.responseTimeMs),
   };
 }
 

@@ -1,6 +1,20 @@
 import type { ModelMessage } from "ai";
 
-const ephemeral = { openrouter: { cacheControl: { type: "ephemeral" } } };
+/** How long a cache entry lives: Anthropic's default five minutes, or an hour (writes cost 2× base input instead of 1.25×). */
+export type CacheTtl = "5m" | "1h";
+
+/** A lifetime in milliseconds. Each read starts it over. */
+export const cacheTtlMs: Record<CacheTtl, number> = {
+  "5m": 5 * 60_000,
+  "1h": 60 * 60_000,
+};
+
+const ephemeral = (ttl: CacheTtl) => ({
+  openrouter: {
+    cacheControl:
+      ttl === "1h" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" },
+  },
+});
 
 /**
  * Marks a message as a prompt-cache breakpoint: everything up to and including
@@ -11,20 +25,39 @@ const ephemeral = { openrouter: { cacheControl: { type: "ephemeral" } } };
  * each request.
  *
  * Where the marker goes depends on the role, because the OpenRouter provider
- * only forwards some placements: message-level for system and tool messages,
- * on the last text part for user messages. Assistant messages can't carry one
- * (it's dropped or ignored), so it throws.
+ * only forwards some placements: message-level for system messages, on the
+ * last result of a tool message (a tool message's own marker is copied onto
+ * every result in it, and parallel tool calls share one message, which would
+ * pass Anthropic's limit), on the last text part for user messages. Assistant
+ * messages can't carry one (it's dropped or ignored), so it throws.
+ *
+ * A request's markers must share one lifetime here: Anthropic requires
+ * longer-lived markers before shorter ones, and Winston never mixes them.
  */
 export function cacheBreakpoint<Message extends ModelMessage>(
   message: Message,
+  ttl: CacheTtl = "5m",
 ): Message {
   switch (message.role) {
     case "system":
-    case "tool":
       return {
         ...message,
-        providerOptions: { ...message.providerOptions, ...ephemeral },
+        providerOptions: { ...message.providerOptions, ...ephemeral(ttl) },
       };
+    case "tool": {
+      const last = message.content.at(-1);
+      if (last?.type !== "tool-result") return message;
+      return {
+        ...message,
+        content: [
+          ...message.content.slice(0, -1),
+          {
+            ...last,
+            providerOptions: { ...last.providerOptions, ...ephemeral(ttl) },
+          },
+        ],
+      };
+    }
     case "user": {
       const parts =
         typeof message.content === "string"
@@ -38,7 +71,7 @@ export function cacheBreakpoint<Message extends ModelMessage>(
           ...parts.slice(0, -1),
           {
             ...last,
-            providerOptions: { ...last.providerOptions, ...ephemeral },
+            providerOptions: { ...last.providerOptions, ...ephemeral(ttl) },
           },
         ],
       };
@@ -55,8 +88,11 @@ export function cacheBreakpoint<Message extends ModelMessage>(
  * rolling cache breakpoint, so each request caches everything up to itself
  * and the next one reads it back (§16). Only the request copy is marked.
  */
-export function withRollingBreakpoint(messages: readonly ModelMessage[]) {
+export function withRollingBreakpoint(
+  messages: readonly ModelMessage[],
+  ttl: CacheTtl = "5m",
+) {
   const last = messages.at(-1);
   if (!last || last.role === "assistant") return [...messages];
-  return [...messages.slice(0, -1), cacheBreakpoint(last)];
+  return [...messages.slice(0, -1), cacheBreakpoint(last, ttl)];
 }

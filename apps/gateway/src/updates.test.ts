@@ -93,16 +93,25 @@ describe("VM updates", () => {
     expect(released).toBe(true);
   });
 
-  test("a VM that doesn't update in time gets its work anyway", async () => {
-    const { updates } = setup(manifest("0.1.9+z"), 20);
+  test("a VM that doesn't update in time gets its work anyway, and waits only once per version", async () => {
+    const { updates, publish } = setup(manifest("0.1.9+z"), 20);
     await updates.refresh();
     updates.hello("vm_1", {
       cliVersion: "0.1.8+y",
       winstondVersion: "0.1.9+z",
     });
-    const started = Date.now();
-    await updates.ready("vm_1");
-    expect(Date.now() - started).toBeGreaterThanOrEqual(15);
+    const waits = async () => {
+      const started = Date.now();
+      await updates.ready("vm_1");
+      return Date.now() - started >= 15;
+    };
+    expect(await waits()).toBe(true);
+    // Its next command doesn't wait again for the same version…
+    expect(await waits()).toBe(false);
+    // …but a newer version gets its own wait.
+    publish(manifest("0.1.10+w"));
+    await updates.refresh();
+    expect(await waits()).toBe(true);
   });
 
   test("current VMs aren't offered anything; a newly published version reaches every connected VM", async () => {

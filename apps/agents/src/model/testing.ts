@@ -56,6 +56,12 @@ export function fakeGateway(
     await new Promise((resolve) => setTimeout(resolve, options.delayMs ?? 0));
     concurrency.current -= 1;
     const reply = replies[Math.min(requests.length, replies.length) - 1];
+    if (reply?.hangs === true)
+      await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason as Error);
+        });
+      });
     if (reply && typeof reply.httpStatus === "number")
       return Response.json(
         { error: { message: "fake upstream error", code: reply.httpStatus } },
@@ -131,6 +137,9 @@ export function textReply(text: string) {
     ],
   };
 }
+
+/** A scripted reply that never comes: the request waits until it's aborted. */
+export const hangingReply = { hangs: true };
 
 /** A scripted reply that fails with this HTTP status, as OpenRouter does. */
 export function httpError(status: number) {

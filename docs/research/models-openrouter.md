@@ -32,6 +32,7 @@
 ## OpenRouter + Anthropic: what works and gotchas
 
 - ✅ **Prompt caching:** `cache_control`, 5-min and 1-h TTLs. **Sticky routing lasts only 10 min**, so pin the provider (Anthropic) to keep caches warm for agents that pause.
+  - **The 1-hour TTL, verified (2026-10-03):** `providerOptions.openrouter.cacheControl: { type: "ephemeral", ttl: "1h" }` passes through `@openrouter/ai-sdk-provider` 3.1.0. A 13,202-token write on Sonnet 5 cost $0.052876, the 1-hour rate ($4/M), so the open provider issue (#196) about 1-hour writes billed at the 5-minute rate doesn't apply here. The same prompt sent 11½ minutes later read all 13,202 tokens from the cache ($0.0027). OpenRouter reports cache writes without their lifetime.
 - ✅ **Effort** via `reasoning.effort` / `output_config.effort`. ⚠️ `verbosity` overrides it if both are set, so never send `verbosity`. Opus 5.5 defaults to _medium_ and always thinks.
 - ✅ Beta headers are forwarded or added automatically. Per-message effort works (not on raw Bedrock routes). Mid-conversation system messages work.
 - ✅ Function tools work.

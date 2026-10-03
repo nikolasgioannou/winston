@@ -1,0 +1,2 @@
+ALTER TABLE "front_state" ADD COLUMN "stub_before_message_id" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "model_calls" ADD COLUMN "context_stub_before_message_id" bigint DEFAULT 0 NOT NULL;

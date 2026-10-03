@@ -31,6 +31,8 @@ export const modelCalls = snakeCase.table(
     /** The `run_messages.id` range that formed the context. */
     contextFromMessageId: bigint({ mode: "number" }).notNull(),
     contextToMessageId: bigint({ mode: "number" }).notNull(),
+    /** Long tool output before this message id was shortened (the front's window); 0 means none was. */
+    contextStubBeforeMessageId: bigint({ mode: "number" }).notNull().default(0),
     inputTokens: integer().notNull(),
     cachedTokens: integer().notNull(),
     cacheWriteTokens: integer().notNull(),

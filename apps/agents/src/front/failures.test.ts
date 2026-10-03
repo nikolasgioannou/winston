@@ -14,6 +14,7 @@ import { asc, eq } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import {
   fakeGateway,
+  hangingReply,
   httpError,
   refusal,
   textReply,
@@ -90,6 +91,7 @@ async function withUser(
           telegram,
           timers: noTimers,
           retryDelayMs: 0,
+          callTimeoutMs: 200,
         },
         user.id,
       ).then(
@@ -135,6 +137,16 @@ describe("front-of-house failure policy", () => {
         { step: 1, stop: "error" },
         { step: 2, stop: "stop" },
       ]);
+    });
+  });
+
+  test("a call past its time limit is cut off and retried", async () => {
+    await withUser(async ({ say, turn, sent }) => {
+      await say("hi");
+      const { models, error } = await turn([hangingReply, textReply("Hi.")]);
+      expect(error).toBeUndefined();
+      expect(models).toEqual([sonnet, sonnet]);
+      expect(sent).toEqual(["Hi."]);
     });
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isStepCount, tool, type ModelMessage } from "ai";
 import { z } from "zod";
-import { cacheBreakpoint } from "./cache.ts";
+import { cacheBreakpoint, withRollingBreakpoint } from "./cache.ts";
 import { fakeGateway, testRun } from "./testing.ts";
 
 describe("model gateway", () => {
@@ -55,12 +55,12 @@ describe("model gateway", () => {
   });
 
   test("breakpoints go where the provider forwards them, keeping other provider options", () => {
-    const tool = cacheBreakpoint<ModelMessage>({
-      role: "tool",
-      content: [],
+    const system = cacheBreakpoint<ModelMessage>({
+      role: "system",
+      content: "x",
       providerOptions: { anthropic: { a: true } },
     });
-    expect(tool.providerOptions).toEqual({
+    expect(system.providerOptions).toEqual({
       anthropic: { a: true },
       openrouter: { cacheControl: { type: "ephemeral" } },
     });
@@ -83,6 +83,52 @@ describe("model gateway", () => {
     expect(() =>
       cacheBreakpoint<ModelMessage>({ role: "assistant", content: "x" }),
     ).toThrow();
+  });
+
+  test("parallel tool results carry one marker between them, within Anthropic's four", async () => {
+    const { gateway, requests } = fakeGateway();
+    const ids = ["call_1", "call_2", "call_3", "call_4", "call_5"];
+    await gateway.generate({
+      profile: "front",
+      run: testRun(),
+      instructions: cacheBreakpoint({ role: "system", content: "sys" }, "1h"),
+      messages: withRollingBreakpoint(
+        [
+          { role: "user", content: "check five things" },
+          {
+            role: "assistant",
+            content: ids.map((toolCallId) => ({
+              type: "tool-call",
+              toolCallId,
+              toolName: "bash",
+              input: {},
+            })),
+          },
+          {
+            role: "tool",
+            content: ids.map((toolCallId) => ({
+              type: "tool-result",
+              toolCallId,
+              toolName: "bash",
+              output: { type: "text", value: "ok" },
+            })),
+          },
+        ],
+        "1h",
+      ),
+    });
+    const sent = requests[0]?.messages as {
+      role: string;
+      tool_call_id?: string;
+      cache_control?: unknown;
+    }[];
+    expect(JSON.stringify(sent).match(/"cache_control"/g)).toHaveLength(2);
+    // The system prompt's, and the last result's: the cache covers all five.
+    expect(
+      sent
+        .filter((m) => m.role === "tool" && m.cache_control)
+        .map((m) => m.tool_call_id),
+    ).toEqual(["call_5"]);
   });
 
   test("rejects sampling settings and forced tool choice before sending", async () => {
@@ -196,6 +242,48 @@ describe("recording", () => {
       [0, "tool-calls"],
       [1, "stop"],
     ]);
+  });
+
+  test("a call's latency is the model's, without its tool calls", async () => {
+    const { gateway, calls } = fakeGateway({
+      replies: [
+        {
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: "",
+                tool_calls: [
+                  {
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "slow", arguments: "{}" },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+      ],
+    });
+    await gateway.generate({
+      profile: "front",
+      run: testRun(),
+      prompt: "hi",
+      stopWhen: isStepCount(1),
+      tools: {
+        slow: tool({
+          inputSchema: z.object({}),
+          execute: async () => {
+            await Bun.sleep(100);
+            return "done";
+          },
+        }),
+      },
+    });
+    expect(calls[0]?.latencyMs).toBeLessThan(50);
   });
 
   test("reports a refusal as such", async () => {

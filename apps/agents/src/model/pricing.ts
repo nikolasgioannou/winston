@@ -1,3 +1,4 @@
+import type { CacheTtl } from "./cache.ts";
 import type { modelProfiles } from "./gateway.ts";
 
 type ModelId = (typeof modelProfiles)[keyof typeof modelProfiles]["model"];
@@ -5,24 +6,34 @@ type ModelId = (typeof modelProfiles)[keyof typeof modelProfiles]["model"];
 /**
  * OpenRouter prices in USD per million tokens (checked 2026-09-27). Only a
  * fallback: the logged cost is OpenRouter's reported charge when present, and
- * a mismatch with these rates is logged as a warning. Cache writes are the
- * 5-minute rate, the only TTL Winston uses.
+ * a mismatch with these rates is logged as a warning. Cache writes cost by
+ * the entry's lifetime: 1.25× base input for five minutes, 2× for an hour
+ * (OpenRouter bills the 1h rate: checked 2026-10-03, 13,202 written tokens
+ * for $0.0529 on Sonnet 5).
  */
 export const pricing: Record<
   ModelId,
-  { input: number; output: number; cacheRead: number; cacheWrite: number }
+  {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cacheWrite1h: number;
+  }
 > = {
   "anthropic/claude-sonnet-5": {
     input: 2,
     output: 10,
     cacheRead: 0.2,
     cacheWrite: 2.5,
+    cacheWrite1h: 4,
   },
   "anthropic/claude-opus-5.5": {
     input: 4,
     output: 20,
     cacheRead: 0.2,
     cacheWrite: 5,
+    cacheWrite1h: 8,
   },
 };
 
@@ -35,6 +46,7 @@ export function computeCostUsd(
     cacheWriteTokens: number;
     outputTokens: number;
   },
+  cacheTtl: CacheTtl = "5m",
 ) {
   const rates = pricing[model];
   const uncached =
@@ -42,7 +54,8 @@ export function computeCostUsd(
   return (
     (uncached * rates.input +
       usage.cachedTokens * rates.cacheRead +
-      usage.cacheWriteTokens * rates.cacheWrite +
+      usage.cacheWriteTokens *
+        (cacheTtl === "1h" ? rates.cacheWrite1h : rates.cacheWrite) +
       usage.outputTokens * rates.output) /
     1_000_000
   );

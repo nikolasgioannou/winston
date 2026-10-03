@@ -29,12 +29,25 @@ import {
 } from "ai";
 import { recordStep, type ModelCallRecord } from "./record.ts";
 
-/** The model (OpenRouter id) and effort for each role. */
+/**
+ * The model (OpenRouter id), effort and prompt-cache lifetime for each role.
+ * The front of house caches for an hour: people often reply after more than
+ * five minutes, and a miss rewrites its whole 100–150k-token context
+ * (93c46b). Background runs step continuously, so five minutes is enough.
+ */
 export const modelProfiles = {
-  front: { model: "anthropic/claude-sonnet-5", effort: "low" },
+  front: { model: "anthropic/claude-sonnet-5", effort: "low", cacheTtl: "1h" },
   /** Where the front of house falls back when Sonnet keeps failing or refuses (§6). */
-  frontFallback: { model: "anthropic/claude-opus-5.5", effort: "low" },
-  background: { model: "anthropic/claude-opus-5.5", effort: "high" },
+  frontFallback: {
+    model: "anthropic/claude-opus-5.5",
+    effort: "low",
+    cacheTtl: "1h",
+  },
+  background: {
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    cacheTtl: "5m",
+  },
 } as const;
 
 export type ModelProfile = keyof typeof modelProfiles;
@@ -46,9 +59,14 @@ export interface ModelRun {
   prompt: PromptVersion;
   /**
    * The stored `run_messages` ids that make up the context of the call about
-   * to be recorded. Read before the caller's `onStepEnd` stores the step.
+   * to be recorded, and where long tool output stopped being shortened (0 or
+   * left out: none was). Read before the caller's `onStepEnd` stores the step.
    */
-  contextRange: () => { fromMessageId: number; toMessageId: number };
+  contextRange: () => {
+    fromMessageId: number;
+    toMessageId: number;
+    stubBeforeMessageId?: number;
+  };
 }
 
 /** One recorded model call. */
@@ -58,6 +76,7 @@ export interface ModelCall extends ModelCallRecord {
   step: number;
   contextFromMessageId: number;
   contextToMessageId: number;
+  contextStubBeforeMessageId: number;
 }
 
 /** Where model calls are recorded. Must not throw: a failed log can't fail a turn. */
@@ -145,21 +164,22 @@ export function createModelGateway({
           maxRetries: 0,
           model: model(profile, effort ?? modelProfiles[profile].effort),
           onStepEnd: async (step: StepResult<Tools>) => {
-            const { fromMessageId, toMessageId } = run.contextRange();
+            const context = run.contextRange();
             await sink({
               ...recordStep(step),
               run,
               profile,
               step: stepOffset + step.stepNumber,
-              contextFromMessageId: fromMessageId,
-              contextToMessageId: toMessageId,
+              contextFromMessageId: context.fromMessageId,
+              contextToMessageId: context.toMessageId,
+              contextStubBeforeMessageId: context.stubBeforeMessageId ?? 0,
             });
             recordedSteps += 1;
             await callerOnStepEnd?.(step);
           },
         } as unknown as GenerateTextOptions<Tools>);
       } catch (error) {
-        const { fromMessageId, toMessageId } = run.contextRange();
+        const context = run.contextRange();
         await sink({
           model: modelProfiles[profile].model,
           provider: undefined,
@@ -174,8 +194,9 @@ export function createModelGateway({
           run,
           profile,
           step: stepOffset + recordedSteps,
-          contextFromMessageId: fromMessageId,
-          contextToMessageId: toMessageId,
+          contextFromMessageId: context.fromMessageId,
+          contextToMessageId: context.toMessageId,
+          contextStubBeforeMessageId: context.stubBeforeMessageId ?? 0,
         });
         throw error;
       }

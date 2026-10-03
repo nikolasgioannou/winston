@@ -36,6 +36,7 @@ export function dbModelCallSink(db: DbOrTx, logger: Logger): ModelCallSink {
           promptHash: call.run.prompt.hash,
           contextFromMessageId: call.contextFromMessageId,
           contextToMessageId: call.contextToMessageId,
+          contextStubBeforeMessageId: call.contextStubBeforeMessageId,
           inputTokens: call.inputTokens,
           cachedTokens: call.cachedTokens,
           cacheWriteTokens: call.cacheWriteTokens,
@@ -71,7 +72,8 @@ export function dbModelCallSink(db: DbOrTx, logger: Logger): ModelCallSink {
 
 /** OpenRouter's charge when it reports one, otherwise computed from the price table. */
 function resolveCost(call: ModelCall, logger: Logger) {
-  const computed = computeCostUsd(modelProfiles[call.profile].model, call);
+  const profile = modelProfiles[call.profile];
+  const computed = computeCostUsd(profile.model, call, profile.cacheTtl);
   if (call.costUsd === undefined) return computed;
   const drift =
     Math.abs(call.costUsd - computed) / Math.max(call.costUsd, 1e-9);

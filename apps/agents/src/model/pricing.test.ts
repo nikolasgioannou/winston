@@ -48,4 +48,17 @@ describe("computeCostUsd", () => {
       6,
     );
   });
+
+  test("Sonnet 5: a one-hour cache write costs 2x base input", () => {
+    // The real call that checked OpenRouter bills the 1h rate (2026-10-03): $0.052876.
+    const write = {
+      inputTokens: 13216,
+      cachedTokens: 0,
+      cacheWriteTokens: 13202,
+      outputTokens: 4,
+    };
+    expect(
+      computeCostUsd("anthropic/claude-sonnet-5", write, "1h"),
+    ).toBeCloseTo(0.052876, 6);
+  });
 });

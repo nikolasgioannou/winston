@@ -27,7 +27,7 @@ export interface UpdatesOptions {
   /** Sends a frame to a VM's live connection; false if it isn't connected. */
   send: (vmId: string, frame: GatewayToVmFrame) => boolean;
   logger: Logger;
-  /** How long agent work waits for a VM's CLI to catch up. */
+  /** How long agent work waits for a VM's CLI to catch up, once per version. */
   holdMs?: number;
 }
 
@@ -37,7 +37,8 @@ export interface UpdatesOptions {
  * and to every connected VM when a deploy publishes new ones. Until a VM's
  * CLI is current, its exec work waits (`ready`), so the system prompt and the
  * CLI's `--help` agree; after `holdMs` the work goes ahead on the old CLI
- * with a warning, rather than wedging the user.
+ * with a warning, rather than wedging the user, and that VM's later work
+ * doesn't wait again for the same version.
  */
 export function createUpdates({
   loadManifest,
@@ -54,6 +55,8 @@ export function createUpdates({
   >();
   /** Work waiting for a VM's CLI to be current. */
   const waiters = new Map<string, Set<() => void>>();
+  /** The version each VM already kept work waiting for, in vain. */
+  const waited = new Map<string, string>();
 
   const cliCurrent = (vmId: string) => {
     const versions = reported.get(vmId);
@@ -130,7 +133,7 @@ export function createUpdates({
 
     /** Resolves when the VM's CLI is current, or after `holdMs` at most. */
     async ready(vmId: string) {
-      if (cliCurrent(vmId)) return;
+      if (cliCurrent(vmId) || waited.get(vmId) === manifest?.version) return;
       const updated = await new Promise<boolean>((resolve) => {
         const done = () => {
           clearTimeout(timer);
@@ -144,11 +147,13 @@ export function createUpdates({
         set.add(done);
         waiters.set(vmId, set);
       });
-      if (!updated)
+      if (!updated && manifest) {
+        waited.set(vmId, manifest.version);
         logger.warn(
-          { vmId, versions: reported.get(vmId), current: manifest?.version },
+          { vmId, versions: reported.get(vmId), current: manifest.version },
           "the VM's CLI didn't update in time; running on the old one",
         );
+      }
     },
   };
 }

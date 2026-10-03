@@ -6,7 +6,7 @@ import { ensurePromptVersion, promptVersion } from "@winston/prompts";
 import { createLogger } from "@winston/shared/logger";
 import type { ModelMessage } from "ai";
 import { eq } from "drizzle-orm";
-import { trimWindow } from "./window.ts";
+import { longOutputChars, shortened, trimWindow } from "./window.ts";
 
 const db = await testDb();
 const logger = createLogger("agents-test", {
@@ -20,9 +20,10 @@ const prompt = promptVersion("front-of-house", [
 
 /**
  * A user with `count` turns of about the same size, each a user message, a
- * tool call and its result, and a reply. Returns each turn's first message id.
+ * tool call and its result (`outputChars` long), and a reply. Returns each
+ * turn's first message id.
  */
-async function conversation(tx: DbOrTx, count: number) {
+async function conversation(tx: DbOrTx, count: number, outputChars = 300) {
   const user = await insertUser(tx);
   const starts: number[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -48,7 +49,7 @@ async function conversation(tx: DbOrTx, count: number) {
             type: "tool-result",
             toolCallId: `c${String(i)}`,
             toolName: "lookup",
-            output: { type: "text", value: "y".repeat(300) },
+            output: { type: "text", value: "y".repeat(outputChars) },
           },
         ],
       },
@@ -65,12 +66,13 @@ async function conversation(tx: DbOrTx, count: number) {
   return { userId: user.id, starts };
 }
 
-/** Records the user's latest model call as having seen `tokens` of context. */
+/** Records the user's latest model call as having seen `tokens` of context, `minutesAgo`. */
 async function lastCallSaw(
   tx: DbOrTx,
   userId: string,
   tokens: number,
   kind: "front" | "background" = "front",
+  minutesAgo = 0,
 ) {
   const run = await insertRun(tx, userId, { kind });
   await ensurePromptVersion(tx, prompt);
@@ -90,6 +92,7 @@ async function lastCallSaw(
     costUsd: "0",
     latencyMs: 1,
     stopReason: "stop",
+    createdAt: new Date(Date.now() - minutesAgo * 60_000),
   });
 }
 
@@ -99,6 +102,14 @@ async function windowStart(tx: DbOrTx, userId: string) {
     .from(frontState)
     .where(eq(frontState.userId, userId));
   return state?.windowStartMessageId ?? 0;
+}
+
+async function stubBefore(tx: DbOrTx, userId: string) {
+  const [state] = await tx
+    .select()
+    .from(frontState)
+    .where(eq(frontState.userId, userId));
+  return state?.stubBeforeMessageId ?? 0;
 }
 
 describe("trimWindow", () => {
@@ -150,6 +161,36 @@ describe("trimWindow", () => {
     });
   });
 
+  test("a warm cache under budget leaves old tool output alone", async () => {
+    await inRollback(db, async (tx) => {
+      const { userId } = await conversation(tx, 4, 5_000);
+      await lastCallSaw(tx, userId, 9_000, "front", 59);
+      await trimWindow(tx, userId, system, budget, logger);
+      expect(await stubBefore(tx, userId)).toBe(0);
+    });
+  });
+
+  test("once the cache has expired, long tool output before the latest turn is shortened, and no turn drops", async () => {
+    await inRollback(db, async (tx) => {
+      const { userId, starts } = await conversation(tx, 4, 5_000);
+      await lastCallSaw(tx, userId, 9_000, "front", 61);
+      await trimWindow(tx, userId, system, budget, logger);
+      expect(await stubBefore(tx, userId)).toBe(starts.at(-1) ?? -1);
+      expect(await windowStart(tx, userId)).toBe(0);
+    });
+  });
+
+  test("over budget, shortening old tool output comes first, and turns drop only if that isn't enough", async () => {
+    await inRollback(db, async (tx) => {
+      // Mostly tool output: shortening it alone gets under the target.
+      const { userId, starts } = await conversation(tx, 10, 5_000);
+      await lastCallSaw(tx, userId, 12_000);
+      await trimWindow(tx, userId, system, budget, logger);
+      expect(await stubBefore(tx, userId)).toBe(starts.at(-1) ?? -1);
+      expect(await windowStart(tx, userId)).toBe(0);
+    });
+  });
+
   test("always keeps the latest turn, however big", async () => {
     await inRollback(db, async (tx) => {
       const { userId, starts } = await conversation(tx, 3);
@@ -158,5 +199,45 @@ describe("trimWindow", () => {
       // The model-call run added by lastCallSaw has no messages, so the last conversation turn stays.
       expect(await windowStart(tx, userId)).toBe(starts.at(-1) ?? -1);
     });
+  });
+});
+
+describe("shortened", () => {
+  const result = (value: string): ModelMessage => ({
+    role: "tool",
+    content: [
+      {
+        type: "tool-result",
+        toolCallId: "c1",
+        toolName: "bash",
+        output: { type: "text", value },
+      },
+    ],
+  });
+  const text = (message: ModelMessage) =>
+    message.role === "tool" &&
+    message.content[0]?.type === "tool-result" &&
+    message.content[0].output.type === "text"
+      ? message.content[0].output.value
+      : undefined;
+
+  test("long tool output keeps its start and says how to get the rest", () => {
+    const value = `exit code 0\n--- stdout ---\n${"page text ".repeat(500)}`;
+    const short = text(shortened(result(value))) ?? "";
+    expect(short.startsWith(value.slice(0, 400))).toBe(true);
+    expect(short).toContain(
+      `[… ${String(value.length - 400)} more characters, no longer in the conversation; run it again if you need them.]`,
+    );
+    expect(short.length).toBeLessThan(600);
+  });
+
+  test("short output and other messages stay as they are", () => {
+    const short = result("y".repeat(longOutputChars));
+    expect(shortened(short)).toEqual(short);
+    const reply: ModelMessage = {
+      role: "assistant",
+      content: "x".repeat(5_000),
+    };
+    expect(shortened(reply)).toEqual(reply);
   });
 });

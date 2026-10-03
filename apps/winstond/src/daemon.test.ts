@@ -120,7 +120,7 @@ async function start(
 }
 
 describe("winstond", () => {
-  test("an update: a new CLI is announced with a fresh hello; a new winstond restarts once idle", async () => {
+  test("an update: a new CLI is announced at once; a new winstond restarts once idle", async () => {
     const gateway = fakeGateway();
     running.push({ stop: () => void gateway.server.stop(true) });
     const applied: string[] = [];
@@ -190,11 +190,16 @@ describe("winstond", () => {
 
     replacesWinstond = true;
     announce("0.1.3+c");
-    // A command running (or its result still wanted): the restart waits.
+    // The new CLI is announced before winstond's restart, which waits while
+    // a command runs (or its result is still wanted). Only a new winstond
+    // that connects confirms its own update.
+    await eventually(() => hellos().length === 3);
+    expect(hellos()[2]?.cliVersion).toBe("0.1.3+c");
     await Bun.sleep(100);
     expect(restarts).toBe(0);
     idle = true;
     await eventually(() => restarts === 1);
+    expect(confirms).toBe(1);
     expect(applied).toEqual(["0.1.2+b", "0.1.3+c"]);
   });
 

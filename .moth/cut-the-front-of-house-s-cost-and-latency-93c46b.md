@@ -1,12 +1,12 @@
 ---
 id: "93c46b"
 title: Cut the front of house's cost and latency
-status: backlog
+status: done
 priority: none
 labels:
   - agents
 created_at: 2026-10-03T17:26:02.974Z
-updated_at: 2026-10-03T17:26:02.974Z
+updated_at: 2026-10-03T18:44:52.765Z
 ---
 
 From the production trace review (5c3cdf, 2026-10-03): 294 model calls cost $9.82 over about 40 hours, and the front of house was $9.43 of it.
@@ -47,3 +47,31 @@ A cache marker on a tool message is copied onto every tool result in it. Paralle
 Docs: §1 (prompt caching), §6 (failure handling, timeouts), §14 (`model_calls` cost), docs/research/models-openrouter.md.
 
 Tests: 1h markers on the front of house's requests, in valid order; pricing by lifetime; old tool results stubbed only at the trim boundary; a call past the timeout is aborted and retried; marker count within limits with five parallel tool results.
+
+## As built
+
+**1. A 1-hour cache.**
+- **Verified first:** a live call through OpenRouter showed 1-hour writes billed at the 1-hour rate (13,202 tokens, $0.052876 = $4/M), so issue #196 doesn't apply. The same prompt sent 11½ minutes later read all 13,202 tokens from the cache.
+- **Where:** `cacheTtl` on the model profiles (`front` and `frontFallback` "1h", `background` "5m"); `cacheBreakpoint`/`withRollingBreakpoint` take it, and `front/turn.ts` uses it on both markers (each step and the delegate brief).
+- **Pricing:** `pricing.ts` has the 1-hour write rates (Sonnet 5 $4, Opus 5.5 $8) and `log.ts` picks by the profile's lifetime, so the drift warning stays quiet.
+
+**2. A lighter window, changed only when that's free.**
+- **Stubbing only at trims would have saved nothing.** Replaying the production stream (sizes only) showed why: the window still runs between 100k and 150k, just holding different things.
+- **So old tool output is shortened when the cache is cold anyway:** no front call for an hour, the cache's lifetime. It also happens at a trim, before any turn drops.
+  - Output over 1,500 characters from before the latest finished turn keeps its first 400 characters and a note to run it again.
+  - In the replay this cut the average context by about 20% and input cost by about 24%.
+  - The boundary is `front_state.stub_before_message_id`. Each `model_calls` row records it (`context_stub_before_message_id`), so replays (ea2e27) can rebuild the exact request.
+
+**3. The slow calls weren't slow model calls.**
+- **The model calls took 3–4 s.** In the 2026-10-02 turn, each step's interim text reached Telegram 3–4 s after the step began. The rest of each step was its tools, which `latency_ms` included (the AI SDK's `stepTimeMs`).
+- **The tools were waiting on the VM update hold.** A deploy had just published 0.1.194, so the gateway held every command for up to 60 s until the VM reported the new CLI. Winstond only reported it when it restarted, and it restarts only when idle (and it keeps results for 5 minutes). So all eight commands in those six minutes waited the full 60 s, then ran on the CLI that was already new. One `exec` per bash call gave 60 s; `view_image`'s two gave 120 s.
+- **Fixes:**
+  - **winstond** says `hello` as soon as the CLI is swapped, without confirming its own pending update. That keeps the rollback marker until a new winstond connects.
+  - **The gateway** holds a VM's work at most once per version.
+  - **`latency_ms`** now records the model's own time (`responseTimeMs`).
+  - **The 90 s timeout** was fine. A test shows a call that never answers is cut off and retried.
+- **Not done:** OpenRouter fallback across Claude providers. It was only worth it for slow model calls, and there weren't any.
+
+**4. Too many cache markers: real, latent, fixed.**
+- **The problem:** five parallel tool results sent six `cache_control` markers, over Anthropic's four. No production step had made more than two parallel calls yet.
+- **The fix:** a tool message's marker now goes on its last result only. The provider uses a part's marker when the message has none.

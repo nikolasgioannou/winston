@@ -14,7 +14,7 @@ import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import type { ExecResult } from "@winston/domain/frames";
 import type { UserMessagePayload } from "@winston/domain/inbound";
 import { createLogger } from "@winston/shared/logger";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { dbModelCallSink } from "../model/log.ts";
 import { fakeGateway, textReply, toolCallReply } from "../model/testing.ts";
 import { keepLineBreaks } from "../telegram/line-breaks.ts";
@@ -1039,11 +1039,48 @@ describe("runFrontTurn", () => {
         expect(sent).toContain("my sister is Bella");
         expect(sent).toContain("Noted.");
         expect(sent).toContain("who's my sister?");
-        // System prompt and the previous turn's last message.
+        // System prompt and the previous turn's last message, both cached for an hour.
         expect(
-          sent.match(/"cache_control":\{"type":"ephemeral"\}/g),
+          sent.match(/"cache_control":\{"type":"ephemeral","ttl":"1h"\}/g),
         ).toHaveLength(2);
+        expect(sent).not.toMatch(/"cache_control":\{"type":"ephemeral"\}/);
       },
+    );
+  });
+
+  test("after an hour's pause, long output from before the last turn comes back shortened, and the call records where", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("bash", { command: "winston browser eval 'text'" }),
+          textReply("It's a long page."),
+        ],
+        [textReply("Ok.")],
+        [textReply("Sure.")],
+      ],
+      async ({ tx, say, turn, requests }) => {
+        await say("what does the page say?");
+        await turn(0);
+        await say("thanks");
+        await turn(1);
+        // The cache has expired: the last call was two hours ago.
+        await tx
+          .update(modelCalls)
+          .set({ createdAt: new Date(Date.now() - 2 * 3600_000) });
+        await say("one more thing");
+        await turn(2);
+
+        const sent = JSON.stringify(requests[2]?.[0]?.messages);
+        expect(sent).toContain("no longer in the conversation");
+        expect(sent.split("page text").length).toBeLessThan(100);
+        const [call] = await tx
+          .select()
+          .from(modelCalls)
+          .orderBy(desc(modelCalls.id))
+          .limit(1);
+        expect(call?.contextStubBeforeMessageId).toBeGreaterThan(0);
+      },
+      { vmAnswer: () => ({ stdout: "page text ".repeat(1_000) }) },
     );
   });
 
