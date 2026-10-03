@@ -9,7 +9,7 @@
  *   process's time zone), so the same item always renders to the same bytes.
  */
 import { canonicalJson } from "@winston/shared/json";
-import { formatInTimeZone } from "@winston/shared/time";
+import { formatEnvelopeTime } from "@winston/shared/time";
 import type {
   Attachment,
   TaskNeedsUserPayload,
@@ -103,11 +103,11 @@ function truncate(text: string, maxChars: number) {
 export function renderUserMessage(item: UserMessageItem, timeZone: string) {
   const { payload } = item;
   const lines = [
-    element("sent_at", formatInTimeZone(item.occurredAt, timeZone)),
+    element("sent_at", formatEnvelopeTime(item.occurredAt, timeZone)),
   ];
   if (payload.forwardedFrom) {
     const origin = payload.forwardedFrom;
-    const sentAt = formatInTimeZone(new Date(origin.sentAt), timeZone);
+    const sentAt = formatEnvelopeTime(new Date(origin.sentAt), timeZone);
     lines.push(
       `  <forwarded_from${attributes({ kind: origin.kind, username: origin.username, sent_at: sentAt })}>${escapeText(origin.name)}</forwarded_from>`,
     );
@@ -176,7 +176,7 @@ export function renderEvent(item: EventItem, timeZone: string) {
   if (!eventTypePattern.test(item.type))
     throw new Error(`Not a catalog event type: ${item.type}`);
   const lines = [
-    element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
+    element("occurred_at", formatEnvelopeTime(item.occurredAt, timeZone)),
   ];
   if (item.subscriptionNote !== undefined)
     lines.push(element("subscription_note", item.subscriptionNote));
@@ -191,7 +191,7 @@ export function renderEvent(item: EventItem, timeZone: string) {
 export function renderTaskResult(item: TaskItem, timeZone: string) {
   const at = element(
     "occurred_at",
-    formatInTimeZone(item.occurredAt, timeZone),
+    formatEnvelopeTime(item.occurredAt, timeZone),
   );
   if (item.type === "task.needs_user")
     return envelope(item.type, [
@@ -218,7 +218,7 @@ export function renderSentMessage(
   timeZone: string,
 ) {
   return envelope("winston.message", [
-    element("sent_at", formatInTimeZone(item.sentAt, timeZone)),
+    element("sent_at", formatEnvelopeTime(item.sentAt, timeZone)),
     element("text", item.text),
   ]);
 }
@@ -235,7 +235,7 @@ export function renderAction(
   timeZone: string,
 ) {
   return envelope("winston.action", [
-    element("occurred_at", formatInTimeZone(item.occurredAt, timeZone)),
+    element("occurred_at", formatEnvelopeTime(item.occurredAt, timeZone)),
     element("action", item.action),
     element("summary", item.summary),
     element("outcome", item.outcome),

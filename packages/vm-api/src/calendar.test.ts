@@ -97,6 +97,23 @@ describe("calendar routes", () => {
       expect(narrow.slots).toEqual([
         { start: "2026-09-29T20:00:00.000Z", end: "2026-09-29T22:00:00.000Z" },
       ]);
+      // Asked from midnight at 3:30pm local: nothing before now is offered.
+      const later = setupApi(
+        tx,
+        {},
+        {
+          now: () => new Date("2026-09-29T19:30:00Z"),
+        },
+      ).as(user.id);
+      const fromNow = (await (
+        await later(
+          "/v1/calendar/free?since=2026-09-29T00:00&until=2026-09-30T00:00&duration=60",
+        )
+      ).json()) as Json;
+      // Free from 3:30pm local (now) to the end of working hours at 6pm.
+      expect(fromNow.slots).toEqual([
+        { start: "2026-09-29T19:30:00.000Z", end: "2026-09-29T22:00:00.000Z" },
+      ]);
       const twelveHour = (await (
         await call(
           "/v1/calendar/free?since=2026-09-29T00:00&until=2026-09-30T00:00&duration=60&hours=4pm-6pm",

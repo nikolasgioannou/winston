@@ -33,6 +33,23 @@ export function formatInTimeZone(date: Date, timeZone: string) {
   return `${parts.year ?? ""}-${parts.month ?? ""}-${parts.day ?? ""}T${parts.hour ?? ""}:${parts.minute ?? ""}:${parts.second ?? ""}${offset}`;
 }
 
+const weekdayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * A time as agents read it in envelopes: ISO 8601 with its offset, then the
+ * weekday, e.g. `2026-10-02T18:12:44-04:00 (Friday)`. Working out a weekday
+ * from a bare date is the date maths models most often slip on, so it's
+ * spelled out. Deterministic, like `formatInTimeZone`.
+ */
+export function formatEnvelopeTime(date: Date, timeZone: string) {
+  let weekday = weekdayFormatters.get(timeZone);
+  if (!weekday) {
+    weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" });
+    weekdayFormatters.set(timeZone, weekday);
+  }
+  return `${formatInTimeZone(date, timeZone)} (${weekday.format(date)})`;
+}
+
 /**
  * The runtime's canonical name for an IANA time zone (`america/new_york` →
  * `America/New_York`), or undefined if it doesn't know it.

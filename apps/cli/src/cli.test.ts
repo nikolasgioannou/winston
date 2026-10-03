@@ -210,3 +210,26 @@ describe("winston", () => {
     expect(result.err).toContain("Can't reach winstond");
   });
 });
+
+describe("help examples", () => {
+  test("every time in an example is one the backend accepts", async () => {
+    const { resources } = await import("./cli.ts");
+    const { parseTimeFlag } = await import("@winston/shared/time-flag");
+    const timeFlags = /--(start|end|at|expires|since|until)\s+("[^"]+"|\S+)/g;
+    let checked = 0;
+    for (const resource of resources)
+      for (const verb of resource.verbs)
+        for (const example of verb.examples)
+          for (const [, , raw = ""] of example.matchAll(timeFlags)) {
+            const value = raw.replace(/^"|"$/g, "");
+            expect(() =>
+              parseTimeFlag(value, {
+                timeZone: "America/New_York",
+                direction: "future",
+              }),
+            ).not.toThrow();
+            checked += 1;
+          }
+    expect(checked).toBeGreaterThan(5);
+  });
+});

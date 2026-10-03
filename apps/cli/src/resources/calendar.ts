@@ -270,9 +270,13 @@ const eventFlags = {
     name: "start",
     value: "<time>",
     description:
-      'When it starts (in the user\'s zone: "thu 3pm", 2026-10-06T15:00)',
+      "When it starts: ISO 8601 in the user's zone (2026-10-06T15:00); add an offset for a time somewhere else (2026-10-08T17:40+03:00)",
   },
-  end: { name: "end", value: "<time>", description: "When it ends" },
+  end: {
+    name: "end",
+    value: "<time>",
+    description: "When it ends, written like --start",
+  },
   duration: {
     name: "duration",
     value: "<d>",
@@ -354,6 +358,14 @@ function showCreated(result: Created, asJson: boolean) {
     .join("\n");
 }
 
+/** A length in minutes as people say it: `45m`, `6h`, `1h30m`. */
+export function lengthText(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${String(rest)}m`;
+  return rest === 0 ? `${String(hours)}h` : `${String(hours)}h${String(rest)}m`;
+}
+
 function showUpdated(result: Updated, asJson: boolean) {
   if (asJson) return json(result);
   const e = result.event;
@@ -364,6 +376,9 @@ function showUpdated(result: Updated, asJson: boolean) {
   return [
     result.dryRun ? "DRY RUN (nothing changed)" : undefined,
     `${result.dryRun ? "Would change" : "Changed"} ${e.id}${scope}: "${e.title}"  ${span(e.start, e.end, result.timeZone)}`,
+    typeof result.keptMinutes === "number"
+      ? `It kept its ${lengthText(result.keptMinutes)} length; pass --end or --duration to change that.`
+      : undefined,
     e.attendees.length > 0
       ? `attendees: ${e.attendees.map((a) => (typeof a === "string" ? a : a.email)).join(", ")}`
       : undefined,
@@ -386,8 +401,8 @@ export const calendar: Resource = {
         "Upcoming events, earliest first (now to a week ahead unless --since/--until say otherwise)",
       flags: filterFlags,
       examples: [
-        'winston calendar list --since today --until "tomorrow 11:59pm"',
-        "winston calendar list --attendee dana@example.com --since mon --until fri",
+        "winston calendar list --since 2026-10-08 --until 2026-10-09",
+        "winston calendar list --attendee dana@example.com --since 2026-10-12 --until 2026-10-17",
         "winston calendar list --external --account work@acme.com",
       ],
       run: async ({ client, flags }) =>
@@ -405,7 +420,7 @@ export const calendar: Resource = {
       usage: "<text>",
       flags: filterFlags,
       examples: [
-        "winston calendar search dentist --since today --until 3w",
+        "winston calendar search dentist --until 3w",
         'winston calendar search "board meeting" --since 2026-10-01 --until 2026-12-31',
       ],
       run: async ({ client, flags, args }) => {
@@ -481,8 +496,8 @@ export const calendar: Resource = {
         standardFlags.account,
       ],
       examples: [
-        'winston calendar free --attendee dana@example.com --duration 30m --since "next mon" --until "next sat"',
-        "winston calendar free --since tomorrow --until 3d --duration 1h --hours 10-16",
+        "winston calendar free --attendee dana@example.com --duration 30m --since 2026-10-12 --until 2026-10-17",
+        "winston calendar free --until 3d --duration 1h --hours 10-16",
       ],
       run: async ({ client, flags }) => {
         const duration = textFlag(flags, "duration");
@@ -541,7 +556,7 @@ export const calendar: Resource = {
         standardFlags.account,
       ],
       examples: [
-        'winston calendar create --title "1:1 with Sam" --start "tue 10am" --duration 30m --attendee sam@acme.com --video --repeat "FREQ=WEEKLY;BYDAY=TU" --dry-run',
+        'winston calendar create --title "1:1 with Sam" --start 2026-10-13T10:00 --duration 30m --attendee sam@acme.com --video --repeat "FREQ=WEEKLY;BYDAY=TU" --dry-run',
         'winston calendar create --title "Dentist" --start "2026-10-14T08:30" --end "2026-10-14T09:30" --location "12 Main St"',
         'winston calendar create --title "Offsite" --start 2026-11-03 --all-day --no-notify',
       ],
@@ -553,7 +568,7 @@ export const calendar: Resource = {
         if (start === undefined)
           throw CliError.usage(
             "--start is required.",
-            'For example --start "thu 3pm".',
+            "For example --start 2026-10-08T15:00.",
           );
         const end = textFlag(flags, "end");
         const duration = textFlag(flags, "duration");
@@ -637,7 +652,7 @@ export const calendar: Resource = {
         standardFlags.dryRun,
       ],
       examples: [
-        'winston calendar update evt_01k5… --start "thu 3pm" --notify --dry-run',
+        "winston calendar update evt_01k5… --start 2026-10-08T15:00 --notify --dry-run",
         "winston calendar update evt_01k5… --add-attendee sam@acme.com --scope following",
         'winston calendar update evt_01k5… --title "Plan review (moved online)" --video --no-notify',
       ],

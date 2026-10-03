@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatInTimeZone } from "./time.ts";
+import { formatEnvelopeTime, formatInTimeZone } from "./time.ts";
 
 const instant = new Date("2026-09-26T21:03:12.789Z");
 
@@ -31,5 +31,17 @@ describe("formatInTimeZone", () => {
 
   test("rejects an unknown time zone", () => {
     expect(() => formatInTimeZone(instant, "Mars/Olympus")).toThrow(RangeError);
+  });
+});
+
+describe("formatEnvelopeTime", () => {
+  test("adds the local weekday, which can differ from UTC's", () => {
+    // 01:30 UTC on Saturday is still Friday evening in New York.
+    expect(
+      formatEnvelopeTime(new Date("2026-10-03T01:30:00Z"), "America/New_York"),
+    ).toBe("2026-10-02T21:30:00-04:00 (Friday)");
+    expect(
+      formatEnvelopeTime(new Date("2026-10-03T01:30:00Z"), "Asia/Nicosia"),
+    ).toBe("2026-10-03T04:30:00+03:00 (Saturday)");
   });
 });

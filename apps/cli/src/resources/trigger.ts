@@ -37,7 +37,8 @@ const triggerFlags: FlagSpec[] = [
   {
     name: "at",
     value: "<time>",
-    description: "Fire once at this time (in the user's zone)",
+    description:
+      "Fire once at this time: ISO 8601 in the user's zone (2026-10-09T14:45), or a duration from now (2h)",
   },
   {
     name: "cron",
@@ -81,7 +82,11 @@ const triggerFlags: FlagSpec[] = [
     description: "Stop after firing this many times (1 for a one-shot)",
     integer: true,
   },
-  { name: "expires", value: "<time>", description: "Stop at this time" },
+  {
+    name: "expires",
+    value: "<time>",
+    description: "Stop at this time, written like --at",
+  },
   {
     name: "on-expire",
     value: "<text>",
@@ -237,11 +242,11 @@ const needId = (args: string[]) => {
 };
 
 const examples = [
-  'winston trigger create --at "fri 2:45pm" --note "Remind Nik to leave for the dentist (3:15)."',
+  'winston trigger create --at 2026-10-09T14:45 --note "Remind Nik to leave for the dentist (3:15)."',
   'winston trigger create --cron "0 8 * * 1-5" --note "Morning briefing: today\'s meetings and anything urgent in mail."',
   'winston trigger create --on mail.message.received --from acme.com --category primary --note "A client wrote: does it need a reply today? Tell Nik if so."',
   'winston trigger create --on calendar.event.starting --lead 10m --external --note "Brief Nik on who\'s in the meeting, from notes and recent mail."',
-  'winston trigger create --on mail.message.received --scope thr_91a --max-fires 1 --expires "fri 9am" --note "Dana replied about the lease; summarize for the user" --on-expire "Dana never replied; offer to draft a nudge"',
+  'winston trigger create --on mail.message.received --scope thr_91a --max-fires 1 --expires 2026-10-09T09:00 --note "Dana replied about the lease; summarize for the user" --on-expire "Dana never replied; offer to draft a nudge"',
 ];
 
 export const trigger: Resource = {
@@ -329,7 +334,7 @@ export const trigger: Resource = {
       flags: triggerFlags,
       examples: [
         'winston trigger update trg_01k5… --cron "0 7 * * 1-5"',
-        'winston trigger update trg_01k5… --expires "next fri 9am"',
+        "winston trigger update trg_01k5… --expires 2026-10-16T09:00",
       ],
       run: async (context) => {
         const { client, flags, args } = context;

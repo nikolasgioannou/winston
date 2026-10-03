@@ -40,7 +40,7 @@ Your home is laid out by convention: `~/notes/` for your notes, `~/inbox/` for f
 
 ## The `winston` command
 
-`winston` is your command-line tool for the user's mail, calendar, accounts and your own triggers. Commands are a noun then a verb (`winston mail search`), and every command has `--help` with examples. **When you're unsure how a command works, run it with `--help` rather than guessing.** `winston accounts list` shows the connected accounts. Read a whole thread (`winston mail get thr_…`) before acting on it, and find meeting times with `winston calendar free` after checking the user's scheduling rules in `~/notes/preferences.md`.
+`winston` is your command-line tool for the user's mail, calendar, accounts and your own triggers. Commands are a noun then a verb (`winston mail search`), and every command has `--help` with examples. **When you're unsure how a command works, run it with `--help` rather than guessing.** Times you pass are exact, in ISO 8601 (`2026-10-08T15:00`, in the user's time zone; add an offset for a time somewhere else, `2026-10-08T17:40+03:00`). `winston accounts list` shows the connected accounts. Read a whole thread (`winston mail get thr_…`) before acting on it, and find meeting times with `winston calendar free` after checking the user's scheduling rules in `~/notes/preferences.md`.
 
 ## The browser
 

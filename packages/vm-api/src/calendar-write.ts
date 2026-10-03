@@ -18,7 +18,7 @@ import { audited } from "@winston/db/audit";
 import type { DbOrTx } from "@winston/db/client";
 import { refFor, resolveRef } from "@winston/db/external-refs";
 import { connections, users } from "@winston/db/schema";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -156,7 +156,7 @@ export function calendarWriteRoutes({
     )[0]?.timeZone ?? "UTC";
 
   const when = (input: string, timeZone: string) =>
-    parseHumanTime(input, { timeZone, direction: "future" });
+    parseTimeFlag(input, { timeZone, direction: "future" });
 
   /** An event by its evt_ id, with its connection checked for `capability`. */
   async function eventFor(
@@ -374,7 +374,9 @@ export function calendarWriteRoutes({
           removeAttendees: input.removeAttendees,
           timeZone,
         };
-        // Moving the start keeps the length unless an end or duration says otherwise.
+        // Moving the start keeps the length unless an end or duration says
+        // otherwise, and says so: a 4–10pm event moved to 6:30 ends at 12:30.
+        let keptMinutes: number | null = null;
         if (
           input.start !== undefined ||
           input.end !== undefined ||
@@ -389,6 +391,10 @@ export function calendarWriteRoutes({
           const oldStart = startInstant(event, timeZone);
           const oldEnd = "at" in event.end ? event.end.at : oldStart;
           const start = input.start ? when(input.start, timeZone) : oldStart;
+          if (input.start && !input.end && input.duration === undefined)
+            keptMinutes = Math.round(
+              (oldEnd.getTime() - oldStart.getTime()) / 60_000,
+            );
           const end = input.end
             ? when(input.end, timeZone)
             : new Date(
@@ -424,6 +430,7 @@ export function calendarWriteRoutes({
             dryRun: true as const,
             scope: input.scope,
             notifies,
+            keptMinutes,
             event: {
               id,
               title: changes.title ?? event.title,
@@ -459,6 +466,7 @@ export function calendarWriteRoutes({
           dryRun: false as const,
           scope: input.scope,
           notifies,
+          keptMinutes,
           event: await dto(userId, connection, updated),
         });
       },

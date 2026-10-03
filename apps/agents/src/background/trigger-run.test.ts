@@ -88,7 +88,7 @@ describe("trigger runs", () => {
       expect(message).toContain("<conversation_tail>");
       expect(message).toContain("remind me about the lease &lt;soon&gt;");
       expect(message).toContain(
-        '<winston_message sent_at="2026-10-01T09:00:05-04:00">Will do.</winston_message>',
+        '<winston_message sent_at="2026-10-01T09:00:05-04:00 (Thursday)">Will do.</winston_message>',
       );
       expect(message.endsWith(notesReminder)).toBe(true);
       expect(await triggerOf(tx, trigger.id)).toMatchObject({

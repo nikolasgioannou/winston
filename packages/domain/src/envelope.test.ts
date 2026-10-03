@@ -25,7 +25,7 @@ describe("renderUserMessage", () => {
     expect(renderUserMessage(message("can you move my 3pm to tomorrow"), zone))
       .toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
         <text>can you move my 3pm to tomorrow</text>
       </system_event>"
     `);
@@ -53,8 +53,8 @@ describe("renderUserMessage", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
-        <forwarded_from kind="user" username="grace" sent_at="2026-09-26T13:00:00-07:00">Grace Hopper</forwarded_from>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
+        <forwarded_from kind="user" username="grace" sent_at="2026-09-26T13:00:00-07:00 (Saturday)">Grace Hopper</forwarded_from>
         <reply_to from="winston">Your 3pm is with Ada.</reply_to>
         <text>thoughts?</text>
       </system_event>"
@@ -73,7 +73,7 @@ describe("renderUserMessage", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
         <reply_to/>
         <text>yes</text>
       </system_event>"
@@ -118,7 +118,7 @@ describe("renderUserMessage", () => {
     );
     expect(photo).toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
         <attachment kind="photo" path="~/inbox/2026-09-26/photo-140312.jpg" type="image/jpeg" size="179 KB"/>
       </system_event>"
     `);
@@ -198,7 +198,7 @@ describe("voice notes", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
         <attachment kind="voice" path="~/inbox/2026-09-26/voice-140312.ogg" type="audio/ogg" size="23 KB"/>
         <source>voice</source>
         <text>remind me to call mum</text>
@@ -262,7 +262,7 @@ describe("renderEvent", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="mail.message.received">
-        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:03:12-07:00 (Saturday)</occurred_at>
         <subscription_note>Flag anything from clients that needs a reply today.</subscription_note>
         <data>{"from":"billing@example.com","subject":"Invoice"}</data>
       </system_event>"
@@ -304,12 +304,12 @@ describe("renderBatch", () => {
     ];
     expect(renderBatch(items, zone)).toMatchInlineSnapshot(`
       "<system_event type="user_message">
-        <sent_at>2026-09-26T14:03:12-07:00</sent_at>
+        <sent_at>2026-09-26T14:03:12-07:00 (Saturday)</sent_at>
         <text>hi</text>
       </system_event>
 
       <system_event type="calendar.event.starting">
-        <occurred_at>2026-09-26T14:05:00-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:05:00-07:00 (Saturday)</occurred_at>
         <data>{"title":"Standup"}</data>
       </system_event>"
     `);
@@ -435,7 +435,7 @@ describe("renderTaskResult", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="task.completed">
-        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:03:12-07:00 (Saturday)</occurred_at>
         <task id="task_01abc">Compare the three lease offers and report the cheapest.</task>
         <report>Northside at $2,350/month is cheapest. &lt;draft drf_01x&gt;</report>
       </system_event>"
@@ -456,7 +456,7 @@ describe("renderTaskResult", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="task.completed">
-        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:03:12-07:00 (Saturday)</occurred_at>
         <task id="task_01abc" capped="true">Compare the three lease offers and report the cheapest.</task>
         <report>Got two of three quotes.</report>
       </system_event>"
@@ -476,7 +476,7 @@ describe("renderTaskResult", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="task.failed">
-        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:03:12-07:00 (Saturday)</occurred_at>
         <task id="task_01abc">Compare the three lease offers and report the cheapest.</task>
         <error>The task failed: upstream 503</error>
       </system_event>"
@@ -499,7 +499,7 @@ describe("renderTaskResult", () => {
       ),
     ).toMatchInlineSnapshot(`
       "<system_event type="task.needs_user">
-        <occurred_at>2026-09-26T14:03:12-07:00</occurred_at>
+        <occurred_at>2026-09-26T14:03:12-07:00 (Saturday)</occurred_at>
         <task id="task_01abc">Book a table for four at Lilia on Friday.</task>
         <reason>Sign in to OpenTable; it wants a code sent to your phone.</reason>
       </system_event>"

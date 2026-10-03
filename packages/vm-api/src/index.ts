@@ -42,6 +42,7 @@ export function createVmApi({
   vmFiles,
   browser,
   jev,
+  now,
 }: {
   db: DbOrTx;
   runTokenSecret: string;
@@ -53,6 +54,8 @@ export function createVmApi({
   connectors?: ConnectorDeps;
   /** The browser's fast decision model (§5); absent without an OpenRouter key. */
   jev?: Jev | undefined;
+  /** The clock, for tests. */
+  now?: () => Date;
 }) {
   const app = new Hono<VmApiEnv>();
 
@@ -146,7 +149,10 @@ export function createVmApi({
     .route("/v1/accounts", accountRoutes({ db, connectors }))
     .route("/v1/mail", mailRoutes({ db, connectors, vmFiles }))
     .route("/v1/mail", mailWriteRoutes({ db, connectors, vmFiles }))
-    .route("/v1/calendar", calendarRoutes({ db, connectors }))
+    .route(
+      "/v1/calendar",
+      calendarRoutes({ db, connectors, ...(now ? { now } : {}) }),
+    )
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
     .route("/v1/tasks", taskRoutes({ db, browser }))
     .route("/v1/events", eventRoutes())

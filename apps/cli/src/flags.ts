@@ -39,9 +39,15 @@ export const standardFlags = {
   since: {
     name: "since",
     value: "<time>",
-    description: "From this time (ISO-8601 or relative: 2h, 3d, today)",
+    description:
+      "From this time: ISO 8601 in the user's zone (2026-10-08 or 2026-10-08T15:00), or a duration back from now (2h, 3d)",
   },
-  until: { name: "until", value: "<time>", description: "Up to this time" },
+  until: {
+    name: "until",
+    value: "<time>",
+    description:
+      "Up to this time: ISO 8601 in the user's zone, or a duration from now",
+  },
   json: { name: "json", description: "Machine-readable JSON instead of text" },
   dryRun: {
     name: "dry-run",

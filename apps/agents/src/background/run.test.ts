@@ -120,7 +120,7 @@ describe("background runs", () => {
       });
       const [first] = await messagesOf(tx, runId);
       expect(first?.content).toMatch(
-        /^<task started_at="\d{4}-\d\d-\d\dT[\d:]+[-+]\d\d:\d\d">\nFind the lease/,
+        /^<task started_at="\d{4}-\d\d-\d\dT[\d:]+[-+]\d\d:\d\d \([A-Z][a-z]+day\)">\nFind the lease/,
       );
       const queued = await tx
         .select()

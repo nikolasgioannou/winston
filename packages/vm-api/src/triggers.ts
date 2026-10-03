@@ -20,7 +20,7 @@ import {
   type FilterField,
 } from "@winston/domain/events";
 import { cronProblem, nextFireAt } from "@winston/domain/triggers";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -85,7 +85,7 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
 
   /** A time flag, resolved ahead in the user's zone; it must be in the future. */
   const future = (flag: string, input: string, timeZone: string) => {
-    const date = parseHumanTime(input, { timeZone, direction: "future" });
+    const date = parseTimeFlag(input, { timeZone, direction: "future" });
     if (date <= new Date()) throw invalid(`--${flag} ${input} is in the past.`);
     return date;
   };

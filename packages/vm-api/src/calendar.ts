@@ -19,7 +19,7 @@ import { isExternal } from "@winston/connectors/google-calendar";
 import type { DbOrTx } from "@winston/db/client";
 import { refsFor, resolveRef } from "@winston/db/external-refs";
 import { connections, users } from "@winston/db/schema";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -108,9 +108,12 @@ const minuteOf = (text: string) => {
 export function calendarRoutes({
   db,
   connectors,
+  now = () => new Date(),
 }: {
   db: DbOrTx;
   connectors: ConnectorDeps | undefined;
+  /** The clock, for tests: free time never starts before it. */
+  now?: () => Date;
 }) {
   const need = () => {
     const calendar = connectors?.calendar;
@@ -135,7 +138,7 @@ export function calendarRoutes({
   ) =>
     input === undefined
       ? fallback
-      : parseHumanTime(input, { timeZone, direction: "future" });
+      : parseTimeFlag(input, { timeZone, direction: "future" });
 
   /** CLI ids for events and their series, and the DTOs. */
   async function dtos(
@@ -278,7 +281,10 @@ export function calendarRoutes({
         query.account,
       );
       const timeZone = await timeZoneOf(userId);
-      const since = resolveTime(query.since, timeZone, new Date());
+      // Free time is only ever ahead: "since today" starts now, not at midnight.
+      const current = now();
+      const asked = resolveTime(query.since, timeZone, current);
+      const since = asked < current ? current : asked;
       const until = resolveTime(
         query.until,
         timeZone,

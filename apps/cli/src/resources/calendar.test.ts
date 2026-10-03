@@ -103,9 +103,9 @@ describe("winston calendar", () => {
         "calendar",
         "list",
         "--since",
-        "today",
+        "2026-10-01",
         "--until",
-        "tomorrow 11:59pm",
+        "2026-10-02",
         "--external",
       ],
       () => Response.json(page),
@@ -122,8 +122,8 @@ describe("winston calendar", () => {
     const url = new URL(requests[0]?.url ?? "");
     expect(url.pathname).toBe("/v1/calendar/events");
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      since: "today",
-      until: "tomorrow 11:59pm",
+      since: "2026-10-01",
+      until: "2026-10-02",
       external: "true",
     });
   });
@@ -185,7 +185,7 @@ describe("winston calendar", () => {
         "--duration",
         "1h30m",
         "--since",
-        "next mon",
+        "2026-10-05",
       ],
       () => Response.json(free),
     );
@@ -284,7 +284,7 @@ describe("winston calendar", () => {
         "update",
         "evt_01sync",
         "--start",
-        "thu 3pm",
+        "2026-10-01T15:00",
         "--scope",
         "following",
         "--notify",
@@ -296,6 +296,7 @@ describe("winston calendar", () => {
           dryRun: false,
           scope: "following",
           notifies: ["dana@other.com", "sam@example.com"],
+          keptMinutes: 30,
           event: {
             id: "evt_01new",
             title: "Sync with Dana",
@@ -311,7 +312,7 @@ describe("winston calendar", () => {
     );
     expect(requests[0]?.method).toBe("PATCH");
     expect(await bodyOf(requests[0])).toEqual({
-      start: "thu 3pm",
+      start: "2026-10-01T15:00",
       addAttendees: [],
       removeAttendees: [],
       scope: "following",
@@ -321,6 +322,7 @@ describe("winston calendar", () => {
     expect(out).toBe(
       [
         'Changed evt_01new (this and following): "Sync with Dana"  Thu 10-01 15:00–15:30 -04:00',
+        "It kept its 30m length; pass --end or --duration to change that.",
         "attendees: dana@other.com",
         "Emailed: dana@other.com, sam@example.com",
       ].join("\n"),

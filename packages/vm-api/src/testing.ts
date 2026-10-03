@@ -305,7 +305,7 @@ export function fakeCalendar() {
 export function setupApi(
   tx: DbOrTx,
   vmFileContents: Record<string, string> = {},
-  extra: { jev?: Jev } = {},
+  extra: { jev?: Jev; now?: () => Date } = {},
 ) {
   const mail = fakeMail();
   const calendar = fakeCalendar();
@@ -314,6 +314,8 @@ export function setupApi(
     db: tx,
     runTokenSecret: testSecret,
     jev: extra.jev,
+    // Fixtures are dated late September 2026: free time is looked for from here.
+    now: extra.now ?? (() => new Date("2026-09-28T12:00:00Z")),
     connectors: {
       webPublicUrl: "https://runwinston.com",
       mail: () => mail.provider,

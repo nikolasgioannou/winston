@@ -1,13 +1,13 @@
 ---
 id: "e19be9"
 title: Take times as ISO 8601 and show the weekday
-status: backlog
+status: done
 priority: none
 labels:
   - backend
   - cli
 created_at: 2026-10-03T17:26:02.777Z
-updated_at: 2026-10-03T17:26:02.777Z
+updated_at: 2026-10-03T18:12:32.390Z
 ---
 
 From the production trace review (5c3cdf, 2026-10-03). Three kinds of friction showed up whenever Winston passed a time to the CLI:
@@ -43,3 +43,12 @@ Callers of `parseHumanTime`: `packages/vm-api/src/mail.ts`, `calendar.ts`, `cale
 Docs: §11 (the `--since`/`--until` convention and the human-time "As built"), the envelope examples in §4, and a decision-log entry recording that the grammar was dropped and why.
 
 Tests: each accepted form (date, date-time, offset, `Z`, `now`, durations in both directions); removed phrases rejected with the helpful error; skipped and repeated DST times rejected; the weekday in envelopes; `calendar free` clamped to now; the kept-length notice; CLI help examples parse.
+
+## As built
+
+- `@winston/shared/human-time` became `@winston/shared/time-flag` (`parseTimeFlag`). It takes ISO 8601 (date = start of day in the user's zone; no offset = the user's zone; offset or `Z` = that moment), `now`, and durations (`30m`, `2h`, `3d`, `1w`) in the flag's direction. The phrase grammar, the "in …"/"… ago" forms and either-order combinations are gone. Errors show the accepted forms, including the offset example. DST skip/repeat rejection stays. All six vm-api callers moved over.
+- Envelope times read `2026-10-02T18:12:44-04:00 (Friday)` (`formatEnvelopeTime` in `@winston/shared/time`), used for every envelope time plus a task's `started_at` and a trigger's tail (`<winston_message sent_at>`). The CLI's own output, mail headers and file names keep the plain format.
+- Every time flag's `--help` says how to write a time elsewhere. Examples were rewritten in ISO, and a CLI test checks that each example's times parse; it caught one missed `"tue 10am"`. CLI tests no longer use phrases.
+- `calendar free` clamps its start to now (the calendar routes take an injectable clock for tests). `calendar update` returns `keptMinutes` when `--start` moved alone, and the CLI prints "It kept its 30m length; pass --end or --duration to change that."
+- Prompts: the front of house's time line and a sentence in the background prompt now teach ISO with an offset for elsewhere.
+- Docs: §4 (envelope times), §11 (the convention and the time-flag "As built"), decision #73.

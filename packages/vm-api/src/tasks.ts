@@ -12,7 +12,7 @@ import {
   latestHandoff,
 } from "@winston/db/handoffs";
 import { cancelTask, resumeTask } from "@winston/db/tasks";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, desc, eq, gte, inArray, lt, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -140,7 +140,7 @@ export function taskRoutes({
           conditions.push(
             gte(
               runs.createdAt,
-              parseHumanTime(query.since, { timeZone, direction: "past" }),
+              parseTimeFlag(query.since, { timeZone, direction: "past" }),
             ),
           );
         // Task ids are TypeIDs (UUIDv7), so they sort by creation time; the

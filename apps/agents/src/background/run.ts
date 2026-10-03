@@ -23,7 +23,7 @@ import {
 } from "@winston/db/tasks";
 import { promptVersion, systemPrompts } from "@winston/prompts";
 import type { Logger } from "@winston/shared/logger";
-import { formatInTimeZone } from "@winston/shared/time";
+import { formatEnvelopeTime } from "@winston/shared/time";
 import {
   APICallError,
   isStepCount,
@@ -197,7 +197,7 @@ export async function startBackgroundRun(
       triggerId: options.triggerId,
       parentRunId: options.parentRunId,
     });
-    const startedAt = formatInTimeZone(new Date(), user.timeZone);
+    const startedAt = formatEnvelopeTime(new Date(), user.timeZone);
     const message: ModelMessage = {
       role: "user",
       content: options.message

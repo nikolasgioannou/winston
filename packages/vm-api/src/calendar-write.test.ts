@@ -128,6 +128,8 @@ describe("calendar writes", () => {
         }),
       );
       expect(moved.notifies).toEqual(["dana@other.com", "sam@other.com"]);
+      // Moved without an end: it says the 30-minute length was kept.
+      expect(moved.keptMinutes).toBe(30);
       expect(calendar.updated[0]).toMatchObject({
         id: "me@example.com/e1",
         scope: "following",
@@ -139,10 +141,13 @@ describe("calendar writes", () => {
         },
       });
 
-      await call(`/v1/calendar/events/${id}`, {
-        method: "PATCH",
-        body: { title: "Renamed", notify: false },
-      });
+      const renamed = await json(
+        await call(`/v1/calendar/events/${id}`, {
+          method: "PATCH",
+          body: { title: "Renamed", notify: false },
+        }),
+      );
+      expect(renamed.keptMinutes).toBeNull();
       expect(calendar.updated[1]).toMatchObject({
         notify: false,
         scope: "this",

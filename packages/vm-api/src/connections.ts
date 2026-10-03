@@ -25,7 +25,7 @@ import {
   ProviderUnavailableError,
 } from "@winston/connectors/errors";
 import type { MailProvider } from "@winston/connectors/mail";
-import { TimeParseError } from "@winston/shared/human-time";
+import { TimeParseError } from "@winston/shared/time-flag";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 export type ConnectionRow = typeof connections.$inferSelect;

@@ -22,7 +22,7 @@ import {
   expire,
   type TriggerLifecycle,
 } from "@winston/domain/triggers";
-import { formatInTimeZone } from "@winston/shared/time";
+import { formatEnvelopeTime } from "@winston/shared/time";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { toEnvelopeItems } from "@winston/db/envelopes";
 import { startBackgroundRun } from "./run.ts";
@@ -72,7 +72,7 @@ export async function conversationTail(
     })),
     ...sent.map((message) => ({
       at: message.sentAt,
-      xml: `<winston_message sent_at="${formatInTimeZone(message.sentAt, timeZone)}">${escape(message.text)}</winston_message>`,
+      xml: `<winston_message sent_at="${formatEnvelopeTime(message.sentAt, timeZone)}">${escape(message.text)}</winston_message>`,
     })),
   ]
     .sort((a, b) => a.at.getTime() - b.at.getTime())

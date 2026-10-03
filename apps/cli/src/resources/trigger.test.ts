@@ -104,8 +104,9 @@ describe("winston trigger", () => {
       note: "Brief Nik on who's coming.",
       lead: 90,
     });
-    const noNote = await cli(["trigger", "create", "--at", "fri 9am"], () =>
-      Response.json({}),
+    const noNote = await cli(
+      ["trigger", "create", "--at", "2026-10-09T09:00"],
+      () => Response.json({}),
     );
     expect(noNote.code).toBe(1);
     expect(noNote.requests).toHaveLength(0);

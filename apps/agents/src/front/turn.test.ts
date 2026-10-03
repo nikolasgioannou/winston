@@ -571,7 +571,7 @@ describe("runFrontTurn", () => {
           '<system_event type=\\"telegram.reaction.added\\">',
         );
         expect(sent).toContain(
-          "<occurred_at>2026-09-27T12:00:00-04:00</occurred_at>",
+          "<occurred_at>2026-09-27T12:00:00-04:00 (Sunday)</occurred_at>",
         );
         expect(sent).toContain('\\"emoji\\":\\"👍\\"');
         expect(sent).toContain("Your 3pm moved to 4.");
@@ -994,7 +994,7 @@ describe("runFrontTurn", () => {
         "<text>move my 3pm</text>",
       );
       expect(JSON.stringify(rows[0]?.content)).toContain(
-        "<sent_at>2026-09-27T12:00:00-04:00</sent_at>",
+        "<sent_at>2026-09-27T12:00:00-04:00 (Sunday)</sent_at>",
       );
     });
   });

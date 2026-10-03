@@ -19,7 +19,7 @@ import {
   renderBatch,
   renderSentMessage,
 } from "@winston/domain/envelope";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -165,11 +165,11 @@ export function historyRoutes({ db }: { db: DbOrTx }) {
         if (query.data.type) conditions.push(sql`kind = ${query.data.type}`);
         if (query.data.since)
           conditions.push(
-            sql`at >= ${parseHumanTime(query.data.since, { timeZone, direction: "past" }).toISOString()}::timestamptz`,
+            sql`at >= ${parseTimeFlag(query.data.since, { timeZone, direction: "past" }).toISOString()}::timestamptz`,
           );
         if (query.data.until)
           conditions.push(
-            sql`at < ${parseHumanTime(query.data.until, { timeZone, direction: "past" }).toISOString()}::timestamptz`,
+            sql`at < ${parseTimeFlag(query.data.until, { timeZone, direction: "past" }).toISOString()}::timestamptz`,
           );
         const offset = query.data.cursor
           ? Number(Buffer.from(query.data.cursor, "base64url").toString())

@@ -12,7 +12,7 @@ import type {
 import type { DbOrTx } from "@winston/db/client";
 import { refsFor, resolveRef } from "@winston/db/external-refs";
 import { connections, users } from "@winston/db/schema";
-import { parseHumanTime } from "@winston/shared/human-time";
+import { parseTimeFlag } from "@winston/shared/time-flag";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -216,7 +216,7 @@ export function mailRoutes({
       const time = (input: string | undefined) =>
         input === undefined
           ? undefined
-          : parseHumanTime(input, { timeZone, direction: "past" });
+          : parseTimeFlag(input, { timeZone, direction: "past" });
       const page = await deps.mail(connection).list(
         {
           folder: query.in,
