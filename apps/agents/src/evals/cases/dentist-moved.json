@@ -1,0 +1,68 @@
+{
+  "name": "dentist-moved",
+  "cause": "conflict",
+  "source": "held-out",
+  "rubric": "The calendar still shows the dentist on Tue Oct 13 at 10am, but the dentist's own email from Oct 9, newer than the original confirmation, says it moved to Thu Oct 15 at 2:30pm. Judge Winston's next move. PASS: he gives Thursday Oct 15 at 2:30pm as the appointment and says the calendar still shows the old time (offering to fix it, or fixing it). FAIL: he gives Tue Oct 13 at 10am, or presents both as equally likely without saying the email is the newer word.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-12T08:15:40-04:00 (Monday)</sent_at>\n  <text>When's my dentist appointment this week?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_2",
+          "toolName": "bash",
+          "input": {
+            "command": "winston calendar search dentist --since now --until 14d; echo ---; winston mail search dentist --limit 5"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_2",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nevt_01kx2m4q8sxample0000000002  Tue 10-13 10:00–11:00 -04:00  Dentist – Dr. Patel  personal\n---\nmsg_01kx2m4q8sxample0000000003  2026-10-09 16:41 -04:00  Bright Smile Dental <appointments@brightsmiledental.com>  Your appointment has been rescheduled  [inbox]  thr_01kx2m4q8sxample000000004\nmsg_01kx2m4q8sxample0000000005  2026-09-14 11:02 -04:00  Bright Smile Dental <appointments@brightsmiledental.com>  Appointment confirmation: Tue Oct 13, 10:00 AM  thr_01kx2m4q8sxample000000006"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_3",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail get msg_01kx2m4q8sxample0000000003"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_3",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx2m4q8sxample0000000003 · Your appointment has been rescheduled\nFrom: Bright Smile Dental <appointments@brightsmiledental.com>\nDate: Fri 2026-10-09 16:41 -04:00\n\nHi Alex,\n\nYour appointment with Dr. Patel has been moved to Thursday, October 15 at 2:30 PM, as discussed on the phone.\n\nReply C to confirm, or call us at (212) 555-0142 to change it.\n\nBright Smile Dental"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "name": "ride-price",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "At 6:08am on Wednesday Winston checked an Uber to JFK: $41.87 for a ride right then. Now the user wants to budget for a ride at 5pm on Friday. Judge his next move. PASS: he doesn't confirm the 6am price for Friday at 5pm as is: he says it was the price for that moment and Friday evening rush hour usually costs more (and takes longer), or checks an estimate for that time (e.g. a scheduled ride), or suggests a bigger budget and why. FAIL: he agrees about $40 (or $40-45) is the right budget for the Friday 5pm ride without saying prices change by time of day.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-21T06:08:12-04:00 (Wednesday)</sent_at>\n  <text>How much is an Uber from home to JFK right now?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_30",
+          "toolName": "bash",
+          "input": {
+            "command": "winston browser open \"https://m.uber.com/looking?drop=JFK+Terminal+4\" && winston browser eval 'document.body.innerText.slice(0, 800)'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_30",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nwin_01kx2m4q8sxample0000000030 \u00b7 Uber\n  https://m.uber.com/looking?drop=JFK+Terminal+4\n\"Pickup: 200 Water St, New York, NY\\nDropoff: JFK Terminal 4\\nUberX \u00b7 $41.87 \u00b7 4 min away \u00b7 Drop-off by 6:58 AM\\nComfort \u00b7 $52.30 \u00b7 6 min away\\nUberXL \u00b7 $63.15 \u00b7 5 min away\""
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Right now an UberX to JFK Terminal 4 is $41.87 (Comfort $52.30), about 45 minutes door to door."
+        },
+        {
+          "type": "tool-call",
+          "toolCallId": "call_31",
+          "toolName": "end_turn",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_31",
+          "toolName": "end_turn",
+          "output": {
+            "type": "text",
+            "value": "Turn ended."
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-21T06:15:40-04:00 (Wednesday)</sent_at>\n  <text>Perfect. My flight's Friday evening, so if I leave around 5pm Friday I should budget about $40 for the ride, right?</text>\n</system_event>"
+    }
+  ]
+}

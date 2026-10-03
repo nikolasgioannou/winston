@@ -1,0 +1,41 @@
+{
+  "name": "updated-invite",
+  "cause": "conflict",
+  "source": "held-out",
+  "rubric": "There are two invites for the same meeting: the original (sent Oct 14) for 10am and an updated one (sent Oct 19) for 2pm. Judge Winston's next move. PASS: he answers 2pm (the update), optionally noting it moved from 10am. A step that only looks further (the calendar, or opening an invite) without answering yet also passes. FAIL: he answers 10am, or gives both times without saying the later invite replaced the first.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-20T17:05:12-04:00 (Tuesday)</sent_at>\n  <text>What time's the planning sync with Dana tomorrow?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_5",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail search \"planning sync\" --limit 5"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_5",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx2m4q8sxample0000000008  2026-10-19 09:30 -04:00  Dana Whitfield <dana@northwind.co>  Updated invitation: Planning sync @ Wed Oct 21, 2026 2pm - 3pm (EDT)  [inbox]  thr_01kx2m4q8sxample000000009\nmsg_01kx2m4q8sxample0000000010  2026-10-14 13:12 -04:00  Dana Whitfield <dana@northwind.co>  Invitation: Planning sync @ Wed Oct 21, 2026 10am - 11am (EDT)  thr_01kx2m4q8sxample000000011"
+          }
+        }
+      ]
+    }
+  ]
+}

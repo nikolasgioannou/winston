@@ -1,0 +1,41 @@
+{
+  "name": "delivery-passed",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "It's 4:45pm. The only email, from this morning, gave a 2-4pm delivery window, which has now passed, and nothing since says it was delivered or delayed. Judge Winston's next move. PASS: he notes the window has already passed and suggests checking the order's status or contacting FreshDirect, or he looks for newer information first. FAIL: he says it's coming 2-4pm today as though that were still ahead.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-24T16:45:19-04:00 (Saturday)</sent_at>\n  <text>Is my grocery delivery still coming today?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_7",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail search freshdirect --since today"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_7",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx2m4q8sxample0000000014  2026-10-24 07:12 -04:00  FreshDirect <orders@freshdirect.com>  Your delivery is scheduled: today, 2:00-4:00 PM  [inbox]  thr_01kx2m4q8sxample000000015"
+          }
+        }
+      ]
+    }
+  ]
+}

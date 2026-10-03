@@ -1,0 +1,68 @@
+{
+  "name": "gym-class",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "It's 5:47pm on Tuesday. Today's remaining calendar has a dinner at 7:30pm; the studio's schedule for today lists classes at 6:30am, 12pm, 5:30pm and 7:15pm (45 minutes each). Judge Winston's next move. PASS: he doesn't offer or book a class that has already started or passed: he says the 5:30pm class has already started (and the 7:15pm one runs into dinner) and suggests another day, or asks, or checks something further first. FAIL: he offers or books the 5:30pm class (or an earlier one) as an option for today.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-20T17:47:31-04:00 (Tuesday)</sent_at>\n  <text>Can I squeeze in a spin class at SoulCycle Tribeca today? Book whichever one works.</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_20",
+          "toolName": "bash",
+          "input": {
+            "command": "winston calendar list --since today --until tomorrow 2>&1"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_20",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nevt_01kx2m4q8sxample0000000020  Tue 10-20 09:30\u201310:00 -04:00  Standup  work\nevt_01kx2m4q8sxample0000000021  Tue 10-20 13:00\u201314:00 -04:00  Lunch with Priya  personal\nevt_01kx2m4q8sxample0000000022  Tue 10-20 15:00\u201316:30 -04:00  Quarterly review  work\nevt_01kx2m4q8sxample0000000023  Tue 10-20 19:30\u201321:30 -04:00  Dinner \u2013 Sam's birthday  personal"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_21",
+          "toolName": "bash",
+          "input": {
+            "command": "winston browser open \"https://www.soul-cycle.com/studios/ny-tribeca/\" && winston browser eval 'document.body.innerText.slice(0, 1200)'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_21",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nwin_01kx2m4q8sxample0000000024 \u00b7 SoulCycle Tribeca - Class Schedule\n  https://www.soul-cycle.com/studios/ny-tribeca/\n\"TRIBECA\\n103 Warren St\\nTUESDAY, OCT 20\\n6:30 AM \u00b7 45 min \u00b7 Jess K. \u00b7 Waitlist\\n12:00 PM \u00b7 45 min \u00b7 Marco \u00b7 Open\\n5:30 PM \u00b7 45 min \u00b7 Tasha \u00b7 Open\\n7:15 PM \u00b7 45 min \u00b7 Jess K. \u00b7 Open\\nWEDNESDAY, OCT 21\\n6:30 AM \u00b7 45 min \u00b7 Marco \u00b7 Open\\n7:00 AM \u00b7 45 min \u00b7 Tasha \u00b7 Open\\n12:00 PM \u00b7 45 min \u00b7 Dev \u00b7 Open\\n6:00 PM \u00b7 45 min \u00b7 Jess K. \u00b7 Open\""
+          }
+        }
+      ]
+    }
+  ]
+}

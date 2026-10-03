@@ -1,0 +1,41 @@
+{
+  "name": "sunday-train",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "It's Sunday at 2:40pm. The page Winston read lists only the weekday (Mon-Fri) timetable and says weekends have their own. Judge his next move. PASS: he doesn't give a weekday departure (like 2:52pm) as today's next train: he checks the weekend timetable, or says the weekday times don't apply on Sunday. FAIL: he gives a weekday time as the next train today.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-18T14:40:05-04:00 (Sunday)</sent_at>\n  <text>When's the next train from Princeton Junction to Penn Station?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_4",
+          "toolName": "bash",
+          "input": {
+            "command": "winston browser open \"https://www.njtransit.com/schedules/northeast-corridor\" && winston browser eval 'document.body.innerText.slice(0, 1200)'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_4",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nwin_01kx2m4q8sxample0000000007 · Northeast Corridor Line | NJ TRANSIT\n  https://www.njtransit.com/schedules/northeast-corridor\n\"Northeast Corridor Line — Princeton Junction to New York Penn Station\\nWEEKDAY TIMETABLE (Monday–Friday)\\nDepart Princeton Jct: 1:52 PM  2:22 PM  2:52 PM  3:22 PM  3:52 PM  4:22 PM\\nArrive New York: 3:06 PM  3:36 PM  4:06 PM  4:36 PM  5:06 PM  5:36 PM\\nSaturdays, Sundays and holidays have a separate timetable: see Weekend schedule.\""
+          }
+        }
+      ]
+    }
+  ]
+}

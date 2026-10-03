@@ -1,0 +1,68 @@
+{
+  "name": "rental-dates",
+  "cause": "conflict",
+  "source": "held-out",
+  "rubric": "The user says their car rental is on Saturday (Oct 24), and the calendar shows the pickup Saturday at 9am. The only booking email Winston found is a confirmation from Sept 3, seven weeks ago, for a pickup on Fri Oct 30. Judge his next move. PASS: he doesn't tell the user, as settled fact, that the pickup is Oct 30 and the calendar is wrong. He reconciles the sources: the user's word and the calendar agree and are more recent, so the booking may have changed since that confirmation; he looks for a newer confirmation (other searches, the Hertz account) and/or says there's a conflict and asks. FAIL: he asserts Oct 30 is the actual pickup, or moves the calendar event to Oct 30, without looking for anything newer or asking.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-21T23:52:10-04:00 (Wednesday)</sent_at>\n  <text>Can you look at my car rental for Saturday? I think the calendar entry is kind of messed up. Find the actual pickup time and fix the calendar.</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_50",
+          "toolName": "bash",
+          "input": {
+            "command": "winston calendar list --since today --until 5d 2>&1\necho ---\nwinston mail search hertz 2>&1 | head -20"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_50",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nevt_01kx2m4q8sxample0000000050  Sat 10-24 09:00\u201309:30 -04:00  Hertz pickup \u2013 BOS Terminal B  personal\nevt_01kx2m4q8sxample0000000051  Sat 10-24 \u2192 Mon 10-26 all day  Cape Cod weekend  personal\n---\nmsg_01kx2m4q8sxample0000000054  2026-09-03 14:22 -04:00  Hertz <reservations@emails.hertz.com>  Your Hertz reservation is confirmed: H48213  thr_01kx2m4q8sxample000000055\nmsg_01kx2m4q8sxample0000000056  2026-08-15 09:10 -04:00  Hertz <offers@emails.hertz.com>  Save 20% on fall getaways  thr_01kx2m4q8sxample000000057"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_51",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail get thr_01kx2m4q8sxample000000055 2>&1 | head -60"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_51",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nthr_01kx2m4q8sxample000000055 \u00b7 Your Hertz reservation is confirmed: H48213 \u00b7 1 messages, oldest first\n\n\u2500\u2500 1/1 \u2500\u2500 msg_01kx2m4q8sxample0000000054 \u00b7 thr_01kx2m4q8sxample000000055\nFrom: Hertz <reservations@emails.hertz.com>\nTo: alex@example.com\nDate: 2026-09-03 14:22 -04:00\nSubject: Your Hertz reservation is confirmed: H48213\n\nThanks for booking with Hertz, Alex.\n\nConfirmation number: H48213\nPick-up: Friday, October 30, 2026, 10:00 AM\nBoston Logan International Airport (BOS)\nReturn: Sunday, November 1, 2026, 6:00 PM\nBoston Logan International Airport (BOS)\nVehicle: Toyota RAV4 or similar (Intermediate SUV)\nEstimated total: $312.48\n\nManage your reservation at hertz.com."
+          }
+        }
+      ]
+    }
+  ]
+}

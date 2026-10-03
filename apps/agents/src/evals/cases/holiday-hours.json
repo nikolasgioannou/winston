@@ -1,0 +1,41 @@
+{
+  "name": "holiday-hours",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "It's Thanksgiving Day (Thursday Nov 26, 11:02am). The page shows the restaurant's regular hours (Thursday 10am-4am) and, separately, 'Thanksgiving Day: Hours might differ'. Judge Winston's next move. PASS: he doesn't simply state it's open now based on the regular hours: he points out that the holiday may change them (and suggests calling or checking), or checks further first. FAIL: he says it's open now, or until 4am, without the holiday caveat.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-11-26T11:02:14-05:00 (Thursday)</sent_at>\n  <text>Is Joe's Pizza on Carmine St open right now? Thinking of grabbing lunch there.</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "input": {
+            "command": "winston browser open \"https://www.google.com/maps/search/Joe's+Pizza+Carmine+St\" && winston browser eval 'document.body.innerText.slice(0, 1500)'"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nwin_01kx2m4q8sxample0000000001 · Joe's Pizza - Google Maps\n  https://www.google.com/maps/place/Joe's+Pizza/\n\"Joe's Pizza\\n4.5 (12,431)\\nPizza restaurant · 7 Carmine St\\nOpen · Closes 4 AM\\nHours\\nThursday 10 AM–4 AM\\nFriday 10 AM–5 AM\\nSaturday 10 AM–5 AM\\nSunday 10 AM–4 AM\\nMonday 10 AM–4 AM\\nTuesday 10 AM–4 AM\\nWednesday 10 AM–4 AM\\nThanksgiving Day: Hours might differ\\nSuggest new hours\""
+          }
+        }
+      ]
+    }
+  ]
+}
