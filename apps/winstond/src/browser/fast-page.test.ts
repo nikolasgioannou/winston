@@ -25,6 +25,7 @@ const observed = {
   guards: { "1": ["g"] },
   omitted_actions: 0,
   frames: 0,
+  viewport: { width: 1280, height: 800 },
 };
 
 /** Chrome standing in: answers the read, records every call. */
@@ -68,7 +69,7 @@ describe("autopilot's page reader", () => {
     expect(reads).toHaveLength(1);
     // Never the page's own world, where its scripts could see ours.
     expect(reads[0]?.params.contextId).toBe(77);
-    expect(reads[0]?.params.expression).toBe(readState);
+    expect(reads[0]?.params.expression).toBe(readState());
     expect(page.fingerprint).toBe(fingerprint(page));
   });
 

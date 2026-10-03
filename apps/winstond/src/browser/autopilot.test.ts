@@ -66,6 +66,8 @@ function page(overrides: Partial<FastPage> = {}): FastPage {
     guards: {},
     omitted_actions: 0,
     frames: 0,
+    framed: [],
+    viewport: { width: 1280, height: 800 },
     ...overrides,
   };
   return { ...state, fingerprint: fingerprint(state) };

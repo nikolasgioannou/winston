@@ -197,7 +197,7 @@ describe("autopilot's page reader in Chrome", () => {
       const field = page.actions.find((a) => a.kind === "fill");
       if (!field) throw new Error("no field");
       await reader.act(entry(), page, field, "Generated");
-      await reader.settle(entry(), field);
+      await reader.settle(entry(), page, field);
       page = await reader.observe(entry());
       expect(await inPage("document.querySelector('#query').value")).toBe(
         "Generated",
@@ -258,5 +258,100 @@ describe("autopilot's page reader in Chrome", () => {
       expect(await inPage("window.closedClicks")).toBe(1);
     },
     30_000,
+  );
+});
+
+describe("autopilot's page reader in frames", () => {
+  run(
+    "controls in a same-site and a cross-site frame are read, clicked, filled and selected where they are",
+    async () => {
+      // Two sites from one server: 127.0.0.1 hosts the page and a same-site
+      // frame; localhost is another site, so its frame gets its own renderer.
+      const server = Bun.serve({
+        port: 0,
+        hostname: "127.0.0.1",
+        fetch: (request) => {
+          const page = (body: string) =>
+            new Response(`<!doctype html>${body}`, {
+              headers: { "Content-Type": "text/html" },
+            });
+          const { pathname, port } = new URL(request.url);
+          if (pathname === "/inner")
+            return page(
+              `<title>Inner</title><button onclick="document.body.dataset.clicked='yes'">Inner button</button><label>Name<input id="name"></label>`,
+            );
+          if (pathname === "/widget")
+            return page(
+              `<title>Widget</title><style>body{margin:8px}</style><label>Party size<select id="size"><option>2</option><option>4</option></select></label><label>Notes<input id="notes"></label><button onclick="document.querySelector('#out').textContent='Booked for '+document.querySelector('#size').value+': '+document.querySelector('#notes').value">Find a table</button><p id="out"></p>`,
+            );
+          return page(
+            `<title>Host</title><style>body{margin:20px}iframe{display:block;margin:10px 0 0 30px}</style><button onclick="window.topClicks=(window.topClicks||0)+1">Top button</button><iframe id="same" src="/inner" style="width:420px;height:160px;border:0"></iframe><iframe id="cross" src="http://localhost:${port}/widget" style="width:420px;height:200px;border:6px solid #333;padding:4px"></iframe>`,
+          );
+        },
+      });
+      try {
+        await browser.open(token, `http://127.0.0.1:${String(server.port)}/`);
+        let page = await reader.observe(entry());
+        for (let i = 0; i < 50 && page.framed.length < 2; i += 1) {
+          await Bun.sleep(100);
+          page = await reader.observe(entry());
+        }
+        expect(entry().frames.size).toBe(1);
+        expect(page.framed.map((f) => f.name).sort()).toEqual([
+          "Inner",
+          "Widget",
+        ]);
+        expect(page.frames).toBe(0);
+        expect(page.text).toContain("[In a frame: Widget]");
+        const inFrame = (label: string) => {
+          const action = labelled(page, label);
+          expect(action.frame).toBeDefined();
+          return action;
+        };
+
+        await reader.act(entry(), page, inFrame("Inner button"));
+        expect(
+          await inPage(
+            "document.querySelector('#same').contentDocument.body.dataset.clicked",
+          ),
+        ).toBe("yes");
+        page = await reader.observe(entry());
+        await reader.act(
+          entry(),
+          page,
+          page.actions.find((a) => a.kind === "fill" && a.label === "Name") ??
+            inFrame("Name"),
+          "Ada",
+        );
+        expect(
+          await inPage(
+            "document.querySelector('#same').contentDocument.querySelector('#name').value",
+          ),
+        ).toBe("Ada");
+
+        page = await reader.observe(entry());
+        await reader.act(entry(), page, inFrame("Party size → 4"));
+        page = await reader.observe(entry());
+        await reader.act(
+          entry(),
+          page,
+          page.actions.find((a) => a.kind === "fill" && a.label === "Notes") ??
+            inFrame("Notes"),
+          "window seat",
+        );
+        page = await reader.observe(entry());
+        await reader.act(entry(), page, inFrame("Find a table"));
+        await Bun.sleep(100);
+        page = await reader.observe(entry());
+        expect(page.text).toContain("Booked for 4: window seat");
+        // The page itself still works alongside its frames.
+        await reader.act(entry(), page, labelled(page, "Top button"));
+        expect(await inPage("window.topClicks")).toBe(1);
+        await browser.close(token);
+      } finally {
+        await server.stop(true);
+      }
+    },
+    60_000,
   );
 });

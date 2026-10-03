@@ -15,8 +15,11 @@
  *   trusted input.
  *
  * Unlike jev-ultrafast, the scripts run in our isolated world, where the
- * page can't see their globals, and they walk open shadow roots. Frames
- * aren't read: controls inside one are counted and reported.
+ * page can't see their globals, and they walk open shadow roots. Visible
+ * frames are read too, same-site or cross-site (a booking widget, a cookie
+ * banner), each in its own isolated world with its visible part as its
+ * viewport; input goes to the page at the frame's place on it, and Chrome
+ * routes it into the frame. Frames that can't be read are counted.
  */
 import type { Cdp } from "./cdp.ts";
 import { BrowserFailure, type WindowEntry } from "./state.ts";
@@ -39,6 +42,31 @@ export interface FastAction {
   expanded?: string;
   /** Scroll distance in pixels. */
   delta?: number;
+  /** The frame it's in (an index into `FastPage.framed`); absent on the page itself. */
+  frame?: number;
+}
+
+/** The part of a document's viewport that shows on screen, in its own coordinates. */
+export interface Region {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** A frame read with the page: where its document is, and what it meant then. */
+export interface FrameRead {
+  /** The frame's session: the page's, or a cross-site frame's own. */
+  sessionId: string;
+  frameId: string;
+  /** Its `<iframe>`, a node in the page's session: where it sits on screen. */
+  owner: number;
+  /** The part of it on screen when it was read, in its own coordinates. */
+  view: Region;
+  /** Its title or address, to label its text. */
+  name: string;
+  page_key: unknown;
+  marker: unknown;
 }
 
 /** What one read of the page found. */
@@ -56,8 +84,12 @@ export interface FastPage {
   guards: Record<string, unknown>;
   /** Controls past the 250 sent. */
   omitted_actions: number;
-  /** Visible frames autopilot can't look inside. */
+  /** Visible frames that couldn't be read (frames in frames, or ones that went away). */
   frames: number;
+  /** The frames read with the page; an action's `frame` indexes this. */
+  framed: FrameRead[];
+  /** The viewport's size, in CSS pixels. */
+  viewport: { width: number; height: number };
   /** A hash of what was seen, to tell whether an action changed anything. */
   fingerprint: string;
 }
@@ -99,9 +131,15 @@ const helpers = `
   };
 `;
 
-/** The atomic read, after jev-ultrafast's `snapshot.js`. */
-export const readState = `(() => {
+/**
+ * The atomic read, after jev-ultrafast's `snapshot.js`. In a frame, `view`
+ * is the part of it on screen, and the page's own controls (scrolling,
+ * waiting) aren't offered.
+ */
+export const readState = (view?: Region) => `(() => {
   if (!document.body) return null;
+  const inFrame = ${view ? "true" : "false"};
+  const view = ${view ? JSON.stringify(view) : "{ left: 0, top: 0, right: innerWidth, bottom: innerHeight }"};
   ${helpers}
   const cache = globalThis.__winstonFast ||= { ids: new WeakMap(), nodes: new Map(), next: 1 };
   const identity = (e) => {
@@ -171,8 +209,8 @@ export const readState = `(() => {
   };
   const candidates = [];
   let frames = 0;
-  const inView = (r) => r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight &&
-    r.right > 0 && r.left < innerWidth;
+  const inView = (r) => r.width > 0 && r.height > 0 && r.bottom > view.top && r.top < view.bottom &&
+    r.right > view.left && r.left < view.right;
   each(document, (e) => {
     if (e.matches(selector)) candidates.push(e);
     else if (e.tagName === 'IFRAME') {
@@ -184,7 +222,7 @@ export const readState = `(() => {
   for (const e of candidates) {
     if (!safe(e) || !visible(e) || e.matches(':disabled') || closestComposed(e, '[aria-disabled="true"]')) continue;
     const r = e.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2, rname = role(e);
-    if (!rname || r.width <= 0 || r.height <= 0 || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    if (!rname || r.width <= 0 || r.height <= 0 || x < view.left || y < view.top || x >= view.right || y >= view.bottom) continue;
     if (rname === 'gridcell' && e.querySelector('button,[role="button"]')) continue;
     const base = { node: identity(e), role: rname, label: clip(name(e) || rname, 160) };
     for (const key of ['checked', 'selected', 'expanded']) {
@@ -237,15 +275,19 @@ export const readState = `(() => {
   actions.splice(250);
   actions.forEach((a, i) => { a.id = 'e' + (i + 1); });
   const step = Math.round(innerHeight * 0.7);
-  if (scrollY + innerHeight < height - 2) actions.push({ id: 'scroll_down', kind: 'scroll', label: 'Scroll down', delta: step });
-  if (scrollY > 0) actions.push({ id: 'scroll_up', kind: 'scroll', label: 'Scroll up', delta: -step });
-  actions.push({ id: 'wait', kind: 'wait', label: 'Wait for the page to update' });
+  if (!inFrame) {
+    if (scrollY + innerHeight < height - 2) actions.push({ id: 'scroll_down', kind: 'scroll', label: 'Scroll down', delta: step });
+    if (scrollY > 0) actions.push({ id: 'scroll_up', kind: 'scroll', label: 'Scroll up', delta: -step });
+    actions.push({ id: 'wait', kind: 'wait', label: 'Wait for the page to update' });
+  }
   return { url: location.href, title: document.title, text, scroll: { y: scrollY, height },
-    actions, marker, page_key, guards, omitted_actions, frames };
+    actions, marker, page_key, guards, omitted_actions, frames,
+    viewport: { width: innerWidth, height: innerHeight } };
 })()`;
 
 /** Just the marker, from a fresh full read. */
-const readMarker = `(() => { const state = ${readState}; return state ? state.marker : null; })()`;
+const readMarker = (view?: Region) =>
+  `(() => { const state = ${readState(view)}; return state ? state.marker : null; })()`;
 
 /** A click's or select's own guards, now. */
 const readGuard = (node: number) =>
@@ -254,16 +296,17 @@ const readGuard = (node: number) =>
 /**
  * Checks the target right before input, and does a select in place.
  * Returns the point to click, or null if the target is gone, hidden,
- * disabled, offscreen or covered.
+ * disabled, offscreen or covered. In a frame, `view` is its part on screen.
  */
-const checkTarget = (action: FastAction) => `((action) => {
+const checkTarget = (action: FastAction, view?: Region) => `((action) => {
   ${helpers}
+  const view = ${view ? JSON.stringify(view) : "{ left: 0, top: 0, right: innerWidth, bottom: innerHeight }"};
   const e = globalThis.__winstonFast?.nodes.get(action.node);
   if (!e?.isConnected || e.matches(':disabled') || closestComposed(e, '[aria-disabled="true"],[inert]') ||
       !e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return null;
   if (action.kind === 'fill' && (e.readOnly || e.getAttribute('aria-readonly') === 'true')) return null;
   const r = e.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
-  if (!r.width || !r.height || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
+  if (!r.width || !r.height || x < view.left || y < view.top || x >= view.right || y >= view.bottom) return null;
   if (!reaches(e, hitAt(x, y))) return null;
   if (action.kind === 'select') {
     if (e.tagName !== 'SELECT' || ![...e.options].some((o) => o.value === action.value &&
@@ -329,6 +372,30 @@ export interface FastPageDeps {
   sleep?: (ms: number) => Promise<unknown>;
 }
 
+/** What one run of the read script returns, before frames are added. */
+type Read = Omit<FastPage, "fingerprint" | "framed">;
+
+/** A frame in Chrome's frame tree. */
+interface FrameTree {
+  frame: { id: string };
+  childFrames?: FrameTree[];
+}
+
+/** Frames read with a page: at most this many, the largest on screen first. */
+const maxFrames = 6;
+/** A frame showing less than this (CSS px²) isn't read; the page doesn't count it either. */
+const minFrameArea = 5_000;
+/** How much of each frame's text the page's text takes. */
+const frameTextChars = 1_500;
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url.slice(0, 80);
+  }
+};
+
 export function fastPage(deps: FastPageDeps) {
   const sleep = deps.sleep ?? Bun.sleep;
 
@@ -358,19 +425,30 @@ export function fastPage(deps: FastPageDeps) {
     return unlessDialog(entry, c.send<T>(method, params, sessionId));
   }
 
-  /** The isolated world for the window's main frame, made once per document. */
-  async function world(entry: WindowEntry, c: Cdp, sessionId: string) {
-    const { frameTree } = await c.send<{
-      frameTree: { frame: { id: string } };
-    }>("Page.getFrameTree", {}, sessionId);
-    const key = `${sessionId}:${frameTree.frame.id}`;
+  /** The isolated world for a frame (the window's main frame unless one is named), made once per document. */
+  async function world(
+    entry: WindowEntry,
+    c: Cdp,
+    sessionId: string,
+    frameId?: string,
+  ) {
+    let id = frameId;
+    if (id === undefined) {
+      const { frameTree } = await c.send<{ frameTree: FrameTree }>(
+        "Page.getFrameTree",
+        {},
+        sessionId,
+      );
+      id = frameTree.frame.id;
+    }
+    const key = `${sessionId}:${id}`;
     const known = entry.worlds.get(key);
     if (known !== undefined) return { key, contextId: known };
     const { executionContextId } = await c.send<{
       executionContextId: number;
     }>(
       "Page.createIsolatedWorld",
-      { frameId: frameTree.frame.id, worldName: "winston" },
+      { frameId: id, worldName: "winston" },
       sessionId,
     );
     entry.worlds.set(key, executionContextId);
@@ -378,17 +456,27 @@ export function fastPage(deps: FastPageDeps) {
   }
 
   /**
-   * Runs a script in the isolated world: its value, or a `StalePage` when
-   * the document changed under it (the world went with the old document).
+   * Runs a script in the isolated world (a frame's, given one): its value,
+   * or a `StalePage` when the document changed under it (the world went
+   * with the old document).
    */
   async function evaluate<T>(
     entry: WindowEntry,
     expression: string,
-    options: { awaitPromise?: boolean } = {},
+    options: {
+      awaitPromise?: boolean;
+      frame?: Pick<FrameRead, "sessionId" | "frameId"> | undefined;
+    } = {},
   ): Promise<T> {
-    const { c, sessionId } = await deps.sessionFor(entry);
+    const { c, sessionId: pageSession } = await deps.sessionFor(entry);
+    const sessionId = options.frame?.sessionId ?? pageSession;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const { key, contextId } = await world(entry, c, sessionId);
+      const { key, contextId } = await world(
+        entry,
+        c,
+        sessionId,
+        options.frame?.frameId,
+      );
       let response: {
         result?: { value?: unknown };
         exceptionDetails?: { text: string };
@@ -420,17 +508,184 @@ export function fastPage(deps: FastPageDeps) {
     throw new StalePage("The document changed during the read.");
   }
 
+  /**
+   * Where a frame shows: its document's origin on the page, and the part
+   * of it on screen in its own coordinates. Null if it's gone, hidden or
+   * off screen.
+   */
+  async function placeOf(
+    entry: WindowEntry,
+    owner: number,
+    viewport: { width: number; height: number },
+  ) {
+    const { c, sessionId } = await deps.sessionFor(entry);
+    let quad: number[];
+    try {
+      ({
+        model: { content: quad },
+      } = await unlessDialog(
+        entry,
+        c.send<{ model: { content: number[] } }>(
+          "DOM.getBoxModel",
+          { backendNodeId: owner },
+          sessionId,
+        ),
+      ));
+    } catch (error) {
+      if (error instanceof DialogOpen) throw error;
+      return null;
+    }
+    const xs = [0, 2, 4, 6].map((i) => quad[i] ?? 0);
+    const ys = [1, 3, 5, 7].map((i) => quad[i] ?? 0);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    const view: Region = {
+      left: Math.max(0, -x),
+      top: Math.max(0, -y),
+      right: Math.min(Math.max(...xs), viewport.width) - x,
+      bottom: Math.min(Math.max(...ys), viewport.height) - y,
+    };
+    const area =
+      Math.max(0, view.right - view.left) * Math.max(0, view.bottom - view.top);
+    return area > 0 ? { x, y, view, area } : null;
+  }
+
+  /** The page's frames that show on screen, largest first, with their `<iframe>`s. */
+  async function framesOn(
+    entry: WindowEntry,
+    viewport: { width: number; height: number },
+  ) {
+    const { c, sessionId } = await deps.sessionFor(entry);
+    const { frameTree } = await unlessDialog(
+      entry,
+      c.send<{ frameTree: FrameTree }>("Page.getFrameTree", {}, sessionId),
+    );
+    const ids: string[] = [];
+    const walk = (node: FrameTree) => {
+      for (const child of node.childFrames ?? []) {
+        ids.push(child.frame.id);
+        walk(child);
+      }
+    };
+    walk(frameTree);
+    // Cross-site frames run in their own renderer, with their own session;
+    // a cross-site frame's target id is its frame id.
+    for (const targetId of entry.frames.keys())
+      if (!ids.includes(targetId)) ids.push(targetId);
+    const found: {
+      sessionId: string;
+      frameId: string;
+      owner: number;
+      view: Region;
+      area: number;
+    }[] = [];
+    for (const frameId of ids) {
+      let owner: number;
+      try {
+        ({ backendNodeId: owner } = await unlessDialog(
+          entry,
+          c.send<{ backendNodeId: number }>(
+            "DOM.getFrameOwner",
+            { frameId },
+            sessionId,
+          ),
+        ));
+      } catch (error) {
+        if (error instanceof DialogOpen) throw error;
+        continue;
+      }
+      const place = await placeOf(entry, owner, viewport);
+      if (!place || place.area < minFrameArea) continue;
+      found.push({
+        sessionId: entry.frames.get(frameId) ?? sessionId,
+        frameId,
+        owner,
+        view: place.view,
+        area: place.area,
+      });
+    }
+    return found.sort((a, b) => b.area - a.area).slice(0, maxFrames);
+  }
+
+  /**
+   * The page with its visible frames read into it: one action space, with
+   * ids across them all and the page's own controls last.
+   */
+  async function withFrames(
+    entry: WindowEntry,
+    state: Read,
+  ): Promise<Omit<FastPage, "fingerprint">> {
+    const framed: FrameRead[] = [];
+    const isControl = (a: FastAction) =>
+      a.kind === "scroll" || a.kind === "wait";
+    const actions = state.actions.filter((a) => !isControl(a));
+    const guards = { ...state.guards };
+    let text = state.text;
+    let omitted = state.omitted_actions;
+    let unread = state.frames;
+    for (const frame of await framesOn(entry, state.viewport)) {
+      let read: Read | null;
+      try {
+        read = await evaluate<Read | null>(entry, readState(frame.view), {
+          frame,
+        });
+      } catch (error) {
+        if (error instanceof DialogOpen) throw error;
+        continue;
+      }
+      if (!read) continue;
+      const index = framed.length;
+      const name = read.title || hostOf(read.url);
+      framed.push({
+        sessionId: frame.sessionId,
+        frameId: frame.frameId,
+        owner: frame.owner,
+        view: frame.view,
+        name,
+        page_key: read.page_key,
+        marker: read.marker,
+      });
+      unread = Math.max(0, unread - 1) + read.frames;
+      omitted += read.omitted_actions;
+      for (const action of read.actions)
+        actions.push({ ...action, frame: index });
+      for (const [node, guard] of Object.entries(read.guards))
+        guards[`${String(index)}:${node}`] = guard;
+      if (read.text)
+        text += `\n\n[In a frame: ${name}]\n${read.text.slice(0, frameTextChars)}`;
+    }
+    const kept = actions.slice(0, 250);
+    omitted += actions.length - kept.length;
+    kept.forEach((action, i) => {
+      action.id = `e${String(i + 1)}`;
+    });
+    return {
+      ...state,
+      text,
+      actions: [...kept, ...state.actions.filter(isControl)],
+      guards,
+      omitted_actions: omitted,
+      frames: unread,
+      framed,
+    };
+  }
+
+  /** The frame an action is in, if any. */
+  const frameOf = (page: FastPage, action?: FastAction) =>
+    action?.frame === undefined ? undefined : page.framed[action.frame];
+
   return {
-    /** One atomic read of the page, retried briefly while a document is swapping in. */
+    /** One atomic read of the page and its frames, retried briefly while a document is swapping in. */
     async observe(entry: WindowEntry): Promise<FastPage> {
       for (let attempt = 0; ; attempt += 1) {
         try {
-          const state = await evaluate<Omit<FastPage, "fingerprint"> | null>(
-            entry,
-            readState,
-          );
+          const state = await evaluate<Read | null>(entry, readState());
           if (!state) throw new StalePage("The document is loading.");
-          return { ...state, fingerprint: fingerprint(state) };
+          const page =
+            state.frames > 0
+              ? await withFrames(entry, state)
+              : { ...state, framed: [] };
+          return { ...page, fingerprint: fingerprint(page) };
         } catch (error) {
           if (!(error instanceof StalePage) || attempt >= 9) throw error;
           await sleep(20);
@@ -438,22 +693,50 @@ export function fastPage(deps: FastPageDeps) {
       }
     },
 
-    /** Whether the page still means what it did for `action` (or at all, without one). */
+    /**
+     * Whether the page still means what it did for `action` (or at all,
+     * without one, frames included).
+     */
     async fresh(entry: WindowEntry, page: FastPage, action?: FastAction) {
+      const frame = frameOf(page, action);
       if (
         action?.node !== undefined &&
         (action.kind === "click" || action.kind === "select")
       ) {
-        const now = await evaluate(entry, readGuard(action.node));
-        return same(now, [page.page_key, page.guards[String(action.node)]]);
+        const now = await evaluate(entry, readGuard(action.node), { frame });
+        const key = frame
+          ? `${String(action.frame)}:${String(action.node)}`
+          : String(action.node);
+        return same(now, [
+          frame ? frame.page_key : page.page_key,
+          page.guards[key],
+        ]);
       }
-      return same(await evaluate(entry, readMarker), page.marker);
+      if (frame)
+        return same(
+          await evaluate(entry, readMarker(frame.view), { frame }),
+          frame.marker,
+        );
+      if (!same(await evaluate(entry, readMarker()), page.marker)) return false;
+      if (action) return true;
+      for (const read of page.framed)
+        if (
+          !same(
+            await evaluate(entry, readMarker(read.view), { frame: read }).catch(
+              () => null,
+            ),
+            read.marker,
+          )
+        )
+          return false;
+      return true;
     },
 
     /**
      * Does `action`, after checking right before input that the page is
      * still the one decided on. A select that may have half happened is
-     * never reported stale (it can't be retried blindly).
+     * never reported stale (it can't be retried blindly). In a frame, the
+     * target's point is offset by where the frame is now.
      */
     async act(
       entry: WindowEntry,
@@ -480,11 +763,17 @@ export function fastPage(deps: FastPageDeps) {
         });
         return;
       }
+      const frame = frameOf(page, action);
+      const place = frame
+        ? await placeOf(entry, frame.owner, page.viewport)
+        : { x: 0, y: 0, view: undefined };
+      if (!place) throw new StalePage("The frame is gone or off screen.");
       let point: { x: number; y: number } | null;
       try {
         point = await evaluate<{ x: number; y: number } | null>(
           entry,
-          checkTarget(action),
+          checkTarget(action, place.view),
+          { frame },
         );
       } catch (error) {
         if (action.kind === "select" && !(error instanceof DialogOpen))
@@ -503,10 +792,11 @@ export function fastPage(deps: FastPageDeps) {
         throw new StalePage("The target changed or is covered.");
       }
       if (action.kind === "select") return;
+      const at = { x: point.x + place.x, y: point.y + place.y };
       for (const type of ["mouseMoved", "mousePressed", "mouseReleased"])
         await send(entry, "Input.dispatchMouseEvent", {
           type,
-          ...point,
+          ...at,
           ...(type === "mouseMoved"
             ? {}
             : {
@@ -516,7 +806,8 @@ export function fastPage(deps: FastPageDeps) {
               }),
         });
       if (action.kind === "fill") {
-        // Select all (Ctrl on the VM's Linux), then type over it.
+        // Select all (Ctrl on the VM's Linux), then type over it. Keys go
+        // to the focused frame.
         const key = { key: "a", code: "KeyA", modifiers: 2 };
         await send(entry, "Input.dispatchKeyEvent", {
           type: "keyDown",
@@ -529,11 +820,12 @@ export function fastPage(deps: FastPageDeps) {
     },
 
     /** Waits briefly for the page to react to an action (read-only; failures are fine). */
-    async settle(entry: WindowEntry, action: FastAction) {
+    async settle(entry: WindowEntry, page: FastPage, action: FastAction) {
       if (action.kind === "wait" || action.node === undefined) return;
-      await evaluate(entry, afterInput(action), { awaitPromise: true }).catch(
-        () => undefined,
-      );
+      await evaluate(entry, afterInput(action), {
+        awaitPromise: true,
+        frame: frameOf(page, action),
+      }).catch(() => undefined);
     },
   };
 }

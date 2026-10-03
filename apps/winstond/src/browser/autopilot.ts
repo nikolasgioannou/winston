@@ -123,7 +123,8 @@ const stateOf = (action: FastAction) =>
  */
 export function actionSpace(actions: FastAction[]) {
   const elements: FastElement[] = [];
-  const indices = new Map<number, string>();
+  // Node ids are per document: a frame's can repeat the page's.
+  const indices = new Map<string, string>();
   const targets: Partial<Record<Operation, Record<string, FastAction>>> = {};
   const controls: Record<string, FastAction> = {};
   for (const action of actions) {
@@ -132,11 +133,12 @@ export function actionSpace(actions: FastAction[]) {
       controls[action.id.toUpperCase()] = action;
       continue;
     }
-    let index = indices.get(action.node);
+    const identity = `${String(action.frame ?? "")}:${String(action.node)}`;
+    let index = indices.get(identity);
     let element: FastElement | undefined;
     if (index === undefined) {
       index = String(elements.length + 1);
-      indices.set(action.node, index);
+      indices.set(identity, index);
       element = {
         index,
         label: action.label.split(" → ")[0] ?? action.label,
@@ -735,7 +737,7 @@ export function createAutopilot(deps: AutopilotDeps) {
                 0,
                 300,
               );
-        await pages.settle(entry, action);
+        await pages.settle(entry, page, action);
         const before = page.fingerprint;
         try {
           page = await observe();
