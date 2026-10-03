@@ -218,3 +218,38 @@ describe("browser actions in Chrome", () => {
     30_000,
   );
 });
+
+// Pages are data: URLs here, so only a Chrome is needed; it must reach this
+// process at 127.0.0.1 (a local Chrome, not one in the VM image).
+const runLocal = devtools ? test : test.skip;
+
+describe("settling in Chrome", () => {
+  runLocal(
+    "a frame that never finishes loading doesn't hold an action up",
+    async () => {
+      // A widget's frame whose server never answers: it stays loading.
+      const hang = Bun.serve({
+        port: 0,
+        hostname: "127.0.0.1",
+        fetch: () => new Promise<Response>(() => undefined),
+      });
+      try {
+        await browser.open(
+          token,
+          `data:text/html,${encodeURIComponent(
+            `<!doctype html><title>Widget</title><button onclick="this.textContent='Clicked'">Go</button><iframe src="http://127.0.0.1:${String(hang.port)}/widget"></iframe>`,
+          )}`,
+        );
+        const started = Date.now();
+        const clicked = await browser.click(token, await refOf(/button "Go"/));
+        expect(Date.now() - started).toBeLessThan(3_000);
+        expect(clicked.settled).toBe(true);
+        await browser.wait(token, { text: "Clicked", timeoutMs: 1_000 });
+        await browser.close(token);
+      } finally {
+        await hang.stop(true);
+      }
+    },
+    60_000,
+  );
+});

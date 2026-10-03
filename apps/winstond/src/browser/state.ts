@@ -56,8 +56,11 @@ export interface WindowEntry {
   nextRef: number;
   /** When a request last started or ended in the page (for settling). */
   lastNetwork: number;
-  /** Frames still loading a document. */
-  loadingFrames: Set<string>;
+  /**
+   * Whether the window's own document is loading. Frames inside it don't
+   * count: a widget whose frame never finishes would hold every action.
+   */
+  loading: boolean;
   /** A confirm or prompt waiting for an answer. */
   dialog?: OpenDialog | undefined;
   /** Alerts and leave-page prompts accepted since the last action. */

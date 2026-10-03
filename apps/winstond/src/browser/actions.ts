@@ -6,9 +6,9 @@
  * JavaScript context the page can't see, and `Runtime.enable` stays off.
  *
  * Every action then waits for the page to settle (the network quiet for
- * 500 ms and no DOM changes for 300 ms, at most 5 s, longer while a
- * document loads) and says what happened: where the window is, anything it
- * opened, and any dialog.
+ * 500 ms and no DOM changes for 300 ms, at most 5 s, longer while the
+ * window's own document loads, never for frames inside it) and says what
+ * happened: where the window is, anything it opened, and any dialog.
  */
 import type {
   BrowserActionResponse,
@@ -335,7 +335,7 @@ export function createActions(core: ActionCore) {
     for (;;) {
       if (pendingDialog(entry)) return true;
       const elapsed = core.now() - started;
-      const loading = entry.loadingFrames.size > 0;
+      const { loading } = entry;
       const limit = loading ? browserTimings.loadTimeoutMs : maxMs;
       if (elapsed >= limit) return false;
       if (

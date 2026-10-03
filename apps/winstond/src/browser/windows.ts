@@ -144,7 +144,7 @@ export function createBrowser(deps: BrowserDeps) {
       refByNode: new Map(),
       nextRef: 1,
       lastNetwork: 0,
-      loadingFrames: new Set(),
+      loading: false,
       handledDialogs: [],
       worlds: new Map(),
       heldForUser: null,
@@ -174,11 +174,12 @@ export function createBrowser(deps: BrowserDeps) {
       case "Network.loadingFailed":
         entry.lastNetwork = now();
         return;
+      // The main frame's id is its target's.
       case "Page.frameStartedLoading":
-        entry.loadingFrames.add(String(event.params.frameId));
+        if (event.params.frameId === entry.targetId) entry.loading = true;
         return;
       case "Page.frameStoppedLoading":
-        entry.loadingFrames.delete(String(event.params.frameId));
+        if (event.params.frameId === entry.targetId) entry.loading = false;
         return;
       case "Page.javascriptDialogOpening": {
         const type = String(event.params.type);
