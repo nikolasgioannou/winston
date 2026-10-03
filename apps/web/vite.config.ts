@@ -14,12 +14,17 @@ const prodRouteTree = fileURLToPath(
   new URL("src/routeTree.prod.gen.ts", import.meta.url),
 );
 
-// The site (docs/design.md §9). Port 3002 matches the Google OAuth dev
-// client's redirect URI (docs/runbooks/google-cloud.md).
+// The site (docs/design.md §9), on WEB_PUBLIC_URL's port: 3002, which matches
+// the Google OAuth dev client's redirect URI (docs/runbooks/google-cloud.md),
+// or a worktree's own (docs/local-dev.md).
+const port = Number(
+  new URL(process.env.WEB_PUBLIC_URL ?? "http://localhost:3002").port,
+);
+
 export default defineConfig(({ command }) => {
   const build = command === "build";
   return {
-    server: { port: 3002, strictPort: true },
+    server: { port, strictPort: true },
     plugins: [
       tanstackStart(
         build

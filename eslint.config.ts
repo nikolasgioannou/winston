@@ -7,8 +7,13 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  // TanStack Router generates this.
-  globalIgnores(["**/routeTree*.gen.ts", "apps/web/dist/"]),
+  // TanStack Router generates the route trees; worktrees (docs/local-dev.md)
+  // are other checkouts, linted on their own.
+  globalIgnores([
+    "**/routeTree*.gen.ts",
+    "apps/web/dist/",
+    ".claude/worktrees/",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

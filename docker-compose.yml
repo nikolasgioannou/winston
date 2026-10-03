@@ -20,5 +20,19 @@ services:
       timeout: 3s
       retries: 15
 
+  # Sends Google's sign-in callbacks on to a worktree's site (docs/local-dev.md,
+  # Worktrees). Shared by every checkout; bun dev starts it in worktrees.
+  oauth-relay:
+    build:
+      context: .
+      dockerfile: docker/oauth-relay.Dockerfile
+    image: winston-oauth-relay:local
+    # Built here, never pulled; rebuilding is cached and picks up changes.
+    pull_policy: build
+    # Bun isn't PID 1, so docker stop's SIGTERM ends it straight away.
+    init: true
+    ports:
+      - "127.0.0.1:3003:3003"
+
 volumes:
   postgres:

@@ -40,7 +40,8 @@
     "vm:provision": "bun run --filter @winston/agents vm:provision",
     "vm:publish": "bun scripts/publish-vm-binaries.ts",
     "vm:reset": "bun run --filter @winston/agents vm:reset",
-    "vm:shell": "bun run --filter @winston/agents vm:shell"
+    "vm:shell": "bun run --filter @winston/agents vm:shell",
+    "worktree": "bun --no-env-file scripts/worktree.ts"
   },
   "dependencies": {},
   "devDependencies": {

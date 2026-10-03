@@ -9,6 +9,7 @@ These are the rules for how work happens in this repo. What Winston is and how i
 - If a ticket's instructions conflict with the principles below, raise it with the user instead of following the ticket as written.
 - Claim a ticket by moving it to `in-progress`. Move it to `done` in the same commit as the work.
 - One ticket per commit.
+- When asked to use a worktree (to work alongside other sessions), follow the `worktree` skill.
 
 ## Principles
 

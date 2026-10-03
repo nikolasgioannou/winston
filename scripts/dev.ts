@@ -45,12 +45,18 @@ const services: Service[] = [
     optional: true,
     task: true,
   },
-  {
-    name: "tunnel",
-    cwd: ".",
-    cmd: ["bun", "--env-file=.env.local", "scripts/tunnel.ts"],
-    optional: true,
-  },
+  // Only with a tunnel set up: a worktree leaves it out (its webhooks go to
+  // the main checkout's api).
+  ...(process.env.TUNNEL_NAME
+    ? [
+        {
+          name: "tunnel",
+          cwd: ".",
+          cmd: ["bun", "--env-file=.env.local", "scripts/tunnel.ts"],
+          optional: true,
+        },
+      ]
+    : []),
 ];
 
 const colors = ["\x1b[36m", "\x1b[35m", "\x1b[33m", "\x1b[32m", "\x1b[34m"];
@@ -74,8 +80,18 @@ if (!existsSync(".env.local")) {
   log("No .env.local. Run ./scripts/setup.sh first.");
   process.exit(1);
 }
+if (!process.env.TUNNEL_NAME)
+  log("No TUNNEL_NAME, so no webhook tunnel (see docs/local-dev.md).");
 const setupHint = "Is Docker running? ./scripts/setup.sh checks everything.";
 await step("Starting Postgres…", ["bun", "run", "db:up"], setupHint);
+// Every checkout's site signs in through the shared OAuth relay
+// (docs/local-dev.md, Worktrees); Compose starts it unless it's already running.
+if (process.env.GOOGLE_OAUTH_REDIRECT_URL)
+  await step(
+    "Starting the OAuth relay…",
+    ["docker", "compose", "up", "--detach", "--wait", "oauth-relay"],
+    setupHint,
+  );
 await step("Migrating…", ["bun", "run", "db:migrate"], setupHint);
 
 async function pipe(stream: ReadableStream<Uint8Array>, prefix: string) {

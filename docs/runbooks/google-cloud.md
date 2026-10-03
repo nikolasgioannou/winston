@@ -16,10 +16,10 @@ Redirect URIs:
 
 | Client     | Sign-in (web)                                 | Connections (web)                                     |
 | ---------- | --------------------------------------------- | ----------------------------------------------------- |
-| dev        | `http://localhost:3002/auth/google/callback`  | `http://localhost:3002/auth/google/connect/callback`  |
+| dev        | `http://localhost:3003/auth/google/callback`  | `http://localhost:3003/auth/google/connect/callback`  |
 | production | `https://runwinston.com/auth/google/callback` | `https://runwinston.com/auth/google/connect/callback` |
 
-Google allows plain `http` only for `localhost`, so the dev client needs no tunnel: the browser does the redirect. Both callbacks are on the site, since each needs the site's session (docs/design.md §9). Ports are the local defaults (web 3002). If a path or port changes in code, change it here and in the client.
+Google allows plain `http` only for `localhost`, so the dev client needs no tunnel: the browser does the redirect. Both callbacks are on the site, since each needs the site's session (docs/design.md §9). The dev URIs are the local OAuth relay's (port 3003), which sends each callback on to whichever local site started it, since every checkout's site has its own port (docs/local-dev.md, Worktrees). If a path or port changes in code, change it here and in the client.
 
 ## Steps
 

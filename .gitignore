@@ -21,3 +21,6 @@ infra/.cdk.staging/
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+# Git worktrees Claude Code creates for parallel work (docs/local-dev.md).
+.claude/worktrees/
