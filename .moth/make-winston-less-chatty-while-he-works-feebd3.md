@@ -1,13 +1,13 @@
 ---
 id: "feebd3"
 title: Make Winston less chatty while he works
-status: backlog
+status: done
 priority: none
 labels:
   - agents
   - telegram
 created_at: 2026-10-03T17:26:02.942Z
-updated_at: 2026-10-03T17:26:02.942Z
+updated_at: 2026-10-03T19:07:17.582Z
 ---
 
 From the production trace review (5c3cdf, 2026-10-03); the founder agreed: "it was doing too much".
@@ -42,3 +42,25 @@ From the production trace review (5c3cdf, 2026-10-03); the founder agreed: "it w
 Docs: §4 (Replying, typing indicator), decisions #70 and #72, docs/research/telegram-rich-messages.md.
 
 Tests: an interim step's text goes to a draft, not a message; the final text is a message; a turn ending silently after a status sends that status; a dropped step shows no status; draft failure drops the status and logs it; handoff and attach messages are unaffected.
+
+## As built
+
+- **Status or message.**
+  - **Status:** text beside a tool that does work (`bash`, `view_image`) goes to `sendRichMessageDraft`, one random `draft_id` per turn, so each status replaces the last in place.
+  - **Message:** text with no tool call, or beside `end_turn`, `browser_handoff`, `delegate` or `attach`, is a message as before.
+  - **Why those count as messages:** the handoff link and the file must come after their words, and text beside `delegate` tells the user the work moved to the background. The step-budget handover in particular has to reach them.
+- **Never silent:** a turn that showed a status but sent no message sends its last status when it ends silently, emptily, or by delegating on its last step. The server's own handover at the step budget already says so in its own message.
+- **Failures and drops:**
+  - A draft Telegram refuses is logged and dropped.
+  - A step dropped for new input shows nothing and forgets the pending status. Rich drafts document no "clear", so an earlier status just gets replaced or fades.
+- **Unchanged:** the typing indicator. #72 still holds: only whole steps that ended in `stop` or `tool-calls` become drafts.
+- **Prompt:** "Replying" now says how it works: text while working shows only as a passing status, so put what the user needs in a message. The old "don't narrate" line is gone.
+- **Not yet checked on a phone:**
+  - how the 30-second fade looks during a long browser step;
+  - whether a rich draft renders like the messages.
+
+  The founder can see it after the deploy, and keep-alive re-sends can follow if the fade is a problem.
+
+Tests: interim text becomes drafts (one id, shown before the tool runs) and the final text is the only message; a status-only turn sends its status; a refused draft is dropped; a dropped step shows nothing; messages next to `delegate`, files and handoffs keep their order.
+
+Docs: §4 (live-editing, Processing without responding), §16 delivery, decisions #70 and #75 (new), docs/research/telegram-rich-messages.md.

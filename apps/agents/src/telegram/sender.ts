@@ -23,6 +23,16 @@ export interface TelegramSender {
     chatId: number,
     markdown: string,
   ): Promise<{ message_id: number }>;
+  /**
+   * A passing status as a Rich Message draft (Bot API 10.3, private chats):
+   * a temporary preview that updates in place under one `draftId`, fades
+   * after about 30 s, and goes when the next message arrives.
+   */
+  sendRichMessageDraft(
+    chatId: number,
+    draftId: number,
+    markdown: string,
+  ): Promise<unknown>;
   sendChatAction(chatId: number, action: "typing"): Promise<unknown>;
   /**
    * Uploads 1–10 files of one kind: one file as its own message, several as
@@ -36,7 +46,8 @@ export interface TelegramSender {
 
 /**
  * The real sender over grammY. grammY 1.46 doesn't type `sendRichMessage`
- * yet, so it goes through the raw API, which passes any method name on.
+ * or `sendRichMessageDraft` yet, so they go through the raw API, which
+ * passes any method name on.
  */
 export function grammySender(api: Api): TelegramSender {
   const raw = api.raw as unknown as Record<
@@ -49,6 +60,16 @@ export function grammySender(api: Api): TelegramSender {
       const send = raw.sendRichMessage;
       if (!send) throw new Error("grammY's raw API has no sendRichMessage");
       return send({ chat_id: chatId, rich_message: { markdown } });
+    },
+    sendRichMessageDraft: (chatId, draftId, markdown) => {
+      const send = raw.sendRichMessageDraft;
+      if (!send)
+        throw new Error("grammY's raw API has no sendRichMessageDraft");
+      return send({
+        chat_id: chatId,
+        draft_id: draftId,
+        rich_message: { markdown },
+      });
     },
     sendChatAction: (chatId, action) => api.sendChatAction(chatId, action),
     async sendFiles(chatId, files) {

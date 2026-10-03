@@ -64,12 +64,16 @@ async function scenario(
     say: (text: string, extra?: Partial<UserMessagePayload>) => Promise<number>;
     turn: (index?: number) => Promise<string | undefined>;
     sent: Sent[];
+    /** Statuses shown as drafts, in order. */
+    drafts: { draftId: number; text: string }[];
     requests: Record<string, unknown>[][];
     commands: string[];
     typing: { sends: number; running: boolean };
   }) => Promise<void>,
   options: {
     rejectRich?: boolean;
+    /** Telegram refuses every draft. */
+    rejectDrafts?: boolean;
     /** How the fake computer answers each command. */
     vmAnswer?: (cmd: string) => Partial<ExecResult>;
     /** The fake computer's other answers (its browser), instead of the defaults. */
@@ -87,6 +91,7 @@ async function scenario(
       .insert(telegramLinks)
       .values({ userId: user.id, chatId: 42, telegramUserId: 42 });
     const sent: Sent[] = [];
+    const drafts: { draftId: number; text: string }[] = [];
     const telegram = {
       sendMessage: (chatId: number, text: string) => {
         sent.push({ chatId, text });
@@ -101,6 +106,16 @@ async function scenario(
         sent.push({ chatId, text: markdown, rich: true });
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
+      },
+      sendRichMessageDraft: (
+        _chatId: number,
+        draftId: number,
+        markdown: string,
+      ) => {
+        if (options.rejectDrafts)
+          return Promise.reject(new Error("Bad Request: draft rejected"));
+        drafts.push({ draftId, text: markdown });
+        return Promise.resolve(true);
       },
       sendChatAction: () => {
         typing.sends += 1;
@@ -175,6 +190,7 @@ async function scenario(
       say,
       turn,
       sent,
+      drafts,
       requests,
       typing,
       commands: vm.commands,
@@ -911,42 +927,80 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("text beside a tool call is sent before the tool runs, and text after the last call is sent too", async () => {
-    let sentWhenCommandRan = -1;
-    let sentSoFar: Sent[] = [];
+  test("text beside a tool that does work is a passing status, shown before the tool runs; the final text is the message", async () => {
+    let shownWhenCommandRan = -1;
+    let shownSoFar: { text: string }[] = [];
     await scenario(
       [
         [
           toolCallReply("bash", { command: "ls ~" }, "On it."),
+          toolCallReply("bash", { command: "ls ~/notes" }, "Looking inside."),
           textReply("Two files: notes.md and todo.md."),
         ],
       ],
-      async ({ tx, userId, say, turn, sent }) => {
-        sentSoFar = sent;
+      async ({ tx, userId, say, turn, sent, drafts }) => {
+        shownSoFar = drafts;
         await say("what's in your home folder?");
         await turn();
-        expect(sentWhenCommandRan).toBe(1);
-        expect(sent.map((message) => message.text)).toEqual([
+        expect(shownWhenCommandRan).toBe(1);
+        expect(drafts.map((d) => d.text)).toEqual([
           "On it.",
+          "Looking inside.",
+        ]);
+        // One draft for the turn, so each status replaces the last in place.
+        expect(new Set(drafts.map((d) => d.draftId)).size).toBe(1);
+        expect(sent.map((message) => message.text)).toEqual([
           "Two files: notes.md and todo.md.",
         ]);
-        // Each message is its own record, in order.
         const rows = await tx
           .select()
           .from(outboundMessages)
-          .where(eq(outboundMessages.userId, userId))
-          .orderBy(asc(outboundMessages.id));
+          .where(eq(outboundMessages.userId, userId));
         expect(rows.map((row) => row.text)).toEqual([
-          "On it.",
           "Two files: notes.md and todo.md.",
         ]);
       },
       {
-        vmAnswer: () => {
-          sentWhenCommandRan = sentSoFar.length;
+        vmAnswer: (cmd) => {
+          if (cmd === "ls ~") shownWhenCommandRan = shownSoFar.length;
           return { stdout: "notes.md\ntodo.md\n" };
         },
       },
+    );
+  });
+
+  test("a turn that only showed a status and ends without a message sends that status", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("bash", { command: "df -h" }, "40 GB free."),
+          toolCallReply("end_turn", {}),
+        ],
+      ],
+      async ({ say, turn, sent, drafts }) => {
+        await say("disk space?");
+        await turn();
+        expect(drafts.map((d) => d.text)).toEqual(["40 GB free."]);
+        expect(sent.map((message) => message.text)).toEqual(["40 GB free."]);
+      },
+    );
+  });
+
+  test("a status Telegram won't show is dropped, never sent as a message instead", async () => {
+    await scenario(
+      [
+        [
+          toolCallReply("bash", { command: "ls" }, "Checking."),
+          textReply("Three files."),
+        ],
+      ],
+      async ({ say, turn, sent, drafts }) => {
+        await say("how many files?");
+        await turn();
+        expect(drafts).toEqual([]);
+        expect(sent.map((message) => message.text)).toEqual(["Three files."]);
+      },
+      { rejectDrafts: true },
     );
   });
 
@@ -987,18 +1041,18 @@ describe("runFrontTurn", () => {
       [
         [
           toolCallReply(
-            "bash",
-            { command: "df -h" },
-            "Plenty of space: 40 GB free.",
+            "delegate",
+            { brief: "Compare the lease offers and report the cheapest." },
+            "On it; I'll get back to you.",
           ),
           textReply(""),
         ],
       ],
       async ({ say, turn, sent, requests }) => {
-        await say("disk space?");
+        await say("which lease is cheapest?");
         await turn();
         expect(sent.map((message) => message.text)).toEqual([
-          "Plenty of space: 40 GB free.",
+          "On it; I'll get back to you.",
         ]);
         expect(requests[0]).toHaveLength(2);
         expect(JSON.stringify(requests[0])).not.toContain(emptyReplyNudge);
@@ -1006,7 +1060,7 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("a step dropped for new input sends nothing and runs none of its tools", async () => {
+  test("a step dropped for new input shows nothing and runs none of its tools", async () => {
     await scenario(
       [
         [
@@ -1018,10 +1072,11 @@ describe("runFrontTurn", () => {
           textReply("Okay, I've left it."),
         ],
       ],
-      async ({ say, turn, sent, requests, commands }) => {
+      async ({ say, turn, sent, drafts, requests, commands }) => {
         await say("delete my notes file");
         await turn();
         expect(commands).toEqual([]);
+        expect(drafts).toEqual([]);
         expect(sent.map((message) => message.text)).toEqual([
           "Okay, I've left it.",
         ]);

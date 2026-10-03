@@ -24,6 +24,7 @@ const noTimers = { setInterval: () => 0, clearInterval: () => undefined };
 const telegram = {
   sendMessage: () => Promise.resolve({ message_id: 1 }),
   sendRichMessage: () => Promise.resolve({ message_id: 1 }),
+  sendRichMessageDraft: () => Promise.resolve(true),
   sendChatAction: () => Promise.resolve(true),
   sendFiles: () => Promise.resolve([]),
 };
