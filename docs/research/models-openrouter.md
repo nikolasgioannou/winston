@@ -29,6 +29,13 @@
 | Fable 5.1 | $10   | $50    | $0.25      | $12.50   | $20      |
 | Haiku 4.5 | $1    | $5     | $0.10      | $1.25    | $2       |
 
+## The text helper: Inception's Mercury 2.5 (checked 2026-10-03)
+
+- **What it's for:** autopilot's `TYPE_TEXT` (docs/design.md §5): a field's value from the goal, as jev-ultrafast does. `inception/mercury-2.5`, $0.04/M in and $0.15/M out, 260k context; JSON mode (`response_format: json_object`) and `reasoning: { enabled: false }` both work.
+- **Privacy:** it answers with `provider: { data_collection: "deny" }`, so Inception is among the providers that keep no data.
+- **Speed and cost:** about $0.000015 a call. In 25 sequential calls, most answered in 0.6–1.9 s, but 3 never did within 8 s, so the backend sends a second request after 2 s.
+- **Correctness:** it returns `{"text": null}` when the goal doesn't hold the value (a passport number for a check-in).
+
 ## OpenRouter + Anthropic: what works and gotchas
 
 - ✅ **Prompt caching:** `cache_control`, 5-min and 1-h TTLs. **Sticky routing lasts only 10 min**, so pin the provider (Anthropic) to keep caches warm for agents that pause.

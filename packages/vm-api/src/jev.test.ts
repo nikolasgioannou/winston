@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { costLedger, jevDecisions } from "@winston/db/schema";
 import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
-import { openRouterJev, siteReliability } from "./jev.ts";
+import {
+  hedged,
+  openRouterJev,
+  parseText,
+  siteReliability,
+  textRules,
+} from "./jev.ts";
 import { setupApi } from "./testing.ts";
 
 const db = await testDb();
@@ -162,12 +168,103 @@ describe("the Jev proxy", () => {
         method: "POST",
         body: {
           ...ask,
-          questions: { action: { type: "choice", criteria } },
+          questions: {
+            action: { type: "choice", criteria, instructions: "Which one?" },
+          },
         },
       });
       expect(tooMany.status).toBe(400);
       expect(openRouter.sent).toEqual([]);
     });
+  });
+
+  test("the text helper writes a field's value with Mercury, keeping no data, and logs and charges it", async () => {
+    await inRollback(db, async (tx) => {
+      const openRouter = fakeOpenRouter(() =>
+        Response.json({
+          model: "inception/mercury-2.5-20260908",
+          choices: [{ message: { content: '{"text": "Zurich"}' } }],
+          usage: { cost: 0.00001476 },
+        }),
+      );
+      const { user, call } = await setup(tx, openRouter.jev);
+      const context = {
+        goal: "Search flights from Zurich to London on 2026-10-20",
+        field: { label: "Where from?", role: "combobox", value: "" },
+        page: { title: "Google Flights", text: "Where from? Where to?" },
+        recent_actions: [],
+      };
+      const response = await call("/v1/jev/text", {
+        method: "POST",
+        body: { context, domain: "google.com" },
+      });
+      expect(await response.json()).toMatchObject({ text: "Zurich" });
+      const [sent] = openRouter.sent;
+      expect(sent?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+      expect(sent?.body).toMatchObject({
+        model: "inception/mercury-2.5",
+        response_format: { type: "json_object" },
+        reasoning: { enabled: false },
+        provider: { data_collection: "deny" },
+        messages: [
+          { role: "system", content: textRules },
+          { role: "user", content: JSON.stringify(context) },
+        ],
+      });
+      const [logged] = await tx.select().from(jevDecisions);
+      expect(logged).toMatchObject({
+        userId: user.id,
+        domain: "google.com",
+        question: { textHelper: context },
+        answer: { text: "Zurich" },
+        model: "inception/mercury-2.5-20260908",
+      });
+      const [cost] = await tx.select().from(costLedger);
+      expect(cost).toMatchObject({ category: "jev", costUsd: "0.000015" });
+    });
+  });
+
+  test("a value the goal doesn't give comes back null; anything but exactly {text} is no answer", () => {
+    expect(parseText('{"text": null}')).toBeNull();
+    expect(parseText('{"text": "Zurich"}')).toBe("Zurich");
+    for (const content of [
+      "Thinking: Zurich",
+      '{"text":"Zurich","extra":true}',
+      '{"text":123}',
+      '{"text":"  "}',
+      JSON.stringify({ text: "x".repeat(2_001) }),
+    ])
+      expect(() => parseText(content)).toThrow();
+  });
+
+  test("a request that doesn't answer is backed up by a second, and the first good answer wins", async () => {
+    const aborted: number[] = [];
+    let calls = 0;
+    const hangThenAnswer = (signal: AbortSignal) => {
+      const call = calls++;
+      signal.addEventListener("abort", () => aborted.push(call));
+      return call === 0
+        ? new Promise<string>(() => undefined)
+        : Promise.resolve("second");
+    };
+    expect(await hedged(hangThenAnswer, 20)).toBe("second");
+    expect(aborted.sort()).toEqual([0, 1]);
+
+    // A fast failure starts the backup at once, without waiting.
+    calls = 0;
+    const started = Date.now();
+    const failThenAnswer = () =>
+      calls++ === 0
+        ? Promise.reject(new Error("not JSON"))
+        : Promise.resolve("backup");
+    expect(await hedged(failThenAnswer, 10_000)).toBe("backup");
+    expect(Date.now() - started).toBeLessThan(1_000);
+
+    // Both failing reports the last failure.
+    const failing = () => Promise.reject(new Error("down"));
+    expect(await hedged(failing, 10).catch((e: unknown) => e)).toBeInstanceOf(
+      Error,
+    );
   });
 
   test("outcomes are recorded on the caller's own decisions, and a site turns unreliable when most picks are overridden", async () => {

@@ -743,6 +743,19 @@ export function createBrowser(deps: BrowserDeps) {
       return mine.map((entry) => entry.id);
     },
 
+    /** What autopilot drives a window through (autopilot.ts). */
+    autopilotCore: {
+      caller,
+      windowFor,
+      sessionFor,
+      refresh,
+      info,
+      /** Takes (or renews) the lock for the site a window is on; exit 6 if taken. */
+      lock: (owner: string, entry: WindowEntry) =>
+        locks.acquire(entry.url, owner, entry.id),
+      now,
+    },
+
     /** The CDP connection, for the live view (screencast.ts). */
     connection,
 

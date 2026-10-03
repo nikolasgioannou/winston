@@ -76,10 +76,11 @@ export function autopilotText(result: BrowserAutopilotResponse) {
     result.actions.length > 0
       ? result.actions.map((action) => `- ${action}`)
       : ["Nothing done."];
+  const seconds = (result.elapsedMs / 1000).toFixed(1);
   return [
     ...did,
-    `Stopped (${result.stop}): ${result.reason}`,
-    `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}. Snapshot next.`,
+    `Stopped (${result.stop}) after ${seconds} s: ${result.reason}`,
+    `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}. Snapshot to check.`,
   ].join("\n");
 }
 
@@ -525,37 +526,44 @@ export const browser: Resource = {
     {
       name: "autopilot",
       summary:
-        "Let the fast model click toward a sub-goal; it hands back when unsure, at typing, or before anything that commits",
-      usage: "<subgoal>",
+        "Let a fast model drive the page toward a goal (clicking, typing, choosing); it stops when done, blocked, or before anything that commits",
+      usage: "<goal>",
       flags: [
         {
           name: "max-steps",
           value: "<n>",
-          description: "At most this many clicks (default 8, at most 20)",
+          description: "At most this many actions (default 30, at most 60)",
+        },
+        {
+          name: "max-seconds",
+          value: "<n>",
+          description: "Stop after this long (default 30, at most 120)",
         },
         windowFlag,
       ],
       examples: [
-        'winston browser autopilot "open the first search result"',
-        'winston browser autopilot "get to the checkout page" --max-steps 12',
+        'winston browser autopilot "search flights from Zurich to London, one way, on 2026-10-20"',
+        'winston browser autopilot "open the first search result" --max-seconds 15',
       ],
       run: async (context) => {
         const goal = context.args.join(" ").trim();
         if (!goal)
           throw CliError.usage(
-            "What's the sub-goal? Say it in a few words.",
-            'winston browser autopilot "open the first search result"',
+            "What's the goal? Say it with every value it needs.",
+            "winston browser autopilot \"search for 'dune' and open the first result\"",
           );
-        const steps = textFlag(context.flags, "max-steps");
-        const maxSteps = steps === undefined ? undefined : Number(steps);
-        if (
-          maxSteps !== undefined &&
-          (!Number.isInteger(maxSteps) || maxSteps < 1)
-        )
-          throw CliError.usage(
-            "--max-steps takes a whole number, like 8.",
-            'winston browser autopilot "open the first result" --max-steps 8',
-          );
+        const whole = (name: string) => {
+          const raw = textFlag(context.flags, name);
+          const value = raw === undefined ? undefined : Number(raw);
+          if (value !== undefined && (!Number.isInteger(value) || value < 1))
+            throw CliError.usage(
+              `--${name} takes a whole number, like 20.`,
+              `winston browser autopilot "open the first result" --${name} 20`,
+            );
+          return value;
+        };
+        const maxSteps = whole("max-steps");
+        const maxSeconds = whole("max-seconds");
         const window = textFlag(context.flags, "window");
         const result = await post<BrowserAutopilotResponse>(
           context,
@@ -563,6 +571,7 @@ export const browser: Resource = {
           {
             goal,
             ...(maxSteps ? { maxSteps } : {}),
+            ...(maxSeconds ? { maxSeconds } : {}),
             ...(window ? { window } : {}),
           },
         );

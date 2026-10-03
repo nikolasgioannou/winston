@@ -135,8 +135,7 @@ await serveCliSocket(
     rpc: browserRpc(
       browser,
       createAutopilot({
-        snapshot: (runToken, window) => browser.snapshot(runToken, { window }),
-        click: (runToken, ref, window) => browser.click(runToken, ref, window),
+        core: browser.autopilotCore,
         backend: (request) => daemon.rpc(request),
       }),
     ),

@@ -281,7 +281,12 @@ export function createActions(core: ActionCore) {
           hit = inner;
         }
         if (!hit) return { skip: true };
-        const mine = hit === this || this.contains(hit) || hit.contains(this) ||
+        // An ancestor counts across shadow boundaries: a closed shadow root
+        // stops the hit test at its host, which doesn't "contain" the button.
+        const up = (n) => n.parentNode ?? n.host ?? null;
+        let ancestor = false;
+        for (let n = up(this); n && !ancestor; n = up(n)) ancestor = n === hit;
+        const mine = hit === this || this.contains(hit) || ancestor ||
           (this.labels ? [...this.labels].some((label) => label.contains(hit)) : false);
         if (mine) return { ok: true };
         const named = hit.id ? \` id="\${hit.id}"\`

@@ -75,6 +75,9 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
             ...(typeof body.maxSteps === "number"
               ? { maxSteps: body.maxSteps }
               : {}),
+            ...(typeof body.maxSeconds === "number"
+              ? { maxSeconds: body.maxSeconds }
+              : {}),
             window: text("window"),
           }),
         );

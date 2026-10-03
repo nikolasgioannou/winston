@@ -134,35 +134,44 @@ describe("winston browser", () => {
     expect(out).toContain("win_01k5x9q8f3e2d1c0b9a8z7y6x5");
   });
 
-  test("autopilot sends the sub-goal and steps, and prints what it did and why it stopped", async () => {
+  test("autopilot sends the goal and its limits, and prints what it did, why it stopped and how long it took", async () => {
     const { out, requests } = await cli(
       [
         "browser",
         "autopilot",
-        "open",
+        "buy",
         "the",
-        "first",
-        "result",
+        "blue",
+        "mug",
         "--max-steps",
         "5",
+        "--max-seconds",
+        "20",
       ],
       () =>
         Response.json({
-          actions: ['Clicked e3 (link "Bun").'],
+          actions: [
+            'Typed "blue mug" into [1] Search.',
+            "Clicked [3] Blue mug.",
+          ],
           stop: "commits",
-          reason: 'The next step commits something: e9 (button "Buy").',
-          window: win({ url: "https://example.com/p", title: "Bun" }),
+          reason:
+            "The next step would commit something: [9] Place order. Decide it yourself.",
+          window: win({ url: "https://example.com/p", title: "Mug" }),
+          elapsedMs: 2_340,
         }),
     );
     expect(await bodyOf(requests[0])).toEqual({
-      goal: "open the first result",
+      goal: "buy the blue mug",
       maxSteps: 5,
+      maxSeconds: 20,
     });
     expect(out).toBe(
       [
-        '- Clicked e3 (link "Bun").',
-        'Stopped (commits): The next step commits something: e9 (button "Buy").',
-        'Now at https://example.com/p ("Bun"). Snapshot next.',
+        '- Typed "blue mug" into [1] Search.',
+        "- Clicked [3] Blue mug.",
+        "Stopped (commits) after 2.3 s: The next step would commit something: [9] Place order. Decide it yourself.",
+        'Now at https://example.com/p ("Mug"). Snapshot to check.',
       ].join("\n"),
     );
   });

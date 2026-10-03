@@ -96,7 +96,7 @@ describe("bash", () => {
       exitCode: 124,
       timedOut: true,
     });
-    expect(output).toContain("stopped after 10 seconds");
+    expect(output).toContain("stopped after 45 seconds");
     expect(output).toContain("halfway");
   });
 

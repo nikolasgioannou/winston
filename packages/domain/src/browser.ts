@@ -113,22 +113,31 @@ export interface BrowserEvalResponse {
 
 /** Why autopilot handed back (docs/design.md §5, Jev fast path). */
 export type AutopilotStop =
-  | "goal_met"
-  | "stuck"
-  | "unsure"
-  | "needs_typing"
+  /** Jev says the goal is visibly met; the agent checks. */
+  | "done"
+  /** Jev says nothing it can do makes progress (a sign-in, a bot check, a frame). */
+  | "blocked"
+  /** Three actions in a row changed nothing. */
+  | "no_progress"
+  /** The next step would place an order, pay, send, book or delete. */
   | "commits"
+  /** A field needs a value the goal doesn't give. */
+  | "needs_value"
   | "max_steps"
+  | "max_time"
+  /** Jev keeps being overridden on this site. */
   | "unreliable"
   | "unavailable"
   | "failed";
 
 /** What `winston browser autopilot` answers. */
 export interface BrowserAutopilotResponse {
-  /** What it did, in order: `Clicked e5 (link "Bun").` */
+  /** What it did, in order: `Clicked [3] Search.` */
   actions: string[];
   stop: AutopilotStop;
-  /** Why it stopped, for the agent: `The next step commits something: e9 (button "Place order").` */
+  /** Why it stopped, for the agent: `The next step would commit something: [9] Place order.` */
   reason: string;
   window: BrowserWindowInfo;
+  /** How long it ran. */
+  elapsedMs: number;
 }

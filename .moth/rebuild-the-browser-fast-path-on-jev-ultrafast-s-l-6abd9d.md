@@ -1,13 +1,13 @@
 ---
 id: "6abd9d"
 title: Rebuild the browser fast path on jev-ultrafast's loop
-status: backlog
+status: done
 priority: none
 labels:
   - browser
   - vm
 created_at: 2026-10-03T17:26:02.878Z
-updated_at: 2026-10-03T17:26:17.025Z
+updated_at: 2026-10-03T19:41:34.650Z
 ---
 
 The founder (2026-10-03): "our browser use is just not good… learn from [browser-use/jev-ultrafast] and implement this exactly."
@@ -108,3 +108,43 @@ jev-ultrafast (MIT, read in full on 2026-10-03 at commit `1231850`; about 850 li
 ## Docs
 
 §5 Browser (autopilot as built), decision #24, docs/research/models-openrouter.md (Mercury), and the measurements.
+
+## As built
+
+- **The loop is jev-ultrafast's,** ported to TypeScript in winstond:
+  - **Reading the page:** `fast-page.ts` does the atomic read, guards and executor; it runs in our isolated world and walks open shadow roots.
+  - **Deciding:** `autopilot.ts` builds the action space and sends one Jev request with operation and per-operation target heads (only the matching head acts). It also holds the stops and waits.
+  - **Kept from before:** per-site reliability and the outcome signal.
+- **Our additions:**
+  - **A `commits` head** in the same request replaces the name regex: a click or select on the named target stops (`commits`).
+  - **The text helper:** `POST /v1/jev/text` runs Mercury 2.5 through OpenRouter, with reasoning off, JSON mode and `data_collection: "deny"`. Calls are logged in `jev_decisions` and charged as `jev`. `null` stops the run (`needs_value`).
+  - **Hedged requests:** Mercury failed to answer 3 of 25 calls within 8 s, so a second request goes out after 2 s or on a failure, and the first good answer wins.
+  - **Dialogs:** a confirm or prompt opening mid-call stops the run (`blocked`) instead of hanging.
+  - **One rule line from testing:** "set every requested filter or control before opening a result". jev-ultrafast's own fixture went 1 of 5 without it; with it, 14 of 14 runs that reached the end were correct.
+- **Proxy:** a choice may have 1 option (Jev answers it as 1); every question needs instructions (the decisions API refuses one without); the state may be up to 128 KB.
+- **"Covered" fix:** both executors accept a hit on a composed ancestor of the target. A real-Chrome test reproduces the BA error without the fix and passes with it.
+- **Measured** (local Chrome 154 headless, real Jev and Mercury):
+
+  | Task | Result | Median time | jev-ultrafast |
+  |---|---|---|---|
+  | Hotel fixture | 5/5 | 2.15 s | 1.9 s |
+  | Wikipedia | 5/5 | 2.45 s | 2.8 s |
+  | Google Flights | 3/3 | 6.27 s | 7.1 s |
+
+  - **Flights detail:** 11 actions, 19 Jev calls and 2 text calls, about $0.0055.
+  - **Real Jev on fixtures:** a bot check stopped as `blocked`; "Place order" stopped as `commits`.
+  - **The old autopilot** couldn't do any of the three tasks.
+  - **Opus driving** is estimated at one to three minutes for the Flights flow, not run head to head.
+- **The front's command limit is now 45 s** (option a): autopilot runs took 2–6.5 s here, and production cut off six slow browser commands at 10 s. Autopilot defaults to 30 s and 30 actions, with `--max-seconds` and `--max-steps`.
+- **`snapshot` stays on the accessibility tree.** The DOM read is faster (6–79 ms against 7–491 ms on five heavy sites), but both are small next to a model turn. The read also sees only the viewport, without frames or closed shadow roots.
+- **Prompts:**
+  - **Background:** autopilot for any multi-step stretch, with a precise goal carrying every value, then a snapshot to check.
+  - **Front of house:** autopilot for a short flow, and the 45 s limit.
+- **Not done:**
+  - **Frames:** reading same-session frames. Frames are counted and Jev is told, so it answers blocked and Opus snapshots.
+  - **Closed shadow roots** are invisible to the read, as to any page script; Opus's snapshot covers them.
+
+Tests:
+- **Ported from jev-ultrafast's offline contracts** (`autopilot.test.ts`, `fast-page.test.ts`), plus `commits`, `needs_value`, reliability, outcomes and dialogs.
+- **`check_guards.py` ported** as `fast-page.chrome.test.ts` (run with `WINSTON_TEST_CHROME`), with open shadow roots, no page globals and the closed-shadow-root click.
+- **Text route:** what's sent, strict parsing, the hedge.

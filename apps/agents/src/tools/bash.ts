@@ -11,9 +11,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import { GatewayError, type VmClient } from "../vm/gateway-client.ts";
 
-/** How long a command may run: short for the front of house, which must stay responsive. */
+/**
+ * How long a command may run: short for the front of house, which must stay
+ * responsive, but long enough for a slow page or an autopilot run (2–30 s).
+ */
 export const bashTimeoutMs: Record<RunKind, number> = {
-  front: 10_000,
+  front: 45_000,
   background: 10 * 60_000,
 };
 
