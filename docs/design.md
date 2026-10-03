@@ -622,7 +622,7 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - Tickets are tracked in the repo with **Moth** (`.moth/`, schema-checked Markdown, statuses and `blocked_by` dependencies). Moth is pinned in `mise.toml` (installed from its GitHub releases), so `setup.sh` and CI get the same version. `moth check` runs as part of `bun run check`. Retitle tickets with `moth edit --title`, which also renames the file, as `moth check` requires.
 - **One ticket per commit.** The whole product is broken into tickets before building starts, detailed enough to execute fairly autonomously.
 - **No standard ticket template.** Each ticket is written on its own, with whatever that piece of work needs.
-- **The sequence lives in [plan.md](plan.md)**, since Moth doesn't track order. It covers the ordered list of all tickets by milestone, how to work through them, and which ones are collaborative.
+- **Order:** v1 was built in the order of a hand-written plan (`docs/plan.md`, retired on 2026-10-03 once every ticket was done; it's in git history). Since then, work comes from the founder's requests and Moth's unblocked tickets by priority (AGENTS.md); `spec`-labeled tickets are fleshed out with the founder first.
 
 ## 8d. Build order
 

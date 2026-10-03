@@ -4,7 +4,7 @@ These are the rules for how work happens in this repo. What Winston is and how i
 
 ## Tickets
 
-- Work comes from Moth tickets in `.moth/`, in the order given by `docs/plan.md`.
+- Work comes from Moth tickets in `.moth/`: the ones the founder asks for, or else the unblocked ones (`moth list --status todo --unblocked`), highest priority first. Tickets labeled `spec` need a spec with the founder before any building.
 - Before starting a ticket, re-check it against the current docs and the tickets it depends on. If things have moved on, update the ticket first.
 - If a ticket's instructions conflict with the principles below, raise it with the user instead of following the ticket as written.
 - Claim a ticket by moving it to `in-progress`. Move it to `done` in the same commit as the work.

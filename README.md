@@ -22,5 +22,5 @@ bun run check
 
 - [Product](docs/product.md): what Winston is and why
 - [Design](docs/design.md): how it works, decisions and specifications
-- [Plan](docs/plan.md): the build order; tickets live in `.moth/`
+- Tickets live in `.moth/` ([Moth](https://github.com/nikolasgioannou/moth)); `moth list --status todo --unblocked` shows what's ready
 - [Local development](docs/local-dev.md): running Winston on your machine
