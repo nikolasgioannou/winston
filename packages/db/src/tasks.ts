@@ -4,7 +4,7 @@
  * queueing its next step, cancelling and resuming. The step engine lives in
  * `apps/agents`; these are shared with the VM-facing API.
  */
-import { runStepJob } from "@winston/domain/jobs";
+import { closeTaskBrowserJob, runStepJob } from "@winston/domain/jobs";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { createHandoff, handoffLink, resolveHandoffs } from "./handoffs.ts";
@@ -29,8 +29,9 @@ export const queueTaskStep = (db: DbOrTx, userId: string, runId: string) =>
  * Ends a run and reports the outcome to the front of house, together: only
  * the front of house messages the user (§4), so the result becomes a
  * `task.completed` or `task.failed` item, which queues a turn like any other
- * input. Returns the new status, or undefined if the run had already moved
- * on, in which case nothing is reported.
+ * input. Its browser windows are closed too (`close_task_browser`). Returns
+ * the new status, or undefined if the run had already moved on, in which
+ * case nothing is reported.
  */
 export async function finishTask(
   db: DbOrTx,
@@ -65,6 +66,12 @@ export async function finishTask(
         ...(trigger ? { trigger } : {}),
       },
       sourceRef: `task:${runId}:finished`,
+    });
+    await enqueue(tx, closeTaskBrowserJob.type, {
+      userId: run.userId,
+      payload: { runId },
+      dedupeKey: closeTaskBrowserJob.dedupeKey(runId),
+      maxAttempts: closeTaskBrowserJob.maxAttempts,
     });
     return status;
   });

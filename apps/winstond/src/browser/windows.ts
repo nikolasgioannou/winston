@@ -707,6 +707,42 @@ export function createBrowser(deps: BrowserDeps) {
       locks.unpin(owner);
     },
 
+    /**
+     * Gives a window to another run (a delegated task carrying on a page):
+     * the same tab, session and history, its site locks, and the new
+     * owner's current window. Null when `from` has no such window, or the
+     * user has it.
+     */
+    transfer(from: string, to: string, windowId?: string) {
+      const id = windowId ?? current.get(from);
+      const entry = id ? windows.get(id) : undefined;
+      if (entry?.owner !== from || entry.heldForUser) return null;
+      entry.owner = to;
+      entry.lastUsedAt = now();
+      // Refs come from the old owner's snapshots: the new one takes its own.
+      entry.refs = new Map();
+      locks.transfer(entry.id, to);
+      if (current.get(from) === entry.id) pickCurrent(from);
+      current.set(to, entry.id);
+      releaseIfGone(from);
+      return { windowId: entry.id, targetId: entry.targetId, url: entry.url };
+    },
+
+    /** A run has ended: closes its windows and frees its sites now. */
+    async closeOwner(owner: string) {
+      const mine = [...windows.values()].filter(
+        (entry) => entry.owner === owner,
+      );
+      for (const entry of mine) {
+        forget(entry);
+        await cdp
+          ?.send("Target.closeTarget", { targetId: entry.targetId })
+          .catch(() => undefined);
+      }
+      locks.release(owner);
+      return mine.map((entry) => entry.id);
+    },
+
     /** The CDP connection, for the live view (screencast.ts). */
     connection,
 

@@ -228,6 +228,46 @@ describe("handoff live views", () => {
     vm.ws.close();
   });
 
+  test("transfer asks the VM to give a window to another run and answers with it; closing an ended run's windows is sent, or retried", async () => {
+    const vm = await connectedVm();
+    const before = vm.frames.length;
+    const transferred = internal(`/vms/${vm.userId}/browser/transfer`, {
+      from: "front",
+      to: "task_1",
+    });
+    const asked = await vm.next("browser.transfer", before);
+    expect(asked).toMatchObject({ from: "front", to: "task_1" });
+    vm.ws.send(
+      JSON.stringify({
+        id: "r2",
+        type: "browser.transferred",
+        replyTo: asked.id,
+        window: { windowId: "win_3", targetId: "T3", url: "https://air.test" },
+      }),
+    );
+    expect(await (await transferred).json()).toEqual({
+      window: { windowId: "win_3", targetId: "T3", url: "https://air.test" },
+    });
+
+    const closed = await internal(`/vms/${vm.userId}/browser/release`, {
+      owner: "task_1",
+      close: true,
+    });
+    expect(closed.status).toBe(200);
+    expect(await vm.next("browser.release", before)).toMatchObject({
+      owner: "task_1",
+      close: true,
+    });
+    vm.ws.close();
+    await eventually(async () => {
+      const offline = await internal(`/vms/${vm.userId}/browser/release`, {
+        owner: "task_1",
+        close: true,
+      });
+      return offline.status === 409;
+    });
+  });
+
   test("an expired link says so; a page that never signs in is dropped", async () => {
     const vm = await connectedVm();
     const run = await insertRun(db, vm.userId, { kind: "background" });

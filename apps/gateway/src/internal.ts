@@ -39,7 +39,7 @@ export function internalRoutes({
   execs: Execs;
   files: FileTransfers;
   updates?: Pick<Updates, "ready">;
-  handoffs?: Pick<Handoffs, "hold" | "release">;
+  handoffs?: Pick<Handoffs, "hold" | "release" | "transfer">;
 }) {
   const expected = Buffer.from(`Bearer ${secret}`);
   const authorized = (header: string | undefined) => {
@@ -214,7 +214,10 @@ export function internalRoutes({
       })
       .post("/vms/:userId/browser/release", async (c) => {
         const body = z
-          .object({ owner: z.string().min(1).max(64) })
+          .object({
+            owner: z.string().min(1).max(64),
+            close: z.boolean().optional(),
+          })
           .safeParse(await c.req.json().catch(() => undefined));
         if (!body.success || !handoffs)
           return c.json(
@@ -225,8 +228,57 @@ export function internalRoutes({
           );
         const vmId = await vmIdFor(c.req.param("userId"));
         if (!vmId) return notFound(c);
-        handoffs.release(vmId, body.data.owner);
+        const sent = handoffs.release(vmId, body.data.owner, {
+          close: body.data.close === true,
+        });
+        // Closing an ended run's windows is worth a retry; a release isn't.
+        if (!sent && body.data.close)
+          return c.json(
+            {
+              error: {
+                code: "vm_unavailable",
+                message: new VmUnavailableError().message,
+              },
+            },
+            409,
+          );
         return c.json({ released: true });
+      })
+      .post("/vms/:userId/browser/transfer", async (c) => {
+        const body = z
+          .object({
+            from: z.string().min(1).max(64),
+            to: z.string().min(1).max(64),
+            windowId: z.string().optional(),
+          })
+          .safeParse(await c.req.json().catch(() => undefined));
+        if (!body.success || !handoffs)
+          return c.json(
+            {
+              error: {
+                code: "invalid_request",
+                message: "from and to are required",
+              },
+            },
+            400,
+          );
+        const vmId = await vmIdFor(c.req.param("userId"));
+        if (!vmId) return notFound(c);
+        try {
+          return c.json({ window: await handoffs.transfer(vmId, body.data) });
+        } catch (error) {
+          if (error instanceof VmUnavailableError)
+            return c.json(
+              { error: { code: "vm_unavailable", message: error.message } },
+              409,
+            );
+          if (error instanceof VmUnreachableError)
+            return c.json(
+              { error: { code: "vm_unreachable", message: error.message } },
+              504,
+            );
+          throw error;
+        }
       })
       .get("/vms/:userId/files", async (c) => {
         const path = c.req.query("path");

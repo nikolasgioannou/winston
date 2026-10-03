@@ -15,6 +15,7 @@ import {
   provisionVmJob,
   restoreVmJob,
   rollVmJob,
+  closeTaskBrowserJob,
   revokeConnectionTokenJob,
   runStepJob,
   syncConnectionJob,
@@ -29,6 +30,7 @@ import {
   transcribeVoiceHandler,
 } from "./attachments.ts";
 import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
+import { closeTaskBrowserHandler } from "./background/close-browser.ts";
 import { createBlobStore } from "./blobs.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
@@ -204,6 +206,7 @@ const worker = createWorker({
       blobs,
       telegram,
     }),
+    [closeTaskBrowserJob.type]: closeTaskBrowserHandler(vm),
     [saveAttachmentJob.type]: saveAttachmentHandler({
       vm,
       telegram: botApiFiles(telegramApi, config.TELEGRAM_BOT_TOKEN),

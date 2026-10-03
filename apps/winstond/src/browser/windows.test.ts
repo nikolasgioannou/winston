@@ -479,4 +479,69 @@ describe("agent windows", () => {
     browser.release("run_a");
     await browser.navigate(token("run_a"), { url: "https://shop.test/2" });
   });
+
+  test("a run that ended has its windows closed and its sites freed at once, held ones too", async () => {
+    const { browser, chrome } = setup();
+    const a = await browser.open(token("run_a"), "https://shop.test");
+    const second = await browser.open(token("run_a"), "https://news.test");
+    browser.hold("run_a");
+    const other = await browser.open(token("run_b"), "https://mail.test");
+    expect((await browser.closeOwner("run_a")).sort()).toEqual(
+      [a.window.id, second.window.id].sort(),
+    );
+    expect(
+      chrome()
+        .sent.filter((m) => m.method === "Target.closeTarget")
+        .map((m) => m.params.targetId),
+    ).toEqual(["t1", "t2"]);
+    expect((await browser.windows(token("run_b"))).map((w) => w.id)).toEqual([
+      other.window.id,
+    ]);
+    // Its sites are free for the next run straight away.
+    await browser.navigate(token("run_b"), { url: "https://shop.test" });
+  });
+
+  test("a window given to another run keeps its page and site, becomes that run's current window, and the giver can only look", async () => {
+    const { browser } = setup();
+    const front = await browser.open(
+      token("run_f", "front"),
+      "https://air.test/checkin",
+    );
+    expect(browser.transfer("front", "task_1")).toEqual({
+      windowId: front.window.id,
+      targetId: "t1",
+      url: "https://air.test/checkin",
+    });
+    // The task acts in it by default, holding its site.
+    const moved = await browser.navigate(token("task_1"), {
+      url: "https://air.test/checkin/passport",
+    });
+    expect(moved.window).toMatchObject({
+      id: front.window.id,
+      owner: "task_1",
+      locks: ["air.test"],
+    });
+    const refused = await failure(
+      browser.navigate(
+        token("run_f", "front"),
+        { url: "https://air.test/2" },
+        front.window.id,
+      ),
+    );
+    expect(refused.message).toBe(`${front.window.id} belongs to another task.`);
+    expect(
+      (
+        await failure(
+          browser.navigate(token("run_f", "front"), {
+            url: "https://air.test",
+          }),
+        )
+      ).code,
+    ).toBe("not_found");
+    // Nothing left to give, and a window held for the user isn't given away.
+    expect(browser.transfer("front", "task_2")).toBeNull();
+    await browser.open(token("run_g", "front"), "https://shop.test");
+    browser.hold("front");
+    expect(browser.transfer("front", "task_2")).toBeNull();
+  });
 });

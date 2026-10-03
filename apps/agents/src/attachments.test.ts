@@ -105,6 +105,8 @@ function fakeVm(
     fetchExec: () => Promise.resolve(undefined),
     holdBrowser: () => Promise.resolve(null),
     releaseBrowser: () => Promise.resolve(),
+    closeBrowser: () => Promise.resolve(),
+    transferBrowser: () => Promise.resolve(null),
     exec: (_userId, request) => {
       if (options.down)
         return Promise.reject(new GatewayError("vm_unavailable", "down"));

@@ -19,6 +19,8 @@ function fakeVm(answer: Partial<ExecResult> | GatewayError) {
     fetchExec: () => Promise.resolve(undefined),
     holdBrowser: () => Promise.resolve(null),
     releaseBrowser: () => Promise.resolve(),
+    closeBrowser: () => Promise.resolve(),
+    transferBrowser: () => Promise.resolve(null),
     exec: (_userId, request) => {
       execs.push(request);
       if (answer instanceof GatewayError) return Promise.reject(answer);

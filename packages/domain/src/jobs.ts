@@ -26,6 +26,19 @@ export const runStepJob = {
 } as const;
 
 /**
+ * A background run ended (§5, Browser): close its windows and free its
+ * sites on the VM now, rather than when the idle sweep gets to them.
+ * Payload `{ runId }`. Queued with the run's final status, so every way a
+ * run ends gets it; a parked run isn't ended, so its windows stay.
+ */
+export const closeTaskBrowserJob = {
+  type: "close_task_browser",
+  dedupeKey: (runId: string) => `close_task_browser:${runId}`,
+  /** A few tries over a couple of minutes: the VM may be mid-restart. */
+  maxAttempts: 5,
+} as const;
+
+/**
  * A schedule's occurrence came (§3, §17 Scheduler loop). The payload names
  * the occurrence, so a duplicate job for one the trigger has moved past does
  * nothing.

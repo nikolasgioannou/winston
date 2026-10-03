@@ -28,6 +28,7 @@ import {
   messageDroppedNote,
   runFrontTurn,
 } from "./turn.ts";
+import type { VmClient } from "../vm/gateway-client.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
 import { localBlobStore } from "../blobs.ts";
 
@@ -71,6 +72,8 @@ async function scenario(
     rejectRich?: boolean;
     /** How the fake computer answers each command. */
     vmAnswer?: (cmd: string) => Partial<ExecResult>;
+    /** The fake computer's other answers (its browser), instead of the defaults. */
+    vm?: Partial<VmClient>;
     /** Runs while model request `index` of a turn is in flight. */
     onRequest?: (
       index: number,
@@ -155,7 +158,7 @@ async function scenario(
           db: tx,
           logger,
           gateway: fake.gateway,
-          vm: vm.client,
+          vm: { ...vm.client, ...options.vm },
           runTokenSecret: testRunTokenSecret,
           blobs: testBlobs,
           webPublicUrl: "https://runwinston.com",
@@ -278,6 +281,103 @@ describe("runFrontTurn", () => {
         expect(all.map((r) => [r.id, r.kind, r.status])).toEqual([
           [runId ?? "", "front", "completed"],
         ]);
+      },
+    );
+  });
+
+  test("a blank window isn't handed over: the model hears why and the turn carries on", async () => {
+    const released: string[] = [];
+    await scenario(
+      [
+        [
+          toolCallReply("browser_handoff", { reason: "Sign in to BA." }),
+          textReply("Opening BA first, then it's yours."),
+        ],
+      ],
+      async ({ say, turn, sent, requests }) => {
+        await say("send me the browser, I'll take over");
+        await turn();
+        expect(released).toEqual(["front"]);
+        expect(JSON.stringify(requests[0]?.[1]?.messages)).toContain(
+          "Not handed over: your browser window is blank",
+        );
+        expect(sent.map((m) => m.text)).toEqual([
+          "Opening BA first, then it's yours.",
+        ]);
+      },
+      {
+        vm: {
+          holdBrowser: () =>
+            Promise.resolve({
+              windowId: "win_1",
+              targetId: "T1",
+              url: "about:blank",
+            }),
+          releaseBrowser: (_userId, owner) => {
+            released.push(owner);
+            return Promise.resolve();
+          },
+        },
+      },
+    );
+  });
+
+  test("delegate can hand the task its window: it changes hands before the task starts, and the brief says so", async () => {
+    const transfers: { from: string; to: string; windowId?: string }[] = [];
+    await scenario(
+      [
+        [
+          toolCallReply("delegate", {
+            brief: "Finish BA's check-in from the passport page.",
+            window: "win_1",
+          }),
+          toolCallReply("delegate", {
+            brief: "And this one.",
+            window: "win_9",
+          }),
+          toolCallReply("end_turn", {}),
+        ],
+      ],
+      async ({ tx, userId, say, turn, requests }) => {
+        await say("finish the check-in for me");
+        await turn();
+        const tasks = await tx
+          .select()
+          .from(runs)
+          .where(and(eq(runs.userId, userId), eq(runs.kind, "background")));
+        expect(tasks).toHaveLength(1);
+        expect(transfers).toEqual([
+          { from: "front", to: tasks[0]?.id ?? "", windowId: "win_1" },
+          {
+            from: "front",
+            to: expect.any(String) as string,
+            windowId: "win_9",
+          },
+        ]);
+        expect(tasks[0]?.brief).toContain(
+          "Your browser window win_1 was handed to you as it was, on https://ba.test/checkin",
+        );
+        const results = JSON.stringify(requests[0]?.slice(1));
+        expect(results).toContain("It has your window win_1 now");
+        expect(results).toContain(
+          "Not started: win_9 isn't a window of yours to hand over",
+        );
+      },
+      {
+        vm: {
+          transferBrowser: (_userId, transfer) => {
+            transfers.push(transfer);
+            return Promise.resolve(
+              transfer.windowId === "win_1"
+                ? {
+                    windowId: "win_1",
+                    targetId: "T1",
+                    url: "https://ba.test/checkin",
+                  }
+                : null,
+            );
+          },
+        },
       },
     );
   });

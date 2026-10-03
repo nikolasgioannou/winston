@@ -236,6 +236,8 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   };
 
   let steps = 0;
+  /** Whether a handoff went through (a blank window is refused instead). */
+  const handoff = { done: false };
   const bash = bashTool({
     vm: deps.vm,
     logger,
@@ -302,12 +304,16 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       () => stream.dropStep,
     ),
     delegate: unlessDropped(
-      delegateTool({ db, logger, userId, runId }),
+      delegateTool({ db, logger, vm: deps.vm, userId, runId }),
       () => stream.dropStep,
     ),
     browser_handoff: unlessDropped(
       frontHandoffTool({
         hold: () => deps.vm.holdBrowser(userId, "front"),
+        release: () => deps.vm.releaseBrowser(userId, "front"),
+        handedOver: () => {
+          handoff.done = true;
+        },
         createLink: async (window, reason) =>
           handoffLink(
             deps.webPublicUrl,
@@ -460,10 +466,8 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       }
       // A handoff ends the turn too: the user's reply is the next message (§1).
       if (
-        step.toolCalls.some(
-          (call) =>
-            call.toolName === "end_turn" || call.toolName === "browser_handoff",
-        )
+        handoff.done ||
+        step.toolCalls.some((call) => call.toolName === "end_turn")
       ) {
         outcome = stream.sent > 0 ? "reply" : "silent";
         break;

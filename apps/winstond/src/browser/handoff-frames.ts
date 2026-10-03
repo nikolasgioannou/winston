@@ -1,6 +1,7 @@
 /**
- * The gateway's browser handoff frames (docs/design.md §5, §15): hold a
- * run's window for the user, let it go, and run that tab's live view.
+ * The gateway's browser frames (docs/design.md §5, §15): hold a run's
+ * window for the user, let it go, close an ended run's windows, give a
+ * window to another run, and run a tab's live view.
  */
 import {
   newFrameId,
@@ -20,7 +21,7 @@ export function handoffFrames({
   sendFrame,
   logger,
 }: {
-  browser: Pick<Browser, "hold" | "release">;
+  browser: Pick<Browser, "hold" | "release" | "transfer" | "closeOwner">;
   screencasts: Screencasts;
   desktops: Pick<Desktops, "open" | "write" | "close" | "closeAll">;
   /** Sends on the live connection (a live view can end any time). */
@@ -39,7 +40,22 @@ export function handoffFrames({
           });
           return;
         case "browser.release":
-          browser.release(frame.owner);
+          if (frame.close)
+            browser.closeOwner(frame.owner).catch((error: unknown) => {
+              logger.warn(
+                { err: error, owner: frame.owner },
+                "closing an ended run's windows failed",
+              );
+            });
+          else browser.release(frame.owner);
+          return;
+        case "browser.transfer":
+          reply({
+            id: newFrameId(),
+            type: "browser.transferred",
+            replyTo: frame.id,
+            window: browser.transfer(frame.from, frame.to, frame.windowId),
+          });
           return;
         case "screencast.start":
           screencasts

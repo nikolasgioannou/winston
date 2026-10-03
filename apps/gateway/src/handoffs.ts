@@ -60,6 +60,7 @@ export function createHandoffs({
   sendBinary: (vmId: string, message: Uint8Array) => boolean;
   logger: Logger;
 }) {
+  /** Holds and transfers waiting on the VM's answer, by frame id. */
   const holds = new Map<
     string,
     { resolve: (window: HeldWindow | null) => void; timer: Timer }
@@ -74,6 +75,26 @@ export function createHandoffs({
     desktops.delete(handoffId);
     send(desktop.vmId, { id: newFrameId(), type: "desktop.close", handoffId });
     desktop.socket.close(code, reason);
+  }
+
+  /** Sends a frame the VM answers with a window (or null), and waits for that. */
+  function ask(
+    vmId: string,
+    frame: (id: string) => GatewayToVmFrame,
+  ): Promise<HeldWindow | null> {
+    const id = newFrameId();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        holds.delete(id);
+        reject(new VmUnreachableError());
+      }, holdTimeoutMs);
+      holds.set(id, { resolve, timer });
+      if (!send(vmId, frame(id))) {
+        clearTimeout(timer);
+        holds.delete(id);
+        reject(new VmUnavailableError());
+      }
+    });
   }
 
   function stop(viewer: Viewer, code: number, reason: string) {
@@ -91,34 +112,42 @@ export function createHandoffs({
   return {
     /** Asks a VM to hold an owner's current window for the user. */
     hold(vmId: string, owner: string): Promise<HeldWindow | null> {
-      const id = newFrameId();
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          holds.delete(id);
-          reject(new VmUnreachableError());
-        }, holdTimeoutMs);
-        holds.set(id, { resolve, timer });
-        if (!send(vmId, { id, type: "browser.hold", owner })) {
-          clearTimeout(timer);
-          holds.delete(id);
-          reject(new VmUnavailableError());
-        }
-      });
+      return ask(vmId, (id) => ({ id, type: "browser.hold", owner }));
     },
 
-    /** Lets an owner's windows go, and ends their live views. */
-    release(vmId: string, owner: string) {
+    /** Asks a VM to give a window (`from`'s current one by default) to another run. */
+    transfer(
+      vmId: string,
+      request: { from: string; to: string; windowId?: string | undefined },
+    ): Promise<HeldWindow | null> {
+      return ask(vmId, (id) => ({
+        id,
+        type: "browser.transfer",
+        from: request.from,
+        to: request.to,
+        ...(request.windowId ? { windowId: request.windowId } : {}),
+      }));
+    },
+
+    /**
+     * Lets an owner's windows go, and ends their live views. With `close`
+     * (the run has ended), its windows close too. False if the VM isn't
+     * connected.
+     */
+    release(vmId: string, owner: string, options: { close?: boolean } = {}) {
+      const reason = options.close ? "The task ended." : "The task carried on.";
       for (const viewer of [...viewers.values()])
         if (viewer.vmId === vmId && viewer.owner === owner)
-          stop(viewer, viewerCloseCodes.ended, "The task carried on.");
+          stop(viewer, viewerCloseCodes.ended, reason);
       for (const desktop of [...desktops.values()])
         if (desktop.vmId === vmId && desktop.owner === owner)
-          closeDesktop(
-            desktop.handoffId,
-            viewerCloseCodes.ended,
-            "The task carried on.",
-          );
-      send(vmId, { id: newFrameId(), type: "browser.release", owner });
+          closeDesktop(desktop.handoffId, viewerCloseCodes.ended, reason);
+      return send(vmId, {
+        id: newFrameId(),
+        type: "browser.release",
+        owner,
+        ...(options.close ? { close: true } : {}),
+      });
     },
 
     /** A page opened a live view: start streaming that tab to it. */
@@ -236,7 +265,10 @@ export function createHandoffs({
 
     /** Frames for the handoff registry; returns whether it took the frame. */
     handle(vmId: string, frame: VmToGatewayFrame) {
-      if (frame.type === "browser.held") {
+      if (
+        frame.type === "browser.held" ||
+        frame.type === "browser.transferred"
+      ) {
         const pending = holds.get(frame.replyTo);
         if (!pending) return true;
         holds.delete(frame.replyTo);

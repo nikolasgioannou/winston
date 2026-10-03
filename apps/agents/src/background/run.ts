@@ -44,7 +44,9 @@ import {
 } from "../tools/bash.ts";
 import {
   backgroundHandoffTool,
+  blankWindowNote,
   browserHandoffDefinition,
+  isBlankPage,
 } from "../tools/handoff.ts";
 import { viewImageDefinition, viewImageTool } from "../tools/view-image.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
@@ -164,6 +166,8 @@ export function contextOf(log: readonly LogEntry[]): ModelMessage[] {
 export async function startBackgroundRun(
   db: DbOrTx,
   options: {
+    /** The run's id, when the caller needed it first (a window handed over). */
+    id?: string;
     userId: string;
     brief: string;
     effort?: Effort;
@@ -185,7 +189,7 @@ export async function startBackgroundRun(
       .from(users)
       .where(eq(users.id, options.userId));
     if (!user) throw new Error(`No user ${options.userId}`);
-    const runId = newId("task");
+    const runId = options.id ?? newId("task");
     await tx.insert(runs).values({
       id: runId,
       userId: options.userId,
@@ -335,6 +339,25 @@ export async function runBackgroundStep(
     }
   };
 
+  /**
+   * Hands over to the user: parks the run, its window held for a live view.
+   * A blank window is refused instead, since there'd be nothing to take
+   * over: false, and the run carries on.
+   */
+  const handOver = async (handoff: ToolCallPart, step: number) => {
+    const window = await heldWindow();
+    if (window && isBlankPage(window.url)) {
+      await deps.vm
+        .releaseBrowser(run.userId, runId)
+        .catch((error: unknown) => {
+          logger.warn({ err: error }, "letting a blank window go failed");
+        });
+      return false;
+    }
+    await parkTask(db, runId, reasonOf(handoff), step, window);
+    return true;
+  };
+
   // A step that died after the model asked for tools (§9, crash safety).
   const lastEntry = log.at(-1);
   const unanswered =
@@ -347,19 +370,16 @@ export async function runBackgroundStep(
       "resuming after an interrupted step",
     );
     const handoff = unanswered.find((call) => call.toolName === handoffTool);
-    if (handoff) {
-      await parkTask(
-        db,
-        runId,
-        reasonOf(handoff),
-        run.stepCount,
-        await heldWindow(),
-      );
-      return "parked";
-    }
+    if (handoff && (await handOver(handoff, run.stepCount))) return "parked";
     const recovered = [];
     for (const call of unanswered)
-      recovered.push({ call, output: await recover(call) });
+      recovered.push({
+        call,
+        output:
+          call === handoff
+            ? { type: "text" as const, value: blankWindowNote }
+            : await recover(call),
+      });
     await store(toolMessage(recovered));
   }
 
@@ -504,14 +524,7 @@ export async function runBackgroundStep(
 
   // Handed over to the user: park, with the call unanswered until resumed.
   const handoff = calls.find((call) => call.toolName === handoffTool);
-  if (handoff) {
-    await parkTask(
-      db,
-      runId,
-      reasonOf(handoff),
-      run.stepCount + 1,
-      await heldWindow(),
-    );
+  if (handoff && (await handOver(handoff, run.stepCount + 1))) {
     logger.info("handed over to the user; parked");
     return "parked";
   }
@@ -519,6 +532,10 @@ export async function runBackgroundStep(
   const outputs: { call: ToolCallPart; output: ToolResultPart["output"] }[] =
     [];
   for (const [i, call] of calls.entries()) {
+    if (call === handoff) {
+      outputs.push({ call, output: { type: "text", value: blankWindowNote } });
+      continue;
+    }
     const requested = step.toolCalls[i];
     outputs.push({
       call,

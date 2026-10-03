@@ -237,6 +237,35 @@ export const browserReleaseFrame = z.object({
   ...base,
   type: z.literal("browser.release"),
   owner: z.string().min(1).max(64),
+  /** The run has ended: close its windows and free its sites now. */
+  close: z.boolean().optional(),
+});
+
+/**
+ * Gives a window to another run (a delegated task carrying on a page): the
+ * same tab, with its session and history. `windowId` defaults to `from`'s
+ * current window.
+ */
+export const browserTransferFrame = z.object({
+  ...base,
+  type: z.literal("browser.transfer"),
+  from: z.string().min(1).max(64),
+  to: z.string().min(1).max(64),
+  windowId: z.string().optional(),
+});
+
+/** The window that changed hands, or null when `from` had no such window to give. */
+export const browserTransferredFrame = z.object({
+  ...base,
+  type: z.literal("browser.transferred"),
+  replyTo: frameId,
+  window: z
+    .object({
+      windowId: z.string(),
+      targetId: z.string(),
+      url: z.string(),
+    })
+    .nullable(),
 });
 
 /**
@@ -406,6 +435,7 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   fileErrorFrame,
   rpcRequestFrame,
   browserHeldFrame,
+  browserTransferredFrame,
   screencastEndedFrame,
   desktopClosedFrame,
   pingFrame,
@@ -425,6 +455,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   updateAvailableFrame,
   browserHoldFrame,
   browserReleaseFrame,
+  browserTransferFrame,
   screencastStartFrame,
   screencastStopFrame,
   inputFrame,

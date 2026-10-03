@@ -37,6 +37,16 @@ export interface VmClient {
   ): Promise<{ windowId: string; targetId: string; url: string } | null>;
   /** Lets a run's held windows go and ends their live views. */
   releaseBrowser(userId: string, owner: string): Promise<void>;
+  /** A run has ended: closes its windows and frees its sites. */
+  closeBrowser(userId: string, owner: string): Promise<void>;
+  /**
+   * Gives a window (`from`'s current one by default) to another run, with
+   * its page and session; null when `from` has no such window to give.
+   */
+  transferBrowser(
+    userId: string,
+    request: { from: string; to: string; windowId?: string },
+  ): Promise<{ windowId: string; targetId: string; url: string } | null>;
 }
 
 /**
@@ -151,6 +161,33 @@ export function gatewayClient({
         },
       );
       if (!response.ok) throw await failure(response);
+    },
+    async closeBrowser(userId, owner) {
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/browser/release`,
+        {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ owner, close: true }),
+        },
+      );
+      if (!response.ok) throw await failure(response);
+    },
+    async transferBrowser(userId, transfer) {
+      const response = await request(
+        userId,
+        `/internal/vms/${userId}/browser/transfer`,
+        { method: "POST", headers: json, body: JSON.stringify(transfer) },
+      );
+      if (!response.ok) throw await failure(response);
+      return (
+        (
+          (await response.json()) as {
+            window?: { windowId: string; targetId: string; url: string } | null;
+          }
+        ).window ?? null
+      );
     },
     async exec(userId, request_) {
       const response = await request(userId, `/internal/vms/${userId}/exec`, {

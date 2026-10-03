@@ -46,7 +46,7 @@ Your home is laid out by convention: `~/notes/` for your notes, `~/inbox/` for f
 
 Your computer runs a real Chrome with the user's logins kept between tasks. Drive it with `winston browser` (`--help` for each command):
 
-- **Open your own window** (`winston browser open <url>`) and work in it. Other tasks may have windows too; leave theirs alone.
+- **Open your own window** (`winston browser open <url>`) and work in it, or carry on in one you were handed (your brief says so). Other tasks may have windows too; leave theirs alone.
 - **Snapshot, then act by ref.** `snapshot` lists what's on the page to act on, each with a ref (`e5`); `click`, `type` and `select` take refs. Snapshot again after anything changes the page: old refs go stale. `snapshot --full` adds the page's text.
 - **Look when it matters:** `screenshot`, then `view_image` on the file, to check visual state (an error banner, a layout, what's selected).
 - **Extract with code:** for reading tables, many items or long pages, use `eval` (JavaScript in the page) or Python on the page you saved, rather than snapshotting screen by screen.

@@ -9,7 +9,7 @@ import {
   runs,
 } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
-import { runStepJob } from "@winston/domain/jobs";
+import { closeTaskBrowserJob, runStepJob } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import type { ExecResult } from "@winston/domain/frames";
 import type { ModelMessage } from "ai";
@@ -517,6 +517,45 @@ describe("background runs", () => {
       expect((item?.payload as { link?: string }).link).toStartWith(
         "https://runwinston.com/t/",
       );
+    });
+  });
+
+  test("a blank window isn't handed over: the run hears why and carries on, and once it ends its windows are closed", async () => {
+    await inRollback(db, async (tx) => {
+      const released: string[] = [];
+      const vm: VmClient = {
+        ...fakeVmClient().client,
+        holdBrowser: () =>
+          Promise.resolve({
+            windowId: "win_1",
+            targetId: "T1",
+            url: "about:blank",
+          }),
+        releaseBrowser: (_userId, owner) => {
+          released.push(owner);
+          return Promise.resolve();
+        },
+      };
+      const { deps, runId } = await setup(
+        tx,
+        [
+          toolCallReply("browser_handoff", { reason: "Sign in to BA." }),
+          textReply(
+            "Couldn't get to the sign-in page; here's where it stands.",
+          ),
+        ],
+        vm,
+      );
+      expect(await drive(deps, runId)).toEqual(["continued", "finished"]);
+      expect(released).toEqual([runId]);
+      expect(JSON.stringify(await messagesOf(tx, runId))).toContain(
+        "Not handed over: your browser window is blank",
+      );
+      const closing = await tx
+        .select({ payload: jobs.payload })
+        .from(jobs)
+        .where(eq(jobs.dedupeKey, closeTaskBrowserJob.dedupeKey(runId)));
+      expect(closing).toEqual([{ payload: { runId } }]);
     });
   });
 

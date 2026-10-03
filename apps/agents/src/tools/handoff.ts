@@ -40,6 +40,17 @@ export const backgroundHandoffTool = tool({
   outputSchema: z.string(),
 });
 
+/** A window showing nothing, so there'd be nothing for the user to take over. */
+export const isBlankPage = (url: string) =>
+  url === "" ||
+  url === "about:blank" ||
+  url.startsWith("chrome://newtab") ||
+  url.startsWith("chrome-error://");
+
+/** What the agent hears when its window is blank: the handoff is refused, and it carries on. */
+export const blankWindowNote =
+  "Not handed over: your browser window is blank, so the user would see an empty screen. Open the page they need first (winston browser open <url>), then hand it over. If their part isn't in the browser, close the blank window (winston browser close) and hand over again.";
+
 /** The message that carries the front of house's handoff link. */
 export const handoffLinkMessage = (link: string) =>
   `Here's the browser, to take over: ${link}\n(The link works once, for 15 minutes. Tell me when you're done.)`;
@@ -49,12 +60,20 @@ export const handoffLinkMessage = (link: string) =>
  * the call and its result are both stored (the next turn needs both).
  */
 export function frontHandoffTool(deps: {
-  hold: () => Promise<{ windowId: string; targetId: string } | null>;
+  hold: () => Promise<{
+    windowId: string;
+    targetId: string;
+    url: string;
+  } | null>;
+  /** Lets the held window go again (it was blank). */
+  release: () => Promise<unknown>;
   createLink: (
     window: { windowId: string; targetId: string },
     reason: string,
   ) => Promise<string>;
   sendLink: (text: string) => Promise<unknown>;
+  /** The handoff went through, so the turn ends. */
+  handedOver: () => void;
   logger: Logger;
 }) {
   return tool({
@@ -63,7 +82,7 @@ export function frontHandoffTool(deps: {
     execute: async ({ reason }) => {
       const ends =
         "Your turn ends here; the user's reply comes as their next message.";
-      let window: { windowId: string; targetId: string } | null = null;
+      let window: Awaited<ReturnType<typeof deps.hold>> = null;
       try {
         window = await deps.hold();
       } catch (error) {
@@ -72,6 +91,13 @@ export function frontHandoffTool(deps: {
           "holding the browser for a handoff failed",
         );
       }
+      if (window && isBlankPage(window.url)) {
+        await deps.release().catch((error: unknown) => {
+          deps.logger.warn({ err: error }, "letting a blank window go failed");
+        });
+        return blankWindowNote;
+      }
+      deps.handedOver();
       if (!window)
         return `Handed over, without a live view (you have no browser window). ${ends}`;
       await deps.sendLink(

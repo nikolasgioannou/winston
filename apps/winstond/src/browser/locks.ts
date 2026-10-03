@@ -96,6 +96,12 @@ export function createLocks(now: () => number) {
           lock.expiresAt = now() + lockTtlMs;
     },
 
+    /** A window changed hands: the sites locked from it go with it. */
+    transfer(windowId: string, owner: string) {
+      for (const lock of locks.values())
+        if (lock.windowId === windowId) lock.owner = owner;
+    },
+
     /** Frees every lock a run holds (its windows are all closed). */
     release(owner: string) {
       for (const [domain, lock] of locks)

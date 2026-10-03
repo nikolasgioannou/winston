@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createLogger } from "@winston/shared/logger";
-import { frontHandoffTool, handoffLinkMessage } from "./handoff.ts";
+import {
+  blankWindowNote,
+  frontHandoffTool,
+  handoffLinkMessage,
+} from "./handoff.ts";
 
 const logger = createLogger("agents-test", {
   pretty: false,
@@ -13,50 +17,69 @@ const run = async (tool: ReturnType<typeof frontHandoffTool>) =>
     { toolCallId: "c1", messages: [], context: {} },
   );
 
+/** A handoff over `hold`, recording links sent, releases and whether it went through. */
+function handoff(hold: Parameters<typeof frontHandoffTool>[0]["hold"]) {
+  const record = { sent: [] as string[], released: 0, handedOver: false };
+  const tool = frontHandoffTool({
+    hold,
+    release: () => {
+      record.released += 1;
+      return Promise.resolve();
+    },
+    createLink: (window, reason) =>
+      Promise.resolve(
+        `https://runwinston.com/t/tok-${window.windowId}-${String(reason.length)}`,
+      ),
+    sendLink: (text) => {
+      record.sent.push(text);
+      return Promise.resolve();
+    },
+    handedOver: () => {
+      record.handedOver = true;
+    },
+    logger,
+  });
+  return { tool, record };
+}
+
 describe("the front of house's handoff", () => {
   test("with a browser window, the user is sent a live-view link straight away", async () => {
-    const sent: string[] = [];
-    const result = await run(
-      frontHandoffTool({
-        hold: () => Promise.resolve({ windowId: "win_1", targetId: "T1" }),
-        createLink: (window, reason) =>
-          Promise.resolve(
-            `https://runwinston.com/t/tok-${window.windowId}-${String(reason.length)}`,
-          ),
-        sendLink: (text) => {
-          sent.push(text);
-          return Promise.resolve();
-        },
-        logger,
+    const { tool, record } = handoff(() =>
+      Promise.resolve({
+        windowId: "win_1",
+        targetId: "T1",
+        url: "https://www.opentable.com/",
       }),
     );
-    expect(sent).toEqual([
+    const result = await run(tool);
+    expect(record.sent).toEqual([
       handoffLinkMessage("https://runwinston.com/t/tok-win_1-21"),
     ]);
     expect(result).toStartWith(
       "Handed over: the user was sent a live-view link",
     );
+    expect(record.handedOver).toBe(true);
   });
 
   test("without one (or the computer can't say), it still hands over, with no link", async () => {
-    const sent: string[] = [];
     for (const hold of [
       () => Promise.resolve(null),
       () => Promise.reject(new Error("vm unreachable")),
     ]) {
-      const result = await run(
-        frontHandoffTool({
-          hold,
-          createLink: () => Promise.resolve("never"),
-          sendLink: (text) => {
-            sent.push(text);
-            return Promise.resolve();
-          },
-          logger,
-        }),
-      );
-      expect(result).toStartWith("Handed over, without a live view");
+      const { tool, record } = handoff(hold);
+      expect(await run(tool)).toStartWith("Handed over, without a live view");
+      expect(record.sent).toEqual([]);
+      expect(record.handedOver).toBe(true);
     }
-    expect(sent).toEqual([]);
+  });
+
+  test("a blank window isn't handed over: it's let go, and the turn carries on", async () => {
+    for (const url of ["about:blank", "chrome-error://chromewebdata/"]) {
+      const { tool, record } = handoff(() =>
+        Promise.resolve({ windowId: "win_1", targetId: "T1", url }),
+      );
+      expect(await run(tool)).toBe(blankWindowNote);
+      expect(record).toEqual({ sent: [], released: 1, handedOver: false });
+    }
   });
 });
