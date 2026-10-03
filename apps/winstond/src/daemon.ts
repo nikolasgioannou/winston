@@ -53,6 +53,7 @@ export type BrowserFrame = Extract<
       | "browser.hold"
       | "browser.release"
       | "browser.transfer"
+      | "browser.list"
       | "screencast.start"
       | "screencast.stop"
       | "input"
@@ -426,6 +427,7 @@ export function createDaemon(options: DaemonOptions) {
         frame.type === "browser.hold" ||
         frame.type === "browser.release" ||
         frame.type === "browser.transfer" ||
+        frame.type === "browser.list" ||
         frame.type === "screencast.start" ||
         frame.type === "screencast.stop" ||
         frame.type === "input" ||

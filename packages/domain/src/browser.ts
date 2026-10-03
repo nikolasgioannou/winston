@@ -141,3 +141,21 @@ export interface BrowserAutopilotResponse {
   /** How long it ran. */
   elapsedMs: number;
 }
+
+/** A window as the signed-in browser page shows it (docs/design.md §5). */
+export interface BrowserPageWindow {
+  id: string;
+  /** `front` for the conversation's own browsing, else the task's id. */
+  owner: string;
+  /** The start of the task's brief; null for the conversation's window. */
+  task: string | null;
+  title: string;
+  url: string;
+  /** The person has it: handed over by Winston, or taken over. */
+  held: "handoff" | "takeover" | null;
+  /** What Winston needs them to do, while it's handed over. */
+  reason: string | null;
+  /** Who has control while the person has it: this page, or another. */
+  control: "you" | "elsewhere" | null;
+  lastUsedAt: number;
+}

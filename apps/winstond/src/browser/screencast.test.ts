@@ -89,7 +89,7 @@ describe("live views", () => {
     ).toBe(true);
     const first = parseScreencastMessage(binaries[0] ?? new Uint8Array());
     expect(first?.header).toEqual({
-      handoffId: "hnd_1",
+      viewId: "hnd_1",
       width: 1919,
       height: 992,
     });
@@ -199,7 +199,7 @@ describe("live views", () => {
       {
         id: "f1",
         type: "screencast.ended",
-        handoffId: "hnd_1",
+        viewId: "hnd_1",
         reason: "The window was closed.",
       },
     ]);

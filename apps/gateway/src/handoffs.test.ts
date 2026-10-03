@@ -1,24 +1,18 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { createHandoff } from "@winston/db/handoffs";
-import {
-  handoffs,
-  inboundItems,
-  runMessages,
-  runs,
-  users,
-} from "@winston/db/schema";
+import { runMessages, runs, users } from "@winston/db/schema";
 import { insertRun, insertUser, testDb } from "@winston/db/testing";
 import { createVm, issueRegistrationToken } from "@winston/db/vms";
 import { applyVmEvent } from "@winston/db/vm-state";
+import { issueViewerTicket } from "@winston/db/viewer-tickets";
 import {
-  desktopMessage,
-  parseDesktopMessage,
   parseScreencastMessage,
   screencastMessage,
   type GatewayToVmFrame,
+  type ListedWindow,
 } from "@winston/domain/frames";
 import { createLogger } from "@winston/shared/logger";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
 
 // Like gateway.test.ts: the server works on its own connections, so rows are
@@ -88,9 +82,10 @@ async function connectedVm() {
   };
 }
 
-/** A live-view page: signs in with its first message. */
-async function page(auth: Record<string, unknown>) {
-  const ws = new WebSocket(`ws://${base}/handoff/connect`);
+/** A browser page's socket: signs in with a ticket from its own server. */
+async function page(userId: string, extra: Record<string, unknown> = {}) {
+  const ticket = await issueViewerTicket(db, userId);
+  const ws = new WebSocket(`ws://${base}/browser/connect`);
   ws.binaryType = "arraybuffer";
   const texts: Record<string, unknown>[] = [];
   const binaries: Uint8Array[] = [];
@@ -107,9 +102,77 @@ async function page(auth: Record<string, unknown>) {
   await new Promise((resolve) => {
     ws.addEventListener("open", resolve);
   });
-  ws.send(JSON.stringify({ type: "auth", ...auth }));
-  return { ws, texts, binaries, closed };
+  ws.send(JSON.stringify({ type: "auth", ticket, ...extra }));
+  const said = async (type: string, after = 0) => {
+    await eventually(() => texts.slice(after).some((t) => t.type === type));
+    return texts.slice(after).find((t) => t.type === type) ?? {};
+  };
+  const ask = (message: Record<string, unknown>) => {
+    ws.send(JSON.stringify(message));
+  };
+  return { ws, ticket, texts, binaries, closed, said, ask };
 }
+
+/** The VM's side of listings and holds: answers from `windows`, holding what's asked. */
+function answerBrowser(
+  vm: Awaited<ReturnType<typeof connectedVm>>,
+  windows: ListedWindow[],
+) {
+  let seen = 0;
+  const timer = setInterval(() => {
+    for (const frame of vm.frames.slice(seen)) {
+      if (frame.type === "browser.list")
+        vm.ws.send(
+          JSON.stringify({
+            id: `r-${frame.id}`,
+            type: "browser.listed",
+            replyTo: frame.id,
+            windows,
+          }),
+        );
+      if (frame.type === "browser.hold") {
+        const window = windows.find((w) => w.windowId === frame.windowId);
+        if (window) window.held = frame.takeover ? "takeover" : "handoff";
+        vm.ws.send(
+          JSON.stringify({
+            id: `r-${frame.id}`,
+            type: "browser.held",
+            replyTo: frame.id,
+            window: window
+              ? {
+                  windowId: window.windowId,
+                  targetId: window.targetId,
+                  url: window.url,
+                }
+              : null,
+          }),
+        );
+      }
+      if (frame.type === "browser.release")
+        for (const window of windows)
+          if (
+            window.owner === frame.owner &&
+            (!frame.windowId || window.windowId === frame.windowId)
+          )
+            window.held = null;
+    }
+    seen = vm.frames.length;
+  }, 5);
+  return () => {
+    clearInterval(timer);
+  };
+}
+
+const listed = (overrides: Partial<ListedWindow>): ListedWindow => ({
+  windowId: "win_1",
+  targetId: "T1",
+  owner: "front",
+  url: "https://shop.test",
+  title: "Shop",
+  held: null,
+  lastUsedAt: Date.now(),
+  ...overrides,
+});
 
 async function eventually(check: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 200; i += 1) {
@@ -129,175 +192,134 @@ const internal = (path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-describe("handoff live views", () => {
-  test("a page relays one tab's frames and input; the link works once; a reconnect uses the page's secret", async () => {
+describe("the browser page's live views", () => {
+  test("a page signs in with a ticket its server issued, once; anything else is refused", async () => {
     const vm = await connectedVm();
-    const run = await insertRun(db, vm.userId, { kind: "background" });
-    const { id, token } = await createHandoff(db, {
-      runId: run.id,
-      userId: vm.userId,
-      windowId: "win_1",
-      targetId: "TARGET1",
-      reason: "Sign in",
+    const first = await page(vm.userId);
+    await first.said("ready");
+    const again = new WebSocket(`ws://${base}/browser/connect`);
+    const closed = new Promise<number>((resolve) => {
+      again.addEventListener("close", (event) => {
+        resolve(event.code);
+      });
     });
+    await new Promise((resolve) => {
+      again.addEventListener("open", resolve);
+    });
+    again.send(JSON.stringify({ type: "auth", ticket: first.ticket }));
+    expect(await closed).toBe(4003);
+    first.ws.close();
+    vm.ws.close();
+  });
 
-    const viewer = await page({ token });
-    const start = await vm.next("screencast.start");
-    expect(start).toMatchObject({ handoffId: id, targetId: "TARGET1" });
-    await eventually(() => viewer.texts.length > 0);
-    const session = viewer.texts[0] as {
-      type: string;
-      handoff: string;
-      secret: string;
+  test("it lists the windows with what each is for, and streams the one it watches, only to it", async () => {
+    const vm = await connectedVm();
+    const task = await insertRun(db, vm.userId, {
+      kind: "background",
+      brief: "Book a table at Zuni for Friday",
+    });
+    await createHandoff(db, {
+      runId: task.id,
+      userId: vm.userId,
+      windowId: "win_2",
+      targetId: "T2",
+      reason: "Sign in to OpenTable",
+    });
+    const stop = answerBrowser(vm, [
+      listed({}),
+      listed({
+        windowId: "win_2",
+        targetId: "T2",
+        owner: task.id,
+        held: "handoff",
+      }),
+    ]);
+    const viewer = await page(vm.userId);
+    await viewer.said("ready");
+    viewer.ask({ type: "windows" });
+    const { windows } = (await viewer.said("windows")) as {
+      windows: unknown[];
     };
-    expect(session).toMatchObject({ type: "session", handoff: id });
-
-    // A frame from the VM reaches the page as it is.
-    const jpeg = new Uint8Array([0xff, 0xd8, 1, 2, 3]);
+    expect(windows).toEqual([
+      expect.objectContaining({
+        id: "win_1",
+        owner: "front",
+        task: null,
+        held: null,
+        reason: null,
+      }),
+      expect.objectContaining({
+        id: "win_2",
+        task: "Book a table at Zuni for Friday",
+        held: "handoff",
+        reason: "Sign in to OpenTable",
+        control: null,
+      }),
+    ]);
+    const before = vm.frames.length;
+    viewer.ask({ type: "watch", windowId: "win_1" });
+    const start = await vm.next("screencast.start", before);
+    expect(start).toMatchObject({ targetId: "T1" });
+    const viewId = (start as { viewId: string }).viewId;
+    const jpeg = new Uint8Array([0xff, 0xd8, 1]);
+    vm.ws.send(screencastMessage({ viewId, width: 390, height: 844 }, jpeg));
     vm.ws.send(
-      screencastMessage({ handoffId: id, width: 390, height: 844 }, jpeg),
+      screencastMessage({ viewId: "view_other", width: 1, height: 1 }, jpeg),
     );
     await eventually(() => viewer.binaries.length > 0);
-    const relayed = parseScreencastMessage(
-      viewer.binaries[0] ?? new Uint8Array(),
-    );
-    expect(relayed?.header).toEqual({ handoffId: id, width: 390, height: 844 });
-    expect([...(relayed?.jpeg ?? [])]).toEqual([...jpeg]);
-    // A frame naming another handoff goes nowhere.
-    vm.ws.send(
-      screencastMessage({ handoffId: "hnd_other", width: 1, height: 1 }, jpeg),
-    );
-
-    // The person's input goes to the VM; anything malformed is dropped.
-    const before = vm.frames.length;
-    viewer.ws.send("not json");
-    viewer.ws.send(
-      JSON.stringify({ kind: "pointer", action: "down", x: 10, y: 20 }),
-    );
-    const input = await vm.next("input", before);
-    expect(input).toMatchObject({
-      handoffId: id,
-      input: { kind: "pointer", action: "down", x: 10, y: 20 },
-    });
+    await Bun.sleep(30);
     expect(viewer.binaries).toHaveLength(1);
-
-    // The link is used up; the page's secret brings it back, replacing the old socket.
-    const again = await page({ token });
-    expect((await again.closed).code).toBe(4003);
-    const startsBefore = vm.frames.filter(
-      (f) => f.type === "screencast.start",
-    ).length;
-    const back = await page({
-      handoff: session.handoff,
-      secret: session.secret,
-    });
-    expect((await viewer.closed).code).toBe(4002);
-    await eventually(
-      () =>
-        vm.frames.filter((f) => f.type === "screencast.start").length >
-        startsBefore,
-    );
-
-    // Releasing the run's windows (the task carried on) ends the live view.
-    const released = await internal(`/vms/${vm.userId}/browser/release`, {
-      owner: run.id,
-    });
-    expect(released.status).toBe(200);
-    expect((await back.closed).code).toBe(4000);
-    await vm.next("browser.release");
+    expect(
+      parseScreencastMessage(viewer.binaries[0] ?? new Uint8Array())?.header
+        .viewId,
+    ).toBe(viewId);
+    stop();
+    viewer.ws.close();
     vm.ws.close();
   });
 
-  test("hold asks the VM for the run's window and answers with what it says", async () => {
+  test("a window Winston is driving is watch-only until the page takes it over", async () => {
     const vm = await connectedVm();
+    const stop = answerBrowser(vm, [listed({})]);
+    const viewer = await page(vm.userId);
+    await viewer.said("ready");
+    viewer.ask({ type: "watch", windowId: "win_1" });
+    expect(await viewer.said("watching")).toMatchObject({ control: false });
     const before = vm.frames.length;
-    const held = internal(`/vms/${vm.userId}/browser/hold`, { owner: "run_x" });
-    const asked = await vm.next("browser.hold", before);
-    expect(asked).toMatchObject({ owner: "run_x" });
-    vm.ws.send(
-      JSON.stringify({
-        id: "r1",
-        type: "browser.held",
-        replyTo: asked.id,
-        window: { windowId: "win_9", targetId: "T9", url: "https://shop.test" },
-      }),
-    );
-    expect(await (await held).json()).toEqual({
-      window: { windowId: "win_9", targetId: "T9", url: "https://shop.test" },
-    });
-    vm.ws.close();
-  });
-
-  test("transfer asks the VM to give a window to another run and answers with it; closing an ended run's windows is sent, or retried", async () => {
-    const vm = await connectedVm();
-    const before = vm.frames.length;
-    const transferred = internal(`/vms/${vm.userId}/browser/transfer`, {
-      from: "front",
-      to: "task_1",
-    });
-    const asked = await vm.next("browser.transfer", before);
-    expect(asked).toMatchObject({ from: "front", to: "task_1" });
-    vm.ws.send(
-      JSON.stringify({
-        id: "r2",
-        type: "browser.transferred",
-        replyTo: asked.id,
-        window: { windowId: "win_3", targetId: "T3", url: "https://air.test" },
-      }),
-    );
-    expect(await (await transferred).json()).toEqual({
-      window: { windowId: "win_3", targetId: "T3", url: "https://air.test" },
-    });
-
-    const closed = await internal(`/vms/${vm.userId}/browser/release`, {
-      owner: "task_1",
-      close: true,
-    });
-    expect(closed.status).toBe(200);
-    expect(await vm.next("browser.release", before)).toMatchObject({
-      owner: "task_1",
-      close: true,
-    });
-    vm.ws.close();
-    await eventually(async () => {
-      const offline = await internal(`/vms/${vm.userId}/browser/release`, {
-        owner: "task_1",
-        close: true,
-      });
-      return offline.status === 409;
-    });
-  });
-
-  test("an expired link says so; a page that never signs in is dropped", async () => {
-    const vm = await connectedVm();
-    const run = await insertRun(db, vm.userId, { kind: "background" });
-    const { id, token } = await createHandoff(db, {
-      runId: run.id,
-      userId: vm.userId,
+    viewer.ask({ kind: "pointer", action: "down", x: 1, y: 2 });
+    await Bun.sleep(50);
+    expect(vm.frames.slice(before).some((f) => f.type === "input")).toBe(false);
+    viewer.ask({ type: "control" });
+    expect(await vm.next("browser.hold", before)).toMatchObject({
+      owner: "front",
       windowId: "win_1",
-      targetId: "T1",
-      reason: "x",
+      takeover: true,
     });
-    await db
-      .update(handoffs)
-      .set({ connectDeadline: sql`now() - interval '1 second'` })
-      .where(eq(handoffs.id, id));
-    const late = await page({ token });
-    expect(await late.closed).toEqual({
-      code: 4004,
-      reason: "This link expired. Ask Winston for a new one.",
+    expect(await viewer.said("control")).toMatchObject({
+      windowId: "win_1",
+      yours: true,
     });
-    const nonsense = await page({ nope: true });
-    expect((await nonsense.closed).code).toBe(4003);
+    viewer.ask({ kind: "pointer", action: "down", x: 1, y: 2 });
+    expect(await vm.next("input", before)).toMatchObject({
+      input: { kind: "pointer", action: "down", x: 1, y: 2 },
+    });
+    // Done gives a taken-over window back.
+    const atDone = vm.frames.length;
+    viewer.ask({ type: "done" });
+    expect(await vm.next("browser.release", atDone)).toMatchObject({
+      owner: "front",
+      windowId: "win_1",
+    });
+    stop();
+    viewer.ws.close();
     vm.ws.close();
   });
 
-  test("Done on the page carries a parked task on, or tells the front of house; either way the window goes back", async () => {
+  test("a handed-over window is the page's to work in; Done carries the task on, and the page keeps watching", async () => {
     const vm = await connectedVm();
     const task = await insertRun(db, vm.userId, {
       kind: "background",
       status: "parked",
-      waitingFor: "Sign in",
     });
     await db.insert(runMessages).values({
       runId: task.id,
@@ -315,91 +337,112 @@ describe("handoff live views", () => {
         ],
       },
     });
-    const { token } = await createHandoff(db, {
+    await createHandoff(db, {
       runId: task.id,
-      userId: vm.userId,
-      windowId: "win_1",
-      targetId: "T1",
-      reason: "Sign in",
-    });
-    const viewer = await page({ token });
-    await vm.next("screencast.start");
-    const before = vm.frames.length;
-    viewer.ws.send(JSON.stringify({ type: "done" }));
-    expect((await viewer.closed).code).toBe(4000);
-    await vm.next("browser.release", before);
-    const [resumed] = await db.select().from(runs).where(eq(runs.id, task.id));
-    expect(resumed?.status).toBe("running");
-
-    const front = await insertRun(db, vm.userId, {
-      kind: "front",
-      status: "completed",
-    });
-    const second = await createHandoff(db, {
-      runId: front.id,
       userId: vm.userId,
       windowId: "win_2",
       targetId: "T2",
-      reason: "Pick a seat",
+      reason: "Sign in",
     });
-    const frontViewer = await page({ token: second.token });
-    await eventually(
-      () => vm.frames.filter((f) => f.type === "screencast.start").length > 1,
-    );
-    frontViewer.ws.send(JSON.stringify({ type: "done" }));
-    expect((await frontViewer.closed).code).toBe(4000);
-    const [item] = await db
-      .select()
-      .from(inboundItems)
-      .where(eq(inboundItems.type, "system.handoff.done"));
-    expect(item?.payload).toEqual({ handoffId: second.id });
+    const stop = answerBrowser(vm, [
+      listed({
+        windowId: "win_2",
+        targetId: "T2",
+        owner: task.id,
+        held: "handoff",
+      }),
+    ]);
+    const viewer = await page(vm.userId);
+    await viewer.said("ready");
+    viewer.ask({ type: "watch", windowId: "win_2" });
+    expect(await viewer.said("control")).toMatchObject({ yours: true });
+    const before = vm.frames.length;
+    const told = viewer.texts.length;
+    viewer.ask({ type: "done" });
+    expect(await vm.next("browser.release", before)).toMatchObject({
+      owner: task.id,
+      windowId: "win_2",
+    });
+    expect(await viewer.said("control", told)).toMatchObject({ yours: false });
+    await eventually(async () => {
+      const [run] = await db.select().from(runs).where(eq(runs.id, task.id));
+      return run?.status !== "parked";
+    });
+    expect(viewer.ws.readyState).toBe(WebSocket.OPEN);
+    stop();
+    viewer.ws.close();
     vm.ws.close();
   });
 
-  test("the full desktop opens only with a connected handoff's session, and relays VNC bytes intact", async () => {
+  test("two pages can watch; control is the last one's to take, and Winston taking it back closes nothing", async () => {
     const vm = await connectedVm();
-    const run = await insertRun(db, vm.userId, { kind: "background" });
-    const { id, token } = await createHandoff(db, {
-      runId: run.id,
-      userId: vm.userId,
+    const stop = answerBrowser(vm, [listed({})]);
+    const phone = await page(vm.userId);
+    const laptop = await page(vm.userId);
+    await phone.said("ready");
+    await laptop.said("ready");
+    phone.ask({ type: "watch", windowId: "win_1" });
+    await phone.said("watching");
+    phone.ask({ type: "control" });
+    await phone.said("control");
+    laptop.ask({ type: "watch", windowId: "win_1" });
+    expect(await laptop.said("watching")).toMatchObject({ control: false });
+    const told = phone.texts.length;
+    laptop.ask({ type: "control" });
+    expect(await laptop.said("control")).toMatchObject({ yours: true });
+    expect(await phone.said("control", told)).toMatchObject({ yours: false });
+    // Winston's side gives it back (the user wrote; a task carried on).
+    const released = await internal(`/vms/${vm.userId}/browser/release`, {
+      owner: "front",
       windowId: "win_1",
-      targetId: "T1",
-      reason: "Pick a file",
     });
-    // Before the link is opened there's no session to sign in with.
-    const early = await page({ handoff: id, secret: "guess", desktop: true });
-    expect((await early.closed).code).toBe(4003);
-
-    const viewer = await page({ token });
-    await eventually(() => viewer.texts.length > 0);
-    const { secret } = viewer.texts[0] as { secret: string };
-    const desktop = await page({ handoff: id, secret, desktop: true });
-    const open = await vm.next("desktop.open");
-    expect(open).toMatchObject({ handoffId: id });
-
-    // VNC bytes from the VM reach the page bare; the page's go back wrapped.
-    const greeting = new TextEncoder().encode("RFB 003.008\n");
-    vm.ws.send(desktopMessage(id, greeting));
-    await eventually(() => desktop.binaries.length > 0);
-    expect(new TextDecoder().decode(desktop.binaries[0])).toBe("RFB 003.008\n");
-    desktop.ws.send(new Uint8Array([1, 0, 255]));
-    await eventually(() => vm.binaries.length > 0);
-    const back = parseDesktopMessage(vm.binaries[0] ?? new Uint8Array());
-    expect(back?.handoffId).toBe(id);
-    expect([...(back?.bytes ?? [])]).toEqual([1, 0, 255]);
-
-    // The task carrying on closes the desktop with the live view.
-    const before = vm.frames.length;
-    await internal(`/vms/${vm.userId}/browser/release`, { owner: run.id });
-    expect((await desktop.closed).code).toBe(4000);
-    await vm.next("desktop.close", before);
-    // And with the handoff over, the session no longer opens one.
-    await db
-      .update(handoffs)
-      .set({ status: "resolved" })
-      .where(eq(handoffs.id, id));
-    const late = await page({ handoff: id, secret, desktop: true });
-    expect((await late.closed).code).toBe(4003);
+    expect(released.status).toBe(200);
+    const laptopTold = laptop.texts.length - 1;
+    expect(await laptop.said("control", laptopTold)).toMatchObject({
+      yours: false,
+    });
+    expect(phone.ws.readyState).toBe(WebSocket.OPEN);
+    expect(laptop.ws.readyState).toBe(WebSocket.OPEN);
+    stop();
+    phone.ws.close();
+    laptop.ws.close();
     vm.ws.close();
+  });
+
+  test("the full desktop opens only while the person has a window; a window that goes ends its stream", async () => {
+    const vm = await connectedVm();
+    const stop = answerBrowser(vm, [listed({})]);
+    const early = await page(vm.userId, { desktop: true });
+    expect((await early.closed).code).toBe(4003);
+    const viewer = await page(vm.userId);
+    await viewer.said("ready");
+    const before = vm.frames.length;
+    viewer.ask({ type: "watch", windowId: "win_1" });
+    const start = await vm.next("screencast.start", before);
+    viewer.ask({ type: "control" });
+    await viewer.said("control");
+    const desktop = await page(vm.userId, { desktop: true });
+    expect(await vm.next("desktop.open", before)).toMatchObject({});
+    vm.ws.send(
+      JSON.stringify({
+        id: "e1",
+        type: "screencast.ended",
+        viewId: (start as { viewId: string }).viewId,
+        reason: "That window is gone.",
+      }),
+    );
+    expect(await viewer.said("ended")).toMatchObject({ windowId: "win_1" });
+    stop();
+    desktop.ws.close();
+    viewer.ws.close();
+    vm.ws.close();
+  });
+
+  test("a VM that disconnects closes its pages with 4001, so they sign in again", async () => {
+    const vm = await connectedVm();
+    const viewer = await page(vm.userId);
+    await viewer.said("ready");
+    vm.ws.close();
+    expect((await viewer.closed).code).toBe(4001);
   });
 });

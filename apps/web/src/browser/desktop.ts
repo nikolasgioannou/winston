@@ -2,8 +2,8 @@
  * The full-desktop fallback (docs/design.md §5): the whole of Winston's
  * screen through noVNC, for native dialogs the tab's live view can't show
  * (`<select>` popups, file pickers, basic-auth prompts). The socket signs in
- * with the live view's session, so it only opens while the handoff is
- * connected; the gateway then tunnels it to the VM's VNC server.
+ * with a ticket of its own, and the gateway opens it only while the person
+ * has a window in hand, then tunnels it to the VM's VNC server.
  */
 import type { ViewerInput } from "@winston/domain/frames";
 
@@ -43,13 +43,14 @@ export function keysymsFor(input: ViewerInput): number[] {
 
 export async function openDesktop({
   url,
-  session,
+  ticket,
   target,
   onEnded,
 }: {
   /** The gateway's live-view socket, as for the tab. */
   url: string;
-  session: { handoff: string; secret: string };
+  /** A ticket from the page's server, as for the live view. */
+  ticket: string;
   /** Where noVNC draws the screen. */
   target: HTMLElement;
   onEnded: () => void;
@@ -68,7 +69,7 @@ export async function openDesktop({
   ws.addEventListener(
     "open",
     () => {
-      ws.send(JSON.stringify({ type: "auth", ...session, desktop: true }));
+      ws.send(JSON.stringify({ type: "auth", ticket, desktop: true }));
       // The VNC server speaks first, so noVNC takes over straight away.
       rfb = new Rfb(target, ws);
       // Full size, dragged around to pan (a tap still clicks): the whole

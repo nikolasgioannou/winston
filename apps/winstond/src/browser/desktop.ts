@@ -25,49 +25,46 @@ export function createDesktops(deps: {
   const open = new Map<string, Socket>();
 
   return {
-    open(handoffId: string) {
-      open.get(handoffId)?.destroy();
+    open(viewId: string) {
+      open.get(viewId)?.destroy();
       const socket = createConnection({
         host: "127.0.0.1",
         port: deps.port ?? vncPort,
       });
-      open.set(handoffId, socket);
+      open.set(viewId, socket);
       socket.on("data", (bytes: Buffer) => {
-        deps.sendBinary(desktopMessage(handoffId, bytes));
+        deps.sendBinary(desktopMessage(viewId, bytes));
       });
       socket.on("error", (error) => {
-        deps.logger.warn(
-          { err: error, handoffId },
-          "desktop connection failed",
-        );
+        deps.logger.warn({ err: error, viewId }, "desktop connection failed");
       });
       socket.on("close", () => {
         // Replaced by a newer open, or closed on purpose: nothing to report.
-        if (open.get(handoffId) !== socket) return;
-        open.delete(handoffId);
+        if (open.get(viewId) !== socket) return;
+        open.delete(viewId);
         deps.sendFrame({
           id: newFrameId(),
           type: "desktop.closed",
-          handoffId,
+          viewId,
           reason: "The desktop connection ended.",
         });
       });
     },
 
     /** Bytes from the page's VNC client. */
-    write(handoffId: string, bytes: Uint8Array) {
-      open.get(handoffId)?.write(bytes);
+    write(viewId: string, bytes: Uint8Array) {
+      open.get(viewId)?.write(bytes);
     },
 
-    close(handoffId: string) {
-      const socket = open.get(handoffId);
-      open.delete(handoffId);
+    close(viewId: string) {
+      const socket = open.get(viewId);
+      open.delete(viewId);
       socket?.destroy();
     },
 
     /** The gateway connection dropped: its pages are gone too. */
     closeAll() {
-      for (const handoffId of [...open.keys()]) this.close(handoffId);
+      for (const viewId of [...open.keys()]) this.close(viewId);
     },
   };
 }

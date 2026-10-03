@@ -261,7 +261,7 @@ export const task: Resource = {
     {
       name: "link",
       summary:
-        "A fresh live-view link to a parked task's browser, when the last one expired or was used",
+        "The link to a parked task's browser window, on the signed-in browser page",
       usage: "<task_id>",
       flags: [],
       examples: ["winston task link task_01k5…"],
@@ -271,7 +271,7 @@ export const task: Resource = {
         );
         return flags.json === true
           ? json(result)
-          : `Send the user this link to ${result.id}'s browser: ${result.link}\nIt works once, for ${String(result.expiresInMinutes)} minutes.`;
+          : `Send the user this link to ${result.id}'s browser: ${result.link}`;
       },
     },
   ],

@@ -12,6 +12,7 @@
  *
  * Nothing here calls `Runtime.enable`, which pages can detect.
  */
+import type { ListedWindow } from "@winston/domain/frames";
 import type {
   BrowserCloseResponse,
   BrowserPageResponse,
@@ -146,7 +147,7 @@ export function createBrowser(deps: BrowserDeps) {
       loadingFrames: new Set(),
       handledDialogs: [],
       worlds: new Map(),
-      heldForUser: false,
+      heldForUser: null,
     };
     windows.set(entry.id, entry);
     byTarget.set(entry.targetId, entry.id);
@@ -333,6 +334,20 @@ export function createBrowser(deps: BrowserDeps) {
       "Open a new one with winston browser open <url> and carry on from there.",
     );
 
+  /** Why the agent can't act in a window the person has. */
+  const held = (entry: WindowEntry) =>
+    entry.heldForUser === "takeover"
+      ? new BrowserFailure(
+          "invalid_request",
+          `The user took over ${entry.id}; it's theirs until they give it back.`,
+          "Carry on with something else, or ask them what they'd like.",
+        )
+      : new BrowserFailure(
+          "invalid_request",
+          `You handed ${entry.id} to the user; it's theirs until they're done.`,
+          "Wait for them, or open another window for something else.",
+        );
+
   /** The window a command acts on: --window, or the owner's current one. */
   function windowFor(
     owner: string,
@@ -349,12 +364,7 @@ export function createBrowser(deps: BrowserDeps) {
           "winston browser windows lists them.",
         );
       }
-      if (access === "own" && entry.heldForUser)
-        throw new BrowserFailure(
-          "invalid_request",
-          `You handed ${windowId} to the user; it's theirs until they're done.`,
-          "Wait for them, or open another window for something else.",
-        );
+      if (access === "own" && entry.heldForUser) throw held(entry);
       if (access === "own" && entry.owner !== owner)
         throw new BrowserFailure(
           "invalid_request",
@@ -365,12 +375,7 @@ export function createBrowser(deps: BrowserDeps) {
     }
     const id = current.get(owner);
     const entry = id ? windows.get(id) : undefined;
-    if (entry?.heldForUser && access === "own")
-      throw new BrowserFailure(
-        "invalid_request",
-        `You handed ${entry.id} to the user; it's theirs until they're done.`,
-        "Wait for them, or open another window for something else.",
-      );
+    if (entry?.heldForUser && access === "own") throw held(entry);
     if (entry) return entry;
     if (lostOwners.delete(owner)) throw restarted();
     throw new BrowserFailure(
@@ -683,28 +688,60 @@ export function createBrowser(deps: BrowserDeps) {
     },
 
     /**
-     * Hands an owner's current window to the user (a handoff): the agent
-     * can't act in it, and its site locks stay put, until `release`. Null
-     * when the owner has no window.
+     * Gives the person a window: the owner's current one when the agent
+     * hands over, or one they take over from the browser page. The agent
+     * can't act in it, and the owner's site locks stay put, until `release`.
+     * Null when there's no such window.
      */
-    hold(owner: string) {
-      const id = current.get(owner);
+    hold(
+      owner: string,
+      options: { windowId?: string | undefined; takeover?: boolean } = {},
+    ) {
+      const id = options.windowId ?? current.get(owner);
       const entry = id ? windows.get(id) : undefined;
-      if (!entry) return null;
-      entry.heldForUser = true;
+      if (entry?.owner !== owner) return null;
+      // A handoff of a window the person already took over stays theirs.
+      if (entry.heldForUser !== "takeover")
+        entry.heldForUser = options.takeover ? "takeover" : "handoff";
       entry.lastUsedAt = now();
       locks.pin(owner);
       return { windowId: entry.id, targetId: entry.targetId, url: entry.url };
     },
 
-    /** The user is done: the owner's windows are its own again. */
-    release(owner: string) {
+    /**
+     * The person is done: the owner's windows (or just that one) are the
+     * agent's again.
+     */
+    release(owner: string, windowId?: string) {
       for (const entry of windows.values())
-        if (entry.owner === owner && entry.heldForUser) {
-          entry.heldForUser = false;
+        if (
+          entry.owner === owner &&
+          entry.heldForUser &&
+          (windowId === undefined || entry.id === windowId)
+        ) {
+          entry.heldForUser = null;
           entry.lastUsedAt = now();
         }
-      locks.unpin(owner);
+      if (
+        ![...windows.values()].some((e) => e.owner === owner && e.heldForUser)
+      )
+        locks.unpin(owner);
+    },
+
+    /** Every open window, for the signed-in browser page. */
+    list(): ListedWindow[] {
+      return [...windows.values()]
+        .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+        .slice(0, 100)
+        .map((entry) => ({
+          windowId: entry.id,
+          targetId: entry.targetId,
+          owner: entry.owner,
+          url: entry.url,
+          title: entry.title,
+          held: entry.heldForUser,
+          lastUsedAt: entry.lastUsedAt,
+        }));
     },
 
     /**

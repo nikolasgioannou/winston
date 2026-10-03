@@ -192,6 +192,7 @@ export async function handleVmFrame(
     case "file.error":
     case "browser.held":
     case "browser.transferred":
+    case "browser.listed":
     case "screencast.ended":
     case "desktop.closed":
       // Handled by the exec, file and handoff registries above.

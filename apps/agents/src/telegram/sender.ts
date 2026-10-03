@@ -18,10 +18,15 @@ export interface SentFile {
 export interface TelegramSender {
   /** Plain text: no parse mode, nothing to escape. */
   sendMessage(chatId: number, text: string): Promise<{ message_id: number }>;
-  /** A Rich Message from standard Markdown (Bot API 10.1). */
+  /**
+   * A Rich Message from standard Markdown (Bot API 10.1), optionally with a
+   * Telegram sign-in button (a `login_url` button: tapping it opens `url`
+   * with the tapper's signed identity added).
+   */
   sendRichMessage(
     chatId: number,
     markdown: string,
+    options?: { login?: { text: string; url: string } },
   ): Promise<{ message_id: number }>;
   /**
    * A passing status as a Rich Message draft (Bot API 10.3, private chats):
@@ -56,10 +61,27 @@ export function grammySender(api: Api): TelegramSender {
   >;
   return {
     sendMessage: (chatId, text) => api.sendMessage(chatId, text),
-    sendRichMessage: (chatId, markdown) => {
+    sendRichMessage: (chatId, markdown, options) => {
       const send = raw.sendRichMessage;
       if (!send) throw new Error("grammY's raw API has no sendRichMessage");
-      return send({ chat_id: chatId, rich_message: { markdown } });
+      return send({
+        chat_id: chatId,
+        rich_message: { markdown },
+        ...(options?.login
+          ? {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: options.login.text,
+                      login_url: { url: options.login.url },
+                    },
+                  ],
+                ],
+              },
+            }
+          : {}),
+      });
     },
     sendRichMessageDraft: (chatId, draftId, markdown) => {
       const send = raw.sendRichMessageDraft;

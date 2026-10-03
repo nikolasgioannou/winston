@@ -14,7 +14,7 @@
  */
 import {
   createHandoff,
-  handoffLink,
+  browserLink,
   resolveFrontHandoffs,
 } from "@winston/db/handoffs";
 import type { DbOrTx } from "@winston/db/client";
@@ -166,7 +166,7 @@ export interface FrontTurnDeps {
   runTokenSecret: string;
   /** Where images from tool results are kept, instead of inline in `run_messages`. */
   blobs: BlobStore;
-  /** The site, for handoff links (`/t/<token>`). */
+  /** The site, for links to the browser page (`/browser?window=…`). */
   webPublicUrl: string;
   /** For tests: the typing indicator's timers. */
   timers?: Timers;
@@ -200,8 +200,8 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     if (!created) throw new Error("Creating a run returned no row.");
     const log = new RunLog(created.id);
     const input = await log.claim(tx, userId, items, user.timezone, deps.blobs);
-    // The user wrote: a browser they took over from the front of house is
-    // theirs no longer ("done" is their next message, §5).
+    // The user wrote: a window the front of house handed them is Winston's
+    // again ("done" is their next message, §5). The page keeps showing it.
     const handedBack = items.some((item) => item.type === "user_message")
       ? await resolveFrontHandoffs(tx, userId)
       : [];
@@ -211,10 +211,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   const { log, input, handedBack } = run;
   const runId = log.runId;
   const logger = deps.logger.child({ runId });
-  if (handedBack.length > 0)
-    deps.vm.releaseBrowser(userId, "front").catch((error: unknown) => {
-      logger.warn({ err: error }, "releasing the handed-over browser failed");
-    });
+  for (const { windowId } of handedBack)
+    deps.vm
+      .releaseBrowser(userId, "front", windowId)
+      .catch((error: unknown) => {
+        logger.warn({ err: error }, "releasing the handed-over browser failed");
+      });
   // "Typing…" shows work between messages (§4).
   const typing = startTyping(
     () => telegram.sendChatAction(user.chatId, "typing"),
@@ -314,6 +316,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         runId,
         chatId: user.chatId,
         text,
+        webPublicUrl: deps.webPublicUrl,
       });
       stream.sent += 1;
     } catch (error) {
@@ -348,19 +351,16 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         handedOver: () => {
           handoff.done = true;
         },
-        createLink: async (window, reason) =>
-          handoffLink(
-            deps.webPublicUrl,
-            (
-              await createHandoff(db, {
-                runId,
-                userId,
-                windowId: window.windowId,
-                targetId: window.targetId,
-                reason,
-              })
-            ).token,
-          ),
+        createLink: async (window, reason) => {
+          await createHandoff(db, {
+            runId,
+            userId,
+            windowId: window.windowId,
+            targetId: window.targetId,
+            reason,
+          });
+          return browserLink(deps.webPublicUrl, window.windowId);
+        },
         sendLink: (text) =>
           deliverReply({
             db,
@@ -370,6 +370,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
             runId,
             chatId: user.chatId,
             text,
+            webPublicUrl: deps.webPublicUrl,
           }),
         logger,
       }),

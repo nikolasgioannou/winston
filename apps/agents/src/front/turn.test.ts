@@ -47,6 +47,8 @@ interface Sent {
   text: string;
   /** Sent as a Rich Message rather than plain text. */
   rich?: boolean;
+  /** A Telegram sign-in button's address. */
+  login?: string;
   /** A file upload; `text` is its name. */
   file?: "photo" | "document";
 }
@@ -74,6 +76,8 @@ async function scenario(
     rejectRich?: boolean;
     /** Telegram refuses every draft. */
     rejectDrafts?: boolean;
+    /** Telegram refuses sign-in buttons (the bot's domain isn't linked yet). */
+    rejectLogin?: boolean;
     /** How the fake computer answers each command. */
     vmAnswer?: (cmd: string) => Partial<ExecResult>;
     /** The fake computer's other answers (its browser), instead of the defaults. */
@@ -98,12 +102,23 @@ async function scenario(
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
       },
-      sendRichMessage: (chatId: number, markdown: string) => {
+      sendRichMessage: (
+        chatId: number,
+        markdown: string,
+        extra?: { login?: { text: string; url: string } },
+      ) => {
         if (options.rejectRich)
           return Promise.reject(
             new Error("Bad Request: rich message rejected"),
           );
-        sent.push({ chatId, text: markdown, rich: true });
+        if (extra?.login && options.rejectLogin)
+          return Promise.reject(new Error("Bad Request: BOT_DOMAIN_INVALID"));
+        sent.push({
+          chatId,
+          text: markdown,
+          rich: true,
+          ...(extra?.login ? { login: extra.login.url } : {}),
+        });
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
       },
@@ -1237,6 +1252,30 @@ describe("runFrontTurn", () => {
       },
       { vmAnswer: () => ({ stdout: "page text ".repeat(1_000) }) },
     );
+  });
+
+  test("a link to the browser page comes with a Telegram sign-in button; refused, the message goes without", async () => {
+    for (const rejectLogin of [false, true])
+      await scenario(
+        [
+          [
+            textReply(
+              "Over to you: https://runwinston.com/browser?window=win_1 (sign in there).",
+            ),
+          ],
+        ],
+        async ({ say, turn, sent }) => {
+          await say("send me the browser");
+          await turn();
+          expect(sent).toHaveLength(1);
+          expect(sent[0]?.login).toBe(
+            rejectLogin
+              ? undefined
+              : "https://runwinston.com/auth/telegram?next=%2Fbrowser%3Fwindow%3Dwin_1",
+          );
+        },
+        { rejectLogin },
+      );
   });
 
   test("a reply to one of Winston's messages quotes it", async () => {

@@ -21,7 +21,10 @@ export function handoffFrames({
   sendFrame,
   logger,
 }: {
-  browser: Pick<Browser, "hold" | "release" | "transfer" | "closeOwner">;
+  browser: Pick<
+    Browser,
+    "hold" | "release" | "transfer" | "closeOwner" | "list"
+  >;
   screencasts: Screencasts;
   desktops: Pick<Desktops, "open" | "write" | "close" | "closeAll">;
   /** Sends on the live connection (a live view can end any time). */
@@ -36,7 +39,10 @@ export function handoffFrames({
             id: newFrameId(),
             type: "browser.held",
             replyTo: frame.id,
-            window: browser.hold(frame.owner),
+            window: browser.hold(frame.owner, {
+              windowId: frame.windowId,
+              takeover: frame.takeover === true,
+            }),
           });
           return;
         case "browser.release":
@@ -47,7 +53,15 @@ export function handoffFrames({
                 "closing an ended run's windows failed",
               );
             });
-          else browser.release(frame.owner);
+          else browser.release(frame.owner, frame.windowId);
+          return;
+        case "browser.list":
+          reply({
+            id: newFrameId(),
+            type: "browser.listed",
+            replyTo: frame.id,
+            windows: browser.list(),
+          });
           return;
         case "browser.transfer":
           reply({
@@ -59,45 +73,45 @@ export function handoffFrames({
           return;
         case "screencast.start":
           screencasts
-            .start(frame.handoffId, frame.targetId)
+            .start(frame.viewId, frame.targetId)
             .catch((error: unknown) => {
               logger.warn(
-                { err: error, handoffId: frame.handoffId },
+                { err: error, viewId: frame.viewId },
                 "starting a live view failed",
               );
               sendFrame({
                 id: newFrameId(),
                 type: "screencast.ended",
-                handoffId: frame.handoffId,
+                viewId: frame.viewId,
                 reason: "The live view couldn't start.",
               });
             });
           return;
         case "screencast.stop":
-          void screencasts.stop(frame.handoffId);
+          void screencasts.stop(frame.viewId);
           return;
         case "input":
           screencasts
-            .input(frame.handoffId, frame.input)
+            .input(frame.viewId, frame.input)
             .catch((error: unknown) => {
               logger.warn(
-                { err: error, handoffId: frame.handoffId },
+                { err: error, viewId: frame.viewId },
                 "replaying live-view input failed",
               );
             });
           return;
         case "desktop.open":
-          desktops.open(frame.handoffId);
+          desktops.open(frame.viewId);
           return;
         case "desktop.close":
-          desktops.close(frame.handoffId);
+          desktops.close(frame.viewId);
           return;
       }
     },
 
     binary(message: Uint8Array) {
       const parsed = parseDesktopMessage(message);
-      if (parsed) desktops.write(parsed.handoffId, parsed.bytes);
+      if (parsed) desktops.write(parsed.viewId, parsed.bytes);
     },
 
     disconnected() {

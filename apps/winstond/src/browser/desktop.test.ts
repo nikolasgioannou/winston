@@ -46,7 +46,7 @@ describe("the desktop tunnel", () => {
     const received = () =>
       out
         .map((message) => parseDesktopMessage(message))
-        .filter((parsed) => parsed?.handoffId === "hnd_1")
+        .filter((parsed) => parsed?.viewId === "hnd_1")
         .flatMap((parsed) => [...(parsed?.bytes ?? [])]);
     await eventually(
       () =>
@@ -62,7 +62,7 @@ describe("the desktop tunnel", () => {
     await eventually(() => frames.length === 1);
     expect(frames[0]).toMatchObject({
       type: "desktop.closed",
-      handoffId: "hnd_1",
+      viewId: "hnd_1",
     });
   });
 

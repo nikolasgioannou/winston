@@ -54,13 +54,13 @@ describe("frames", () => {
 
   test("desktop bytes round-trip intact, and neither binary kind passes for the other", () => {
     const bytes = new Uint8Array([0, 10, 255, 82, 70, 66, 10]);
-    const message = desktopMessage("hnd_1", bytes);
+    const message = desktopMessage("view_1", bytes);
     const parsed = parseDesktopMessage(message);
-    expect(parsed?.handoffId).toBe("hnd_1");
+    expect(parsed?.viewId).toBe("view_1");
     expect([...(parsed?.bytes ?? [])]).toEqual([...bytes]);
     expect(parseScreencastMessage(message)).toBeUndefined();
     const frame = screencastMessage(
-      { handoffId: "hnd_1", width: 10, height: 10 },
+      { viewId: "view_1", width: 10, height: 10 },
       new Uint8Array([0xff, 0xd8]),
     );
     expect(parseDesktopMessage(frame)).toBeUndefined();

@@ -1,16 +1,15 @@
 import type { DbOrTx } from "@winston/db/client";
+import type { BrowserPageWindow } from "@winston/domain/browser";
 import { newFrameId, type GatewayToVmFrame } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
-import {
-  connectHandoff,
-  reconnectHandoff,
-  resolveHandoffs,
-} from "@winston/db/handoffs";
-import { handoffs as handoffRows, runs, vms } from "@winston/db/schema";
+import { openHandoffs, resolveHandoffs } from "@winston/db/handoffs";
+import { runs, vms } from "@winston/db/schema";
 import { recordSystemEvent } from "@winston/db/system-events";
 import { resumeTask } from "@winston/db/tasks";
-import { and, eq, sql } from "drizzle-orm";
+import { useViewerTicket } from "@winston/db/viewer-tickets";
+import { createId } from "@winston/shared/ids";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
@@ -18,7 +17,12 @@ import type { ConnectorDeps } from "@winston/vm-api/connections";
 import type { Jev } from "@winston/vm-api/jev";
 import { createExecs, VmUnavailableError } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
-import { createHandoffs, viewerCloseCodes, type Viewer } from "./handoffs.ts";
+import {
+  createHandoffs,
+  viewerCloseCodes,
+  type Viewer,
+  type Watched,
+} from "./handoffs.ts";
 import { internalRoutes } from "./internal.ts";
 import { createUpdates, type UpdatesOptions } from "./updates.ts";
 import {
@@ -32,11 +36,11 @@ import {
 /** Frames are small today; file transfers will chunk within this. */
 export const maxFrameBytes = 1024 * 1024;
 
-/** A live-view page's socket: it signs in with its first message. */
+/** A browser page's socket: it signs in with its first message. */
 export interface ViewerSocketData {
   kind: "viewer";
   viewer?: Viewer;
-  /** The full-desktop fallback's socket (noVNC), not the tab's live view. */
+  /** The full-desktop fallback's socket (noVNC), not a tab's live view. */
   desktop?: boolean;
   authTimer?: Timer;
 }
@@ -49,42 +53,23 @@ type GatewaySocket = ServerWebSocket<GatewaySocketData>;
 const isViewer = (ws: GatewaySocket): ws is ServerWebSocket<ViewerSocketData> =>
   "kind" in ws.data;
 
-/** How the live-view page signs in: its link's token, or its reconnect secret. */
-const viewerAuth = z.union([
-  z.object({ type: z.literal("auth"), token: z.string().min(1).max(200) }),
-  z.object({
-    type: z.literal("auth"),
-    handoff: z.string().min(1).max(64),
-    secret: z.string().min(1).max(200),
-    /** The full desktop: only with the secret, i.e. once the link is open. */
-    desktop: z.literal(true).optional(),
-  }),
+/** How the browser page signs a socket in: a ticket its own server issued. */
+const viewerAuth = z.object({
+  type: z.literal("auth"),
+  ticket: z.string().min(1).max(200),
+  /** The full desktop, for a page with a window in hand. */
+  desktop: z.literal(true).optional(),
+});
+
+/** What a signed-in page asks; anything else it sends is input for the tab. */
+const viewerRequest = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("windows") }),
+  z.object({ type: z.literal("watch"), windowId: z.string().min(1).max(64) }),
+  /** Take control of the watched window (take it over, if Winston has it). */
+  z.object({ type: z.literal("control") }),
+  /** Give it back to Winston: Done. */
+  z.object({ type: z.literal("done") }),
 ]);
-
-/** The live view's Done: `{ "type": "done" }`. */
-const isDone = (text: string) => {
-  try {
-    return (JSON.parse(text) as { type?: unknown }).type === "done";
-  } catch {
-    return false;
-  }
-};
-
-/** Close codes for a link that can't be opened (docs/design.md §5). */
-const refusals = {
-  unknown: [4003, "This link isn't valid."],
-  used: [4003, "This link has already been opened."],
-  expired: [4004, "This link expired. Ask Winston for a new one."],
-  ended: [viewerCloseCodes.ended, "This handoff is over."],
-} as const;
-
-const refuse = (
-  ws: ServerWebSocket<ViewerSocketData>,
-  why: keyof typeof refusals,
-) => {
-  const [code, reason] = refusals[why];
-  ws.close(code, reason);
-};
 
 /**
  * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`,
@@ -199,43 +184,93 @@ export function createGateway({
     ws.send(JSON.stringify(frame));
 
   /**
-   * The person tapped Done on the live view: the browser goes back to
-   * Winston. A parked task carries on, as when they say "done" in chat; the
-   * front of house hears it as an event and carries on itself. Either way
-   * the window is released and the page told it's over.
+   * The person tapped Done on a window that was handed over: it goes back
+   * to Winston. A parked task carries on, as when they say "done" in chat;
+   * the front of house hears it as an event and carries on itself. The page
+   * keeps watching.
    */
-  async function handBack(viewer: Viewer) {
-    const [row] = await db
-      .select({ runId: handoffRows.runId, userId: handoffRows.userId })
-      .from(handoffRows)
-      .where(eq(handoffRows.id, viewer.handoffId));
-    const [run] = row
+  async function handBack(viewer: Viewer, window: Watched) {
+    const handoff = (await openHandoffs(db, viewer.userId)).find(
+      (h) => h.windowId === window.windowId,
+    );
+    const [run] = handoff
       ? await db
           .select({ kind: runs.kind, status: runs.status })
           .from(runs)
-          .where(eq(runs.id, row.runId))
+          .where(eq(runs.id, handoff.runId))
       : [];
-    if (!row || !run) return;
-    if (run.kind === "background") {
+    if (handoff && run?.kind === "background") {
       if (run.status === "parked")
-        await resumeTask(db, row.runId, "They tapped Done on the live view.");
-    } else {
-      await resolveHandoffs(db, row.runId);
+        await resumeTask(
+          db,
+          handoff.runId,
+          "They tapped Done on the browser page.",
+        );
+    } else if (handoff) {
+      await resolveHandoffs(db, handoff.runId);
       await recordSystemEvent(db, {
-        userId: row.userId,
+        userId: viewer.userId,
         type: "system.handoff.done",
-        payload: { handoffId: viewer.handoffId },
-        sourceRef: `handoff:${viewer.handoffId}:done`,
+        payload: { handoffId: handoff.id },
+        sourceRef: `handoff:${handoff.id}:done`,
       });
     }
     logger.info(
-      { handoffId: viewer.handoffId },
-      "handed back from the live view",
+      { windowId: window.windowId },
+      "handed back from the browser page",
     );
-    handoffs.release(viewer.vmId, viewer.owner);
+    handoffs.release(viewer.vmId, window.owner, { windowId: window.windowId });
   }
 
-  /** Signs a live-view page in and starts its stream, or closes it saying why. */
+  /** The VM's windows as the page shows them: who they're for, and who has control. */
+  async function pageWindows(viewer: Viewer): Promise<BrowserPageWindow[]> {
+    const [listed, open] = await Promise.all([
+      handoffs.list(viewer.vmId),
+      openHandoffs(db, viewer.userId),
+    ]);
+    const tasks = listed.map((w) => w.owner).filter((o) => o !== "front");
+    const briefs = new Map(
+      tasks.length > 0
+        ? (
+            await db
+              .select({ id: runs.id, brief: runs.brief })
+              .from(runs)
+              .where(inArray(runs.id, tasks))
+          ).map((r) => [r.id, (r.brief ?? "").slice(0, 120)])
+        : [],
+    );
+    return listed.map((w) => {
+      const controller = handoffs.controllerOf(viewer.vmId, w.windowId);
+      return {
+        id: w.windowId,
+        owner: w.owner,
+        task: w.owner === "front" ? null : (briefs.get(w.owner) ?? ""),
+        title: w.title,
+        url: w.url,
+        held: w.held,
+        reason:
+          w.held === "handoff"
+            ? (open.find((h) => h.windowId === w.windowId)?.reason ?? null)
+            : null,
+        control:
+          controller === undefined
+            ? null
+            : controller === viewer.viewId
+              ? "you"
+              : "elsewhere",
+        lastUsedAt: w.lastUsedAt,
+      };
+    });
+  }
+
+  /** The window by id, as the VM has it now. */
+  async function windowOn(viewer: Viewer, windowId: string) {
+    return (await handoffs.list(viewer.vmId)).find(
+      (w) => w.windowId === windowId,
+    );
+  }
+
+  /** Signs a browser page's socket in with its ticket, or closes it saying why. */
   async function admitViewer(
     ws: ServerWebSocket<ViewerSocketData>,
     text: string,
@@ -245,62 +280,118 @@ export function createGateway({
     try {
       auth = viewerAuth.parse(JSON.parse(text));
     } catch {
-      refuse(ws, "unknown");
+      ws.close(viewerCloseCodes.unauthorized, "Sign in again.");
       return;
     }
-    let row;
-    let viewerSecret: string | undefined;
-    if ("token" in auth) {
-      const result = await connectHandoff(db, auth.token);
-      if (!result.ok) {
-        refuse(ws, result.reason);
-        return;
-      }
-      row = result.handoff;
-      viewerSecret = result.viewerSecret;
-    } else {
-      row = await reconnectHandoff(db, auth.handoff, auth.secret);
-      if (!row) {
-        refuse(ws, "used");
-        return;
-      }
+    const userId = await useViewerTicket(db, auth.ticket);
+    if (!userId) {
+      ws.close(viewerCloseCodes.unauthorized, "Sign in again.");
+      return;
     }
     const [vm] = await db
       .select({ id: vms.id })
       .from(vms)
-      .where(eq(vms.userId, row.userId));
-    const [run] = await db
-      .select({ kind: runs.kind })
-      .from(runs)
-      .where(eq(runs.id, row.runId));
-    if (!vm || !run) {
-      refuse(ws, "ended");
+      .where(eq(vms.userId, userId));
+    if (!vm) {
+      ws.close(
+        viewerCloseCodes.vmOffline,
+        "Winston's computer isn't set up yet.",
+      );
       return;
     }
     const viewer: Viewer = {
-      handoffId: row.id,
+      viewId: createId("view"),
+      userId,
       vmId: vm.id,
-      // winstond names the front of house's windows `front`, others by run id.
-      owner: run.kind === "front" ? "front" : row.runId,
-      targetId: row.targetId,
       socket: ws,
     };
     ws.data.viewer = viewer;
-    if ("desktop" in auth && auth.desktop) {
+    if (auth.desktop) {
+      // The whole screen: only while the person has a window in hand.
+      if (!handoffs.hasControl(vm.id)) {
+        ws.close(viewerCloseCodes.unauthorized, "Take over a window first.");
+        return;
+      }
       ws.data.desktop = true;
       handoffs.openDesktop(viewer);
       return;
     }
-    // The page keeps this to reconnect; the link itself is used up.
-    if (viewerSecret)
-      ws.send(
-        JSON.stringify({
-          type: "session",
-          handoff: row.id,
-          secret: viewerSecret,
-        }),
-      );
-    handoffs.connect(viewer);
+    handoffs.join(viewer);
+    ws.send(JSON.stringify({ type: "ready" }));
+  }
+
+  /** What a signed-in page asked, or its input for the tab. */
+  async function viewerMessage(viewer: Viewer, text: string) {
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return;
+    }
+    const request = viewerRequest.safeParse(data);
+    if (!request.success) {
+      handoffs.input(viewer, data);
+      return;
+    }
+    const tell = (message: Record<string, unknown>) =>
+      viewer.socket.send(JSON.stringify(message));
+    try {
+      switch (request.data.type) {
+        case "windows":
+          tell({ type: "windows", windows: await pageWindows(viewer) });
+          return;
+        case "watch": {
+          const window = await windowOn(viewer, request.data.windowId);
+          if (!window) {
+            tell({
+              type: "ended",
+              windowId: request.data.windowId,
+              reason: "That window is gone.",
+            });
+            return;
+          }
+          handoffs.watch(viewer, window);
+          // A window the person has, with nobody in control, is this page's.
+          if (
+            window.held &&
+            handoffs.controllerOf(viewer.vmId, window.windowId) === undefined
+          )
+            handoffs.grant(viewer);
+          return;
+        }
+        case "control": {
+          const watched = viewer.watching;
+          if (!watched) return;
+          const window = await windowOn(viewer, watched.windowId);
+          if (!window) return;
+          const held =
+            window.held ??
+            (await handoffs.hold(viewer.vmId, window.owner, {
+              windowId: window.windowId,
+              takeover: true,
+            }));
+          if (held) handoffs.grant(viewer);
+          return;
+        }
+        case "done": {
+          const watched = viewer.watching;
+          if (!watched || !handoffs.controls(viewer)) return;
+          const window = await windowOn(viewer, watched.windowId);
+          if (window?.held === "handoff") await handBack(viewer, watched);
+          else
+            handoffs.release(viewer.vmId, watched.owner, {
+              windowId: watched.windowId,
+            });
+          return;
+        }
+      }
+    } catch (error) {
+      logger.warn({ err: error }, "a browser page's request failed");
+      tell({
+        type: "error",
+        message: "Winston's computer didn't answer; try again.",
+      });
+    }
   }
   /** Liveness for the load balancer, like api's: the process answers and Postgres is reachable. */
   const health = async () => {
@@ -321,7 +412,7 @@ export function createGateway({
       if (isViewer(socket)) {
         // A page that doesn't sign in within 10 s is dropped.
         socket.data.authTimer = setTimeout(() => {
-          refuse(socket, "unknown");
+          socket.close(viewerCloseCodes.unauthorized, "Sign in again.");
         }, 10_000);
         return;
       }
@@ -356,8 +447,7 @@ export function createGateway({
         }
         if (typeof message !== "string") return;
         if (!socket.data.viewer) await admitViewer(socket, message);
-        else if (isDone(message)) await handBack(socket.data.viewer);
-        else handoffs.input(socket.data.viewer, message);
+        else await viewerMessage(socket.data.viewer, message);
         return;
       }
       const ws = socket as VmSocket;
@@ -408,8 +498,8 @@ export function createGateway({
     handoffs,
     fetch: async (request: Request, server: Server<GatewaySocketData>) => {
       const url = new URL(request.url);
-      // The handoff page's live view; it signs in over the socket.
-      if (url.pathname === "/handoff/connect")
+      // The browser page's live view; it signs in over the socket.
+      if (url.pathname === "/browser/connect")
         return server.upgrade(request, {
           data: { kind: "viewer" } satisfies ViewerSocketData,
         })

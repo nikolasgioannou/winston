@@ -490,6 +490,44 @@ describe("agent windows", () => {
     await browser.navigate(token("run_a"), { url: "https://shop.test/2" });
   });
 
+  test("the person can take over any window from the browser page, and give just that one back", async () => {
+    const { browser } = setup();
+    const a = await browser.open(token("run_a"), "https://shop.test");
+    const b = await browser.open(token("run_a"), "https://news.test");
+    expect(
+      browser.hold("run_a", { windowId: a.window.id, takeover: true }),
+    ).toMatchObject({
+      windowId: a.window.id,
+    });
+    const refused = await failure(
+      browser.navigate(
+        token("run_a"),
+        { url: "https://shop.test/2" },
+        a.window.id,
+      ),
+    );
+    expect(refused.message).toBe(
+      `The user took over ${a.window.id}; it's theirs until they give it back.`,
+    );
+    // Another run's window can't be held under the wrong owner.
+    expect(
+      browser.hold("run_z", { windowId: a.window.id, takeover: true }),
+    ).toBeNull();
+    expect(new Map(browser.list().map((w) => [w.windowId, w.held]))).toEqual(
+      new Map([
+        [a.window.id, "takeover"],
+        [b.window.id, null],
+      ]),
+    );
+    browser.release("run_a", a.window.id);
+    await browser.navigate(
+      token("run_a"),
+      { url: "https://shop.test/2" },
+      a.window.id,
+    );
+    expect(browser.list().every((w) => w.held === null)).toBe(true);
+  });
+
   test("a run that ended has its windows closed and its sites freed at once, held ones too", async () => {
     const { browser, chrome } = setup();
     const a = await browser.open(token("run_a"), "https://shop.test");

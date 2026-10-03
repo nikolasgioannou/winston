@@ -35,8 +35,12 @@ export interface VmClient {
     userId: string,
     owner: string,
   ): Promise<{ windowId: string; targetId: string; url: string } | null>;
-  /** Lets a run's held windows go and ends their live views. */
-  releaseBrowser(userId: string, owner: string): Promise<void>;
+  /** Gives a run's held windows (or just one) back to it; the page keeps watching. */
+  releaseBrowser(
+    userId: string,
+    owner: string,
+    windowId?: string,
+  ): Promise<void>;
   /** A run has ended: closes its windows and frees its sites. */
   closeBrowser(userId: string, owner: string): Promise<void>;
   /**
@@ -150,14 +154,14 @@ export function gatewayClient({
         ).window ?? null
       );
     },
-    async releaseBrowser(userId, owner) {
+    async releaseBrowser(userId, owner, windowId) {
       const response = await request(
         userId,
         `/internal/vms/${userId}/browser/release`,
         {
           method: "POST",
           headers: json,
-          body: JSON.stringify({ owner }),
+          body: JSON.stringify({ owner, ...(windowId ? { windowId } : {}) }),
         },
       );
       if (!response.ok) throw await failure(response);

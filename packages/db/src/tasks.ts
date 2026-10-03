@@ -7,7 +7,7 @@
 import { closeTaskBrowserJob, runStepJob } from "@winston/domain/jobs";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
-import { createHandoff, handoffLink, resolveHandoffs } from "./handoffs.ts";
+import { browserLink, createHandoff, resolveHandoffs } from "./handoffs.ts";
 import { enqueue } from "./queue.ts";
 import { applyRunEvent } from "./run-state.ts";
 import { runMessages, runs } from "./schema/index.ts";
@@ -97,7 +97,7 @@ export async function parkTask(
   reason: string,
   /** Distinguishes this handoff from the run's earlier ones. */
   step: number,
-  /** The browser window the user takes over, for a live-view link. */
+  /** The browser window the user takes over, for a link to the browser page. */
   window?: { windowId: string; targetId: string; webPublicUrl: string },
 ) {
   return db.transaction(async (tx) => {
@@ -108,19 +108,16 @@ export async function parkTask(
       .where(eq(runs.id, runId))
       .returning({ userId: runs.userId, brief: runs.brief });
     if (!run) throw new Error(`No run ${runId}`);
+    if (window)
+      await createHandoff(tx, {
+        runId,
+        userId: run.userId,
+        windowId: window.windowId,
+        targetId: window.targetId,
+        reason,
+      });
     const link = window
-      ? handoffLink(
-          window.webPublicUrl,
-          (
-            await createHandoff(tx, {
-              runId,
-              userId: run.userId,
-              windowId: window.windowId,
-              targetId: window.targetId,
-              reason,
-            })
-          ).token,
-        )
+      ? browserLink(window.webPublicUrl, window.windowId)
       : undefined;
     await recordSystemEvent(tx, {
       userId: run.userId,

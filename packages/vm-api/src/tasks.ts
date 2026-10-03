@@ -8,7 +8,7 @@ import { finalRunStatuses } from "@winston/db/run-state";
 import { runs, users } from "@winston/db/schema";
 import {
   createHandoff,
-  handoffLink,
+  browserLink,
   latestHandoff,
 } from "@winston/db/handoffs";
 import { cancelTask, resumeTask } from "@winston/db/tasks";
@@ -252,7 +252,7 @@ export function taskRoutes({
           return c.json({ id: run.id, status: "running" as const });
         },
       )
-      // A fresh live-view link for a parked task (the last one expired or was used).
+      // The browser page at a parked task's window, holding it again if it slipped.
       .post("/:id/link", async (c) => {
         const { userId } = c.get("run");
         const run = await taskFor(userId, c.req.param("id"));
@@ -277,17 +277,20 @@ export function taskRoutes({
             `${run.id} has no browser window to show.`,
             "It handed over for something else; tell the user what it needs.",
           );
-        const { token } = await createHandoff(db, {
-          runId: run.id,
-          userId,
-          windowId: window.windowId,
-          targetId: window.targetId,
-          reason: run.waitingFor ?? previous?.reason ?? "",
-        });
+        if (
+          previous?.status !== "open" ||
+          previous.windowId !== window.windowId
+        )
+          await createHandoff(db, {
+            runId: run.id,
+            userId,
+            windowId: window.windowId,
+            targetId: window.targetId,
+            reason: run.waitingFor ?? previous?.reason ?? "",
+          });
         return c.json({
           id: run.id,
-          link: handoffLink(browser.webPublicUrl, token),
-          expiresInMinutes: 15,
+          link: browserLink(browser.webPublicUrl, window.windowId),
         });
       })
   );

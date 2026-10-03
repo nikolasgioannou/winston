@@ -53,7 +53,7 @@ export const blankWindowNote =
 
 /** The message that carries the front of house's handoff link. */
 export const handoffLinkMessage = (link: string) =>
-  `Here's the browser, to take over: ${link}\n(The link works once, for 15 minutes. Tell me when you're done.)`;
+  `Over to you in the browser: ${link}\n(Tap Done there, or tell me, when you're finished.)`;
 
 /**
  * For the front of house: the call ends the turn, and it has an `execute` so
@@ -103,7 +103,7 @@ export function frontHandoffTool(deps: {
       await deps.sendLink(
         handoffLinkMessage(await deps.createLink(window, reason)),
       );
-      return `Handed over: the user was sent a live-view link to your browser window. ${ends}`;
+      return `Handed over: the user was sent a link to your window on their browser page. ${ends}`;
     },
   });
 }

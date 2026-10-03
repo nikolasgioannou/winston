@@ -1,8 +1,14 @@
 /**
- * Browser handoff in the gateway (docs/design.md §5, §15): holding and
- * releasing a run's window on its VM, and relaying a live view between the
- * page at `/t/<token>` and that one tab. The page's socket carries nothing
- * but that tab's frames one way and the person's input the other.
+ * The browser page's live views, in the gateway (docs/design.md §5, §15):
+ * holding and releasing windows on a VM, listing them, and relaying live
+ * views between the signed-in browser page and the tab it's watching.
+ *
+ * Each page socket is a viewer. It watches one window at a time (its own
+ * screencast on the VM), and any number can watch the same one: a phone and
+ * a laptop. Control of a window is the person's while it's handed over or
+ * they've taken it over, and belongs to one viewer at a time, the last to
+ * take it; only that viewer's input and size reach the tab. When control
+ * goes back to Winston, viewers keep watching.
  */
 import {
   desktopMessage,
@@ -11,6 +17,7 @@ import {
   parseScreencastMessage,
   viewerInput,
   type GatewayToVmFrame,
+  type ListedWindow,
   type VmToGatewayFrame,
 } from "@winston/domain/frames";
 import type { Logger } from "@winston/shared/logger";
@@ -22,26 +29,32 @@ export interface ViewerSocket {
   close(code?: number, reason?: string): void;
 }
 
-export interface Viewer {
-  handoffId: string;
-  vmId: string;
+/** A window a viewer is watching: what it needs to stream and control it. */
+export interface Watched {
+  windowId: string;
+  targetId: string;
   /** Whose window it is, as winstond names runs (`front`, or a run id). */
   owner: string;
-  targetId: string;
+}
+
+export interface Viewer {
+  /** This page's live view on the VM (made by the gateway). */
+  viewId: string;
+  userId: string;
+  vmId: string;
   socket: ViewerSocket;
+  watching?: Watched | undefined;
 }
 
 /** Close codes the page reads (docs/design.md §5). */
 export const viewerCloseCodes = {
-  /** The task carried on, or the tab went away: the live view is over. */
-  ended: 4000,
-  /** The computer isn't connected; the page may retry. */
+  /** The computer isn't connected; the page signs in again and retries. */
   vmOffline: 4001,
-  /** Someone else opened this handoff's live view. */
-  replaced: 4002,
+  /** The ticket was unknown, used or expired: the page gets a new one. */
+  unauthorized: 4003,
 } as const;
 
-const holdTimeoutMs = 10_000;
+const askTimeoutMs = 10_000;
 
 export interface HeldWindow {
   windowId: string;
@@ -60,59 +73,113 @@ export function createHandoffs({
   sendBinary: (vmId: string, message: Uint8Array) => boolean;
   logger: Logger;
 }) {
-  /** Holds and transfers waiting on the VM's answer, by frame id. */
-  const holds = new Map<
+  /** Holds, transfers and listings waiting on the VM's answer, by frame id. */
+  const asks = new Map<
     string,
-    { resolve: (window: HeldWindow | null) => void; timer: Timer }
+    { resolve: (answer: unknown) => void; timer: Timer }
   >();
   const viewers = new Map<string, Viewer>();
-  /** Full-desktop fallbacks (noVNC), by handoff: at most one each. */
+  /** Full-desktop fallbacks (noVNC), by view: at most one each. */
   const desktops = new Map<string, Viewer>();
+  /** Who controls each window the person has, `vmId:windowId` → viewId. */
+  const control = new Map<string, string>();
 
-  function closeDesktop(handoffId: string, code: number, reason: string) {
-    const desktop = desktops.get(handoffId);
-    if (!desktop) return;
-    desktops.delete(handoffId);
-    send(desktop.vmId, { id: newFrameId(), type: "desktop.close", handoffId });
-    desktop.socket.close(code, reason);
-  }
+  const key = (vmId: string, windowId: string) => `${vmId}:${windowId}`;
 
-  /** Sends a frame the VM answers with a window (or null), and waits for that. */
-  function ask(
-    vmId: string,
-    frame: (id: string) => GatewayToVmFrame,
-  ): Promise<HeldWindow | null> {
+  /** Tells a page something (a JSON message on its socket). */
+  const tell = (viewer: Viewer, message: Record<string, unknown>) => {
+    viewer.socket.send(JSON.stringify(message));
+  };
+
+  /** Sends a frame the VM answers, and waits for its answer. */
+  function ask<T>(vmId: string, frame: (id: string) => GatewayToVmFrame) {
     const id = newFrameId();
-    return new Promise((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        holds.delete(id);
+        asks.delete(id);
         reject(new VmUnreachableError());
-      }, holdTimeoutMs);
-      holds.set(id, { resolve, timer });
+      }, askTimeoutMs);
+      asks.set(id, {
+        resolve: (answer) => {
+          resolve(answer as T);
+        },
+        timer,
+      });
       if (!send(vmId, frame(id))) {
         clearTimeout(timer);
-        holds.delete(id);
+        asks.delete(id);
         reject(new VmUnavailableError());
       }
     });
   }
 
-  function stop(viewer: Viewer, code: number, reason: string) {
-    if (viewers.get(viewer.handoffId) !== viewer) return;
-    viewers.delete(viewer.handoffId);
+  function closeDesktop(viewId: string, reason: string) {
+    const desktop = desktops.get(viewId);
+    if (!desktop) return;
+    desktops.delete(viewId);
+    send(desktop.vmId, { id: newFrameId(), type: "desktop.close", viewId });
+    desktop.socket.close(1000, reason);
+  }
+
+  /** Stops a viewer's stream (it stopped watching, switched, or went away). */
+  function stopWatching(viewer: Viewer) {
+    if (!viewer.watching) return;
     send(viewer.vmId, {
       id: newFrameId(),
       type: "screencast.stop",
-      handoffId: viewer.handoffId,
+      viewId: viewer.viewId,
     });
-    viewer.socket.close(code, reason);
-    closeDesktop(viewer.handoffId, code, reason);
+    viewer.watching = undefined;
   }
 
+  /**
+   * Control of a window goes (back to Winston, or to another viewer); its
+   * holder hears. Its stream starts over: the page's size was emulated in
+   * that stream's own session on the VM, and a new session drops it, so the
+   * tab is back at Winston's size.
+   */
+  function dropControl(vmId: string, windowId: string) {
+    const holder = control.get(key(vmId, windowId));
+    if (!holder) return;
+    control.delete(key(vmId, windowId));
+    const viewer = viewers.get(holder);
+    if (viewer) {
+      tell(viewer, { type: "control", windowId, yours: false });
+      if (viewer.watching?.windowId === windowId) {
+        send(vmId, {
+          id: newFrameId(),
+          type: "screencast.stop",
+          viewId: holder,
+        });
+        send(vmId, {
+          id: newFrameId(),
+          type: "screencast.start",
+          viewId: holder,
+          targetId: viewer.watching.targetId,
+        });
+      }
+    }
+    closeDesktop(holder, "Control went back to Winston.");
+  }
+
+  const controls = (viewer: Viewer) =>
+    viewer.watching !== undefined &&
+    control.get(key(viewer.vmId, viewer.watching.windowId)) === viewer.viewId;
+
   return {
-    /** Asks a VM to hold an owner's current window for the user. */
-    hold(vmId: string, owner: string): Promise<HeldWindow | null> {
-      return ask(vmId, (id) => ({ id, type: "browser.hold", owner }));
+    /** Asks a VM to hold a window for the person: the owner's current one, or that one taken over. */
+    hold(
+      vmId: string,
+      owner: string,
+      options: { windowId?: string; takeover?: boolean } = {},
+    ): Promise<HeldWindow | null> {
+      return ask(vmId, (id) => ({
+        id,
+        type: "browser.hold",
+        owner,
+        ...(options.windowId ? { windowId: options.windowId } : {}),
+        ...(options.takeover ? { takeover: true } : {}),
+      }));
     },
 
     /** Asks a VM to give a window (`from`'s current one by default) to another run. */
@@ -129,99 +196,137 @@ export function createHandoffs({
       }));
     },
 
+    /** Every open window on a VM. */
+    list(vmId: string): Promise<ListedWindow[]> {
+      return ask(vmId, (id) => ({ id, type: "browser.list" }));
+    },
+
     /**
-     * Lets an owner's windows go, and ends their live views. With `close`
-     * (the run has ended), its windows close too. False if the VM isn't
-     * connected.
+     * Gives an owner's windows (or just one) back to Winston: viewers keep
+     * watching, and whoever had control hears it's gone. With `close` (the
+     * run has ended) its windows close too, and their streams end. False if
+     * the VM isn't connected.
      */
-    release(vmId: string, owner: string, options: { close?: boolean } = {}) {
-      const reason = options.close ? "The task ended." : "The task carried on.";
-      for (const viewer of [...viewers.values()])
-        if (viewer.vmId === vmId && viewer.owner === owner)
-          stop(viewer, viewerCloseCodes.ended, reason);
-      for (const desktop of [...desktops.values()])
-        if (desktop.vmId === vmId && desktop.owner === owner)
-          closeDesktop(desktop.handoffId, viewerCloseCodes.ended, reason);
+    release(
+      vmId: string,
+      owner: string,
+      options: { windowId?: string | undefined; close?: boolean } = {},
+    ) {
+      for (const viewer of viewers.values())
+        if (
+          viewer.vmId === vmId &&
+          viewer.watching?.owner === owner &&
+          (options.windowId === undefined ||
+            viewer.watching.windowId === options.windowId)
+        )
+          dropControl(vmId, viewer.watching.windowId);
       return send(vmId, {
         id: newFrameId(),
         type: "browser.release",
         owner,
+        ...(options.windowId ? { windowId: options.windowId } : {}),
         ...(options.close ? { close: true } : {}),
       });
     },
 
-    /** A page opened a live view: start streaming that tab to it. */
-    connect(viewer: Viewer) {
-      const previous = viewers.get(viewer.handoffId);
-      if (previous) {
-        // One live view per handoff: the newest (a reconnect) wins.
-        viewers.delete(viewer.handoffId);
-        previous.socket.close(viewerCloseCodes.replaced, "Opened elsewhere.");
-      }
-      viewers.set(viewer.handoffId, viewer);
+    /** A page signed in: it can list, watch and, when it has control, act. */
+    join(viewer: Viewer) {
+      viewers.set(viewer.viewId, viewer);
+    },
+
+    /** Starts streaming a window to a viewer (stopping what it watched before). */
+    watch(viewer: Viewer, window: Watched) {
+      if (viewers.get(viewer.viewId) !== viewer) return;
+      stopWatching(viewer);
+      viewer.watching = window;
       const started = send(viewer.vmId, {
         id: newFrameId(),
         type: "screencast.start",
-        handoffId: viewer.handoffId,
-        targetId: viewer.targetId,
+        viewId: viewer.viewId,
+        targetId: window.targetId,
       });
       if (!started) {
-        viewers.delete(viewer.handoffId);
+        viewer.watching = undefined;
         viewer.socket.close(
           viewerCloseCodes.vmOffline,
           "The computer isn't connected right now.",
         );
-      }
-    },
-
-    /** The page sent input: pass it to the tab, if it's well formed. */
-    input(viewer: Viewer, text: string) {
-      if (viewers.get(viewer.handoffId) !== viewer) return;
-      let data: unknown;
-      try {
-        data = JSON.parse(text);
-      } catch {
         return;
       }
+      tell(viewer, {
+        type: "watching",
+        windowId: window.windowId,
+        control: controls(viewer),
+      });
+    },
+
+    /** Whether a viewer has control of the window it's watching. */
+    controls,
+
+    /** Who has control of a window, if anyone (a view id). */
+    controllerOf(vmId: string, windowId: string) {
+      return control.get(key(vmId, windowId));
+    },
+
+    /** Whether the person has any window in hand on a VM (for the full desktop). */
+    hasControl(vmId: string) {
+      return [...control.keys()].some((window) =>
+        window.startsWith(`${vmId}:`),
+      );
+    },
+
+    /**
+     * Gives a viewer control of the window it's watching (the person has
+     * it: handed over or taken over). Whoever had it loses it.
+     */
+    grant(viewer: Viewer) {
+      const watched = viewer.watching;
+      if (!watched) return;
+      const previous = control.get(key(viewer.vmId, watched.windowId));
+      if (previous === viewer.viewId) return;
+      if (previous) dropControl(viewer.vmId, watched.windowId);
+      control.set(key(viewer.vmId, watched.windowId), viewer.viewId);
+      tell(viewer, {
+        type: "control",
+        windowId: watched.windowId,
+        yours: true,
+      });
+    },
+
+    /** The page sent input: to the tab, if it's well formed and the page has control. */
+    input(viewer: Viewer, data: unknown) {
+      if (viewers.get(viewer.viewId) !== viewer || !controls(viewer)) return;
       const parsed = viewerInput.safeParse(data);
       if (!parsed.success) return;
       send(viewer.vmId, {
         id: newFrameId(),
         type: "input",
-        handoffId: viewer.handoffId,
+        viewId: viewer.viewId,
         input: parsed.data,
       });
     },
 
-    /** The page went away: stop the screencast (the handoff stays connected). */
+    /** The page went away: its stream stops, and its control goes. */
     disconnected(viewer: Viewer) {
-      if (viewers.get(viewer.handoffId) !== viewer) return;
-      viewers.delete(viewer.handoffId);
-      send(viewer.vmId, {
-        id: newFrameId(),
-        type: "screencast.stop",
-        handoffId: viewer.handoffId,
-      });
+      if (viewers.get(viewer.viewId) !== viewer) return;
+      viewers.delete(viewer.viewId);
+      stopWatching(viewer);
+      for (const [window, holder] of control)
+        if (holder === viewer.viewId) control.delete(window);
+      closeDesktop(viewer.viewId, "The page closed.");
     },
 
-    /**
-     * A page opened the full desktop (its handoff is connected): tunnel its
-     * VNC client to the VM's VNC server.
-     */
+    /** A page with control opened the full desktop: tunnel its VNC client to the VM's VNC server. */
     openDesktop(desktop: Viewer) {
-      closeDesktop(
-        desktop.handoffId,
-        viewerCloseCodes.replaced,
-        "Opened elsewhere.",
-      );
-      desktops.set(desktop.handoffId, desktop);
+      closeDesktop(desktop.viewId, "Opened again.");
+      desktops.set(desktop.viewId, desktop);
       const opened = send(desktop.vmId, {
         id: newFrameId(),
         type: "desktop.open",
-        handoffId: desktop.handoffId,
+        viewId: desktop.viewId,
       });
       if (!opened) {
-        desktops.delete(desktop.handoffId);
+        desktops.delete(desktop.viewId);
         desktop.socket.close(
           viewerCloseCodes.vmOffline,
           "The computer isn't connected right now.",
@@ -231,90 +336,96 @@ export function createHandoffs({
 
     /** Bytes from the page's VNC client, for the VM. */
     desktopInput(desktop: Viewer, bytes: Uint8Array) {
-      if (desktops.get(desktop.handoffId) !== desktop) return;
-      sendBinary(desktop.vmId, desktopMessage(desktop.handoffId, bytes));
+      if (desktops.get(desktop.viewId) !== desktop) return;
+      sendBinary(desktop.vmId, desktopMessage(desktop.viewId, bytes));
     },
 
     /** The page closed the full desktop. */
     desktopDisconnected(desktop: Viewer) {
-      if (desktops.get(desktop.handoffId) !== desktop) return;
-      desktops.delete(desktop.handoffId);
+      if (desktops.get(desktop.viewId) !== desktop) return;
+      desktops.delete(desktop.viewId);
       send(desktop.vmId, {
         id: newFrameId(),
         type: "desktop.close",
-        handoffId: desktop.handoffId,
+        viewId: desktop.viewId,
       });
     },
 
-    /**
-     * A binary message from a VM: desktop bytes or a screencast frame, for
-     * its page only.
-     */
+    /** A binary message from a VM: desktop bytes or a screencast frame, for its page only. */
     frame(vmId: string, message: Uint8Array) {
       const tunnelled = parseDesktopMessage(message);
       if (tunnelled) {
-        const desktop = desktops.get(tunnelled.handoffId);
+        const desktop = desktops.get(tunnelled.viewId);
         if (desktop?.vmId === vmId) desktop.socket.send(tunnelled.bytes);
         return;
       }
       const parsed = parseScreencastMessage(message);
-      const viewer = parsed ? viewers.get(parsed.header.handoffId) : undefined;
-      // A frame for another VM's handoff never reaches its page.
-      if (viewer?.vmId === vmId) viewer.socket.send(message);
+      const viewer = parsed ? viewers.get(parsed.header.viewId) : undefined;
+      // A frame for another VM's view never reaches its page.
+      if (viewer?.vmId === vmId && viewer.watching) viewer.socket.send(message);
     },
 
-    /** Frames for the handoff registry; returns whether it took the frame. */
+    /** Frames for the registry; returns whether it took the frame. */
     handle(vmId: string, frame: VmToGatewayFrame) {
       if (
         frame.type === "browser.held" ||
-        frame.type === "browser.transferred"
+        frame.type === "browser.transferred" ||
+        frame.type === "browser.listed"
       ) {
-        const pending = holds.get(frame.replyTo);
+        const pending = asks.get(frame.replyTo);
         if (!pending) return true;
-        holds.delete(frame.replyTo);
+        asks.delete(frame.replyTo);
         clearTimeout(pending.timer);
-        pending.resolve(frame.window);
+        pending.resolve(
+          frame.type === "browser.listed" ? frame.windows : frame.window,
+        );
         return true;
       }
       if (frame.type === "screencast.ended") {
-        const viewer = viewers.get(frame.handoffId);
-        if (viewer?.vmId === vmId) {
+        const viewer = viewers.get(frame.viewId);
+        if (viewer?.vmId === vmId && viewer.watching) {
           logger.info(
-            { handoffId: frame.handoffId, reason: frame.reason },
+            { viewId: frame.viewId, reason: frame.reason },
             "live view ended",
           );
-          viewers.delete(frame.handoffId);
-          viewer.socket.close(
-            viewerCloseCodes.ended,
-            frame.reason.slice(0, 120),
-          );
+          const { windowId } = viewer.watching;
+          viewer.watching = undefined;
+          control.delete(key(vmId, windowId));
+          tell(viewer, {
+            type: "ended",
+            windowId,
+            reason: frame.reason.slice(0, 120),
+          });
         }
         return true;
       }
       if (frame.type === "desktop.closed") {
-        const desktop = desktops.get(frame.handoffId);
+        const desktop = desktops.get(frame.viewId);
         if (desktop?.vmId === vmId) {
-          desktops.delete(frame.handoffId);
-          desktop.socket.close(viewerCloseCodes.ended, frame.reason);
+          desktops.delete(frame.viewId);
+          desktop.socket.close(1000, frame.reason);
         }
         return true;
       }
       return false;
     },
 
-    /** A VM disconnected: its pages are told it's offline. */
+    /** A VM disconnected: its pages are told it's offline, and sign in again. */
     vmClosed(vmId: string) {
       for (const viewer of [...viewers.values()])
         if (viewer.vmId === vmId) {
-          viewers.delete(viewer.handoffId);
+          viewers.delete(viewer.viewId);
+          viewer.watching = undefined;
           viewer.socket.close(
             viewerCloseCodes.vmOffline,
             "The computer disconnected; reconnecting.",
           );
         }
+      for (const window of [...control.keys()])
+        if (window.startsWith(`${vmId}:`)) control.delete(window);
       for (const desktop of [...desktops.values()])
         if (desktop.vmId === vmId) {
-          desktops.delete(desktop.handoffId);
+          desktops.delete(desktop.viewId);
           desktop.socket.close(
             viewerCloseCodes.vmOffline,
             "The computer disconnected.",

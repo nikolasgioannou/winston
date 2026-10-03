@@ -179,24 +179,3 @@ export function textChange(before: string, after: string): ViewerInput[] {
   if (added) inputs.push({ kind: "text", text: added });
   return inputs;
 }
-
-/** The page's states. */
-export type LiveState =
-  | "connecting"
-  | "live"
-  | "reconnecting"
-  | "ended"
-  | "expired"
-  | "invalid"
-  | "elsewhere";
-
-/** What a closed socket means, given whether the page had a session to come back with. */
-export function closedState(code: number, hadSession: boolean): LiveState {
-  if (code === 4000) return "ended";
-  if (code === 4004) return "expired";
-  if (code === 4002) return "elsewhere";
-  // A used token after we'd connected means our session is gone too.
-  if (code === 4003) return "invalid";
-  // Anything else (the computer offline, a network blip) is worth retrying.
-  return hadSession ? "reconnecting" : "invalid";
-}

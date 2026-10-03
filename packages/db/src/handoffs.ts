@@ -1,26 +1,35 @@
 /**
- * Handoff links (docs/design.md §5 Browser handoff, §17): a random token,
- * stored hashed, that opens a live view of one browser window. It works
- * once, within 15 minutes; the page that opens it gets a secret of its own
- * to reconnect with, so a dropped connection doesn't need the link again.
- * The handoff ends when its run carries on (or is cancelled).
+ * Handoffs (docs/design.md §5 Browser handoff, §17): a browser window handed
+ * to the user, the record of who has control, why, and when it ended. The
+ * user watches and works in it on the signed-in browser page
+ * (`/browser?window=…`), so its link holds nothing secret. A handoff ends
+ * when its run carries on (or is cancelled), or when the user writes to the
+ * front of house after it handed over.
  */
-import { generateToken, hashToken, tokenMatches } from "@winston/shared/tokens";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "./client.ts";
 import { handoffs, runs } from "./schema/index.ts";
 
-export const handoffConnectMs = 15 * 60_000;
-
-/** The page a handoff token opens on the site. */
-export function handoffLink(webPublicUrl: string, token: string) {
-  return new URL(`/t/${token}`, webPublicUrl).href;
+/** The signed-in browser page, open at a window when there's one. */
+export function browserLink(webPublicUrl: string, windowId?: string) {
+  const url = new URL("/browser", webPublicUrl);
+  if (windowId) url.searchParams.set("window", windowId);
+  return url.href;
 }
 
 /**
- * Makes a link for a run's window. An earlier link of the run that nobody
- * opened stops working (a fresh link replaces it).
+ * The site's Telegram sign-in for a page on it: a login button opens this
+ * with the tapper's signed Telegram identity added, and lands on `link`
+ * signed in (docs/design.md §13).
  */
+export function telegramLoginUrl(webPublicUrl: string, link: string) {
+  const target = new URL(link);
+  const url = new URL("/auth/telegram", webPublicUrl);
+  url.searchParams.set("next", `${target.pathname}${target.search}`);
+  return url.href;
+}
+
+/** Records a run handing its window to the user; an earlier open one of the run ends. */
 export async function createHandoff(
   db: DbOrTx,
   handoff: {
@@ -31,104 +40,32 @@ export async function createHandoff(
     reason: string;
   },
 ) {
-  await db
-    .update(handoffs)
-    .set({ status: "expired", resolvedAt: sql`now()` })
-    .where(and(eq(handoffs.runId, handoff.runId), eq(handoffs.status, "open")));
-  const token = generateToken();
+  await resolveHandoffs(db, handoff.runId);
   const [row] = await db
     .insert(handoffs)
-    .values({
-      ...handoff,
-      tokenHash: hashToken(token),
-      connectDeadline: sql`now() + ${handoffConnectMs} * interval '1 millisecond'`,
-    })
+    .values(handoff)
     .returning({ id: handoffs.id });
   if (!row) throw new Error("No handoff row");
-  return { id: row.id, token };
+  return { id: row.id };
 }
 
 export type HandoffRow = typeof handoffs.$inferSelect;
 
-export type ConnectResult =
-  | { ok: true; handoff: HandoffRow; viewerSecret: string }
-  | { ok: false; reason: "unknown" | "used" | "expired" | "ended" };
-
-/**
- * The live-view page opening a link: valid once, before its deadline. Uses
- * the token up and hands the page its own secret for reconnecting.
- */
-export async function connectHandoff(
-  db: DbOrTx,
-  token: string,
-): Promise<ConnectResult> {
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(handoffs)
-      .where(eq(handoffs.tokenHash, hashToken(token)))
-      .for("update");
-    if (!row) return { ok: false, reason: "unknown" };
-    if (row.status === "connected") return { ok: false, reason: "used" };
-    if (row.status !== "open")
-      return {
-        ok: false,
-        reason: row.status === "expired" ? "expired" : "ended",
-      };
-    if (row.connectDeadline.getTime() <= Date.now()) {
-      await tx
-        .update(handoffs)
-        .set({ status: "expired", resolvedAt: sql`now()` })
-        .where(eq(handoffs.id, row.id));
-      return { ok: false, reason: "expired" };
-    }
-    const viewerSecret = generateToken();
-    const [connected] = await tx
-      .update(handoffs)
-      .set({ status: "connected", viewerSecretHash: hashToken(viewerSecret) })
-      .where(eq(handoffs.id, row.id))
-      .returning();
-    if (!connected) throw new Error("No handoff row");
-    return { ok: true, handoff: connected, viewerSecret };
-  });
-}
-
-/** The page coming back after a drop, with the secret it was given. */
-export async function reconnectHandoff(
-  db: DbOrTx,
-  handoffId: string,
-  viewerSecret: string,
-) {
-  const [row] = await db
-    .select()
-    .from(handoffs)
-    .where(and(eq(handoffs.id, handoffId), eq(handoffs.status, "connected")));
-  if (
-    !row?.viewerSecretHash ||
-    !tokenMatches(viewerSecret, row.viewerSecretHash)
-  )
-    return undefined;
-  return row;
-}
-
-/** Ends a run's live handoffs (it carried on, or was cancelled). Returns their ids. */
+/** Ends a run's open handoffs (it carried on, or was cancelled). Returns their ids. */
 export async function resolveHandoffs(db: DbOrTx, runId: string) {
   const ended = await db
     .update(handoffs)
     .set({ status: "resolved", resolvedAt: sql`now()` })
-    .where(
-      and(
-        eq(handoffs.runId, runId),
-        inArray(handoffs.status, ["open", "connected"]),
-      ),
-    )
+    .where(and(eq(handoffs.runId, runId), eq(handoffs.status, "open")))
     .returning({ id: handoffs.id });
   return ended.map((row) => row.id);
 }
 
 /**
- * Ends the front of house's live handoffs: they last until the user writes
- * again, since the front of house hears "done" as their next message.
+ * Ends the front of house's open handoffs: they last until the user writes
+ * again, since the front of house hears "done" as their next message. The
+ * page keeps showing the window; only control goes back. Returns them with
+ * their windows.
  */
 export async function resolveFrontHandoffs(db: DbOrTx, userId: string) {
   const ended = await db
@@ -137,7 +74,7 @@ export async function resolveFrontHandoffs(db: DbOrTx, userId: string) {
     .where(
       and(
         eq(handoffs.userId, userId),
-        inArray(handoffs.status, ["open", "connected"]),
+        eq(handoffs.status, "open"),
         inArray(
           handoffs.runId,
           db
@@ -147,11 +84,11 @@ export async function resolveFrontHandoffs(db: DbOrTx, userId: string) {
         ),
       ),
     )
-    .returning({ id: handoffs.id });
-  return ended.map((row) => row.id);
+    .returning({ id: handoffs.id, windowId: handoffs.windowId });
+  return ended;
 }
 
-/** The window of a run's latest handoff, for a fresh link. */
+/** A run's latest handoff, for its window. */
 export async function latestHandoff(db: DbOrTx, runId: string) {
   const [row] = await db
     .select()
@@ -160,4 +97,13 @@ export async function latestHandoff(db: DbOrTx, runId: string) {
     .orderBy(sql`${handoffs.createdAt} desc`)
     .limit(1);
   return row;
+}
+
+/** The user's open handoffs, by window: what each is for. */
+export async function openHandoffs(db: DbOrTx, userId: string) {
+  return db
+    .select()
+    .from(handoffs)
+    .where(and(eq(handoffs.userId, userId), eq(handoffs.status, "open")))
+    .orderBy(sql`${handoffs.createdAt} desc`);
 }

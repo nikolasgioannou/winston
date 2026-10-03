@@ -20,6 +20,8 @@
     "./handoffs": "./src/handoffs.ts",
     "./tasks": "./src/tasks.ts",
     "./telegram-link-tokens": "./src/telegram-link-tokens.ts",
+    "./telegram-logins": "./src/telegram-logins.ts",
+    "./viewer-tickets": "./src/viewer-tickets.ts",
     "./testing": "./src/testing.ts",
     "./vm-state": "./src/vm-state.ts",
     "./vms": "./src/vms.ts",

@@ -61,6 +61,7 @@ describe("secrets", () => {
     expect(Object.keys(environment).sort()).toEqual([
       "GOOGLE_OAUTH_CLIENT_ID",
       "GOOGLE_OAUTH_CLIENT_SECRET",
+      "TELEGRAM_LOGIN_KEY",
     ]);
     const clientId = stacks.services.resolve(
       environment.GOOGLE_OAUTH_CLIENT_ID?.arn,

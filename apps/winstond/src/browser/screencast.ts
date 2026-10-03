@@ -29,7 +29,7 @@ export const screencastSettings = {
 } as const;
 
 interface Live {
-  handoffId: string;
+  viewId: string;
   targetId: string;
   sessionId: string;
   width: number;
@@ -58,13 +58,13 @@ export function createScreencasts(deps: ScreencastDeps) {
   const live = new Map<string, Live>();
 
   function end(view: Live, reason: string) {
-    if (live.get(view.handoffId) !== view) return;
-    live.delete(view.handoffId);
+    if (live.get(view.viewId) !== view) return;
+    live.delete(view.viewId);
     view.stopListening();
     deps.sendFrame({
       id: deps.newFrameId(),
       type: "screencast.ended",
-      handoffId: view.handoffId,
+      viewId: view.viewId,
       reason,
     });
   }
@@ -74,16 +74,16 @@ export function createScreencasts(deps: ScreencastDeps) {
     view.height = height;
     deps.sendBinary(
       screencastMessage(
-        { handoffId: view.handoffId, width, height },
+        { viewId: view.viewId, width, height },
         Buffer.from(data, "base64"),
       ),
     );
   }
 
-  async function stop(handoffId: string) {
-    const view = live.get(handoffId);
+  async function stop(viewId: string) {
+    const view = live.get(viewId);
     if (!view) return;
-    live.delete(handoffId);
+    live.delete(viewId);
     view.stopListening();
     const c = await deps.connection().catch(() => undefined);
     if (!c) return;
@@ -103,8 +103,8 @@ export function createScreencasts(deps: ScreencastDeps) {
   }
 
   return {
-    async start(handoffId: string, targetId: string) {
-      await stop(handoffId);
+    async start(viewId: string, targetId: string) {
+      await stop(viewId);
       const c = await deps.connection();
       let sessionId: string;
       try {
@@ -116,13 +116,13 @@ export function createScreencasts(deps: ScreencastDeps) {
         deps.sendFrame({
           id: deps.newFrameId(),
           type: "screencast.ended",
-          handoffId,
+          viewId,
           reason: "That window is gone.",
         });
         return;
       }
       const view: Live = {
-        handoffId,
+        viewId,
         targetId,
         sessionId,
         width: 0,
@@ -165,7 +165,7 @@ export function createScreencasts(deps: ScreencastDeps) {
         )
           end(view, "The window was closed.");
       });
-      live.set(handoffId, view);
+      live.set(viewId, view);
       await c.send("Page.enable", {}, sessionId);
       // Watched means in front: focus, as for a window the person clicked into.
       await c
@@ -186,7 +186,7 @@ export function createScreencasts(deps: ScreencastDeps) {
           sessionId,
         )
         .catch(() => undefined);
-      if (first && live.get(handoffId) === view)
+      if (first && live.get(viewId) === view)
         frameOut(
           view,
           first.data,
@@ -198,14 +198,14 @@ export function createScreencasts(deps: ScreencastDeps) {
         { ...screencastSettings, everyNthFrame: 1 },
         sessionId,
       );
-      deps.logger.info({ handoffId, targetId }, "live view started");
+      deps.logger.info({ viewId, targetId }, "live view started");
     },
 
     stop,
 
     /** Replays what the person did on the live view into the tab, in order. */
-    input(handoffId: string, input: ViewerInput) {
-      const view = live.get(handoffId);
+    input(viewId: string, input: ViewerInput) {
+      const view = live.get(viewId);
       if (!view) return Promise.resolve();
       const next = view.queue.then(() => replay(view, input));
       // One failed input doesn't stop the ones after it.

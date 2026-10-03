@@ -11,6 +11,11 @@
  */
 export const secrets = {
   "telegram-bot-token": { generated: false },
+  /**
+   * SHA-256 of the bot token, in hex: checks Telegram sign-in buttons'
+   * signatures without being able to act as the bot. `prod:keys` derives it.
+   */
+  "telegram-login-key": { generated: false },
   /** Our own value, handed to Telegram when the webhook is set. */
   "telegram-webhook-secret": { generated: true },
   "openrouter-api-key": { generated: false },
@@ -55,6 +60,8 @@ export const serviceSecrets = {
   web: {
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
     GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
+    // Checking Telegram sign-in buttons' signatures (§13), not the bot's token.
+    TELEGRAM_LOGIN_KEY: "telegram-login-key",
   },
 } as const satisfies Record<string, Record<string, SecretRef>>;
 

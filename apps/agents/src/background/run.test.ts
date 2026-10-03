@@ -463,7 +463,7 @@ describe("background runs", () => {
     });
   });
 
-  test("a handoff with a browser window holds it for the user and puts a live-view link in task.needs_user", async () => {
+  test("a handoff with a browser window holds it for the user and puts a link to it in task.needs_user", async () => {
     await inRollback(db, async (tx) => {
       const held: string[] = [];
       const vm: VmClient = {
@@ -514,8 +514,8 @@ describe("background runs", () => {
         .select({ payload: inboundItems.payload })
         .from(inboundItems)
         .where(eq(inboundItems.userId, userId));
-      expect((item?.payload as { link?: string }).link).toStartWith(
-        "https://runwinston.com/t/",
+      expect((item?.payload as { link?: string }).link).toBe(
+        "https://runwinston.com/browser?window=win_1",
       );
     });
   });

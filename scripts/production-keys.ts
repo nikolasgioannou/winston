@@ -4,7 +4,8 @@
  * value with typing hidden, so keys never reach a chat, a file in the repo or
  * your shell history. Leave an answer blank to keep the current value.
  *
- *   1. @RunWinstonBot's token (from @BotFather)
+ *   1. @RunWinstonBot's token (from @BotFather), and the site's key for
+ *      checking Telegram sign-ins, derived from it (once, if it's missing)
  *   2. The production OpenRouter key
  *   3. The "Winston production" Google OAuth client's id and secret
  *
@@ -95,6 +96,21 @@ if (!Bun.argv.includes("--webhook")) {
     }
     await putSecret("winston/telegram-bot-token", botToken);
     for (const service of readersOf("telegram-bot-token")) changed.add(service);
+  }
+  // The site checks Telegram sign-ins with SHA-256 of the token, never the
+  // token itself: derived from the token just set, or from the stored one
+  // when the key isn't set yet.
+  const loginKey = await readSecret("winston/telegram-login-key");
+  if (botToken || !/^[0-9a-f]{64}$/.test(loginKey)) {
+    const token = botToken || (await readSecret("winston/telegram-bot-token"));
+    if (/^\d+:[\w-]+$/.test(token)) {
+      await putSecret(
+        "winston/telegram-login-key",
+        new Bun.CryptoHasher("sha256").update(token).digest("hex"),
+      );
+      for (const service of readersOf("telegram-login-key"))
+        changed.add(service);
+    }
   }
 
   const openRouter = await askHidden("Production OpenRouter API key: ");

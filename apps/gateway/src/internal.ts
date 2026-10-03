@@ -216,6 +216,7 @@ export function internalRoutes({
         const body = z
           .object({
             owner: z.string().min(1).max(64),
+            windowId: z.string().min(1).max(64).optional(),
             close: z.boolean().optional(),
           })
           .safeParse(await c.req.json().catch(() => undefined));
@@ -229,6 +230,7 @@ export function internalRoutes({
         const vmId = await vmIdFor(c.req.param("userId"));
         if (!vmId) return notFound(c);
         const sent = handoffs.release(vmId, body.data.owner, {
+          windowId: body.data.windowId,
           close: body.data.close === true,
         });
         // Closing an ended run's windows is worth a retry; a release isn't.

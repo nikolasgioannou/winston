@@ -217,6 +217,10 @@ export const browserHoldFrame = z.object({
   ...base,
   type: z.literal("browser.hold"),
   owner: z.string().min(1).max(64),
+  /** That window rather than the owner's current one. */
+  windowId: z.string().min(1).max(64).optional(),
+  /** The person took it over themselves, not a handoff. */
+  takeover: z.boolean().optional(),
 });
 
 /** The window held, or null when the run has no browser window. */
@@ -237,8 +241,37 @@ export const browserReleaseFrame = z.object({
   ...base,
   type: z.literal("browser.release"),
   owner: z.string().min(1).max(64),
+  /** Only that window (a take-over given back), not all the owner's. */
+  windowId: z.string().min(1).max(64).optional(),
   /** The run has ended: close its windows and free its sites now. */
   close: z.boolean().optional(),
+});
+
+/** Asks for every open window, for the signed-in browser page. */
+export const browserListFrame = z.object({
+  ...base,
+  type: z.literal("browser.list"),
+});
+
+/** A window as the browser page shows it. */
+export const listedWindow = z.object({
+  windowId: z.string(),
+  targetId: z.string(),
+  /** `front`, or a task's run id. */
+  owner: z.string(),
+  url: z.string(),
+  title: z.string(),
+  /** The person has it: handed over, or taken over. */
+  held: z.enum(["handoff", "takeover"]).nullable(),
+  lastUsedAt: z.number(),
+});
+export type ListedWindow = z.infer<typeof listedWindow>;
+
+export const browserListedFrame = z.object({
+  ...base,
+  type: z.literal("browser.listed"),
+  replyTo: frameId,
+  windows: z.array(listedWindow).max(100),
 });
 
 /**
@@ -269,27 +302,28 @@ export const browserTransferredFrame = z.object({
 });
 
 /**
- * The live view of one window's tab: frames come back as binary messages
+ * A live view of one window's tab, for one page watching it (its `viewId`,
+ * which the gateway makes): frames come back as binary messages
  * (`screencastMessage`), and input from the page goes the other way.
  */
 export const screencastStartFrame = z.object({
   ...base,
   type: z.literal("screencast.start"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
   targetId: z.string().min(1).max(64),
 });
 
 export const screencastStopFrame = z.object({
   ...base,
   type: z.literal("screencast.stop"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
 });
 
 /** The tab went away (closed, or Chrome restarted): the live view is over. */
 export const screencastEndedFrame = z.object({
   ...base,
   type: z.literal("screencast.ended"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
   reason: z.string().max(200),
 });
 
@@ -336,41 +370,41 @@ export type ViewerInput = z.infer<typeof viewerInput>;
 export const inputFrame = z.object({
   ...base,
   type: z.literal("input"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
   input: viewerInput,
 });
 
 /**
  * The full-desktop fallback (docs/design.md §5): a tunnel to the VM's VNC
- * server (localhost only) for the page's noVNC client, open only while its
- * handoff is connected. Its bytes go as binary `desktopMessage`s both ways.
+ * server (localhost only) for the page's noVNC client, open only while the
+ * person has a window. Its bytes go as binary `desktopMessage`s both ways.
  */
 export const desktopOpenFrame = z.object({
   ...base,
   type: z.literal("desktop.open"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
 });
 
 export const desktopCloseFrame = z.object({
   ...base,
   type: z.literal("desktop.close"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
 });
 
 /** The VNC connection ended (or never opened). */
 export const desktopClosedFrame = z.object({
   ...base,
   type: z.literal("desktop.closed"),
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
   reason: z.string().max(200),
 });
 
 const desktopHeader = z.object({ desktop: z.string().min(1).max(64) });
 
-/** A binary desktop message: `{"desktop":<handoffId>}`, a newline, then VNC bytes. */
-export function desktopMessage(handoffId: string, bytes: Uint8Array) {
+/** A binary desktop message: `{"desktop":<viewId>}`, a newline, then VNC bytes. */
+export function desktopMessage(viewId: string, bytes: Uint8Array) {
   const head = new TextEncoder().encode(
-    `${JSON.stringify({ desktop: handoffId })}\n`,
+    `${JSON.stringify({ desktop: viewId })}\n`,
   );
   const message = new Uint8Array(head.length + bytes.length);
   message.set(head);
@@ -387,7 +421,7 @@ export function parseDesktopMessage(message: Uint8Array) {
     const header = desktopHeader.parse(
       JSON.parse(new TextDecoder().decode(message.subarray(0, newline))),
     );
-    return { handoffId: header.desktop, bytes: message.subarray(newline + 1) };
+    return { viewId: header.desktop, bytes: message.subarray(newline + 1) };
   } catch {
     return undefined;
   }
@@ -395,7 +429,7 @@ export function parseDesktopMessage(message: Uint8Array) {
 
 /** A screencast frame's facts, ahead of its JPEG in the binary message. */
 export const screencastHeader = z.object({
-  handoffId: z.string().min(1).max(64),
+  viewId: z.string().min(1).max(64),
   /** The tab's viewport in CSS pixels, to map the page's touches back. */
   width: z.number(),
   height: z.number(),
@@ -436,6 +470,7 @@ export const vmToGatewayFrame = z.discriminatedUnion("type", [
   rpcRequestFrame,
   browserHeldFrame,
   browserTransferredFrame,
+  browserListedFrame,
   screencastEndedFrame,
   desktopClosedFrame,
   pingFrame,
@@ -456,6 +491,7 @@ export const gatewayToVmFrame = z.discriminatedUnion("type", [
   browserHoldFrame,
   browserReleaseFrame,
   browserTransferFrame,
+  browserListFrame,
   screencastStartFrame,
   screencastStopFrame,
   inputFrame,

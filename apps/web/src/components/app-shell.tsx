@@ -1,6 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Sidebar, SidebarDrawer, SidebarItem } from "@winston/ui";
-import { Blocks, CircleUser, House, type LucideIcon } from "lucide-react";
+import {
+  Blocks,
+  CircleUser,
+  Globe,
+  House,
+  type LucideIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 /** The signed-in pages: a flat list, no catch-all settings (docs/design.md §20). */
@@ -8,12 +14,14 @@ const navigation: NavItem[] = [
   { to: "/home", label: "Home", icon: House },
   // Blocks (apps plugged in), not an envelope: it covers every kind of account.
   { to: "/accounts", label: "Connected accounts", icon: Blocks },
+  // Winston's browser, live: its own full-screen page.
+  { to: "/browser", label: "Browser", icon: Globe },
   // Also holds the Telegram link, sign-out and account deletion.
   { to: "/profile", label: "Profile", icon: CircleUser },
 ];
 
 interface NavItem {
-  to: "/home" | "/accounts" | "/profile";
+  to: "/home" | "/accounts" | "/browser" | "/profile";
   label: string;
   icon: LucideIcon;
 }

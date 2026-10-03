@@ -1,14 +1,14 @@
 ---
 id: "b8e28a"
 title: Show the browser live on a signed-in page, with control in place
-status: backlog
+status: done
 priority: none
 labels:
   - browser
   - telegram
   - web
 created_at: 2026-10-03T17:26:02.845Z
-updated_at: 2026-10-03T17:26:17.068Z
+updated_at: 2026-10-03T20:15:29.804Z
 ---
 
 The founder (2026-10-03): "Why does it even need to end the browser view? If I'm signed in, why don't we just put it behind a signed-in route, and then I can view the browser even while it's live and doing stuff… and if it hands off, then I can just, in the same link, look at that and edit it myself."
@@ -81,3 +81,42 @@ Tests:
 - **Gateway tokens:** a viewer token for another user or an expired one is refused.
 - **Old links:** `/t/` links redirect.
 - **Telegram sign-in:** a valid `login_url` signature signs in the linked user and lands on `next`; a stale `auth_date`, a reused hash, a bad signature, an unlinked Telegram user or an off-site `next` are each refused.
+
+## As built
+
+- **`/browser`** (signed in; signed-out visits go through sign-in and come back via `returnPath`):
+  - **Windows:** every window is listed with what it's for (the conversation, or the task's brief) and its site. The chosen one plays live: the `?window=` one, else one waiting on the person, else the latest.
+  - **Watching and control:** watch-only while Winston drives; "Your turn: <reason>" with Keyboard, Done and the full desktop when it's handed over. Take over works on any window; Give back returns a taken-over one.
+  - **Many viewers:** several pages can watch; control is the last taker's.
+  - **Chat ends nothing on the page.**
+  - **Also:** in the sidebar; old `/t/<token>` links redirect here; the dev design view has its states.
+- **Gateway auth by viewer ticket, not a signed token:**
+  - **What a ticket is:** `viewer_tickets` rows, hashed, with a minute's life, used once, issued by the page's server function.
+  - **Why not a signed token:** the two services already share the database, so no new shared secret or infrastructure was needed. A reconnect gets a fresh ticket.
+- **The live-view protocol:**
+  - **Requests:** `windows` (winstond answers `browser.list`; the gateway adds purposes and reasons from the database), `watch`, `control` and `done`. Anything else the page sends is input, passed on only from the page with control.
+  - **Ids:** live views are keyed by a per-page `viewId`, renamed from `handoffId` in the frames.
+  - **Automatic control:** a window the person has, with nobody in control, goes to the first page that watches it.
+  - **Taking over:** `browser.hold` with `windowId` and `takeover`. winstond refuses Winston's commands in that window with its own message.
+  - **Giving back:** `done` resumes a handoff as before, or releases a taken-over window (`browser.release` with `windowId`).
+  - **Size:** when control goes, that page's stream restarts in a new session, so the phone-sized emulation never lingers for Winston.
+- **The front of house** gives back only the windows it handed over when the user writes (`resolveFrontHandoffs` now returns their windows). Pages keep watching.
+- **Telegram:** any message carrying a `/browser` link gets a `login_url` button ("Open the browser"), resent without it if Telegram refuses (until `/setdomain`). `/auth/telegram`:
+  - checks the signature with **`TELEGRAM_LOGIN_KEY` (SHA-256 of the bot token)** rather than the token, so the site never holds the token; the existing secrets test that keeps the bot token from the site still holds, and `prod:keys` derives the key;
+  - accepts a login only within 2 minutes;
+  - uses each hash once (`telegram_logins`);
+  - signs in only the linked Telegram user;
+  - creates the session and redirects 303 to `next`. Anything else goes to the usual sign-in.
+- **Gone:** handoff tokens, connect deadlines, viewer secrets, `handoffs.token_hash`, `viewer_secret_hash` and `connect_deadline` (migration; `connected` rows become `open`), `connectHandoff`/`reconnectHandoff`/`handoffLink`, and the old page. `winston task link` now prints the page link.
+- **Founder steps:**
+  1. In BotFather, `/setdomain` for @RunWinstonBot → runwinston.com.
+  2. `bun run prod:keys` (blank answers keep values; it derives the sign-in key).
+  3. Check on a phone: Telegram's login prompt, Google sign-in in Telegram's browser, and whether the session sticks.
+  4. Then try a handoff and a take-over.
+
+Tests:
+- **gateway:** ticket sign-in once, listing with purposes and reasons, one page's frames, watch-only until take-over, handed-over control and Done resuming the task with the page still open, two pages handing control over, a Winston-side release keeping views open, the desktop gated on control, a window ending its stream, 4001 on VM disconnect.
+- **winstond:** take-over refusal, per-window release, the list.
+- **db:** links, tickets, login claims.
+- **web:** the Telegram signature (valid, tampered, wrong bot, stale, missing) and the return path.
+- **agents:** the sign-in button and its fallback.

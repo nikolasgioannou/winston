@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ViewerInput } from "@winston/domain/frames";
-import { closedState, createGestures, textChange, toTab } from "./input";
+import { createGestures, textChange, toTab } from "./input";
 
 // The canvas shows a 1280×800 tab at 390×244 on screen, 100px down the page.
 const canvas = { left: 0, top: 100, width: 390, height: 243.75 };
@@ -71,15 +71,5 @@ describe("the live view's input", () => {
       { kind: "text", text: "pasted code 123" },
     ]);
     expect(textChange("👍", "👍!")).toEqual([{ kind: "text", text: "!" }]);
-  });
-
-  test("a closed socket says what happened, and retries only what's worth retrying", () => {
-    expect(closedState(4000, true)).toBe("ended");
-    expect(closedState(4004, false)).toBe("expired");
-    expect(closedState(4002, true)).toBe("elsewhere");
-    expect(closedState(4003, false)).toBe("invalid");
-    expect(closedState(1006, true)).toBe("reconnecting");
-    expect(closedState(4001, true)).toBe("reconnecting");
-    expect(closedState(1006, false)).toBe("invalid");
   });
 });

@@ -26,9 +26,9 @@ function handoff(hold: Parameters<typeof frontHandoffTool>[0]["hold"]) {
       record.released += 1;
       return Promise.resolve();
     },
-    createLink: (window, reason) =>
+    createLink: (window) =>
       Promise.resolve(
-        `https://runwinston.com/t/tok-${window.windowId}-${String(reason.length)}`,
+        `https://runwinston.com/browser?window=${window.windowId}`,
       ),
     sendLink: (text) => {
       record.sent.push(text);
@@ -43,7 +43,7 @@ function handoff(hold: Parameters<typeof frontHandoffTool>[0]["hold"]) {
 }
 
 describe("the front of house's handoff", () => {
-  test("with a browser window, the user is sent a live-view link straight away", async () => {
+  test("with a browser window, the user is sent a link to it straight away", async () => {
     const { tool, record } = handoff(() =>
       Promise.resolve({
         windowId: "win_1",
@@ -53,11 +53,9 @@ describe("the front of house's handoff", () => {
     );
     const result = await run(tool);
     expect(record.sent).toEqual([
-      handoffLinkMessage("https://runwinston.com/t/tok-win_1-21"),
+      handoffLinkMessage("https://runwinston.com/browser?window=win_1"),
     ]);
-    expect(result).toStartWith(
-      "Handed over: the user was sent a live-view link",
-    );
+    expect(result).toStartWith("Handed over: the user was sent a link");
     expect(record.handedOver).toBe(true);
   });
 

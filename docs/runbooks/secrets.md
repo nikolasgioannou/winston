@@ -11,14 +11,15 @@ export AWS_PROFILE=winston-prod
 
 ## The secrets
 
-| Secret                            | Value                                                                                                          | Services             |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                        | api, agents          |
-| `winston/telegram-webhook-secret` | generated at creation                                                                                          | api                  |
-| `winston/openrouter-api-key`      | the production OpenRouter key (models, and Jev for the browser's autopilot)                                    | agents, gateway      |
-| `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md) | web, gateway, agents |
-| `winston/gateway-internal-secret` | generated at creation                                                                                          | agents, gateway      |
-| `winston/run-token-secret`        | generated at creation                                                                                          | agents, gateway      |
+| Secret                            | Value                                                                                                                               | Services             |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                                             | api, agents          |
+| `winston/telegram-login-key`      | SHA-256 of the bot token, in hex: the site checks Telegram sign-in buttons with it, never holding the token. `prod:keys` derives it | web                  |
+| `winston/telegram-webhook-secret` | generated at creation                                                                                                               | api                  |
+| `winston/openrouter-api-key`      | the production OpenRouter key (models, and Jev for the browser's autopilot)                                                         | agents, gateway      |
+| `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md)                      | web, gateway, agents |
+| `winston/gateway-internal-secret` | generated at creation                                                                                                               | agents, gateway      |
+| `winston/run-token-secret`        | generated at creation                                                                                                               | agents, gateway      |
 
 Every secret starts with a random 48-character value, so the generated ones are ready as they are and the others hold a placeholder until they're set. Database credentials aren't here: RDS manages and rotates them (the `rds!db-…` secret). Connected accounts' tokens are encrypted with the KMS key `alias/winston/tokens`, not stored as secrets.
 
@@ -29,7 +30,7 @@ aws sso login --profile winston-prod
 bun run prod:keys
 ```
 
-It asks for @RunWinstonBot's token, the production OpenRouter key, and the "Winston production" Google client's id and secret, with typing hidden (leave one blank to keep it), stores them, restarts the services that read them, and, once `api.runwinston.com` resolves, registers the bot's webhook at `https://api.runwinston.com/webhooks/telegram` with the generated webhook secret and prints Telegram's webhook info (`allowed_updates` includes reactions). Re-run just the webhook with `bun run prod:keys --webhook`.
+It asks for @RunWinstonBot's token, the production OpenRouter key, and the "Winston production" Google client's id and secret, with typing hidden (leave one blank to keep it), stores them (and the site's Telegram sign-in key, derived from the bot token: from a new one, or once from the stored one when the key isn't set yet), restarts the services that read them, and, once `api.runwinston.com` resolves, registers the bot's webhook at `https://api.runwinston.com/webhooks/telegram` with the generated webhook secret and prints Telegram's webhook info (`allowed_updates` includes reactions). Re-run just the webhook with `bun run prod:keys --webhook`.
 
 ## Setting a value
 
