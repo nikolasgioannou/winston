@@ -108,7 +108,7 @@ describe("services stack", () => {
           },
           {
             Field: "path-pattern",
-            PathPatternConfig: { Values: ["/vm/connect", "/handoff/connect"] },
+            PathPatternConfig: { Values: ["/vm/connect", "/browser/connect"] },
           },
         ]),
       },

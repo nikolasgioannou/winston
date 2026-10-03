@@ -113,6 +113,7 @@ Tests:
   2. `bun run prod:keys` (blank answers keep values; it derives the sign-in key).
   3. Check on a phone: Telegram's login prompt, Google sign-in in Telegram's browser, and whether the session sticks.
   4. Then try a handoff and a take-over.
+- **Fixed after the first deploy:** the load balancer still routed the old `/handoff/connect`, not `/browser/connect`, so the page's socket got a 404 and the page sat at "Reconnecting". It now routes `/browser/connect` (infra/src/services.ts).
 
 Tests:
 - **gateway:** ticket sign-in once, listing with purposes and reasons, one page's frames, watch-only until take-over, handed-over control and Done resuming the task with the page still open, two pages handing control over, a Winston-side release keeping views open, the desktop gated on control, a window ending its stream, 4001 on VM disconnect.

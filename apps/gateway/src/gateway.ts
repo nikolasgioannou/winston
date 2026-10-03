@@ -72,9 +72,11 @@ const viewerRequest = z.discriminatedUnion("type", [
 ]);
 
 /**
- * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`,
- * everything under `/internal` is the internal API, and `/health` is for the
- * load balancer. One `Bun.serve` hosts them all.
+ * The gateway (docs/design.md §9, §15): VMs connect at `/vm/connect`, the
+ * browser page at `/browser/connect` (the only two paths the load balancer
+ * routes here, infra/src/services.ts), everything under `/internal` is the
+ * internal API, and `/health` is for the load balancer. One `Bun.serve` hosts
+ * them all.
  */
 export function createGateway({
   db,

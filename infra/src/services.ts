@@ -319,12 +319,14 @@ export class ServicesStack extends Stack {
       conditions: [ListenerCondition.hostHeaders([`api.${domain}`])],
       action: ListenerAction.forward([targets("api")]),
     });
-    // The VM websocket and handoff live views; the internal API is never routed.
+    // The VM websocket and the browser page's live view, the sockets the
+    // gateway upgrades (apps/gateway/src/gateway.ts); the internal API is
+    // never routed.
     listener.addAction("Gateway", {
       priority: 20,
       conditions: [
         ListenerCondition.hostHeaders([`gateway.${domain}`]),
-        ListenerCondition.pathPatterns(["/vm/connect", "/handoff/connect"]),
+        ListenerCondition.pathPatterns(["/vm/connect", "/browser/connect"]),
       ],
       action: ListenerAction.forward([targets("gateway")]),
     });
