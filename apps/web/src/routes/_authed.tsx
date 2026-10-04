@@ -5,7 +5,6 @@ import {
   useLocation,
   useRouter,
 } from "@tanstack/react-router";
-import { toast } from "@winston/ui";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "../components/app-shell";
 import { saveSidebarWidth } from "../components/sidebar-width";
@@ -48,8 +47,9 @@ function AuthedLayout() {
 /**
  * Once per app load, reports the browser's time zone when it isn't the one
  * last reported. The server adopts it then (someone who travels keeps getting
- * local times), but a zone Winston set stays until the device moves, and a
- * quiet notice says when it changed (docs/design.md §20).
+ * local times), but a zone Winston set stays until the device moves. There's
+ * no notice: Winston hears of the change and mentions it if it's worth a word
+ * (docs/design.md §20).
  */
 function useFollowBrowserTimezone(lastReported: string | null) {
   const router = useRouter();
@@ -61,11 +61,7 @@ function useFollowBrowserTimezone(lastReported: string | null) {
     if (browser === lastReported) return;
     void syncBrowserTimezone({ data: { timezone: browser } })
       .then(({ updated }) => {
-        if (!updated) return;
-        void router.invalidate();
-        toast(`Time zone updated to ${browser.replaceAll("_", " ")}`, {
-          description: "It follows this device.",
-        });
+        if (updated) void router.invalidate();
       })
       .catch(() => undefined);
   }, [lastReported, router]);

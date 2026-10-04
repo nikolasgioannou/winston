@@ -32,5 +32,5 @@ The founder asked for M4–M7 to run without pauses, inferring answers to collab
 - **Winston may change the time zone only.** Names identify the account and stay the user's to edit on the site; a nickname or preferred name goes in Winston's notes.
 - **Browser sync follows the device only on a change:** `users.browser_timezone` holds the zone the browser last reported, and the site adopts the browser's zone only when that changes (`followBrowserTimezone` in `@winston/db/profile`). A zone Winston sets sticks while the laptop stays on home time, and carrying the device somewhere (or home again) still moves it. The migration backfills `browser_timezone` from `timezone`.
 - **CLI:** unchanged, `winston me update --timezone <IANA>`. Winston says in his reply when he changes it (the prompt, f6613f).
-- The toast no longer says "Change it on your profile", since the profile doesn't show the zone.
+- The toast no longer says "Change it on your profile", since the profile doesn't show the zone. Later removed altogether (the founder's call, 2026-10-04): the user just moved, so it said nothing new, and Winston hears of the change and can mention it.
 
