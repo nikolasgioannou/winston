@@ -15,6 +15,8 @@ export interface TextFieldProps extends Omit<
   description?: ReactNode;
   /** Shown when the field is invalid. */
   error?: ReactNode;
+  /** Fixed text after the input, like a domain after a name. */
+  suffix?: ReactNode;
   size?: ControlSize;
   className?: string;
 }
@@ -23,6 +25,7 @@ export function TextField({
   label,
   description,
   error,
+  suffix,
   size = "md",
   className,
   ...props
@@ -37,14 +40,29 @@ export function TextField({
           {label}
         </Field.Label>
       )}
-      <Field.Control
-        className={cn(
-          input,
-          controlHeight[size],
-          size === "sm" ? "px-1.5" : "px-2",
-        )}
-        {...props}
-      />
+      {suffix === undefined ? (
+        <Field.Control
+          className={cn(
+            input,
+            controlHeight[size],
+            size === "sm" ? "px-1.5" : "px-2",
+          )}
+          {...props}
+        />
+      ) : (
+        <div className="flex items-center gap-2">
+          <Field.Control
+            className={cn(
+              input,
+              controlHeight[size],
+              "min-w-0 flex-1",
+              size === "sm" ? "px-1.5" : "px-2",
+            )}
+            {...props}
+          />
+          <span className="shrink-0 text-sm text-fg-muted">{suffix}</span>
+        </div>
+      )}
       {description !== undefined && (
         <Field.Description className="text-caption text-fg-muted">
           {description}

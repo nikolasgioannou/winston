@@ -28,6 +28,20 @@ const statusWords = {
   disconnected: "disconnected",
 };
 
+/** What `connect mail` says about Winston's own address, which isn't a Google account. */
+function mailboxLines(mailbox: ConnectLink["winstonMailbox"]) {
+  if (!mailbox) return [];
+  if (mailbox.status === "never")
+    return [
+      `You have no email address of your own yet. The user can give you one at ${mailbox.url}`,
+    ];
+  return [
+    mailbox.status === "on"
+      ? `Your own address is ${mailbox.address ?? ""} (not a Google account; use it with --account).`
+      : `Your own address, ${mailbox.address ?? ""}, is turned off. The user can turn it on at ${mailbox.url}`,
+  ];
+}
+
 const pad = (rows: string[][]) => {
   const widths = rows[0]?.map((_, i) =>
     Math.max(...rows.map((row) => row[i]?.length ?? 0)),
@@ -144,6 +158,7 @@ export const accounts: Resource = {
           result.connected.length > 0
             ? `Already connected for ${domain}: ${result.connected.join(", ")}.`
             : `No ${domain} account is connected yet.`,
+          ...mailboxLines(result.winstonMailbox),
         ].join("\n");
       },
     },

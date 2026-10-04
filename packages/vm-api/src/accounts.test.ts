@@ -38,6 +38,11 @@ describe("accounts routes", () => {
         domain: "mail",
         url: "https://runwinston.com/auth/google/connect?domain=mail",
         connected: ["me@example.com"],
+        winstonMailbox: {
+          status: "never",
+          address: null,
+          url: "https://runwinston.com/channels?email=setup",
+        },
       });
       expect(
         await (await as("/v1/accounts/connect/calendar")).json(),
@@ -100,7 +105,14 @@ describe("accounts routes", () => {
       ]);
       expect(
         await (await as("/v1/accounts/connect/mail")).json(),
-      ).toMatchObject({ connected: [] });
+      ).toMatchObject({
+        connected: [],
+        winstonMailbox: {
+          status: "on",
+          address: "ada@runwinston.email",
+          url: "https://runwinston.com/channels",
+        },
+      });
       const got = (await (
         await as("/v1/accounts/ada@runwinston.email")
       ).json()) as { accounts: Account[] };

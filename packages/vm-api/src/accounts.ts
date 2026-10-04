@@ -7,6 +7,7 @@
 import type { CalendarInfo } from "@winston/connectors/calendar";
 import type { DbOrTx } from "@winston/db/client";
 import { googleBacked } from "@winston/db/connections";
+import { mailboxState } from "@winston/db/mailbox";
 import { connections } from "@winston/db/schema";
 import {
   capabilitiesByDomain,
@@ -130,10 +131,27 @@ export function accountRoutes({
           ),
         )
         .orderBy(asc(connections.externalEmail));
+      // Winston's own address is set up on the site's Channels page.
+      const mailbox =
+        domain === "mail"
+          ? await mailboxState(db, c.get("run").userId)
+          : undefined;
       return c.json({
         domain,
         url: connectLink(connectors.webPublicUrl, domain),
         connected: rows.map((row) => row.email),
+        winstonMailbox: mailbox
+          ? {
+              status: mailbox.status,
+              address: mailbox.status === "never" ? null : mailbox.address,
+              url: new URL(
+                mailbox.status === "never"
+                  ? "/channels?email=setup"
+                  : "/channels",
+                connectors.webPublicUrl,
+              ).href,
+            }
+          : null,
       });
     })
     .get("/:id", async (c) => {

@@ -124,6 +124,49 @@ describe("winston accounts", () => {
     expect(bad.code).toBe(1);
   });
 
+  test("connect mail also says where the user gives Winston his own address, or what it is", async () => {
+    const mail = (winstonMailbox: unknown) =>
+      cli(["accounts", "connect", "mail"], () =>
+        Response.json({
+          domain: "mail",
+          url: "https://runwinston.com/auth/google/connect?domain=mail",
+          connected: [],
+          winstonMailbox,
+        }),
+      );
+    expect(
+      (
+        await mail({
+          status: "never",
+          address: null,
+          url: "https://runwinston.com/channels?email=setup",
+        })
+      ).out,
+    ).toContain(
+      "You have no email address of your own yet. The user can give you one at https://runwinston.com/channels?email=setup",
+    );
+    expect(
+      (
+        await mail({
+          status: "on",
+          address: "ada@runwinston.email",
+          url: "https://runwinston.com/channels",
+        })
+      ).out,
+    ).toContain("Your own address is ada@runwinston.email");
+    expect(
+      (
+        await mail({
+          status: "off",
+          address: "ada@runwinston.email",
+          url: "https://runwinston.com/channels",
+        })
+      ).out,
+    ).toContain(
+      "Your own address, ada@runwinston.email, is turned off. The user can turn it on at https://runwinston.com/channels",
+    );
+  });
+
   test("get shows each permission clearly as on, off or not granted, with where to fix it, then calendars and notes", async () => {
     const { out, requests } = await cli(
       ["accounts", "get", "me@example.com"],

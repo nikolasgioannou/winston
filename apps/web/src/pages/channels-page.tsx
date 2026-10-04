@@ -10,10 +10,18 @@ import {
   StatusPill,
   TelegramIcon,
 } from "@winston/ui";
-import { MoreHorizontal } from "lucide-react";
+import type { MailboxNameCheck, MailboxState } from "@winston/db/mailbox";
+import { Mail, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
+import {
+  MailboxDialog,
+  type MailboxProblem,
+} from "../components/mailbox-dialog";
 import { TelegramConnectDialog } from "../components/telegram-connect";
 import type { TelegramLinkState } from "../server/telegram-state";
+
+/** Which mailbox dialog is open. */
+export type MailboxDialogMode = "setup" | "change" | null;
 
 export interface ChannelsPageProps {
   telegram: TelegramLinkState | null;
@@ -25,6 +33,21 @@ export interface ChannelsPageProps {
   onDisconnectTelegram: () => void;
   /** Opens the disconnect confirmation, for the dev design view. */
   confirmingTelegramDisconnect?: boolean;
+  mailbox: MailboxState;
+  mailboxDialog: MailboxDialogMode;
+  onMailboxDialogChange: (mode: MailboxDialogMode) => void;
+  checkMailboxName: (name: string) => Promise<MailboxNameCheck>;
+  /** Resolves with the problem, or undefined once it's done. */
+  onSetUpMailbox: (name: string) => Promise<MailboxProblem | undefined>;
+  onChangeMailboxAddress: (name: string) => Promise<MailboxProblem | undefined>;
+  onTurnOnMailbox: () => void;
+  onTurnOffMailbox: () => void;
+  onCopyAddress: (address: string) => void;
+  /** Opens the turn-off confirmation, for the dev design view. */
+  confirmingMailboxOff?: boolean;
+  /** Starts the open dialog with a name typed, for the dev design view. */
+  mailboxDialogName?: string;
+  mailboxDialogProblem?: MailboxProblem;
 }
 
 /**
@@ -37,6 +60,7 @@ export function ChannelsPage(props: ChannelsPageProps) {
       <PageHeader title="Channels" />
       <Card>
         <TelegramRow {...props} />
+        <EmailRow {...props} />
       </Card>
     </Page>
   );
@@ -132,6 +156,153 @@ function TelegramRow({
         description="Winston won't be able to message you until you connect Telegram again."
         confirmLabel="Disconnect"
         onConfirm={onDisconnectTelegram}
+      />
+    </>
+  );
+}
+
+/**
+ * Winston's own email address: set it up, then copy, change or turn it off.
+ * The address shows like a connected account's.
+ */
+function EmailRow({
+  mailbox,
+  mailboxDialog,
+  onMailboxDialogChange,
+  checkMailboxName,
+  onSetUpMailbox,
+  onChangeMailboxAddress,
+  onTurnOnMailbox,
+  onTurnOffMailbox,
+  onCopyAddress,
+  confirmingMailboxOff,
+  mailboxDialogName,
+  mailboxDialogProblem,
+}: ChannelsPageProps) {
+  const [confirming, setConfirming] = useState(confirmingMailboxOff ?? false);
+  const icon = <Mail />;
+  const preset = {
+    ...(mailboxDialogName !== undefined
+      ? { initialName: mailboxDialogName }
+      : {}),
+    ...(mailboxDialogProblem !== undefined
+      ? { initialProblem: mailboxDialogProblem }
+      : {}),
+  };
+  const onOpenChange = (open: boolean) => {
+    if (!open) onMailboxDialogChange(null);
+  };
+
+  if (mailbox.status === "never")
+    return (
+      <>
+        <SettingRow
+          icon={icon}
+          label="Email"
+          control={
+            <span className="flex items-center gap-3">
+              <StatusPill tone="neutral">Not set up</StatusPill>
+              <Button
+                onClick={() => {
+                  onMailboxDialogChange("setup");
+                }}
+              >
+                Set up
+              </Button>
+            </span>
+          }
+        />
+        <MailboxDialog
+          // A fresh form each time it opens.
+          key={String(mailboxDialog === "setup")}
+          mode="setup"
+          open={mailboxDialog === "setup"}
+          onOpenChange={onOpenChange}
+          checkName={checkMailboxName}
+          onSubmit={onSetUpMailbox}
+          {...preset}
+        />
+      </>
+    );
+
+  if (mailbox.status === "off")
+    return (
+      <SettingRow
+        icon={icon}
+        label="Email"
+        description={mailbox.address}
+        control={
+          <span className="flex items-center gap-3">
+            <StatusPill tone="neutral">Off</StatusPill>
+            <Button onClick={onTurnOnMailbox}>Turn on</Button>
+          </span>
+        }
+      />
+    );
+
+  return (
+    <>
+      <SettingRow
+        icon={icon}
+        label="Email"
+        description={mailbox.address}
+        control={
+          <span className="flex items-center gap-2">
+            <StatusPill tone="ok">On</StatusPill>
+            <Menu
+              trigger={
+                <IconButton label="Email options">
+                  <MoreHorizontal />
+                </IconButton>
+              }
+              actions={[
+                {
+                  label: "Copy address",
+                  onSelect: () => {
+                    onCopyAddress(mailbox.address);
+                  },
+                },
+                // Once the changes are used up, there's nothing to offer.
+                ...(mailbox.changesLeft > 0
+                  ? [
+                      {
+                        label: "Change address",
+                        onSelect: () => {
+                          onMailboxDialogChange("change");
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Turn off",
+                  danger: true,
+                  onSelect: () => {
+                    setConfirming(true);
+                  },
+                },
+              ]}
+            />
+          </span>
+        }
+      />
+      <MailboxDialog
+        key={String(mailboxDialog === "change")}
+        mode="change"
+        open={mailboxDialog === "change"}
+        onOpenChange={onOpenChange}
+        current={mailbox.address}
+        changesLeft={mailbox.changesLeft}
+        checkName={checkMailboxName}
+        onSubmit={onChangeMailboxAddress}
+        {...preset}
+      />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Turn off Winston's email?"
+        description={`Mail to ${mailbox.address} will bounce until you turn it back on. The address stays his.`}
+        confirmLabel="Turn off"
+        onConfirm={onTurnOffMailbox}
       />
     </>
   );
