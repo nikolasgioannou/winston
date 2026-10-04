@@ -14,6 +14,7 @@
     "@novnc/novnc": "1.7.0",
     "@tanstack/react-router": "1.170.40",
     "@tanstack/react-start": "1.168.59",
+    "@winston/blobs": "workspace:*",
     "@winston/db": "workspace:*",
     "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",

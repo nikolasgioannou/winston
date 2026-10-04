@@ -20,6 +20,7 @@ import { Route as TTokenRouteImport } from './routes/t/$token'
 import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
 import { Route as AuthedChannelsIndexRouteImport } from './routes/_authed/channels/index'
 import { Route as AuthedProfileIndexRouteImport } from './routes/_authed/profile/index'
+import { Route as AuthedSitesIndexRouteImport } from './routes/_authed/sites/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthGoogleStartRouteImport } from './routes/auth/google/start'
 import { Route as DevDesignIndexRouteImport } from './routes/dev/design/index'
@@ -81,6 +82,11 @@ const AuthedProfileIndexRoute = AuthedProfileIndexRouteImport.update({
   path: '/profile/',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedSitesIndexRoute = AuthedSitesIndexRouteImport.update({
+  id: '/sites/',
+  path: '/sites/',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   id: '/auth/google/callback',
   path: '/auth/google/callback',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/accounts/': typeof AuthedAccountsIndexRoute
   '/channels/': typeof AuthedChannelsIndexRoute
   '/profile/': typeof AuthedProfileIndexRoute
+  '/sites/': typeof AuthedSitesIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
   '/auth/google/connect/': typeof AuthGoogleConnectIndexRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/accounts': typeof AuthedAccountsIndexRoute
   '/channels': typeof AuthedChannelsIndexRoute
   '/profile': typeof AuthedProfileIndexRoute
+  '/sites': typeof AuthedSitesIndexRoute
   '/dev/design': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
   '/auth/google/connect': typeof AuthGoogleConnectIndexRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/_authed/accounts/': typeof AuthedAccountsIndexRoute
   '/_authed/channels/': typeof AuthedChannelsIndexRoute
   '/_authed/profile/': typeof AuthedProfileIndexRoute
+  '/_authed/sites/': typeof AuthedSitesIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
   '/auth/google/connect/': typeof AuthGoogleConnectIndexRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/accounts/'
     | '/channels/'
     | '/profile/'
+    | '/sites/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
     | '/auth/google/connect/'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/channels'
     | '/profile'
+    | '/sites'
     | '/dev/design'
     | '/auth/google/connect/callback'
     | '/auth/google/connect'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authed/accounts/'
     | '/_authed/channels/'
     | '/_authed/profile/'
+    | '/_authed/sites/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
     | '/auth/google/connect/'
@@ -322,6 +334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedProfileIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/sites/': {
+      id: '/_authed/sites/'
+      path: '/sites'
+      fullPath: '/sites/'
+      preLoaderRoute: typeof AuthedSitesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/auth/google/callback': {
       id: '/auth/google/callback'
       path: '/auth/google/callback'
@@ -372,6 +391,7 @@ interface AuthedRouteChildren {
   AuthedAccountsIndexRoute: typeof AuthedAccountsIndexRoute
   AuthedChannelsIndexRoute: typeof AuthedChannelsIndexRoute
   AuthedProfileIndexRoute: typeof AuthedProfileIndexRoute
+  AuthedSitesIndexRoute: typeof AuthedSitesIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -379,6 +399,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountsIndexRoute: AuthedAccountsIndexRoute,
   AuthedChannelsIndexRoute: AuthedChannelsIndexRoute,
   AuthedProfileIndexRoute: AuthedProfileIndexRoute,
+  AuthedSitesIndexRoute: AuthedSitesIndexRoute,
 }
 
 const AuthedRouteWithChildren =

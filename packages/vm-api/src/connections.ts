@@ -27,6 +27,7 @@ import {
 } from "@winston/connectors/errors";
 import type { MailProvider } from "@winston/connectors/mail";
 import { TimeParseError } from "@winston/shared/time-flag";
+import { SiteChangeError } from "@winston/site-host/manage";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 export type ConnectionRow = typeof connections.$inferSelect;
@@ -225,6 +226,8 @@ export function toApiFailure(
     );
   if (error instanceof TimeParseError)
     return new ApiFailure("invalid_request", error.message, error.hint);
+  if (error instanceof SiteChangeError)
+    return new ApiFailure(error.kind, error.message, error.hint);
   if (error instanceof ProviderUnavailableError)
     return new ApiFailure(
       "unavailable",

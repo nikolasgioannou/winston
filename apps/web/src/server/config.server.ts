@@ -32,6 +32,14 @@ const webConfigSchema = dbConfigSchema
       .optional(),
     /** Where sites are served, each at a subdomain: https://runwinston.app. */
     SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
+    /** The local site host's admin API (bun dev's sites service): the Sites page's changes. */
+    SITES_ADMIN_URL: z.url().optional(),
+    /** Sites' bundles, for rollback: S3 in production, a directory locally. */
+    BLOB_BUCKET: z.string().min(1).optional(),
+    BLOB_DIR: z
+      .string()
+      .min(1)
+      .default(new URL("../../../../.data/blobs", import.meta.url).pathname),
     /** The bot Connect Telegram opens: @RunWinstonBot in production. */
     TELEGRAM_BOT_USERNAME: z
       .string()

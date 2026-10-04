@@ -7,6 +7,7 @@ import { homeFixtures } from "../../pages/home-page.fixtures";
 import { notFoundFixtures } from "../../pages/not-found-page.fixtures";
 import { profileFixtures } from "../../pages/profile-page.fixtures";
 import { signInFixtures } from "../../pages/sign-in-page.fixtures";
+import { sitesFixtures } from "../../pages/sites-page.fixtures";
 import type { PageFixtures } from "../../pages/fixtures";
 
 /**
@@ -21,6 +22,7 @@ export const designPages: Record<string, PageFixtures> = {
   accounts: accountsFixtures,
   account: accountFixtures,
   channels: channelsFixtures,
+  sites: sitesFixtures,
   notFound: notFoundFixtures,
   browser: browserFixtures,
 };

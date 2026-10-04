@@ -3,6 +3,7 @@ import { Sidebar, SidebarDrawer, SidebarItem } from "@winston/ui";
 import {
   Blocks,
   CircleUser,
+  Globe,
   House,
   MessagesSquare,
   type LucideIcon,
@@ -16,12 +17,14 @@ const navigation: NavItem[] = [
   { to: "/accounts", label: "Connected accounts", icon: Blocks },
   // The ways the user reaches Winston.
   { to: "/channels", label: "Channels", icon: MessagesSquare },
+  // The sites Winston deployed (docs/design.md §9a).
+  { to: "/sites", label: "Sites", icon: Globe },
   // Also holds sign-out and account deletion.
   { to: "/profile", label: "Profile", icon: CircleUser },
 ];
 
 interface NavItem {
-  to: "/home" | "/accounts" | "/channels" | "/profile";
+  to: "/home" | "/accounts" | "/channels" | "/sites" | "/profile";
   label: string;
   icon: LucideIcon;
 }

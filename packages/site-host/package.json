@@ -6,6 +6,7 @@
     "./bundle": "./src/bundle.ts",
     "./host": "./src/host.ts",
     "./local-host": "./src/local-host.ts",
+    "./manage": "./src/manage.ts",
     "./migrations": "./src/migrations.ts",
     "./pass": "./src/pass.ts",
     "./pass-sign": "./src/pass-sign.ts",
@@ -18,6 +19,7 @@
   "dependencies": {
     "@winston/blobs": "workspace:*",
     "@winston/db": "workspace:*",
+    "@winston/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4"
   }
 }
