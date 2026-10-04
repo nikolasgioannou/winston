@@ -55,6 +55,8 @@ const agentsConfigSchema = dbConfigSchema
     RUN_TOKEN_SECRET: z
       .string()
       .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+    /** The local site host's admin API (bun dev's sites service, §9a): taking a deleted account's sites down. */
+    SITES_ADMIN_URL: z.url().optional(),
     /** The S3 bucket for images and other binaries (production). */
     BLOB_BUCKET: z.string().min(1).optional(),
     /** Local blob storage, used when BLOB_BUCKET isn't set. */

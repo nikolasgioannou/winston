@@ -13,6 +13,8 @@ import {
   outboundMessages,
   runMessages,
   runs,
+  sites,
+  siteVersions,
   telegramLinks,
   users,
   vms,
@@ -27,6 +29,7 @@ import { localTokenVault } from "@winston/shared/token-vault";
 import { count, eq, getColumns, getTableName, is, sql } from "drizzle-orm";
 import { PgTable, type PgColumn } from "drizzle-orm/pg-core";
 import { localBlobStore } from "@winston/blobs";
+import type { SiteHost } from "@winston/site-host/host";
 import type { VmProvider } from "../vm/provider.ts";
 import { deleteUserHandler, goodbyeMessage } from "./delete-user.ts";
 
@@ -193,6 +196,59 @@ describe("deleteUserHandler", () => {
           .from(allowedEmails)
           .where(eq(allowedEmails.email, user.email)),
       ).toHaveLength(1);
+    });
+  });
+
+  test("takes down every site the user deployed, and won't finish without a site host", async () => {
+    await inRollback(db, async (tx) => {
+      const blobs = localBlobStore(await mkdtemp(`${tmpdir()}/winston-blobs-`));
+      const bundleKey = await blobs.put(new TextEncoder().encode("a bundle"));
+      const { user } = await fullAccount(tx, bundleKey);
+      const [site] = await tx
+        .insert(sites)
+        .values({
+          userId: user.id,
+          name: "blog",
+          databaseId: "db-1",
+          currentVersion: 1,
+        })
+        .returning();
+      await tx
+        .insert(siteVersions)
+        .values({ siteId: site?.id ?? "", number: 1, bundleKey, size: 8 });
+      const { deps } = fakes();
+
+      // Without a host the job fails, and is retried once one is configured.
+      expect(run(tx, { ...deps, blobs }, user.id)).rejects.toThrow(/site host/);
+      await run(tx, { ...deps, blobs }, user.id).catch(() => undefined);
+
+      const removed: string[] = [];
+      const host: SiteHost = {
+        kind: "local",
+        putScript: () => Promise.resolve(),
+        deleteScript: (script) => {
+          removed.push(`script ${script}`);
+          return Promise.resolve();
+        },
+        setRoute: (name, route) => {
+          removed.push(`route ${name} ${route === null ? "null" : "set"}`);
+          return Promise.resolve();
+        },
+        createDatabase: () => Promise.resolve("unused"),
+        deleteDatabase: (id) => {
+          removed.push(`database ${id}`);
+          return Promise.resolve();
+        },
+        batchSql: () => Promise.resolve([]),
+      };
+      await run(tx, { ...deps, blobs, sites: host }, user.id);
+      expect(removed).toEqual([
+        "route blog null",
+        `script ${site?.id ?? ""}`,
+        "database db-1",
+      ]);
+      expect(await blobs.get(bundleKey).catch(() => "gone")).toBe("gone");
+      expect(await tx.select().from(sites)).toEqual([]);
     });
   });
 

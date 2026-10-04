@@ -215,6 +215,15 @@ describe("the local site host", () => {
     expect(tables).toEqual([]);
   });
 
+  test("a deleted database can't be reached, and deleting it again is fine", async () => {
+    const databaseId = await host.createDatabase("site_01gone");
+    await host.deleteDatabase(databaseId);
+    const reach = host.batchSql(databaseId, [{ sql: "SELECT 1" }]);
+    expect(reach).rejects.toThrow(/no such database/);
+    await reach.catch(() => undefined);
+    await host.deleteDatabase(databaseId);
+  });
+
   test("asset paths can't escape the site", async () => {
     const escape = host.putScript("site_01escape", {
       modules: [{ name: "worker.js", content: worker }],

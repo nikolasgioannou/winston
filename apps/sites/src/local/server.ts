@@ -280,6 +280,18 @@ export async function startLocalSites(options: LocalSitesOptions) {
             return new Response(null, { status: 204 });
           }
         }
+        if (kind === "databases" && request.method === "DELETE" && name) {
+          const ids = await databases();
+          if (ids.includes(name)) {
+            // Its data stays in Miniflare's state folder, unreachable.
+            await writeFile(
+              databasesFile,
+              JSON.stringify(ids.filter((id) => id !== name)),
+            );
+            await rebuild();
+          }
+          return new Response(null, { status: 204 });
+        }
         if (kind === "databases" && request.method === "POST") {
           if (!name) return Response.json({ id: await createDatabase() });
           if (!(await databases()).includes(name))

@@ -9,9 +9,15 @@
     "./migrations": "./src/migrations.ts",
     "./pass": "./src/pass.ts",
     "./pass-sign": "./src/pass-sign.ts",
+    "./remove": "./src/remove.ts",
     "./route": "./src/route.ts"
   },
   "scripts": {
     "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@winston/blobs": "workspace:*",
+    "@winston/db": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.4"
   }
 }

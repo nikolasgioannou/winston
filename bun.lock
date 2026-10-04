@@ -40,6 +40,7 @@
         "@winston/domain": "workspace:*",
         "@winston/prompts": "workspace:*",
         "@winston/shared": "workspace:*",
+        "@winston/site-host": "workspace:*",
         "ai": "7.0.118",
         "drizzle-orm": "1.0.0-rc.4",
         "grammy": "1.46.0",
@@ -213,6 +214,11 @@
     },
     "packages/site-host": {
       "name": "@winston/site-host",
+      "dependencies": {
+        "@winston/blobs": "workspace:*",
+        "@winston/db": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+      },
     },
     "packages/ui": {
       "name": "@winston/ui",

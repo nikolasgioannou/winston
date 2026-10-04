@@ -4,6 +4,7 @@ import { posix } from "node:path";
 import { call, type ApiClient } from "../client.ts";
 import type { Context, Resource } from "../commands.ts";
 import { CliError } from "../errors.ts";
+import { standardFlags } from "../flags.ts";
 import { json, list, record } from "../output.ts";
 
 /** Typed by the API itself (Hono RPC), so a change there breaks the build here. */
@@ -16,6 +17,7 @@ type Shared = InferResponseType<Sites[":site"]["share"]["$post"], 200>;
 type Unshared = InferResponseType<Sites[":site"]["unshare"]["$post"], 200>;
 type Versions = InferResponseType<Sites[":site"]["versions"]["$get"], 200>;
 type RolledBack = InferResponseType<Sites[":site"]["rollback"]["$post"], 200>;
+type Deleted = InferResponseType<Sites[":site"]["$delete"], 200>;
 
 const line = (site: Site) =>
   record(
@@ -125,6 +127,7 @@ export const site: Resource = {
           description:
             "Its address, <name>.runwinston.app (default: the folder's name). Lowercase letters, digits and hyphens; first come, first served",
         },
+        standardFlags.dryRun,
       ],
       examples: [
         "winston site deploy ~/sites/blog",
@@ -140,12 +143,15 @@ export const site: Resource = {
         let deployed: Deployed;
         try {
           deployed = await call<Deployed>(
-            client.v1.sites.deploy.$post({ json: { path: tar, name } }),
+            client.v1.sites.deploy.$post({
+              json: { path: tar, name, dryRun: flags["dry-run"] === true },
+            }),
           );
         } finally {
           await files.remove(tar);
         }
         if (flags.json === true) return json(deployed);
+        if (!("site" in deployed)) return deployed.summary;
         const packed = [
           `${String(counts.assets)} static file${counts.assets === 1 ? "" : "s"}`,
           counts.worker ? "worker.js" : undefined,
@@ -230,6 +236,7 @@ export const site: Resource = {
             "The version to go back to (winston site versions lists them)",
           integer: true,
         },
+        standardFlags.dryRun,
       ],
       examples: [
         "winston site rollback blog",
@@ -239,10 +246,14 @@ export const site: Resource = {
         const rolledBack = await call<RolledBack>(
           client.v1.sites[":site"].rollback.$post({
             param: { site: siteArg(args, "rollback") },
-            json: typeof flags.to === "number" ? { to: flags.to } : {},
+            json: {
+              ...(typeof flags.to === "number" ? { to: flags.to } : {}),
+              dryRun: flags["dry-run"] === true,
+            },
           }),
         );
         if (flags.json === true) return json(rolledBack);
+        if (!("site" in rolledBack)) return rolledBack.summary;
         return [detail(rolledBack.site), rolledBack.note].join("\n");
       },
     },
@@ -251,15 +262,17 @@ export const site: Resource = {
       summary:
         "Share a site by link: anyone with the link can open it. Only when the user asks. Sharing again gives the same link",
       usage: "<site_id|name>",
-      flags: [],
+      flags: [standardFlags.dryRun],
       examples: ["winston site share blog"],
       run: async ({ client, flags, args }) => {
         const shared = await call<Shared>(
           client.v1.sites[":site"].share.$post({
             param: { site: siteArg(args, "share") },
+            json: { dryRun: flags["dry-run"] === true },
           }),
         );
-        return flags.json === true ? json(shared) : detail(shared.site);
+        if (flags.json === true) return json(shared);
+        return "site" in shared ? detail(shared.site) : shared.summary;
       },
     },
     {
@@ -267,15 +280,40 @@ export const site: Resource = {
       summary:
         "Make a site private again: its share link and anyone who opened it stop working. Sharing it again makes a new link",
       usage: "<site_id|name>",
-      flags: [],
+      flags: [standardFlags.dryRun],
       examples: ["winston site unshare blog"],
       run: async ({ client, flags, args }) => {
         const unshared = await call<Unshared>(
           client.v1.sites[":site"].unshare.$post({
             param: { site: siteArg(args, "unshare") },
+            json: { dryRun: flags["dry-run"] === true },
           }),
         );
-        return flags.json === true ? json(unshared) : detail(unshared.site);
+        if (flags.json === true) return json(unshared);
+        return "site" in unshared ? detail(unshared.site) : unshared.summary;
+      },
+    },
+    {
+      name: "delete",
+      summary:
+        "Take a site down for good: its address stops working and its files, versions and database (with its data) are deleted; the name is freed. Confirm with the user first (--dry-run says what would go)",
+      usage: "<site_id|name>",
+      flags: [standardFlags.dryRun],
+      examples: [
+        "winston site delete blog --dry-run",
+        "winston site delete blog",
+      ],
+      run: async ({ client, flags, args }) => {
+        const deleted = await call<Deleted>(
+          client.v1.sites[":site"].$delete({
+            param: { site: siteArg(args, "delete") },
+            json: { dryRun: flags["dry-run"] === true },
+          }),
+        );
+        if (flags.json === true) return json(deleted);
+        return "deleted" in deleted
+          ? `Took ${deleted.name} down. Its address no longer answers, and the name is free.`
+          : deleted.summary;
       },
     },
   ],

@@ -7,6 +7,7 @@ import {
   mailboxMessages,
   runMessages,
   runs,
+  sites,
   telegramLinks,
   users,
   vms,
@@ -17,6 +18,8 @@ import type { TokenVault } from "@winston/shared/token-vault";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { BlobStore } from "@winston/blobs";
+import type { SiteHost } from "@winston/site-host/host";
+import { removeSite } from "@winston/site-host/remove";
 import type { RevokeGoogleToken } from "../connections/revoke.ts";
 import type { TelegramSender } from "../telegram/sender.ts";
 import type { VmProvider } from "../vm/provider.ts";
@@ -31,6 +34,8 @@ export interface DeleteUserDeps {
   revoke: RevokeGoogleToken;
   blobs: BlobStore;
   telegram: Pick<TelegramSender, "sendMessage">;
+  /** Where the user's sites run (§9a); without one, an account with sites can't be deleted. */
+  sites?: SiteHost;
 }
 
 /**
@@ -43,9 +48,10 @@ export interface DeleteUserDeps {
  * 2. Say goodbye in Telegram, briefly, then unlink the chat.
  * 3. Terminate the VM: the instance, then its data volume.
  * 4. Revoke every connected Google grant.
- * 5. Delete blobs only this user's rows refer to.
- * 6. Retire Winston's addresses (by hash), so nobody else ever gets them.
- * 7. Delete the user row, which cascades to every table with a `user_id`.
+ * 5. Take down every site they deployed: address, Worker, database, bundles.
+ * 6. Delete blobs only this user's rows refer to.
+ * 7. Retire Winston's addresses (by hash), so nobody else ever gets them.
+ * 8. Delete the user row, which cascades to every table with a `user_id`.
  *
  * The allowlist entry stays: whether they may come back is the founder's call.
  */
@@ -67,12 +73,31 @@ export function deleteUserHandler(deps: DeleteUserDeps): JobHandler {
     await sayGoodbye(db, deps, userId, logger);
     await terminateVm(db, deps.provider, userId);
     await revokeGrants(db, deps, userId);
+    await removeSites(db, deps, userId);
     const blobKeys = await blobsOnlyTheyUse(db, userId);
     for (const key of blobKeys) await deps.blobs.delete(key);
     await retireMailboxAddresses(db, userId);
     await db.delete(users).where(eq(users.id, userId));
     logger.info({ userId, blobs: blobKeys.length }, "account deleted");
   };
+}
+
+/**
+ * Every site the user deployed, taken down (so none outlives the account).
+ * Without a site host, an account that has sites fails here and is retried.
+ */
+async function removeSites(db: DbOrTx, deps: DeleteUserDeps, userId: string) {
+  const owned = await db
+    .select({ id: sites.id })
+    .from(sites)
+    .where(eq(sites.userId, userId));
+  if (owned.length === 0) return;
+  if (!deps.sites)
+    throw new Error(
+      "the user has sites, and there's no site host to take them down",
+    );
+  for (const site of owned)
+    await removeSite({ db, host: deps.sites, blobs: deps.blobs }, site.id);
 }
 
 async function sayGoodbye(

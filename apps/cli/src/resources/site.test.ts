@@ -190,7 +190,7 @@ describe("winston site", () => {
       ["site", "rollback", "blog", "--to", "1"],
       async (request) => {
         expect(new URL(request.url).pathname).toBe("/v1/sites/blog/rollback");
-        expect(await request.json()).toEqual({ to: 1 });
+        expect(await request.json()).toEqual({ to: 1, dryRun: false });
         return Response.json({
           site,
           note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
@@ -198,5 +198,30 @@ describe("winston site", () => {
       },
     );
     expect(rolledBack.out).toContain("The database stays as it is");
+  });
+
+  test("--dry-run sends dryRun and prints what would happen; delete says the name is free", async () => {
+    const preview = await cli(
+      ["site", "delete", "blog", "--dry-run"],
+      async (request) => {
+        expect(request.method).toBe("DELETE");
+        expect(await request.json()).toEqual({ dryRun: true });
+        return Response.json({
+          dryRun: true,
+          summary: "Would take blog down for good.",
+        });
+      },
+    );
+    expect(preview.out).toBe("Would take blog down for good.");
+    const deleted = await cli(["site", "delete", "blog"], () =>
+      Response.json({ id: "site_01abc", name: "blog", deleted: true }),
+    );
+    expect(deleted.out).toBe(
+      "Took blog down. Its address no longer answers, and the name is free.",
+    );
+    const share = await cli(["site", "share", "blog", "--dry-run"], () =>
+      Response.json({ dryRun: true, summary: "Would share blog by link." }),
+    );
+    expect(share.out).toBe("Would share blog by link.");
   });
 });

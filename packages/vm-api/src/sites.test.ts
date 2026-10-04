@@ -36,6 +36,10 @@ function fakeHost() {
       else routes.delete(name);
       return Promise.resolve();
     },
+    deleteDatabase: (databaseId) => {
+      databases.delete(databaseId);
+      return Promise.resolve();
+    },
     createDatabase: () => {
       const id = `db-${String(databases.size + 1)}`;
       databases.set(id, []);
@@ -266,7 +270,7 @@ describe("site routes", () => {
       const share = async () =>
         (
           (await (
-            await call("/v1/sites/blog/share", { method: "POST" })
+            await call("/v1/sites/blog/share", { method: "POST", body: {} })
           ).json()) as { site: { access: string; shareLink: string } }
         ).site;
 
@@ -284,7 +288,7 @@ describe("site routes", () => {
       expect((await share()).shareLink).toBe(first.shareLink);
 
       const unshared = (await (
-        await call("/v1/sites/blog/unshare", { method: "POST" })
+        await call("/v1/sites/blog/unshare", { method: "POST", body: {} })
       ).json()) as { site: { access: string; shareLink: string | null } };
       expect(unshared.site).toMatchObject({
         access: "private",
@@ -308,12 +312,14 @@ describe("site routes", () => {
       await deploy(as(owner.id), "/site.tar", "blog");
       const theirs = await as(other.id)("/v1/sites/blog/share", {
         method: "POST",
+        body: {},
       });
       expect(theirs.status).toBe(404);
       // A site whose first deploy failed has no version to share.
       await tx.insert(sitesTable).values({ userId: owner.id, name: "empty" });
       const empty = await as(owner.id)("/v1/sites/empty/share", {
         method: "POST",
+        body: {},
       });
       expect(empty.status).toBe(409);
     });
@@ -438,6 +444,84 @@ describe("site routes", () => {
           })
         ).status,
       ).toBe(404);
+    });
+  });
+
+  test("delete takes a site down for good and frees its name; a dry run only says so", async () => {
+    await inRollback(db, async (tx) => {
+      const owner = await insertUser(tx);
+      const other = await insertUser(tx);
+      const { as, scripts, routes, databases, blobs } = await setup(tx, {
+        "/notes.tar": {
+          "worker.js": "export default {}",
+          "migrations/0001.sql": "CREATE TABLE notes (id INTEGER);",
+        },
+      });
+      await deploy(as(owner.id), "/notes.tar", "notes");
+      const [version] = await tx.select().from(siteVersions);
+
+      const preview = await as(owner.id)("/v1/sites/notes", {
+        method: "DELETE",
+        body: { dryRun: true },
+      });
+      expect(await preview.json()).toEqual({
+        dryRun: true,
+        summary: expect.stringContaining(
+          "database (with all its data)",
+        ) as string,
+      });
+      expect(routes.has("notes")).toBe(true);
+
+      const deleted = await as(owner.id)("/v1/sites/notes", {
+        method: "DELETE",
+        body: {},
+      });
+      expect(await deleted.json()).toMatchObject({
+        name: "notes",
+        deleted: true,
+      });
+      expect(routes.has("notes")).toBe(false);
+      expect(scripts.size).toBe(0);
+      expect(databases.size).toBe(0);
+      expect(await tx.select().from(sitesTable)).toEqual([]);
+      expect(blobs.get(version?.bundleKey ?? "")).rejects.toThrow();
+      // The name is free again, for anyone.
+      expect((await deploy(as(other.id), "/notes.tar", "notes")).status).toBe(
+        200,
+      );
+    });
+  });
+
+  test("dry runs check everything but change nothing", async () => {
+    await inRollback(db, async (tx) => {
+      const owner = await insertUser(tx);
+      const other = await insertUser(tx);
+      const { as, routes } = await setup(tx, {
+        "/site.tar": { "public/index.html": "hi" },
+      });
+      const preview = await as(owner.id)("/v1/sites/deploy", {
+        method: "POST",
+        body: { path: "/site.tar", name: "blog", dryRun: true },
+      });
+      expect(((await preview.json()) as { summary: string }).summary).toContain(
+        "Would claim https://blog.runwinston.app",
+      );
+      expect(await tx.select().from(sitesTable)).toEqual([]);
+
+      await deploy(as(owner.id), "/site.tar", "blog");
+      const taken = await as(other.id)("/v1/sites/deploy", {
+        method: "POST",
+        body: { path: "/site.tar", name: "blog", dryRun: true },
+      });
+      expect(taken.status).toBe(409);
+      const share = await as(owner.id)("/v1/sites/blog/share", {
+        method: "POST",
+        body: { dryRun: true },
+      });
+      expect(((await share.json()) as { summary: string }).summary).toContain(
+        "Would share blog by link",
+      );
+      expect(routes.get("blog")?.access).toBe("private");
     });
   });
 });

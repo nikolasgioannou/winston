@@ -1,8 +1,10 @@
 /**
  * `winston site` (docs/design.md §9a, §11): deploying the sites Winston
- * builds to `<name>.runwinston.app`, and listing them. The CLI packs a site's
- * folder into a tar under the home folder; this reads it off the VM, keeps it
- * as a version, applies the site's migrations, and uploads it.
+ * builds to `<name>.runwinston.app`, and managing them. The CLI packs a
+ * site's folder into a tar under the home folder; deploy reads it off the
+ * VM, keeps it as a version, applies the site's migrations, and uploads it.
+ * Every write takes `dryRun`, which checks everything a real run would and
+ * says what it would do, without doing it.
  */
 import type { BlobStore } from "@winston/blobs";
 import type { DbOrTx } from "@winston/db/client";
@@ -10,6 +12,7 @@ import { sites, siteVersions, users } from "@winston/db/schema";
 import { BundleError, readBundle } from "@winston/site-host/bundle";
 import type { SiteHost } from "@winston/site-host/host";
 import { applyMigrations, MigrationError } from "@winston/site-host/migrations";
+import { deleteUnusedBundles, removeSite } from "@winston/site-host/remove";
 import {
   shareLink,
   siteNameProblem,
@@ -28,6 +31,9 @@ import type { VmFiles } from "./files.ts";
 /** At most this many sites per user (the parent ticket's guardrails). */
 export const maxSitesPerUser = 10;
 
+/** Each site keeps its newest versions' bundles, for rollback. */
+export const keptVersions = 10;
+
 export interface SiteDeps {
   host: SiteHost;
   blobs: BlobStore;
@@ -35,19 +41,36 @@ export interface SiteDeps {
   sitesUrl: string;
 }
 
-/** Each site keeps its newest versions' bundles, for rollback. */
-export const keptVersions = 10;
-
-const rollbackBody = z.object({
-  /** The version to go back to; by default the one before the current. */
-  to: z.number().int().positive().optional(),
-});
+const dryRun = z.boolean().default(false);
 
 const deployBody = z.object({
   /** The bundle the CLI packed, on the VM. */
   path: z.string().min(1),
   name: z.string().min(1),
+  dryRun,
 });
+const rollbackBody = z.object({
+  /** The version to go back to; by default the one before the current. */
+  to: z.number().int().positive().optional(),
+  dryRun,
+});
+const writeBody = z.object({ dryRun });
+
+/** A request body, validated, with the CLI's hint when it's wrong. */
+const body = <T extends z.ZodType>(schema: T, hint: string) =>
+  validator("json", (value) => {
+    const parsed = schema.safeParse(value ?? {});
+    if (!parsed.success)
+      throw new ApiFailure(
+        "invalid_request",
+        z.prettifyError(parsed.error),
+        hint,
+      );
+    return parsed.data;
+  });
+
+/** What a dry run answers: what would happen, in a sentence or two. */
+const wouldDo = (summary: string) => ({ dryRun: true as const, summary });
 
 type Site = typeof sites.$inferSelect;
 
@@ -60,6 +83,13 @@ const routeOf = (site: Site): SiteRoute => ({
     site.access === "link" && site.shareKey ? hashToken(site.shareKey) : null,
   paused: site.paused,
 });
+
+const notDeployed = (site: Site) =>
+  new ApiFailure(
+    "conflict",
+    `${site.name} hasn't been deployed yet.`,
+    "Deploy it first with winston site deploy.",
+  );
 
 export function siteRoutes({
   db,
@@ -119,10 +149,16 @@ export function siteRoutes({
   }
 
   /**
-   * The site with this name, the user's own or newly claimed. Locks the
-   * user's row, so two deploys can't both take the last free place.
+   * The site with this name: the user's own, or newly claimed (unless it's a
+   * dry run, which only checks it could be: null). Locks the user's row, so
+   * two deploys can't both take the last free place.
    */
-  async function claim(userId: string, name: string, sitesUrl: string) {
+  async function claim(
+    userId: string,
+    name: string,
+    sitesUrl: string,
+    { dryRun }: { dryRun: boolean },
+  ) {
     return db.transaction(async (tx) => {
       await tx
         .select({ id: users.id })
@@ -155,8 +191,9 @@ export function siteRoutes({
         throw new ApiFailure(
           "conflict",
           `The user already has ${String(maxSitesPerUser)} sites, the most there can be.`,
-          "Redeploy over one of them instead (winston site list).",
+          "Redeploy over one of them, or take one down (winston site list).",
         );
+      if (dryRun) return null;
       const [site] = await tx
         .insert(sites)
         .values({ userId, name })
@@ -166,36 +203,12 @@ export function siteRoutes({
     });
   }
 
-  /**
-   * Deletes pruned bundles no version still uses. Blobs are keyed by
-   * content, so another version (this site redeployed unchanged, or another
-   * site) can share one.
-   */
-  async function deleteUnusedBundles(blobs: BlobStore, keys: string[]) {
-    for (const key of new Set(keys)) {
-      const [used] = await db
-        .select({ id: siteVersions.id })
-        .from(siteVersions)
-        .where(eq(siteVersions.bundleKey, key))
-        .limit(1);
-      if (!used) await blobs.delete(key);
-    }
-  }
-
   /** Changes who may open a site: the row and its route together. */
   async function setAccess(
-    userId: string,
-    idOrName: string,
+    site: Site,
     changes: Pick<Site, "access" | "shareKey">,
   ) {
     const { host } = available();
-    const site = await ownSite(userId, idOrName);
-    if (site.currentVersion === null)
-      throw new ApiFailure(
-        "conflict",
-        `${site.name} hasn't been deployed yet.`,
-        "Deploy it first with winston site deploy.",
-      );
     return db.transaction(async (tx) => {
       const [updated] = await tx
         .update(sites)
@@ -222,19 +235,6 @@ export function siteRoutes({
         const site = await ownSite(c.get("run").userId, c.req.param("site"));
         return c.json({ site: dto(site) });
       })
-      // Shared already: the same link. Shared again after unsharing: a new one.
-      .post("/:site/share", async (c) => {
-        const { userId } = c.get("run");
-        const current = await ownSite(userId, c.req.param("site"));
-        const site =
-          current.access === "link" && current.shareKey
-            ? current
-            : await setAccess(userId, current.id, {
-                access: "link",
-                shareKey: generateToken(),
-              });
-        return c.json({ site: dto(site) });
-      })
       .get("/:site/versions", async (c) => {
         const site = await ownSite(c.get("run").userId, c.req.param("site"));
         const rows = await db
@@ -252,36 +252,73 @@ export function siteRoutes({
           })),
         });
       })
+      // Shared already: the same link. Shared again after unsharing: a new one.
+      .post(
+        "/:site/share",
+        body(writeBody, "Run winston site share <name>."),
+        async (c) => {
+          available();
+          const site = await ownSite(c.get("run").userId, c.req.param("site"));
+          if (site.currentVersion === null) throw notDeployed(site);
+          if (c.req.valid("json").dryRun)
+            return c.json(
+              wouldDo(
+                site.access === "link"
+                  ? `${site.name} is already shared by link; this would show the same link.`
+                  : `Would share ${site.name} by link: anyone with the link could open ${siteUrl(available().sitesUrl, site.name)}.`,
+              ),
+            );
+          const shared =
+            site.access === "link" && site.shareKey
+              ? site
+              : await setAccess(site, {
+                  access: "link",
+                  shareKey: generateToken(),
+                });
+          return c.json({ site: dto(shared) });
+        },
+      )
+      .post(
+        "/:site/unshare",
+        body(writeBody, "Run winston site unshare <name>."),
+        async (c) => {
+          available();
+          const site = await ownSite(c.get("run").userId, c.req.param("site"));
+          if (site.currentVersion === null) throw notDeployed(site);
+          if (c.req.valid("json").dryRun)
+            return c.json(
+              wouldDo(
+                site.access === "private"
+                  ? `${site.name} is already private.`
+                  : `Would make ${site.name} private: its share link, and anyone who opened it, would stop working.`,
+              ),
+            );
+          const unshared = await setAccess(site, {
+            access: "private",
+            shareKey: null,
+          });
+          return c.json({ site: dto(unshared) });
+        },
+      )
       .post(
         "/:site/rollback",
-        validator("json", (value) => {
-          const parsed = rollbackBody.safeParse(value ?? {});
-          if (!parsed.success)
-            throw new ApiFailure(
-              "invalid_request",
-              z.prettifyError(parsed.error),
-              "Pass --to <version>; winston site versions lists them.",
-            );
-          return parsed.data;
-        }),
+        body(
+          rollbackBody,
+          "Pass --to <version>; winston site versions lists them.",
+        ),
         async (c) => {
           const { host, blobs } = available();
           const { userId } = c.get("run");
-          const { to } = c.req.valid("json");
+          const { to, dryRun } = c.req.valid("json");
           const claimed = await ownSite(userId, c.req.param("site"));
-          const site = await db.transaction(async (tx) => {
+          const result = await db.transaction(async (tx) => {
             const [locked = claimed] = await tx
               .select()
               .from(sites)
               .where(eq(sites.id, claimed.id))
               .for("update");
             const current = locked.currentVersion;
-            if (current === null)
-              throw new ApiFailure(
-                "conflict",
-                `${locked.name} hasn't been deployed yet.`,
-                "Deploy it first with winston site deploy.",
-              );
+            if (current === null) throw notDeployed(locked);
             // By default the newest version before the current one.
             const [target] = await tx
               .select()
@@ -310,6 +347,10 @@ export function siteRoutes({
                 `${locked.name} is already on version ${String(current)}.`,
                 null,
               );
+            if (dryRun)
+              return wouldDo(
+                `Would put ${locked.name} back from version ${String(current)} to version ${String(target.number)}. Its database would stay as it is.`,
+              );
             const { script } = await readBundle(
               await blobs.get(target.bundleKey),
             );
@@ -322,37 +363,41 @@ export function siteRoutes({
               .set({ currentVersion: target.number, updatedAt: new Date() })
               .where(eq(sites.id, locked.id))
               .returning();
-            return updated ?? locked;
+            return {
+              site: dto(updated ?? locked),
+              note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
+            };
           });
+          return c.json(result);
+        },
+      )
+      .delete(
+        "/:site",
+        body(writeBody, "Run winston site delete <name>."),
+        async (c) => {
+          const { host, blobs } = available();
+          const site = await ownSite(c.get("run").userId, c.req.param("site"));
+          if (c.req.valid("json").dryRun)
+            return c.json(
+              wouldDo(
+                `Would take ${site.name} down for good: its address would stop working, and its files, versions${site.databaseId ? " and database (with all its data)" : ""} would be deleted. The name would be free for anyone.`,
+              ),
+            );
+          await removeSite({ db, host, blobs }, site.id);
           return c.json({
-            site: dto(site),
-            note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
+            id: site.id,
+            name: site.name,
+            deleted: true as const,
           });
         },
       )
-      .post("/:site/unshare", async (c) => {
-        const site = await setAccess(c.get("run").userId, c.req.param("site"), {
-          access: "private",
-          shareKey: null,
-        });
-        return c.json({ site: dto(site) });
-      })
       .post(
         "/deploy",
-        validator("json", (value) => {
-          const parsed = deployBody.safeParse(value);
-          if (!parsed.success)
-            throw new ApiFailure(
-              "invalid_request",
-              z.prettifyError(parsed.error),
-              "Run winston site deploy <folder>.",
-            );
-          return parsed.data;
-        }),
+        body(deployBody, "Run winston site deploy <folder>."),
         async (c) => {
           const { host, blobs, sitesUrl, vmFiles } = available();
           const { userId } = c.get("run");
-          const { path, name } = c.req.valid("json");
+          const { path, name, dryRun } = c.req.valid("json");
 
           let bytes: Uint8Array;
           try {
@@ -373,7 +418,15 @@ export function siteRoutes({
             throw error;
           }
 
-          const claimed = await claim(userId, name, sitesUrl);
+          const claimed = await claim(userId, name, sitesUrl, { dryRun });
+          if (!claimed || dryRun)
+            return c.json(
+              wouldDo(
+                claimed
+                  ? `Would deploy a new version of ${name} to ${siteUrl(sitesUrl, name)}${bundle.migrations.length ? `, applying any of its ${String(bundle.migrations.length)} migrations not yet applied` : ""}.`
+                  : `Would claim ${siteUrl(sitesUrl, name)} and deploy it there, private to the user${bundle.migrations.length ? `, with a new database and its ${String(bundle.migrations.length)} migrations` : ""}.`,
+              ),
+            );
           // Its own step, so the database is kept even if this deploy fails.
           if (!claimed.databaseId && bundle.migrations.length > 0)
             await db.transaction(async (tx) => {
@@ -459,7 +512,7 @@ export function siteRoutes({
             };
           });
           // After the commit, so a failed deploy never loses a kept bundle.
-          await deleteUnusedBundles(blobs, result.pruned);
+          await deleteUnusedBundles(db, blobs, result.pruned);
           return c.json({ site: dto(result.site), migrated: result.migrated });
         },
       )

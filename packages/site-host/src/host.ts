@@ -30,6 +30,8 @@ export interface SiteHost {
   setRoute(name: string, route: SiteRoute | null): Promise<void>;
   /** Creates a database (D1) for a site, returning its id. */
   createDatabase(name: string): Promise<string>;
+  /** Deletes a database and its data. One that's already gone is fine. */
+  deleteDatabase(databaseId: string): Promise<void>;
   /** Runs statements on a database in one transaction, returning each one's rows. */
   batchSql(
     databaseId: string,

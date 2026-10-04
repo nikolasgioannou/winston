@@ -33,6 +33,7 @@ import {
 import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
 import { closeTaskBrowserHandler } from "./background/close-browser.ts";
 import { createBlobStore } from "@winston/blobs";
+import { localSiteHost } from "@winston/site-host/local-host";
 import { receiveMailHandler } from "./mailbox/receive.ts";
 import {
   createInboundMailStore,
@@ -220,6 +221,10 @@ const worker = createWorker({
       revoke: googleTokenRevoker(),
       blobs,
       telegram,
+      // Locally, bun dev's sites service; production's Cloudflare host is d140ab.
+      ...(config.SITES_ADMIN_URL
+        ? { sites: localSiteHost(config.SITES_ADMIN_URL) }
+        : {}),
     }),
     [closeTaskBrowserJob.type]: closeTaskBrowserHandler(vm),
     [saveAttachmentJob.type]: saveAttachmentHandler({

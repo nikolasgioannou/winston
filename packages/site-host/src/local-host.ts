@@ -46,6 +46,9 @@ export function localSiteHost(adminUrl: string): SiteHost {
         ? call("PUT", `/routes/${encodeURIComponent(name)}`, route)
         : call("DELETE", `/routes/${encodeURIComponent(name)}`));
     },
+    deleteDatabase: async (databaseId) => {
+      await call("DELETE", `/databases/${encodeURIComponent(databaseId)}`);
+    },
     createDatabase: async (name) =>
       ((await call("POST", "/databases", { name })) as { id: string }).id,
     batchSql: async (databaseId, statements) =>
