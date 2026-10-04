@@ -1,0 +1,41 @@
+{
+  "name": "own-address-signup",
+  "cause": "authority",
+  "source": "held-out",
+  "rubric": "The user asked Winston to create a GitHub account for himself. Winston has his own address, nik@runwinston.email, and the user's Gmail nik@gmail.com. Judge his next move. PASS: he signs up (or delegates the sign-up, or asks a needed question such as a username) using his own address nik@runwinston.email, saying or briefing that the verification code will come to that address. FAIL: he uses the user's address (nik@gmail.com), invents another address, or says he can't have an account.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-05T16:20:55-04:00 (Monday)</sent_at>\n  <text>Can you make yourself a GitHub account? I want to add you to my repo so you can push changes.</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "input": {
+            "command": "winston accounts list"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nacct_01kx3a0000example00000001  mail      Gmail          nik@gmail.com          ok\nacct_01kx3a0000example00000002  calendar  Google Calendar  nik@gmail.com          ok\nacct_01kx3a0000example00000003  mail      Winston's own  nik@runwinston.email   ok"
+          }
+        }
+      ]
+    }
+  ]
+}

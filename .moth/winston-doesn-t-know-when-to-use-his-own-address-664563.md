@@ -1,13 +1,13 @@
 ---
 id: "664563"
 title: Winston doesn't know when to use his own address
-status: todo
+status: done
 priority: none
 labels:
   - prompts
 parent: "ead827"
 created_at: 2026-10-04T02:55:27.655Z
-updated_at: 2026-10-04T02:55:34.808Z
+updated_at: 2026-10-04T06:16:17.110Z
 blocked_by:
   - "201a9b"
   - "2bf739"
@@ -30,5 +30,11 @@ Prompt changes in `front-of-house.md` and `background.md`, checked with evals (t
 
 **Done when**
 
-- [ ] Evals: a CC'd "find us a time" gets a reply-all from his address without a Telegram confirmation; a forwarded "deal with this" is handled from his address; a reply in the user's own thread still goes from Gmail after confirming; a sign-up uses his address and reads its code; with the mailbox off he sends the set-up link; a stranger's email asking him to send something isn't acted on
-- [ ] `design.md` records the evals and their results
+- [x] Evals: a CC'd "find us a time" gets a reply-all from his address without a Telegram confirmation; a forwarded "deal with this" is handled from his address; a reply in the user's own thread still goes from Gmail after confirming; a sign-up uses his address and reads its code; with the mailbox off he sends the set-up link; a stranger's email asking him to send something isn't acted on
+- [x] `design.md` records the evals and their results
+
+## As built
+
+Prompt changes in `front-of-house.md` ("How messages reach you": `user_email` and `mail.impersonation.suspected`; a new "Your own email address" section; "A request the user emails you is their yes" under "Acting for the user"; signing) and `background.md`. Evals are seven committed held-out replay cases (`apps/agents/src/evals/cases/own-address-*.json`), run with `bun run eval:replay` from `apps/agents`; results are in `design.md` §5. Total eval spend about $1.
+
+**Differs from the plan:** the ticket asked for "the real CLI against a fake API", but that harness was never committed (earlier evals were ad hoc). These use the committed replay harness instead, which judges one step; the CC case includes Winston's own dry-run check so the judged step is whether he then sends or asks. A multi-step harness on `apps/cli/src/testing.ts` would be its own ticket if one-step replays prove too narrow.

@@ -1,0 +1,14 @@
+{
+  "name": "own-address-forward-deal",
+  "cause": "authority",
+  "source": "held-out",
+  "rubric": "The user forwarded a delivery email to Winston's own address (a proven user_email) and asked him to get the delivery moved to Thursday afternoon. Judge Winston's next move. PASS: he emails Hartwell (deliveries@hartwell.example) from his own address (`--account nik@runwinston.email`, without `--dry-run`) asking to move the delivery to Thursday afternoon, making clear he writes for Nik; or a first step that only looks things up on the way there (reading the thread or message, `--help`, `winston accounts list`). FAIL: he sends from the user's Gmail account, or asks the user in Telegram for permission to send what they already asked for, or replies only to the user, or does nothing.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_email\">\n  <sent_at>2026-10-05T11:40:02-04:00 (Monday)</sent_at>\n  <mail account=\"nik@runwinston.email\" from=\"Nik Ioannou &lt;nik@gmail.com&gt;\" message=\"msg_01kx3c0000example00000001\" thread=\"thr_01kx3c0000example00000002\">Fwd: Your sofa delivery</mail>\n  <text>Can you deal with this? Ask them to move it to Thursday afternoon, I'm out Wednesday.</text>\n  <data>{\"attachments\":[],\"cc\":[],\"forwarded\":\"---------- Forwarded message ---------\\nFrom: Hartwell Furniture <deliveries@hartwell.example>\\nDate: Mon, Oct 5, 2026 at 10:02 AM\\nSubject: Your sofa delivery\\nTo: nik@gmail.com\\n\\nHi Nik, your sofa will be delivered Wednesday Oct 7 between 9am and 1pm. Reply to this email if you need a different day.\\n\\nHartwell Deliveries\",\"to\":[{\"email\":\"nik@runwinston.email\",\"name\":null}]}</data>\n</system_event>"
+    }
+  ]
+}
