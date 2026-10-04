@@ -3,7 +3,7 @@
  * path), after browser-use/jev-ultrafast (MIT; read at commit 1231850).
  *
  * - **One atomic read** (`observe`): a single `Runtime.evaluate` returns the
- *   visible, enabled controls in the viewport, up to 6,000 characters of
+ *   visible, enabled, uncovered controls in the viewport, up to 6,000 characters of
  *   visible text, a marker of the page's meaning, and per-target guards.
  *   Each element gets a code-owned id, so the model never writes selectors,
  *   coordinates or code.
@@ -22,13 +22,16 @@
  * routes it into the frame. Frames that can't be read are counted.
  */
 import type { Cdp } from "./cdp.ts";
+import { keys } from "./input.ts";
 import { BrowserFailure, type WindowEntry } from "./state.ts";
 
-/** One thing autopilot can do on the page: an element's operation, a scroll, or a wait. */
+/** One thing autopilot can do on the page: an element's operation, a key, a scroll, or a wait. */
 export interface FastAction {
-  /** `e1`…, or `scroll_down`, `scroll_up`, `wait`. */
+  /** `e1`…, or `press_enter`, `press_escape`, `scroll_down`, `scroll_up`, `wait`. */
   id: string;
-  kind: "click" | "fill" | "select" | "scroll" | "wait";
+  kind: "click" | "fill" | "select" | "key" | "scroll" | "wait";
+  /** The key a `key` action presses, in whatever has focus. */
+  key?: "Enter" | "Escape";
   label: string;
   /** The element's code-owned id (absent for scrolls and waits). */
   node?: number;
@@ -223,6 +226,8 @@ export const readState = (view?: Region) => `(() => {
     if (!safe(e) || !visible(e) || e.matches(':disabled') || closestComposed(e, '[aria-disabled="true"]')) continue;
     const r = e.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2, rname = role(e);
     if (!rname || r.width <= 0 || r.height <= 0 || x < view.left || y < view.top || x >= view.right || y >= view.bottom) continue;
+    // Covered where it would be clicked (a sliding panel, an overlay): input would be refused, so it isn't offered.
+    if (!reaches(e, hitAt(x, y))) continue;
     if (rname === 'gridcell' && e.querySelector('button,[role="button"]')) continue;
     const base = { node: identity(e), role: rname, label: clip(name(e) || rname, 160) };
     for (const key of ['checked', 'selected', 'expanded']) {
@@ -274,6 +279,18 @@ export const readState = (view?: Region) => `(() => {
   const omitted_actions = Math.max(0, actions.length - 250);
   actions.splice(250);
   actions.forEach((a, i) => { a.id = 'e' + (i + 1); });
+  // Keys: Enter in the focused field (a search box with no button), Escape
+  // while a menu, list or dialog is open.
+  let focused = document.activeElement;
+  while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+  if (focused && focused !== document.body && safe(focused) && visible(focused) &&
+      (focused.matches('input,textarea,select,[contenteditable="true"]') ||
+        ['combobox', 'searchbox', 'textbox', 'spinbutton'].includes(focused.getAttribute('role'))))
+    actions.push({ id: 'press_enter', kind: 'key', key: 'Enter',
+      label: 'Press Enter in ' + clip(name(focused) || role(focused) || 'the focused field', 80) });
+  if ([...document.querySelectorAll('[aria-expanded="true"],[role="dialog"],[role="alertdialog"],[role="listbox"],[role="menu"],dialog[open]')]
+      .some((e) => visible(e)))
+    actions.push({ id: 'press_escape', kind: 'key', key: 'Escape', label: 'Press Escape to close the open menu, list or dialog' });
   const step = Math.round(innerHeight * 0.7);
   if (!inFrame) {
     if (scrollY + innerHeight < height - 2) actions.push({ id: 'scroll_down', kind: 'scroll', label: 'Scroll down', delta: step });
@@ -365,6 +382,18 @@ export function fingerprint(
 /** Two results of the scripts, compared as the JSON they came back as. */
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A guard read loosely: the same document, and the element as it was
+ * (role, name, value, state), whatever the text around it does.
+ */
+const loosely = (read: unknown): unknown[] => {
+  const [pageKey, guard] = (read ?? []) as [unknown, unknown];
+  return [
+    Array.isArray(pageKey) ? (pageKey[0] as unknown) : pageKey,
+    Array.isArray(guard) ? (guard.slice(0, -1) as unknown[]) : guard,
+  ];
+};
 
 /** The CDP access a fast page needs. */
 export interface FastPageDeps {
@@ -617,8 +646,9 @@ export function fastPage(deps: FastPageDeps) {
   ): Promise<Omit<FastPage, "fingerprint">> {
     const framed: FrameRead[] = [];
     const isControl = (a: FastAction) =>
-      a.kind === "scroll" || a.kind === "wait";
+      a.kind === "key" || a.kind === "scroll" || a.kind === "wait";
     const actions = state.actions.filter((a) => !isControl(a));
+    const controls = state.actions.filter(isControl);
     const guards = { ...state.guards };
     let text = state.text;
     let omitted = state.omitted_actions;
@@ -648,7 +678,10 @@ export function fastPage(deps: FastPageDeps) {
       unread = Math.max(0, unread - 1) + read.frames;
       omitted += read.omitted_actions;
       for (const action of read.actions)
-        actions.push({ ...action, frame: index });
+        if (action.kind !== "key") actions.push({ ...action, frame: index });
+        // Keys go to whatever has focus: one of each, wherever it is.
+        else if (!controls.some((c) => c.id === action.id))
+          controls.push({ ...action, frame: index });
       for (const [node, guard] of Object.entries(read.guards))
         guards[`${String(index)}:${node}`] = guard;
       if (read.text)
@@ -662,7 +695,7 @@ export function fastPage(deps: FastPageDeps) {
     return {
       ...state,
       text,
-      actions: [...kept, ...state.actions.filter(isControl)],
+      actions: [...kept, ...controls],
       guards,
       omitted_actions: omitted,
       frames: unread,
@@ -697,20 +730,27 @@ export function fastPage(deps: FastPageDeps) {
      * Whether the page still means what it did for `action` (or at all,
      * without one, frames included).
      */
-    async fresh(entry: WindowEntry, page: FastPage, action?: FastAction) {
+    async fresh(
+      entry: WindowEntry,
+      page: FastPage,
+      action?: FastAction,
+      options: { loose?: boolean } = {},
+    ) {
       const frame = frameOf(page, action);
       if (
         action?.node !== undefined &&
-        (action.kind === "click" || action.kind === "select")
+        (action.kind === "click" ||
+          action.kind === "select" ||
+          (options.loose === true && action.kind === "fill"))
       ) {
         const now = await evaluate(entry, readGuard(action.node), { frame });
         const key = frame
           ? `${String(action.frame)}:${String(action.node)}`
           : String(action.node);
-        return same(now, [
-          frame ? frame.page_key : page.page_key,
-          page.guards[key],
-        ]);
+        const then = [frame ? frame.page_key : page.page_key, page.guards[key]];
+        return options.loose
+          ? same(loosely(now), loosely(then))
+          : same(now, then);
       }
       if (frame)
         return same(
@@ -743,11 +783,34 @@ export function fastPage(deps: FastPageDeps) {
       page: FastPage,
       action: FastAction,
       text?: string,
+      /** A retried step: only its element has to be as it was. */
+      options: { loose?: boolean } = {},
     ) {
-      if (!(await this.fresh(entry, page, action)))
+      if (!(await this.fresh(entry, page, action, options)))
         throw new StalePage("The page changed since this decision.");
       if (action.kind === "wait") {
         await sleep(100);
+        return;
+      }
+      if (action.kind === "key") {
+        // Sent to the page; Chrome delivers keys to whatever has focus.
+        const key = keys[action.key ?? "Enter"];
+        const common = {
+          key: key.key,
+          code: key.code,
+          windowsVirtualKeyCode: key.keyCode,
+        };
+        await send(entry, "Input.dispatchKeyEvent", {
+          type: "text" in key ? "keyDown" : "rawKeyDown",
+          ...common,
+          ...("text" in key
+            ? { text: key.text, unmodifiedText: key.text }
+            : {}),
+        });
+        await send(entry, "Input.dispatchKeyEvent", {
+          type: "keyUp",
+          ...common,
+        });
         return;
       }
       if (action.kind === "scroll") {

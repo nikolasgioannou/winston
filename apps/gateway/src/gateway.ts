@@ -102,7 +102,7 @@ export function createGateway({
   artifacts?: Pick<UpdatesOptions, "loadManifest" | "presign">;
   /** Mail and calendar providers for the VM-facing API. */
   connectors?: ConnectorDeps;
-  /** Jev for `winston browser autopilot` (§5); absent without a key. */
+  /** Jev and its helpers for `winston browser act` (§5); absent without a key. */
   jev?: Jev;
 }) {
   const connections = new Connections<VmSocket>();

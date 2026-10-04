@@ -32,28 +32,12 @@ export interface AxFrame {
   sessionId: string;
   /** The frame's id (absent in recorded fixtures). */
   frameId?: string;
-  /**
-   * A cross-site frame's `<iframe>`, in its parent's session: its own
-   * coordinates start there.
-   */
-  ownerInParent?: { sessionId: string; backendNodeId: number };
   nodes: AxNode[];
   /** Child frames, keyed by the owning `<iframe>`'s backend node id. */
   children: { owner: number; frame: AxFrame }[];
 }
 
-/** Where a ref points: a node in one frame's session. */
-export interface RefTarget {
-  sessionId: string;
-  backendNodeId: number;
-  frameId?: string | undefined;
-  /** How the snapshot showed it: `button "Sign in"`. */
-  label: string;
-  /** For a cross-site frame, the `<iframe>` its coordinates are relative to. */
-  offsetFrom?: { sessionId: string; backendNodeId: number } | undefined;
-}
-
-/** Elements an agent acts on: they get refs. */
+/** Controls: shown with their value and state. */
 const interactive = new Set([
   "button",
   "link",
@@ -147,26 +131,15 @@ function states(node: AxNode) {
 }
 
 export interface SnapshotOptions {
-  /** Include page text and images, not just what can be acted on. */
+  /** Include page text and images, not just the controls. */
   full: boolean;
-  /** Whether to give refs (not for a peek at another run's window). */
-  refs: boolean;
-  /** The ref for a node: the same one as last time if it's still there. */
-  refFor: (target: RefTarget) => string;
 }
 
-export interface Snapshot {
-  lines: string[];
-  refs: Map<string, RefTarget>;
-}
-
-/** Renders frames as indented lines, assigning refs as it goes. */
+/** Renders frames as indented lines, for reading. */
 export function formatSnapshot(
   root: AxFrame,
   options: SnapshotOptions,
-): Snapshot {
-  const refs = new Map<string, RefTarget>();
-
+): string[] {
   function renderFrame(frame: AxFrame, depth: number): string[] {
     const byId = new Map(frame.nodes.map((node) => [node.nodeId, node]));
     const frameAt = new Map(frame.children.map((c) => [c.owner, c.frame]));
@@ -199,22 +172,9 @@ export function formatSnapshot(
         // An option in a <select>'s popup is listed with its combobox.
         if (role === "option" && str(parent?.role) === "MenuListPopup")
           return [];
-        const target = {
-          sessionId: frame.sessionId,
-          backendNodeId: node.backendDOMNodeId,
-          frameId: frame.frameId,
-          label: `${role}${quoted}`,
-          offsetFrom: frame.ownerInParent,
-        };
-        let ref = "";
-        if (options.refs) {
-          ref = options.refFor(target);
-          refs.set(ref, target);
-        }
         const value = clip(str(node.value), maxName);
         const parts = [
           `${pad}${role}${quoted}`,
-          ref ? `[${ref}]` : undefined,
           value && value !== name ? `= "${value}"` : undefined,
           ...states(node),
           role === "combobox" ? optionsOf(node) : undefined,
@@ -232,7 +192,7 @@ export function formatSnapshot(
         const inside = kids(node, at + 1);
         // A heading that's just a link (a search result) is one line.
         const only = inside.length === 1 ? inside[0]?.trimStart() : undefined;
-        if (only?.startsWith(`link${quoted} `))
+        if (only === `link${quoted}` || only?.startsWith(`link${quoted} `))
           return [`${pad}${only}${line.slice(line.lastIndexOf(" ["))}`];
         return name ? [line, ...inside] : inside;
       }
@@ -281,7 +241,7 @@ export function formatSnapshot(
     return kids(top, depth);
   }
 
-  return { lines: renderFrame(root, 0), refs };
+  return renderFrame(root, 0);
 }
 
 /** Reads a page's accessibility tree, frames included, through CDP. */
@@ -356,7 +316,6 @@ export async function readFrames(
           sessionId: childSession,
           // A cross-site frame's target id is its frame id.
           frameId: targetId,
-          ownerInParent: { sessionId, backendNodeId: at },
           nodes: await tree(childSession),
           children: [],
         },

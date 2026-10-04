@@ -315,26 +315,18 @@ describe("agent windows", () => {
     expect(none.message).toBe("There's no page to go back to.");
   });
 
-  test("a new document in the window gets fresh refs, never reusing a number", async () => {
+  test("a snapshot is for reading: controls without refs, document after document", async () => {
     const { browser, chrome } = setup();
     await browser.open(token("run_a"), "a.test");
-    // Chrome hands out the same node ids on the next site.
-    const snapshotOf = async () => {
-      const result = await browser.snapshot(token("run_a"), {});
-      return result.lines.join("\n");
-    };
-    expect(await snapshotOf()).toBe('button "Go" [e1]');
-    expect(await snapshotOf()).toBe('button "Go" [e1]');
+    const snapshotOf = async () =>
+      (await browser.snapshot(token("run_a"), {})).lines.join("\n");
+    expect(await snapshotOf()).toBe('button "Go"');
     chrome().emit({
       method: "Page.frameNavigated",
       params: { frame: { id: "f" } },
       sessionId: "s-t1",
     });
-    expect(await snapshotOf()).toBe('button "Go" [e2]');
-    // The old ref is gone, so an action with it is refused, not misdirected.
-    const refused = await failure(browser.click(token("run_a"), "e1"));
-    expect(refused.message).toStartWith("There's no e1 in your last snapshot");
-    expect(refused.code).toBe("invalid_request");
+    expect(await snapshotOf()).toBe('button "Go"');
   });
 
   test("after Chrome restarts, a run's next command says its window was closed, once", async () => {

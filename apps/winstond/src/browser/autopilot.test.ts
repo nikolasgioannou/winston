@@ -73,10 +73,10 @@ function page(overrides: Partial<FastPage> = {}): FastPage {
   return { ...state, fingerprint: fingerprint(state) };
 }
 
-const choice = (ids: string[], selected: string) => ({
+const choice = (ids: string[], selected: string, confidence = 1) => ({
   type: "choice",
   choice: selected,
-  confidence: 1,
+  confidence,
   probabilities: Object.fromEntries(
     ids.map((id) => [id, id === selected ? 1 : 0]),
   ),
@@ -90,11 +90,17 @@ type Answer = (questions: Questions) => Record<string, unknown>;
 
 /** Jev answering an operation (and the target for it, and nothing committing). */
 const pick =
-  (operation: string, target?: string, commits = "none"): Answer =>
+  (
+    operation: string,
+    target?: string,
+    commits = "none",
+    confidence = 1,
+  ): Answer =>
   (questions) => ({
     operation: choice(
       Object.keys(questions.operation?.criteria ?? {}),
       operation,
+      confidence,
     ),
     ...(target
       ? {
@@ -111,26 +117,44 @@ const pick =
       : {}),
   });
 
+/** The step picker's answer. */
+const step = (
+  operation: string,
+  target: string | null = null,
+  extra: { text?: string | null; commits?: boolean } = {},
+) => ({
+  operation,
+  target,
+  text: extra.text ?? null,
+  commits: extra.commits ?? false,
+});
+
 /** Autopilot over a scripted page reader and backend. */
 function harness({
   pages = [page()],
   answers,
+  picks = [],
   texts = ["dune"],
   fresh = () => true,
   act = () => Promise.resolve(),
   observe,
   reliable = true,
+  jevDown = false,
 }: {
   pages?: FastPage[];
   answers: Answer[];
+  /** The step picker's answers in turn; null (or none left) is unavailable. */
+  picks?: (ReturnType<typeof step> | null)[];
   texts?: (string | null)[];
   fresh?: () => boolean;
   act?: (action: FastAction, text?: string) => Promise<void>;
   observe?: (index: number) => Promise<FastPage>;
   reliable?: boolean;
+  jevDown?: boolean;
 }) {
   const acted: { id: string; text?: string }[] = [];
   const asked: Questions[] = [];
+  const picked: Record<string, unknown>[] = [];
   const written: unknown[] = [];
   const outcomes: unknown[] = [];
   let reads = 0;
@@ -189,6 +213,22 @@ function harness({
           body: JSON.stringify({ text: texts.shift() ?? null }),
         });
       }
+      if (request.path === "/v1/jev/pick") {
+        picked.push(body);
+        const answer = picks.shift();
+        return Promise.resolve(
+          answer
+            ? {
+                status: 200,
+                body: JSON.stringify({
+                  decisionId: `pick_${String(picked.length)}`,
+                  pick: answer,
+                }),
+              }
+            : { status: 503, body: "{}" },
+        );
+      }
+      if (jevDown) return Promise.resolve({ status: 503, body: "{}" });
       const questions = body.questions as Questions;
       asked.push(questions);
       const answer = answers.shift() ?? pick("DONE");
@@ -201,7 +241,15 @@ function harness({
       });
     },
   });
-  return { autopilot, acted, asked, written, outcomes, reads: () => reads };
+  return {
+    autopilot,
+    acted,
+    asked,
+    picked,
+    written,
+    outcomes,
+    reads: () => reads,
+  };
 }
 
 describe("autopilot's choices", () => {
@@ -266,18 +314,22 @@ describe("autopilot's choices", () => {
     expect(result.actions[0]).toBe('Typed "dune" into [1] Search.');
   });
 
-  test("a click can't take a target from another head", async () => {
-    const { autopilot, acted } = harness({
+  test("a click can't take a target from another head: the step goes to the picker", async () => {
+    const { autopilot, acted, asked, picked } = harness({
       answers: [
         (questions) => ({
           ...pick("CLICK")(questions),
           click_target: choice(["1", "2", "999"], "999"),
           type_text_target: choice(["1"], "1"),
         }),
+        pick("DONE"),
       ],
     });
     const result = await autopilot.run(token, { goal: "Search for dune" });
-    expect(result.stop).toBe("failed");
+    expect(picked[0]?.reason).toBe("Jev's answer didn't check out.");
+    // No picker here: Jev is asked again, and nothing was done meanwhile.
+    expect(asked).toHaveLength(2);
+    expect(result.stop).toBe("done");
     expect(acted).toEqual([]);
   });
 
@@ -317,9 +369,10 @@ describe("autopilot's loop", () => {
     expect(acted).toEqual([]);
   });
 
-  test("a stale decision is dropped before any input, and the page is read again", async () => {
+  test("nothing is typed on a stale page: it's read again, and the same step is tried once more if its element is still there", async () => {
     let freshness = false;
-    const { autopilot, acted, written, reads } = harness({
+    const { autopilot, acted, asked, reads } = harness({
+      pages: [page(), page(), page({ text: "Results" })],
       answers: [pick("TYPE_TEXT", "1"), pick("DONE")],
       fresh: () => {
         const was = freshness;
@@ -328,10 +381,42 @@ describe("autopilot's loop", () => {
       },
     });
     const result = await autopilot.run(token, { goal: "Search for dune" });
-    expect(acted).toEqual([]);
-    expect(written).toEqual([]);
-    expect(reads()).toBe(2);
+    // Decided once, typed on the fresh read, not on the stale one.
+    expect(asked).toHaveLength(2);
+    expect(acted).toEqual([{ id: "e1", text: "dune" }]);
+    expect(reads()).toBe(3);
     expect(result.stop).toBe("done");
+  });
+
+  test("a step the picker decided isn't decided again when the page moves on: it's retried once, then given up", async () => {
+    let stale = 2;
+    const retried = harness({
+      pages: [page(), page(), page({ text: "Results" })],
+      answers: [pick("BLOCKED"), pick("DONE")],
+      picks: [step("CLICK", "2")],
+      act: () =>
+        stale-- > 1
+          ? Promise.reject(new StalePage("the map moved"))
+          : Promise.resolve(),
+    });
+    await retried.autopilot.run(token, { goal: "Search" });
+    expect(retried.picked).toHaveLength(1);
+    expect(retried.acted).toEqual([{ id: "e3" }]);
+
+    // Gone stale twice: the step is decided afresh.
+    let failures = 2;
+    const decidedAgain = harness({
+      pages: [page(), page(), page(), page({ text: "Results" })],
+      answers: [pick("BLOCKED"), pick("BLOCKED"), pick("DONE")],
+      picks: [step("CLICK", "2"), step("CLICK", "2")],
+      act: () =>
+        failures-- > 0
+          ? Promise.reject(new StalePage("the map moved"))
+          : Promise.resolve(),
+    });
+    await decidedAgain.autopilot.run(token, { goal: "Search" });
+    expect(decidedAgain.picked).toHaveLength(2);
+    expect(decidedAgain.acted).toEqual([{ id: "e3" }]);
   });
 
   test("text written for a field is reused only when its context is the same", async () => {
@@ -340,10 +425,11 @@ describe("autopilot's loop", () => {
       const pages = [
         page(),
         page({ text: changed ? "Different page" : "Search" }),
+        page({ text: "Results" }),
       ];
       const h = harness({
         pages,
-        answers: [pick("TYPE_TEXT", "1"), pick("TYPE_TEXT", "1"), pick("DONE")],
+        answers: [pick("TYPE_TEXT", "1"), pick("DONE")],
         texts: ["dune", "dune"],
         act: () => {
           if (failures-- > 0)
@@ -374,12 +460,19 @@ describe("autopilot's loop", () => {
     expect(result.stop).toBe("done");
   });
 
-  test("three actions in a row that change nothing stop the run", async () => {
-    const { autopilot, acted } = harness({
+  test("three actions in a row that change nothing stop the run, the picker's included", async () => {
+    const { autopilot, acted, asked, picked } = harness({
       answers: Array.from({ length: 5 }, () => pick("CLICK", "2")),
+      picks: [step("CLICK", "2"), step("CLICK", "2")],
     });
     const result = await autopilot.run(token, { goal: "Search" });
     expect(acted).toHaveLength(3);
+    // Jev wanting the same click again, after it changed nothing, goes to the picker.
+    expect(asked).toHaveLength(3);
+    expect(picked).toHaveLength(2);
+    expect(picked[0]?.reason).toBe(
+      "Jev wants to repeat a step that changed nothing.",
+    );
     expect(result.stop).toBe("no_progress");
   });
 
@@ -450,14 +543,32 @@ describe("autopilot's loop", () => {
     ).toContain("frames");
   });
 
-  test("a site where Jev keeps being overridden gets no autopilot", async () => {
-    const { autopilot, asked } = harness({
+  test("on a page that never stops changing, done twice in a row on two reads stands", async () => {
+    const { autopilot, asked, reads } = harness({
+      answers: [pick("DONE"), pick("DONE"), pick("DONE")],
+      fresh: () => false,
+    });
+    const result = await autopilot.run(token, { goal: "Show the prices" });
+    expect(result.stop).toBe("done");
+    expect(asked).toHaveLength(2);
+    expect(reads()).toBe(2);
+  });
+
+  test("where Jev keeps being overridden, the step picker decides every step", async () => {
+    const { autopilot, asked, picked, acted } = harness({
+      pages: [page(), page({ text: "Results" })],
       answers: [pick("DONE")],
+      picks: [step("CLICK", "2"), step("DONE")],
       reliable: false,
     });
     const result = await autopilot.run(token, { goal: "Search" });
-    expect(result.stop).toBe("unreliable");
     expect(asked).toEqual([]);
+    expect(picked.map((p) => p.reason)).toEqual([
+      "Jev keeps being overridden on this site.",
+      "Jev keeps being overridden on this site.",
+    ]);
+    expect(acted).toEqual([{ id: "e3" }]);
+    expect(result).toMatchObject({ stop: "done", escalated: 2 });
   });
 
   test("it stops at its step limit", async () => {
@@ -491,5 +602,147 @@ describe("autopilot's loop", () => {
         outcome: "overridden",
       },
     ]);
+  });
+});
+
+describe("one way to act: the step picker takes what Jev isn't sure of", () => {
+  test("an unsure done goes to the picker, which sees the same page, operations and rules", async () => {
+    const { autopilot, acted, picked } = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [pick("DONE", undefined, "none", 0.3), pick("DONE")],
+      picks: [step("CLICK", "2")],
+    });
+    const result = await autopilot.run(token, { goal: "Search for dune" });
+    expect(acted).toEqual([{ id: "e3" }]);
+    const asked = picked[0] ?? {};
+    expect(asked.reason).toBe("Jev isn't sure it's done (confidence 0.30).");
+    expect(asked.goal).toBe("Search for dune");
+    expect(Object.keys(asked.operations as object)).toContain("CLICK");
+    expect(JSON.stringify(asked.state)).toContain("Go");
+    expect(String(asked.rules)).toContain(nextActionRules.slice(0, 40));
+    expect(result).toMatchObject({ stop: "done", escalated: 1 });
+    expect(result.page?.text).toBe("Results");
+  });
+
+  test("a pick Jev isn't confident of still stands: confidence alone doesn't call the picker", async () => {
+    const { autopilot, acted, picked } = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [pick("CLICK", "2", "none", 0.24), pick("DONE")],
+    });
+    await autopilot.run(token, { goal: "Search" });
+    expect(acted).toEqual([{ id: "e3" }]);
+    expect(picked).toEqual([]);
+  });
+
+  test("the picker's text is typed as is; a value it doesn't have stops the run", async () => {
+    const typed = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [pick("BLOCKED"), pick("DONE")],
+      picks: [step("TYPE_TEXT", "1", { text: "dune" })],
+    });
+    await typed.autopilot.run(token, { goal: "Search for dune" });
+    expect(typed.acted).toEqual([{ id: "e1", text: "dune" }]);
+    expect(typed.written).toEqual([]);
+
+    const missing = harness({
+      answers: [pick("BLOCKED")],
+      picks: [step("TYPE_TEXT", "1", { text: null })],
+    });
+    const result = await missing.autopilot.run(token, {
+      goal: "Fill in my passport number",
+    });
+    expect(result.stop).toBe("needs_value");
+    expect(missing.acted).toEqual([]);
+  });
+
+  test("a step the picker says commits waits for --commit, which takes that one step and stops", async () => {
+    const answers = () => [pick("BLOCKED")];
+    const picks = () => [step("CLICK", "2", { commits: true })];
+    const held = harness({ answers: answers(), picks: picks() });
+    const stopped = await held.autopilot.run(token, { goal: "Send it" });
+    expect(stopped.stop).toBe("commits");
+    expect(stopped.reason).toContain("--commit");
+    expect(held.acted).toEqual([]);
+
+    const approved = harness({ answers: answers(), picks: picks() });
+    const committed = await approved.autopilot.run(token, {
+      goal: "Send it",
+      commit: true,
+    });
+    expect(approved.acted).toEqual([{ id: "e3" }]);
+    expect(committed.stop).toBe("committed");
+  });
+
+  test("when Jev is down the picker decides; when neither can, it stops", async () => {
+    const down = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [],
+      picks: [step("CLICK", "2"), step("DONE")],
+      jevDown: true,
+    });
+    const result = await down.autopilot.run(token, { goal: "Search" });
+    expect(down.acted).toEqual([{ id: "e3" }]);
+    expect(down.picked[0]?.reason).toBe("Jev isn't available.");
+    expect(result.stop).toBe("done");
+
+    const neither = harness({ answers: [], jevDown: true });
+    expect((await neither.autopilot.run(token, { goal: "Search" })).stop).toBe(
+      "unavailable",
+    );
+  });
+
+  test("the picker's answer is checked like Jev's; one that doesn't check out leaves Jev's pick", async () => {
+    const { autopilot, acted } = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [pick("CLICK", "1", "none", 0.3), pick("DONE")],
+      // A target that isn't one of CLICK's.
+      picks: [step("CLICK", "9")],
+    });
+    await autopilot.run(token, { goal: "Open search" });
+    expect(acted).toEqual([{ id: "e2" }]);
+  });
+
+  test("Jev's blocked is checked by the picker, which can find a way on", async () => {
+    const { autopilot, acted } = harness({
+      pages: [page(), page({ text: "Results" })],
+      answers: [pick("BLOCKED"), pick("DONE")],
+      picks: [step("CLICK", "2")],
+    });
+    const result = await autopilot.run(token, { goal: "Search" });
+    expect(acted).toEqual([{ id: "e3" }]);
+    expect(result.stop).toBe("done");
+  });
+
+  test("keys are offered as operations, and one that commits waits like a click", async () => {
+    const field: FastAction = {
+      id: "e1",
+      kind: "fill",
+      label: "Message",
+      role: "textbox",
+      value: "On my way",
+      node: 7,
+    };
+    const enter: FastAction = {
+      id: "press_enter",
+      kind: "key",
+      key: "Enter",
+      label: "Press Enter in Message",
+    };
+    const chat = page({ actions: [field, enter] });
+    const sends = harness({
+      pages: [chat],
+      answers: [pick("PRESS_ENTER", undefined, "PRESS_ENTER")],
+    });
+    const result = await sends.autopilot.run(token, { goal: "Send it" });
+    expect(result.stop).toBe("commits");
+    expect(sends.asked[0]?.commits?.criteria).toHaveProperty("PRESS_ENTER");
+    expect(sends.acted).toEqual([]);
+
+    const searches = harness({
+      pages: [chat, page({ text: "Results" })],
+      answers: [pick("PRESS_ENTER"), pick("DONE")],
+    });
+    await searches.autopilot.run(token, { goal: "Search" });
+    expect(searches.acted).toEqual([{ id: "press_enter" }]);
   });
 });

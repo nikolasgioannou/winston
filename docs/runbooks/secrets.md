@@ -16,7 +16,7 @@ export AWS_PROFILE=winston-prod
 | `winston/telegram-bot-token`      | @RunWinstonBot's token, from @BotFather                                                                                             | api, agents          |
 | `winston/telegram-login-key`      | SHA-256 of the bot token, in hex: the site checks Telegram sign-in buttons with it, never holding the token. `prod:keys` derives it | web                  |
 | `winston/telegram-webhook-secret` | generated at creation                                                                                                               | api                  |
-| `winston/openrouter-api-key`      | the production OpenRouter key (models, and Jev for the browser's autopilot)                                                         | agents, gateway      |
+| `winston/openrouter-api-key`      | the production OpenRouter key (models, and Jev and its helpers for the browser's `act`)                                             | agents, gateway      |
 | `winston/google-oauth`            | JSON `{"clientId": "…", "clientSecret": "…"}`, the "Winston production" client (docs/runbooks/google-cloud.md)                      | web, gateway, agents |
 | `winston/gateway-internal-secret` | generated at creation                                                                                                               | agents, gateway      |
 | `winston/run-token-secret`        | generated at creation                                                                                                               | agents, gateway      |

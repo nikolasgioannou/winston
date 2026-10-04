@@ -140,9 +140,6 @@ export function createBrowser(deps: BrowserDeps) {
       createdAt: now(),
       lastUsedAt: now(),
       frames: new Map(),
-      refs: new Map(),
-      refByNode: new Map(),
-      nextRef: 1,
       lastNetwork: 0,
       loading: false,
       handledDialogs: [],
@@ -248,9 +245,6 @@ export function createBrowser(deps: BrowserDeps) {
         return;
       }
       case "Page.frameNavigated": {
-        // A new document in a window: its node ids mean nothing any more
-        // (Chrome reuses them across sites), so it gets fresh refs. Numbers
-        // keep counting up, so a ref never names two elements in a window.
         const frame = event.params.frame as
           { id?: string; parentId?: string } | undefined;
         const entry = windowOfSession(event.sessionId);
@@ -258,11 +252,8 @@ export function createBrowser(deps: BrowserDeps) {
         if (entry && frame?.id)
           entry.worlds.delete(`${String(event.sessionId)}:${frame.id}`);
         if (frame?.parentId !== undefined) return;
-        if (entry && entry.sessionId === event.sessionId) {
-          entry.refByNode.clear();
-          entry.refs.clear();
-          entry.worlds.clear();
-        }
+        // A new document in the window: every world went with the old one.
+        if (entry && entry.sessionId === event.sessionId) entry.worlds.clear();
         return;
       }
       case "Target.attachedToTarget": {
@@ -661,21 +652,7 @@ export function createBrowser(deps: BrowserDeps) {
       if (own) entry.lastUsedAt = now();
       const { c, sessionId } = await sessionFor(entry);
       const frames = await readFrames(c, sessionId, entry.frames);
-      const { lines, refs } = formatSnapshot(frames, {
-        full: request.full === true,
-        refs: own,
-        refFor: (target) => {
-          const key = `${target.sessionId}:${String(target.backendNodeId)}`;
-          let ref = entry.refByNode.get(key);
-          if (!ref) {
-            ref = `e${String(entry.nextRef++)}`;
-            entry.refByNode.set(key, ref);
-          }
-          return ref;
-        },
-      });
-      // A peek leaves the owner's refs alone.
-      if (own) entry.refs = refs;
+      const lines = formatSnapshot(frames, { full: request.full === true });
       await refresh(entry);
       const cap = request.full
         ? browserTimings.fullSnapshotLines
@@ -757,8 +734,6 @@ export function createBrowser(deps: BrowserDeps) {
       if (entry?.owner !== from || entry.heldForUser) return null;
       entry.owner = to;
       entry.lastUsedAt = now();
-      // Refs come from the old owner's snapshots: the new one takes its own.
-      entry.refs = new Map();
       locks.transfer(entry.id, to);
       if (current.get(from) === entry.id) pickCurrent(from);
       current.set(to, entry.id);

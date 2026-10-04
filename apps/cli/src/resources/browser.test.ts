@@ -29,59 +29,52 @@ const bodyOf = async (request: Request | undefined) =>
   (await request?.json()) as Record<string, unknown>;
 
 describe("winston browser", () => {
-  test("click sends the ref to winstond and says what changed", async () => {
-    const { out, requests } = await cli(["browser", "click", "e5"], () =>
-      Response.json(
-        action({
-          navigated: true,
-          window: win({ url: "https://example.com/home", title: "Home" }),
-          dialog: { type: "confirm", message: "Leave?", defaultPrompt: "" },
-          settled: false,
-        }),
-      ),
+  test("click-xy sends the point and says what changed", async () => {
+    const { out, requests } = await cli(
+      ["browser", "click-xy", "640", "360"],
+      () =>
+        Response.json(
+          action({
+            did: "Clicked at (640, 360).",
+            navigated: true,
+            window: win({ url: "https://example.com/home", title: "Home" }),
+            dialog: { type: "confirm", message: "Leave?", defaultPrompt: "" },
+            settled: false,
+          }),
+        ),
     );
-    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/v1/browser/click");
-    expect(await bodyOf(requests[0])).toEqual({ ref: "e5" });
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe(
+      "/v1/browser/click-xy",
+    );
+    expect(await bodyOf(requests[0])).toEqual({ x: 640, y: 360 });
     expect(out).toBe(
       [
-        'Clicked e5 (button "Sign in").',
-        'Now at https://example.com/home ("Home"). Refs from your last snapshot are gone; snapshot again.',
+        "Clicked at (640, 360).",
+        'Now at https://example.com/home ("Home").',
         'The page is asking (confirm): "Leave?". Answer with winston browser dialog accept or dismiss.',
-        "The page was still changing when the wait ended; snapshot before your next step.",
+        "The page was still changing when the wait ended; look before your next step.",
       ].join("\n"),
     );
   });
 
-  test("a missing or malformed ref is a usage error, without calling winstond", async () => {
+  test("acting goes through act: the per-element commands and autopilot are gone, without calling winstond", async () => {
     for (const argv of [
-      ["browser", "click"],
-      ["browser", "click", "#submit"],
-      ["browser", "type", "e2"],
+      ["browser", "click", "e5"],
+      ["browser", "type", "e2", "tacos"],
+      ["browser", "select", "e3", "Cyprus"],
+      ["browser", "press", "Enter"],
+      ["browser", "scroll"],
+      ["browser", "autopilot", "search for tacos"],
+      ["browser", "click-xy", "640"],
+      ["browser", "act"],
     ]) {
       const { code, requests } = await cli(argv, () => Response.json({}));
-      expect(code).toBe(1);
+      expect([argv.join(" "), code]).toEqual([argv.join(" "), 1]);
       expect(requests).toHaveLength(0);
     }
   });
 
-  test("type sends the text and its switches; wait tells a ref from text", async () => {
-    const typed = await cli(
-      ["browser", "type", "e2", "tacos near me", "--clear", "--submit"],
-      () => Response.json(action({ did: "Typed into e2." })),
-    );
-    expect(await bodyOf(typed.requests[0])).toEqual({
-      ref: "e2",
-      text: "tacos near me",
-      clear: true,
-      submit: true,
-    });
-    const forRef = await cli(["browser", "wait", "--for", "e12"], () =>
-      Response.json(action({ did: "e12 is visible." })),
-    );
-    expect(await bodyOf(forRef.requests[0])).toEqual({
-      ref: "e12",
-      timeoutMs: 10_000,
-    });
+  test("wait sends the text to wait for", async () => {
     const forText = await cli(
       ["browser", "wait", "--for", "Order confirmed", "--timeout", "30s"],
       () => Response.json(action({ did: "Found." })),
@@ -92,11 +85,11 @@ describe("winston browser", () => {
     });
   });
 
-  test("snapshot prints the page under its window; a peek says it's read-only", async () => {
+  test("snapshot prints the page under its window, for reading; a peek says it's read-only", async () => {
     const own = await cli(["browser", "snapshot"], () =>
       Response.json({
         window: win(),
-        lines: ['button "Sign in" [e1]'],
+        lines: ['button "Sign in"'],
         more: 4,
         readOnly: false,
       }),
@@ -105,8 +98,8 @@ describe("winston browser", () => {
       [
         "win_01k5x9q8f3e2d1c0b9a8z7y6x5 · Example",
         "  https://example.com/",
-        'button "Sign in" [e1]',
-        "… 4 more lines (a long page). Act on what's here, or scroll and snapshot again.",
+        'button "Sign in"',
+        "… 4 more lines (a long page).",
       ].join("\n"),
     );
     const peek = await cli(
@@ -120,7 +113,7 @@ describe("winston browser", () => {
         }),
     );
     expect(peek.out.split("\n")[0]).toBe(
-      "Read-only peek at win_01k5x9q8f3e2d1c0b9a8z7y6x5 (task run_2): no refs, since you can't act in it.",
+      "Read-only peek at win_01k5x9q8f3e2d1c0b9a8z7y6x5 (task run_2).",
     );
   });
 
@@ -134,11 +127,11 @@ describe("winston browser", () => {
     expect(out).toContain("win_01k5x9q8f3e2d1c0b9a8z7y6x5");
   });
 
-  test("autopilot sends the goal and its limits, and prints what it did, why it stopped and how long it took", async () => {
+  test("act sends the instruction, its limits and --commit, and prints what it did, why it stopped and the page it ended on", async () => {
     const { out, requests } = await cli(
       [
         "browser",
-        "autopilot",
+        "act",
         "buy",
         "the",
         "blue",
@@ -147,32 +140,61 @@ describe("winston browser", () => {
         "5",
         "--max-seconds",
         "20",
+        "--commit",
       ],
       () =>
         Response.json({
           actions: [
             'Typed "blue mug" into [1] Search.',
             "Clicked [3] Blue mug.",
+            "Clicked [9] Place order.",
           ],
-          stop: "commits",
+          stop: "committed",
           reason:
-            "The next step would commit something: [9] Place order. Decide it yourself.",
-          window: win({ url: "https://example.com/p", title: "Mug" }),
+            "It took the step that commits. Check the page below to confirm it went through.",
+          window: win({ url: "https://example.com/done", title: "Thanks" }),
           elapsedMs: 2_340,
+          escalated: 1,
+          page: {
+            title: "Thanks",
+            url: "https://example.com/done",
+            text: "Order #1234 placed",
+          },
         }),
+    );
+    // The route keeps autopilot's name, which daemons not yet updated know.
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe(
+      "/v1/browser/autopilot",
     );
     expect(await bodyOf(requests[0])).toEqual({
       goal: "buy the blue mug",
       maxSteps: 5,
       maxSeconds: 20,
+      commit: true,
     });
     expect(out).toBe(
       [
         '- Typed "blue mug" into [1] Search.',
         "- Clicked [3] Blue mug.",
-        "Stopped (commits) after 2.3 s: The next step would commit something: [9] Place order. Decide it yourself.",
-        'Now at https://example.com/p ("Mug"). Snapshot to check.',
+        "- Clicked [9] Place order.",
+        "Stopped (committed) after 2.3 s (1 step decided by the stronger model): It took the step that commits. Check the page below to confirm it went through.",
+        'Now at https://example.com/done ("Thanks"). On screen:',
+        "Order #1234 placed",
       ].join("\n"),
+    );
+
+    // An older daemon answers without the page.
+    const older = await cli(["browser", "act", "open the first result"], () =>
+      Response.json({
+        actions: [],
+        stop: "done",
+        reason: "Jev says the goal is met.",
+        window: win(),
+        elapsedMs: 900,
+      }),
+    );
+    expect(older.out.split("\n").at(-1)).toBe(
+      'Now at https://example.com/ ("Example"). Snapshot to check.',
     );
   });
 

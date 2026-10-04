@@ -1,16 +1,16 @@
 main
   heading "Sign in to Acme" [h1]
-  textbox "Email" [e1] = "ada@example.com"
-  textbox "Password" [e2]
-  checkbox "Remember me" [e3] checked
+  textbox "Email" = "ada@example.com"
+  textbox "Password"
+  checkbox "Remember me" checked
   group "Plan"
-    radio "Free" [e4] checked
-    radio "Pro" [e5]
-  combobox "Country" [e6] = "Cyprus" (options: Canada, Cyprus)
-  textbox "Notes" [e7] = "Hello"
-  button "Sign in" [e8]
-  button "Delete account" [e9] disabled
+    radio "Free" checked
+    radio "Pro"
+  combobox "Country" = "Cyprus" (options: Canada, Cyprus)
+  textbox "Notes" = "Hello"
+  button "Sign in"
+  button "Delete account" disabled
   text "By signing in you agree to our"
-  link "terms" [e10]
-  button "Custom div button" [e11]
-  button "Shadow button" [e12]
+  link "terms"
+  button "Custom div button"
+  button "Shadow button"

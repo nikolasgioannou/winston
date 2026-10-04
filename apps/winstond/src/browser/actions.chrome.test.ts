@@ -34,14 +34,18 @@ const browser = createBrowser({
   },
 });
 
-/** The ref of the first snapshot line matching `pattern`. */
-async function refOf(pattern: RegExp) {
-  const { lines } = await browser.snapshot(token, {});
-  const line = lines.find((l) => pattern.test(l));
-  const ref = line?.match(/\[(e\d+)\]/)?.[1];
-  if (!ref)
-    throw new Error(`no ref for ${String(pattern)} in:\n${lines.join("\n")}`);
-  return ref;
+/** Where an element shows, for a click at a point: scrolled into view first. */
+async function centerOf(selector: string) {
+  const { value } = await browser.eval(token, {
+    code: `const e = document.querySelector(${JSON.stringify(selector)}); e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }`,
+  });
+  return JSON.parse(value) as { x: number; y: number };
+}
+
+/** A click at an element's middle, the way a coordinate click goes. */
+async function clickAt(selector: string) {
+  const { x, y } = await centerOf(selector);
+  return browser.clickXY(token, x, y);
 }
 
 const failure = async (promise: Promise<unknown>) => {
@@ -56,42 +60,10 @@ const failure = async (promise: Promise<unknown>) => {
 
 describe("browser actions in Chrome", () => {
   run(
-    "type, click, select and press do what a person would",
+    "a click at a point waits for the page to settle; wait finds what comes later",
     async () => {
       await browser.open(token, `${pages ?? ""}/actions.html`);
-      await browser.type(token, await refOf(/textbox "Name"/), "Ada", {});
-      await browser.click(token, await refOf(/button "Go"/));
-      await browser.wait(token, { text: "Hello Ada", timeoutMs: 3_000 });
-      await browser.type(token, await refOf(/textbox "Name"/), "Grace", {
-        clear: true,
-      });
-      await browser.press(token, "Tab");
-      await browser.click(token, await refOf(/button "Go"/));
-      await browser.wait(token, { text: "Hello Grace", timeoutMs: 3_000 });
-      const selected = await browser.select(
-        token,
-        await refOf(/combobox "Country"/),
-        "cyprus",
-      );
-      expect(selected.did).toBe(
-        'Selected "cyprus" in ' + (await refOf(/combobox "Country"/)) + ".",
-      );
-      await browser.wait(token, { text: "Country Cyprus", timeoutMs: 3_000 });
-      const missing = await failure(
-        browser.select(token, await refOf(/combobox "Country"/), "Mars"),
-      );
-      expect(missing.hint).toBe("Its options: Canada, Cyprus.");
-    },
-    60_000,
-  );
-
-  run(
-    "an action waits for the page to settle; wait finds what comes later",
-    async () => {
-      const result = await browser.click(
-        token,
-        await refOf(/button "Load later"/),
-      );
+      const result = await clickAt("#later");
       expect(result.settled).toBe(true);
       await browser.wait(token, { text: "Loaded later", timeoutMs: 5_000 });
       const late = await failure(
@@ -103,36 +75,21 @@ describe("browser actions in Chrome", () => {
   );
 
   run(
-    "a covered element isn't clicked; once the banner goes, it is",
-    async () => {
-      const under = await refOf(/button "Under the banner"/);
-      const covered = await failure(browser.click(token, under));
-      expect(covered.message).toBe(
-        `${under} (button "Under the banner") is covered by <div id="banner">.`,
-      );
-      await browser.click(token, await refOf(/button "Accept cookies"/));
-      await browser.click(token, await refOf(/button "Under the banner"/));
-      await browser.wait(token, { text: "Covered clicked", timeoutMs: 3_000 });
-    },
-    30_000,
-  );
-
-  run(
     "a confirm waits for an answer and blocks other actions; an alert is answered",
     async () => {
-      const asked = await browser.click(token, await refOf(/button "Delete"/));
+      const asked = await clickAt("#delete");
       expect(asked.dialog).toMatchObject({
         type: "confirm",
         message: "Delete it?",
       });
-      const blocked = await failure(browser.press(token, "Tab"));
+      const blocked = await failure(browser.clickXY(token, 5, 5));
       expect(blocked.hint).toBe(
         "Answer it with winston browser dialog accept (or dismiss).",
       );
       const answered = await browser.dialog(token, { accept: false });
       expect(answered.did).toBe('Dismissed the confirm: "Delete it?".');
       await browser.wait(token, { text: "Kept", timeoutMs: 3_000 });
-      const alerted = await browser.click(token, await refOf(/button "Alert"/));
+      const alerted = await clickAt("#alert");
       expect(alerted.handledDialogs).toEqual([
         'The page showed an alert: "Hello there" (dismissed).',
       ]);
@@ -141,34 +98,11 @@ describe("browser actions in Chrome", () => {
   );
 
   run(
-    "scrolling reaches an element; a link opening a window joins the run",
+    "a link that opens a window joins the run",
     async () => {
-      await browser.scroll(token, {
-        to: await refOf(/button "At the bottom"/),
-      });
-      await browser.click(token, await refOf(/button "At the bottom"/));
-      await browser.wait(token, { text: "Bottom clicked", timeoutMs: 3_000 });
-      const popup = await browser.click(
-        token,
-        await refOf(/link "Open payment"/),
-      );
+      const popup = await clickAt("a");
       expect(popup.opened).toHaveLength(1);
       expect(popup.opened[0]?.url).toEndWith("/pay.html");
-      await browser.close(token);
-    },
-    30_000,
-  );
-
-  run(
-    "a ref from before the page changed fails and says to snapshot again",
-    async () => {
-      const stale = await refOf(/button "Go"/);
-      await browser.navigate(token, { url: `${pages ?? ""}/form.html` });
-      const refused = await failure(browser.click(token, stale));
-      expect(refused.code).toBe("invalid_request");
-      expect(refused.hint).toBe(
-        "Refs change as the page does; take a new snapshot and use a ref from it.",
-      );
       await browser.close(token);
     },
     30_000,
@@ -241,7 +175,7 @@ describe("settling in Chrome", () => {
           )}`,
         );
         const started = Date.now();
-        const clicked = await browser.click(token, await refOf(/button "Go"/));
+        const clicked = await clickAt("button");
         expect(Date.now() - started).toBeLessThan(3_000);
         expect(clicked.settled).toBe(true);
         await browser.wait(token, { text: "Clicked", timeoutMs: 1_000 });

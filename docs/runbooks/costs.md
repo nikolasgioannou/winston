@@ -45,4 +45,4 @@ When an OpenRouter limit is reached, Winston's model calls fail with a clear err
 
 ## Jev
 
-Jev (the browser's autopilot model) is served by OpenRouter and billed to the same key, so the OpenRouter limit covers it; there's no separate TypeSafe account. Its calls show as `jev` in `bun run prod costs` (fractions of a cent each).
+Jev and its helpers (the models behind the browser's `act`) are served by OpenRouter and billed to the same key, so the OpenRouter limit covers it; there's no separate TypeSafe account. Its calls show as `jev` in `bun run prod costs` (fractions of a cent each).

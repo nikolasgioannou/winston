@@ -1,9 +1,9 @@
 main
   heading "Your cart" [h1]
-  button "Checkout" [e1]
-  link "Keep shopping" [e2]
+  button "Checkout"
+  link "Keep shopping"
 dialog "Confirm your order" (modal)
   heading "Confirm your order" [h2]
-  button "Options" [e3]
-  button "Place order" [e4]
-  button "Close" [e5]
+  button "Options"
+  button "Place order"
+  button "Close"

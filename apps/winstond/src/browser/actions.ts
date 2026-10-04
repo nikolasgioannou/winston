@@ -1,9 +1,11 @@
 /**
- * Acting on a page (docs/design.md §5 Browser, §11): click, type, select,
- * press, scroll, a coordinate fallback, and waiting. Input is trusted
- * (`input.ts`); looking at the page (is this node still there, what's at
- * this point, has the DOM gone quiet) runs in an isolated world, a separate
- * JavaScript context the page can't see, and `Runtime.enable` stays off.
+ * What's left of acting on a page directly (docs/design.md §5 Browser,
+ * §11): a click at a point (the last resort, for what `act` can't operate),
+ * waiting, answering dialogs, screenshots and scripts. Everything else on a
+ * page goes through `act` (`autopilot.ts`). Input is trusted (`input.ts`);
+ * looking at the page (has the DOM gone quiet) runs in an isolated world, a
+ * separate JavaScript context the page can't see, and `Runtime.enable`
+ * stays off.
  *
  * Every action then waits for the page to settle (the network quiet for
  * 500 ms and no DOM changes for 300 ms, at most 5 s, longer while the
@@ -17,16 +19,7 @@ import type {
   BrowserWindowInfo,
 } from "@winston/domain/browser";
 import type { Cdp } from "./cdp.ts";
-import {
-  clickAt,
-  keys,
-  parseKey,
-  press,
-  typeText,
-  wheel,
-  type Point,
-} from "./input.ts";
-import type { RefTarget } from "./snapshot.ts";
+import { clickAt } from "./input.ts";
 import {
   BrowserFailure,
   browserTimings,
@@ -108,201 +101,22 @@ async function unlessDialog<T>(entry: WindowEntry, call: Promise<T>) {
 export const dialogText = (dialog: OpenDialog) =>
   `The page is asking (${dialog.type}): "${dialog.message}"`;
 
-const isMissingNode = (error: unknown) =>
-  error instanceof Error &&
-  /No node|Could not find node|not found/i.test(error.message);
-
 export function createActions(core: ActionCore) {
-  /** The isolated world for a target's frame, made once per document. */
-  async function worldFor(entry: WindowEntry, c: Cdp, target: RefTarget) {
-    let frameId = target.frameId;
-    if (!frameId) {
-      const { frameTree } = await c.send<{
-        frameTree: { frame: { id: string } };
-      }>("Page.getFrameTree", {}, target.sessionId);
-      frameId = frameTree.frame.id;
-    }
-    const key = `${target.sessionId}:${frameId}`;
+  /** The isolated world for a session's main frame, made once per document. */
+  async function worldFor(entry: WindowEntry, c: Cdp, sessionId: string) {
+    const { frameTree } = await c.send<{
+      frameTree: { frame: { id: string } };
+    }>("Page.getFrameTree", {}, sessionId);
+    const key = `${sessionId}:${frameTree.frame.id}`;
     const known = entry.worlds.get(key);
     if (known !== undefined) return known;
     const { executionContextId } = await c.send<{ executionContextId: number }>(
       "Page.createIsolatedWorld",
-      { frameId, worldName: "winston" },
-      target.sessionId,
+      { frameId: frameTree.frame.id, worldName: "winston" },
+      sessionId,
     );
     entry.worlds.set(key, executionContextId);
     return executionContextId;
-  }
-
-  /** The node behind a ref, as an object in the isolated world; fails if it's gone. */
-  async function objectFor(
-    entry: WindowEntry,
-    c: Cdp,
-    ref: string,
-    target: RefTarget,
-  ) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const executionContextId = await worldFor(entry, c, target);
-      try {
-        const { object } = await c.send<{ object: { objectId: string } }>(
-          "DOM.resolveNode",
-          { backendNodeId: target.backendNodeId, executionContextId },
-          target.sessionId,
-        );
-        return object.objectId;
-      } catch (error) {
-        if (isMissingNode(error)) break;
-        // The world went with a document we didn't see go: make a new one.
-        entry.worlds.clear();
-      }
-    }
-    throw new BrowserFailure(
-      "invalid_request",
-      `${ref} (${target.label}) is no longer on the page.`,
-      "The page changed since your snapshot; take a new snapshot.",
-    );
-  }
-
-  async function callOn<T>(
-    c: Cdp,
-    sessionId: string,
-    objectId: string,
-    fn: string,
-    args: unknown[] = [],
-  ): Promise<T> {
-    const { result, exceptionDetails } = await c.send<{
-      result: { value?: unknown };
-      exceptionDetails?: { text: string };
-    }>(
-      "Runtime.callFunctionOn",
-      {
-        objectId,
-        functionDeclaration: fn,
-        arguments: args.map((value) => ({ value })),
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId,
-    );
-    if (exceptionDetails)
-      throw new BrowserFailure("invalid_request", exceptionDetails.text);
-    return result.value as T;
-  }
-
-  function refTarget(entry: WindowEntry, ref: string) {
-    const target = entry.refs.get(ref);
-    if (!target)
-      throw new BrowserFailure(
-        "invalid_request",
-        `There's no ${ref} in your last snapshot of ${entry.id}.`,
-        "Refs change as the page does; take a new snapshot and use a ref from it.",
-      );
-    return target;
-  }
-
-  /** The middle of a node's visible box, in the page's viewport. */
-  async function centerOf(
-    c: Cdp,
-    ref: string,
-    target: RefTarget,
-  ): Promise<Point> {
-    await c
-      .send(
-        "DOM.scrollIntoViewIfNeeded",
-        { backendNodeId: target.backendNodeId },
-        target.sessionId,
-      )
-      .catch(() => undefined);
-    const box = async (sessionId: string, backendNodeId: number) => {
-      const { quads } = await c.send<{ quads: number[][] }>(
-        "DOM.getContentQuads",
-        { backendNodeId },
-        sessionId,
-      );
-      // The largest visible piece (a wrapped link has several).
-      const area = (q: number[]) =>
-        Math.abs(((q[2] ?? 0) - (q[0] ?? 0)) * ((q[5] ?? 0) - (q[1] ?? 0)));
-      return quads
-        .filter((q) => area(q) > 1)
-        .sort((a, b) => area(b) - area(a))[0];
-    };
-    const quad = await box(target.sessionId, target.backendNodeId).catch(
-      () => undefined,
-    );
-    if (!quad)
-      throw new BrowserFailure(
-        "invalid_request",
-        `${ref} (${target.label}) isn't visible, so it can't be clicked.`,
-        "It may be hidden or collapsed; open what contains it, then snapshot again.",
-      );
-    const point = {
-      x:
-        ((quad[0] ?? 0) + (quad[2] ?? 0) + (quad[4] ?? 0) + (quad[6] ?? 0)) / 4,
-      y:
-        ((quad[1] ?? 0) + (quad[3] ?? 0) + (quad[5] ?? 0) + (quad[7] ?? 0)) / 4,
-    };
-    // A cross-site frame's coordinates start at its <iframe>.
-    if (target.offsetFrom) {
-      const frame = await box(
-        target.offsetFrom.sessionId,
-        target.offsetFrom.backendNodeId,
-      ).catch(() => undefined);
-      if (frame) {
-        point.x += Math.min(frame[0] ?? 0, frame[6] ?? 0);
-        point.y += Math.min(frame[1] ?? 0, frame[3] ?? 0);
-      }
-    }
-    return point;
-  }
-
-  /** Fails if something else (a banner, an overlay) is on top at that point. */
-  async function checkNotCovered(
-    c: Cdp,
-    ref: string,
-    target: RefTarget,
-    objectId: string,
-    point: Point,
-  ) {
-    // Inside a frame the point is in the top page's coordinates; the
-    // frame's own document can't hit-test it, so frames go unchecked.
-    if (target.offsetFrom) return;
-    const result = await callOn<{ ok: boolean; by?: string } | { skip: true }>(
-      c,
-      target.sessionId,
-      objectId,
-      `function (x, y) {
-        const view = this.ownerDocument.defaultView;
-        if (!view || view !== view.top) return { skip: true };
-        let hit = this.ownerDocument.elementFromPoint(x, y);
-        // Into shadow roots, to the element actually there.
-        while (hit && hit.shadowRoot) {
-          const inner = hit.shadowRoot.elementFromPoint(x, y);
-          if (!inner || inner === hit) break;
-          hit = inner;
-        }
-        if (!hit) return { skip: true };
-        // An ancestor counts across shadow boundaries: a closed shadow root
-        // stops the hit test at its host, which doesn't "contain" the button.
-        const up = (n) => n.parentNode ?? n.host ?? null;
-        let ancestor = false;
-        for (let n = up(this); n && !ancestor; n = up(n)) ancestor = n === hit;
-        const mine = hit === this || this.contains(hit) || ancestor ||
-          (this.labels ? [...this.labels].some((label) => label.contains(hit)) : false);
-        if (mine) return { ok: true };
-        const named = hit.id ? \` id="\${hit.id}"\`
-          : typeof hit.className === "string" && hit.className ? \` class="\${hit.className.slice(0, 40)}"\`
-          : hit.getAttribute("aria-label") ? \` aria-label="\${hit.getAttribute("aria-label").slice(0, 40)}"\`
-          : (hit.textContent || "").trim() ? \` "\${hit.textContent.trim().slice(0, 40)}"\` : "";
-        return { ok: false, by: \`<\${hit.localName}\${named}>\` };
-      }`,
-      [point.x, point.y],
-    ).catch(() => ({ skip: true as const }));
-    if ("skip" in result || result.ok) return;
-    throw new BrowserFailure(
-      "invalid_request",
-      `${ref} (${target.label}) is covered by ${result.by ?? "something"}.`,
-      "Something is in front of it, like a banner or dialog: snapshot, close it, then try again (or click-xy if you're sure).",
-    );
   }
 
   /** Waits for the page to settle; false if it was still busy at the end. */
@@ -316,11 +130,7 @@ export function createActions(core: ActionCore) {
     // A MutationObserver in the isolated world, which the page can't see.
     let world: number | undefined;
     const watchDom = async () => {
-      world = await worldFor(entry, c, {
-        sessionId,
-        backendNodeId: 0,
-        label: "",
-      });
+      world = await worldFor(entry, c, sessionId);
       await c.send(
         "Runtime.evaluate",
         {
@@ -424,21 +234,6 @@ export function createActions(core: ActionCore) {
       dialog: pendingDialog(entry) ?? null,
       handledDialogs: entry.handledDialogs,
     };
-  }
-
-  /** Clicks a ref's element where a person would: its visible middle. */
-  async function clickRef(
-    entry: WindowEntry,
-    c: Cdp,
-    sessionId: string,
-    ref: string,
-  ) {
-    const target = refTarget(entry, ref);
-    const objectId = await objectFor(entry, c, ref, target);
-    const point = await centerOf(c, ref, target);
-    await checkNotCovered(c, ref, target, objectId, point);
-    await clickAt(c, sessionId, point);
-    return target;
   }
 
   return {
@@ -548,11 +343,7 @@ export function createActions(core: ActionCore) {
           ),
         );
       } else {
-        const world = await worldFor(entry, c, {
-          sessionId,
-          backendNodeId: 0,
-          label: "",
-        });
+        const world = await worldFor(entry, c, sessionId);
         evaluated = await unlessDialog(
           entry,
           c.send<Evaluated>(
@@ -598,182 +389,6 @@ export function createActions(core: ActionCore) {
       };
     },
 
-    click(runToken: string, ref: string, windowId?: string) {
-      let label = "";
-      return act(
-        runToken,
-        windowId,
-        () => `Clicked ${ref} (${label}).`,
-        async (entry, c, s) => {
-          // Before clicking: a dialog the click opens ends the action early.
-          label = refTarget(entry, ref).label;
-          await clickRef(entry, c, s, ref);
-        },
-      );
-    },
-
-    type(
-      runToken: string,
-      ref: string,
-      text: string,
-      options: { clear?: boolean; submit?: boolean },
-      windowId?: string,
-    ) {
-      let label = "";
-      return act(
-        runToken,
-        windowId,
-        () =>
-          `Typed into ${ref} (${label})${options.submit ? " and pressed Enter" : ""}.`,
-        async (entry, c, s) => {
-          const target = refTarget(entry, ref);
-          label = target.label;
-          const objectId = await objectFor(entry, c, ref, target);
-          // Click into it as a person would, then make sure it has focus.
-          await clickRef(entry, c, s, ref);
-          await c
-            .send(
-              "DOM.focus",
-              { backendNodeId: target.backendNodeId },
-              target.sessionId,
-            )
-            .catch(() => undefined);
-          if (options.clear) {
-            const selectAll = parseKey("Control+a");
-            if (selectAll) await press(c, s, selectAll);
-            await press(c, s, keys.Backspace);
-          }
-          await typeText(c, s, text);
-          if (options.submit) await press(c, s, keys.Enter);
-          const value = await callOn<string | null>(
-            c,
-            target.sessionId,
-            objectId,
-            "function () { return 'value' in this ? String(this.value) : (this.isContentEditable ? this.innerText : null); }",
-          ).catch(() => null);
-          if (
-            value !== null &&
-            !options.submit &&
-            !value.includes(text.split("\n")[0] ?? "")
-          )
-            return `Its value is now "${value.slice(0, 80)}" (the page may have changed what was typed).`;
-        },
-      );
-    },
-
-    select(runToken: string, ref: string, option: string, windowId?: string) {
-      return act(
-        runToken,
-        windowId,
-        `Selected "${option}" in ${ref}.`,
-        async (entry, c) => {
-          const target = refTarget(entry, ref);
-          const objectId = await objectFor(entry, c, ref, target);
-          // A native <select> opens a popup input can't reach, so it's set the
-          // way Playwright does: pick the option, then fire input and change.
-          const result = await callOn<{
-            ok: boolean;
-            options?: string[];
-            notSelect?: boolean;
-          }>(
-            c,
-            target.sessionId,
-            objectId,
-            `function (wanted) {
-            if (!(this instanceof HTMLSelectElement)) return { ok: false, notSelect: true };
-            const opts = [...this.options];
-            const norm = (s) => s.trim().toLowerCase();
-            const w = norm(wanted);
-            const found = opts.find((o) => norm(o.label) === w || norm(o.value) === w)
-              ?? opts.find((o) => norm(o.label).includes(w));
-            if (!found) return { ok: false, options: opts.map((o) => o.label.trim()).slice(0, 30) };
-            this.focus();
-            this.value = found.value;
-            this.dispatchEvent(new Event("input", { bubbles: true }));
-            this.dispatchEvent(new Event("change", { bubbles: true }));
-            return { ok: true };
-          }`,
-            [option],
-          );
-          if (result.notSelect)
-            throw new BrowserFailure(
-              "invalid_request",
-              `${ref} (${target.label}) isn't a native select.`,
-              "Click it to open its list, snapshot, then click the option.",
-            );
-          if (!result.ok)
-            throw new BrowserFailure(
-              "invalid_request",
-              `${ref} has no option "${option}".`,
-              `Its options: ${(result.options ?? []).join(", ")}.`,
-            );
-        },
-      );
-    },
-
-    press(runToken: string, key: string, windowId?: string) {
-      const parsed = parseKey(key);
-      if (!parsed)
-        throw new BrowserFailure(
-          "invalid_request",
-          `"${key}" isn't a key winston browser press knows.`,
-          `Use ${Object.keys(keys).join(", ")}, a single character, or a combination like Control+a.`,
-        );
-      return act(
-        runToken,
-        windowId,
-        `Pressed ${key}.`,
-        async (_entry, c, s) => {
-          await press(c, s, parsed);
-        },
-      );
-    },
-
-    scroll(
-      runToken: string,
-      how: { to?: string | undefined; up?: boolean },
-      windowId?: string,
-    ) {
-      return act(
-        runToken,
-        windowId,
-        how.to
-          ? `Scrolled ${how.to} into view.`
-          : `Scrolled ${how.up ? "up" : "down"}.`,
-        async (entry, c, s) => {
-          if (how.to) {
-            const target = refTarget(entry, how.to);
-            await objectFor(entry, c, how.to, target);
-            await centerOf(c, how.to, target);
-            return;
-          }
-          const metrics = async () =>
-            (
-              await c.send<{
-                cssVisualViewport: {
-                  pageY: number;
-                  clientHeight: number;
-                  clientWidth: number;
-                };
-              }>("Page.getLayoutMetrics", {}, s)
-            ).cssVisualViewport;
-          const view = await metrics();
-          await wheel(
-            c,
-            s,
-            { x: view.clientWidth / 2, y: view.clientHeight / 2 },
-            (how.up ? -1 : 1) * Math.round(view.clientHeight * 0.8),
-          );
-          await Bun.sleep(150);
-          const after = await metrics();
-          if (Math.abs(after.pageY - view.pageY) < 1)
-            return how.up
-              ? "Already at the top."
-              : "Already at the bottom (or the page doesn't scroll there).";
-        },
-      );
-    },
-
     clickXY(runToken: string, x: number, y: number, windowId?: string) {
       return act(
         runToken,
@@ -787,11 +402,7 @@ export function createActions(core: ActionCore) {
 
     async wait(
       runToken: string,
-      request: {
-        text?: string | undefined;
-        ref?: string | undefined;
-        timeoutMs: number;
-      },
+      request: { text?: string | undefined; timeoutMs: number },
       windowId?: string,
     ): Promise<BrowserActionResponse> {
       return act(
@@ -799,33 +410,14 @@ export function createActions(core: ActionCore) {
         windowId,
         (entry) => {
           if (request.text) return `"${request.text}" is on the page.`;
-          if (request.ref) return `${request.ref} is visible.`;
           return entry.url ? "The page is settled." : "Done.";
         },
         async (entry, c, s) => {
           const deadline = core.now() + request.timeoutMs;
           const found = async () => {
-            if (request.ref) {
-              const target = refTarget(entry, request.ref);
-              try {
-                await objectFor(entry, c, request.ref, target);
-                const { quads } = await c.send<{ quads: number[][] }>(
-                  "DOM.getContentQuads",
-                  { backendNodeId: target.backendNodeId },
-                  target.sessionId,
-                );
-                return quads.length > 0;
-              } catch {
-                return false;
-              }
-            }
             if (request.text) {
               try {
-                const world = await worldFor(entry, c, {
-                  sessionId: s,
-                  backendNodeId: 0,
-                  label: "",
-                });
+                const world = await worldFor(entry, c, s);
                 const { result } = await c.send<{
                   result: { value?: boolean };
                 }>(
@@ -851,9 +443,7 @@ export function createActions(core: ActionCore) {
                 "unavailable",
                 request.text
                   ? `"${request.text}" didn't appear within ${String(Math.round(request.timeoutMs / 1000))} s.`
-                  : request.ref
-                    ? `${request.ref} didn't become visible within ${String(Math.round(request.timeoutMs / 1000))} s.`
-                    : `The page was still busy after ${String(Math.round(request.timeoutMs / 1000))} s.`,
+                  : `The page was still busy after ${String(Math.round(request.timeoutMs / 1000))} s.`,
                 "Snapshot to see where the page is.",
               );
             await Bun.sleep(250);

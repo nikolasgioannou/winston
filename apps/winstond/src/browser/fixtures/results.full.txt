@@ -1,18 +1,18 @@
 banner
   navigation "Main"
-    link "Home" [e1]
-    link "Deals" [e2]
-  searchbox "Search" [e3] = "tacos"
-  button "Search" [e4]
+    link "Home"
+    link "Deals"
+  searchbox "Search" = "tacos"
+  button "Search"
 main
   heading "Results for "tacos"" [h1]
   text "About 3 results"
   list
-    link "Taqueria El Sol" [e5] [h2]
+    link "Taqueria El Sol" [h2]
     text "Mission St · 4.6 stars · Open now"
-    link "Taco Libre" [e6] [h2]
+    link "Taco Libre" [h2]
     text "Valencia St · 4.3 stars"
-    link "La Cocina" [e7] [h2]
+    link "La Cocina" [h2]
     text "24th St · 4.8 stars · Closes soon"
   navigation "Pagination"
-    link "Next page" [e8]
+    link "Next page"

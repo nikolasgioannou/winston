@@ -58,29 +58,33 @@ export function pageResult(result: BrowserPageResponse) {
 /** A snapshot: the window, then the page, bounded. */
 export function snapshotText(result: BrowserSnapshotResponse) {
   const head = result.readOnly
-    ? `Read-only peek at ${result.window.id} (task ${result.window.owner}): no refs, since you can't act in it.`
+    ? `Read-only peek at ${result.window.id} (task ${result.window.owner}).`
     : record(result.window.id, result.window.title || undefined);
   const lines = [head, `  ${result.window.url}`, ...result.lines];
   if (result.lines.length === 0)
-    lines.push("(Nothing to act on here yet: the page may still be loading.)");
+    lines.push("(Nothing here yet: the page may still be loading.)");
   if (result.more > 0)
-    lines.push(
-      `… ${String(result.more)} more lines (a long page). Act on what's here, or scroll and snapshot again.`,
-    );
+    lines.push(`… ${String(result.more)} more lines (a long page).`);
   return lines.join("\n");
 }
 
-/** What autopilot did, why it stopped, and where the window is now. */
-export function autopilotText(result: BrowserAutopilotResponse) {
+/** What `act` did, why it stopped, and the page it ended on. */
+export function actText(result: BrowserAutopilotResponse) {
   const did =
     result.actions.length > 0
       ? result.actions.map((action) => `- ${action}`)
       : ["Nothing done."];
   const seconds = (result.elapsedMs / 1000).toFixed(1);
+  const escalated = result.escalated
+    ? ` (${String(result.escalated)} step${result.escalated === 1 ? "" : "s"} decided by the stronger model)`
+    : "";
+  const at = `${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}`;
   return [
     ...did,
-    `Stopped (${result.stop}) after ${seconds} s: ${result.reason}`,
-    `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}. Snapshot to check.`,
+    `Stopped (${result.stop}) after ${seconds} s${escalated}: ${result.reason}`,
+    ...(result.page
+      ? [`Now at ${at}. On screen:`, result.page.text || "(no text)"]
+      : [`Now at ${at}. Snapshot to check.`]),
   ].join("\n");
 }
 
@@ -90,7 +94,7 @@ export function actionText(result: BrowserActionResponse) {
   if (result.note) lines.push(result.note);
   if (result.navigated)
     lines.push(
-      `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}. Refs from your last snapshot are gone; snapshot again.`,
+      `Now at ${result.window.url}${result.window.title ? ` ("${result.window.title}")` : ""}.`,
     );
   for (const opened of result.opened)
     lines.push(
@@ -103,7 +107,7 @@ export function actionText(result: BrowserActionResponse) {
     );
   if (!result.settled)
     lines.push(
-      "The page was still changing when the wait ended; snapshot before your next step.",
+      "The page was still changing when the wait ended; look before your next step.",
     );
   return lines.join("\n");
 }
@@ -123,23 +127,13 @@ export function timeoutMs(value: string) {
   return Math.min(Math.max(ms, 100), 120_000);
 }
 
-const refArg = (context: Context, verb: string) => {
-  const [ref] = context.args;
-  if (!ref || !/^e\d+$/.test(ref))
-    throw CliError.usage(
-      `Which element? Pass a ref from winston browser snapshot, like e5.`,
-      `winston browser ${verb} e5`,
-    );
-  return ref;
-};
-
 const post = <T>(context: Context, route: string, body: unknown) =>
   call<T>(context.local.request("POST", `/v1/browser/${route}`, body));
 
 export const browser: Resource = {
   name: "browser",
   description:
-    "Your own Chrome window in the shared profile (logins persist): open, navigate, close",
+    "Your own Chrome window in the shared profile (logins persist): open, read, act, close",
   ids: ["win"],
   verbs: [
     {
@@ -234,128 +228,9 @@ export const browser: Resource = {
       },
     },
     {
-      name: "click",
-      summary: "Click an element by its ref, where a person would",
-      usage: "<ref>",
-      flags: [windowFlag],
-      examples: ["winston browser click e5"],
-      run: async (context) => {
-        const ref = refArg(context, "click");
-        const window = textFlag(context.flags, "window");
-        const result = await post<BrowserActionResponse>(context, "click", {
-          ref,
-          ...(window ? { window } : {}),
-        });
-        return context.flags.json === true ? json(result) : actionText(result);
-      },
-    },
-    {
-      name: "type",
-      summary: "Type text into a field, key by key (text, - or @path)",
-      usage: "<ref> <text>",
-      flags: [
-        { name: "submit", description: "Press Enter afterwards" },
-        { name: "clear", description: "Clear what's in the field first" },
-        windowFlag,
-      ],
-      examples: [
-        'winston browser type e2 "ada@example.com"',
-        'winston browser type e7 "tacos near me" --clear --submit',
-      ],
-      run: async (context) => {
-        const ref = refArg(context, "type");
-        const raw = context.args.slice(1).join(" ");
-        if (!raw)
-          throw CliError.usage(
-            "What should be typed? Pass the text after the ref.",
-            'winston browser type e2 "hello"',
-          );
-        const text = await resolveText(raw, context.text);
-        const window = textFlag(context.flags, "window");
-        const result = await post<BrowserActionResponse>(context, "type", {
-          ref,
-          text,
-          clear: context.flags.clear === true,
-          submit: context.flags.submit === true,
-          ...(window ? { window } : {}),
-        });
-        return context.flags.json === true ? json(result) : actionText(result);
-      },
-    },
-    {
-      name: "select",
-      summary: "Choose an option in a dropdown (a native select) by its label",
-      usage: "<ref> <option>",
-      flags: [windowFlag],
-      examples: ['winston browser select e6 "Cyprus"'],
-      run: async (context) => {
-        const ref = refArg(context, "select");
-        const option = context.args.slice(1).join(" ");
-        if (!option)
-          throw CliError.usage(
-            "Which option? Pass its label after the ref.",
-            'winston browser select e6 "Cyprus"',
-          );
-        const window = textFlag(context.flags, "window");
-        const result = await post<BrowserActionResponse>(context, "select", {
-          ref,
-          option,
-          ...(window ? { window } : {}),
-        });
-        return context.flags.json === true ? json(result) : actionText(result);
-      },
-    },
-    {
-      name: "press",
-      summary:
-        "Press a key in the focused element: Enter, Escape, Tab, arrows, Control+a…",
-      usage: "<key>",
-      flags: [windowFlag],
-      examples: ["winston browser press Enter", "winston browser press Escape"],
-      run: async (context) => {
-        const [key] = context.args;
-        if (!key)
-          throw CliError.usage(
-            "Which key? For example Enter, Escape or Tab.",
-            "winston browser press Enter",
-          );
-        const window = textFlag(context.flags, "window");
-        const result = await post<BrowserActionResponse>(context, "press", {
-          key,
-          ...(window ? { window } : {}),
-        });
-        return context.flags.json === true ? json(result) : actionText(result);
-      },
-    },
-    {
-      name: "scroll",
-      summary: "Scroll the page down or up a screen, or to an element",
-      flags: [
-        { name: "down", description: "A screen down (the default)" },
-        { name: "up", description: "A screen up" },
-        {
-          name: "to",
-          value: "<ref>",
-          description: "Until this element is in view",
-        },
-        windowFlag,
-      ],
-      examples: ["winston browser scroll", "winston browser scroll --to e40"],
-      run: async (context) => {
-        const to = textFlag(context.flags, "to");
-        const window = textFlag(context.flags, "window");
-        const result = await post<BrowserActionResponse>(context, "scroll", {
-          ...(to ? { to } : {}),
-          up: context.flags.up === true,
-          ...(window ? { window } : {}),
-        });
-        return context.flags.json === true ? json(result) : actionText(result);
-      },
-    },
-    {
       name: "click-xy",
       summary:
-        "Click at a point (screenshot pixels): for canvas and anything without a ref",
+        "Click at a point (screenshot pixels): the last resort, for what act can't operate (a canvas, an odd widget)",
       usage: "<x> <y>",
       flags: [windowFlag],
       examples: ["winston browser click-xy 640 360"],
@@ -387,8 +262,8 @@ export const browser: Resource = {
       flags: [
         {
           name: "for",
-          value: "<text|ref>",
-          description: "Text on the page, or a ref that should become visible",
+          value: "<text>",
+          description: "Text that should appear on the page",
         },
         {
           name: "timeout",
@@ -399,7 +274,7 @@ export const browser: Resource = {
       ],
       examples: [
         'winston browser wait --for "Order confirmed"',
-        "winston browser wait --for e12 --timeout 30s",
+        'winston browser wait --for "Results" --timeout 30s',
         "winston browser wait",
       ],
       run: async (context) => {
@@ -407,11 +282,7 @@ export const browser: Resource = {
         const timeout = textFlag(context.flags, "timeout");
         const window = textFlag(context.flags, "window");
         const result = await post<BrowserActionResponse>(context, "wait", {
-          ...(target
-            ? /^e\d+$/.test(target)
-              ? { ref: target }
-              : { text: target }
-            : {}),
+          ...(target ? { text: target } : {}),
           timeoutMs: timeout ? timeoutMs(timeout) : 10_000,
           ...(window ? { window } : {}),
         });
@@ -524,10 +395,10 @@ export const browser: Resource = {
       },
     },
     {
-      name: "autopilot",
+      name: "act",
       summary:
-        "Let a fast model drive the page toward a goal (clicking, typing, choosing); it stops when done, blocked, or before anything that commits",
-      usage: "<goal>",
+        "Do something on the page, a whole flow with every value it needs or one step: a fast model drives and a stronger one takes the steps it's unsure of; it stops when done, blocked, short of a value, or before anything that commits",
+      usage: "<instruction>",
       flags: [
         {
           name: "max-steps",
@@ -539,18 +410,25 @@ export const browser: Resource = {
           value: "<n>",
           description: "Stop after this long (default 30, at most 120)",
         },
+        {
+          name: "commit",
+          description:
+            "The user said yes to what this commits (a submit, send, booking or payment): take that one step, then stop",
+        },
         windowFlag,
       ],
       examples: [
-        'winston browser autopilot "search flights from Zurich to London, one way, on 2026-10-20"',
-        'winston browser autopilot "open the first search result" --max-seconds 15',
+        'winston browser act "search flights from Zurich to London, one way, on 2026-11-20, one adult"',
+        'winston browser act "click New request"',
+        'winston browser act "click Submit request" --commit',
+        "winston browser act \"fill in the request: category Plumbing, description 'the shower drains slowly'; don't submit\" --max-seconds 60",
       ],
       run: async (context) => {
         const goal = context.args.join(" ").trim();
         if (!goal)
           throw CliError.usage(
-            "What's the goal? Say it with every value it needs.",
-            "winston browser autopilot \"search for 'dune' and open the first result\"",
+            "What should it do? Say it with every value it needs.",
+            "winston browser act \"search for 'dune' and open the first result\"",
           );
         const whole = (name: string) => {
           const raw = textFlag(context.flags, name);
@@ -558,13 +436,14 @@ export const browser: Resource = {
           if (value !== undefined && (!Number.isInteger(value) || value < 1))
             throw CliError.usage(
               `--${name} takes a whole number, like 20.`,
-              `winston browser autopilot "open the first result" --${name} 20`,
+              `winston browser act "open the first result" --${name} 20`,
             );
           return value;
         };
         const maxSteps = whole("max-steps");
         const maxSeconds = whole("max-seconds");
         const window = textFlag(context.flags, "window");
+        // The route keeps autopilot's name, which daemons not yet updated know.
         const result = await post<BrowserAutopilotResponse>(
           context,
           "autopilot",
@@ -572,27 +451,27 @@ export const browser: Resource = {
             goal,
             ...(maxSteps ? { maxSteps } : {}),
             ...(maxSeconds ? { maxSeconds } : {}),
+            ...(context.flags.commit === true ? { commit: true } : {}),
             ...(window ? { window } : {}),
           },
         );
-        return context.flags.json === true
-          ? json(result)
-          : autopilotText(result);
+        return context.flags.json === true ? json(result) : actText(result);
       },
     },
     {
       name: "snapshot",
       summary:
-        "What's on the page to act on, each with a ref (e1, e2…) for click, type and select",
+        "What's on the page, to read: its structure and controls (--full adds its text)",
       flags: [
         {
           name: "full",
-          description: "Include the page's text, not just what can be acted on",
+          description:
+            "Include the page's text, not just its structure and controls",
         },
         {
           name: "window",
           value: "<win_id>",
-          description: "Another run's window, to look at (read-only, no refs)",
+          description: "Another run's window, to look at (read-only)",
         },
       ],
       examples: [

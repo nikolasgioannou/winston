@@ -60,7 +60,7 @@ describe("autopilot's page reader in Chrome", () => {
       await browser.open(token, guards);
       let page = await reader.observe(entry());
       await inPage(
-        "document.querySelector('#target').style.transform='translateX(200px)'",
+        "document.querySelector('#target').style.transform='translateX(-25px)'",
       );
       expect(await reader.fresh(entry(), page)).toBe(true);
       await reader.act(entry(), page, labelled(page, "Continue"));
@@ -104,15 +104,18 @@ describe("autopilot's page reader in Chrome", () => {
       );
       page = await reader.observe(entry());
       const target = labelled(page, "Delete account");
-      // A textless overlay doesn't change the meaning, but must block the click.
+      // A textless overlay covers every control: they're no longer offered,
+      // and a click decided before it came is refused.
       await inPage(
         "const cover=document.createElement('div'); cover.style.cssText='position:fixed;inset:0;z-index:9999;background:white'; document.body.append(cover)",
       );
-      expect(await reader.fresh(entry(), page)).toBe(true);
+      expect(await reader.fresh(entry(), page)).toBe(false);
       expect(
         await reader.act(entry(), page, target).catch((e: unknown) => e),
       ).toBeInstanceOf(StalePage);
       expect(await inPage("window.clicks")).toBe(1);
+      const covered = await reader.observe(entry());
+      expect(covered.actions.filter((a) => a.node !== undefined)).toEqual([]);
     },
     30_000,
   );
@@ -236,26 +239,43 @@ describe("autopilot's page reader in Chrome", () => {
     },
     30_000,
   );
+});
 
+describe("keys in Chrome", () => {
   run(
-    "a button inside a closed shadow root isn't taken for covered by its host",
+    "Enter is offered in a focused field and submits it; Escape is offered while a menu is open, and closes it",
     async () => {
       await browser.open(
         token,
-        html(`<ba-link></ba-link><script>
-          customElements.define('ba-link', class extends HTMLElement {
-            constructor() { super(); const root = this.attachShadow({ mode: 'closed' });
-              root.innerHTML = '<button style="width:200px;height:40px">Continue to check-in</button>';
-              root.querySelector('button').addEventListener('click', () => { window.closedClicks = (window.closedClicks||0)+1; }); }
-          });</script>`),
+        html(`<form onsubmit="event.preventDefault(); document.querySelector('#out').textContent='Searched '+document.querySelector('#q').value"><input id="q" aria-label="Search"></form><p id="out"></p>
+<button id="menu" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true'); document.querySelector('#list').hidden=false">Menu</button>
+<ul id="list" role="menu" hidden><li role="menuitem">One</li></ul>
+<script>document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { document.querySelector('#menu').setAttribute('aria-expanded','false'); document.querySelector('#list').hidden = true; } })</script>`),
       );
-      const { lines } = await browser.snapshot(token, {});
-      const ref = lines
-        .find((l) => l.includes("Continue to check-in"))
-        ?.match(/\[(e\d+)\]/)?.[1];
-      if (!ref) throw new Error(`no ref in:\n${lines.join("\n")}`);
-      await browser.click(token, ref);
-      expect(await inPage("window.closedClicks")).toBe(1);
+      let page = await reader.observe(entry());
+      expect(page.actions.some((a) => a.kind === "key")).toBe(false);
+      const field = page.actions.find((a) => a.kind === "fill");
+      if (!field) throw new Error("no field");
+      await reader.act(entry(), page, field, "dune");
+      page = await reader.observe(entry());
+      const enter = page.actions.find((a) => a.id === "press_enter");
+      if (!enter)
+        throw new Error(`no Enter in ${JSON.stringify(page.actions)}`);
+      expect(enter.label).toBe("Press Enter in Search");
+      await reader.act(entry(), page, enter);
+      await Bun.sleep(50);
+      expect(await inPage("document.querySelector('#out').textContent")).toBe(
+        "Searched dune",
+      );
+
+      page = await reader.observe(entry());
+      await reader.act(entry(), page, labelled(page, "Menu"));
+      page = await reader.observe(entry());
+      const escape = page.actions.find((a) => a.id === "press_escape");
+      if (!escape)
+        throw new Error(`no Escape in ${JSON.stringify(page.actions)}`);
+      await reader.act(entry(), page, escape);
+      expect(await inPage("document.querySelector('#list').hidden")).toBe(true);
     },
     30_000,
   );

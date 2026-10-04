@@ -101,6 +101,38 @@ describe("autopilot's page reader", () => {
     ]);
   });
 
+  test("a retried step is checked loosely: its element as it was, whatever the text around it or the address does", async () => {
+    const decided: FastPage = {
+      ...asPage(observed),
+      page_key: ["doc-1", "https://maps.test/@1"],
+      guards: { "1": [1, "button", "Go", null, "Live times 5:41 PM"] },
+    };
+    const go = observed.actions[0] as FastAction;
+    const now = (
+      guard: unknown[],
+      pageKey = ["doc-1", "https://maps.test/@2"],
+    ) =>
+      fakeChrome((expression) =>
+        expression.includes("pageKey()") ? [pageKey, guard] : observed,
+      );
+    const moved = now([1, "button", "Go", null, "Live times 5:42 PM"]);
+    expect(await moved.pages.fresh(moved.entry, decided, go)).toBe(false);
+    expect(
+      await moved.pages.fresh(moved.entry, decided, go, { loose: true }),
+    ).toBe(true);
+    const renamed = now([1, "button", "Delete", null, "Live times 5:42 PM"]);
+    expect(
+      await renamed.pages.fresh(renamed.entry, decided, go, { loose: true }),
+    ).toBe(false);
+    const reloaded = now(
+      [1, "button", "Go", null, "Live times 5:42 PM"],
+      ["doc-2", "https://maps.test/@2"],
+    );
+    expect(
+      await reloaded.pages.fresh(reloaded.entry, decided, go, { loose: true }),
+    ).toBe(false);
+  });
+
   test("an interrupted dropdown change is never retried as if nothing happened", async () => {
     const select: FastAction = {
       id: "e1",

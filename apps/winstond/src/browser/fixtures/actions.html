@@ -4,9 +4,9 @@
 <label>Country <select id=country onchange="document.getElementById('out').textContent='Country '+this.value"><option>Canada</option><option>Cyprus</option></select></label>
 <button id=go onclick="document.getElementById('out').textContent='Hello '+document.getElementById('name').value">Go</button>
 <p id=out></p>
-<button onclick="setTimeout(()=>{const p=document.createElement('p');p.textContent='Loaded later';document.body.append(p)},800)">Load later</button>
-<button onclick="document.getElementById('out').textContent = confirm('Delete it?') ? 'Deleted' : 'Kept'">Delete</button>
-<button onclick="alert('Hello there')">Alert</button>
+<button id=later onclick="setTimeout(()=>{const p=document.createElement('p');p.textContent='Loaded later';document.body.append(p)},800)">Load later</button>
+<button id=delete onclick="document.getElementById('out').textContent = confirm('Delete it?') ? 'Deleted' : 'Kept'">Delete</button>
+<button id=alert onclick="alert('Hello there')">Alert</button>
 <a href="pay.html" target=_blank>Open payment</a>
 <button style="position:fixed;right:20px;bottom:40px;z-index:1" onclick="document.getElementById('out').textContent='Covered clicked'">Under the banner</button>
 <div id=banner style="position:fixed;left:0;right:0;bottom:0;height:120px;background:#eee;z-index:10">Cookie banner <button onclick="this.parentElement.remove()">Accept cookies</button></div>

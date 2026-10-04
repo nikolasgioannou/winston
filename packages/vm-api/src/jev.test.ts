@@ -4,7 +4,9 @@ import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
 import {
   hedged,
   openRouterJev,
+  parsePick,
   parseText,
+  pickFormat,
   siteReliability,
   textRules,
 } from "./jev.ts";
@@ -235,6 +237,137 @@ describe("the Jev proxy", () => {
       JSON.stringify({ text: "x".repeat(2_001) }),
     ])
       expect(() => parseText(content)).toThrow();
+  });
+
+  test("the step picker decides a step on Sonnet, pinned and keeping no data, and logs and charges it", async () => {
+    await inRollback(db, async (tx) => {
+      const openRouter = fakeOpenRouter(() =>
+        Response.json({
+          model: "anthropic/claude-sonnet-5-20260801",
+          choices: [
+            {
+              message: {
+                content:
+                  'Looking at the page, the date isn\'t set yet.\n{"operation": "CLICK", "target": "4", "text": null, "commits": false}',
+              },
+            },
+          ],
+          usage: { cost: 0.0042 },
+        }),
+      );
+      const { user, call } = await setup(tx, openRouter.jev);
+      const body = {
+        domain: "google.com",
+        goal: "Leave at 5pm tomorrow",
+        state: { page: { url: "https://maps.google.com/", text: "Depart at" } },
+        operations: { CLICK: "Click an element.", DONE: "Done." },
+        rules: "Advance the goal with one operation.",
+        reason: "Jev isn't sure (confidence 0.25).",
+      };
+      const response = await call("/v1/jev/pick", { method: "POST", body });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        pick: { operation: "CLICK", target: "4", text: null, commits: false },
+        model: "anthropic/claude-sonnet-5-20260801",
+      });
+      const [sent] = openRouter.sent;
+      expect(sent?.body).toMatchObject({
+        model: "anthropic/claude-sonnet-5",
+        reasoning: { effort: "low" },
+        provider: {
+          order: ["anthropic"],
+          allow_fallbacks: false,
+          data_collection: "deny",
+        },
+      });
+      const messages = (sent?.body as { messages: { content: string }[] })
+        .messages;
+      expect(messages[0]?.content).toStartWith(pickFormat);
+      expect(messages[0]?.content).toContain(body.rules);
+      expect(JSON.parse(messages[1]?.content ?? "{}")).toMatchObject({
+        goal: body.goal,
+        why_you: body.reason,
+        operations: body.operations,
+        page: body.state.page,
+      });
+      const [logged] = await tx.select().from(jevDecisions);
+      expect(logged).toMatchObject({
+        userId: user.id,
+        domain: "google.com",
+        answer: { operation: "CLICK", target: "4" },
+      });
+      expect(logged?.question).toHaveProperty("picker");
+      const [cost] = await tx.select().from(costLedger);
+      expect(cost).toMatchObject({ category: "jev", costUsd: "0.004200" });
+    });
+  });
+
+  test("the step picker's answer is its first JSON object with the right shape; anything else is no answer", () => {
+    expect(
+      parsePick(
+        '{"operation":"TYPE_TEXT","target":"2","text":"dune","commits":false}',
+      ),
+    ).toEqual({
+      operation: "TYPE_TEXT",
+      target: "2",
+      text: "dune",
+      commits: false,
+    });
+    expect(
+      parsePick('```json\n{"operation":"DONE","commits":false}\n```'),
+    ).toEqual({ operation: "DONE", target: null, text: null, commits: false });
+    for (const content of [
+      "Click the date.",
+      '{"operation":"CLICK","target":"4"}',
+      '{"operation":"","commits":false}',
+      '{"operation":"CLICK","target":4,"commits":false}',
+      JSON.stringify({
+        operation: "TYPE_TEXT",
+        text: "x".repeat(2_001),
+        commits: false,
+      }),
+    ])
+      expect(() => parsePick(content)).toThrow();
+  });
+
+  test("a failed step picker is logged and reported as unavailable, and its picks don't count against Jev on a site", async () => {
+    await inRollback(db, async (tx) => {
+      const openRouter = fakeOpenRouter(
+        () => new Response("busy", { status: 529 }),
+      );
+      const { user, call } = await setup(tx, openRouter.jev);
+      const response = await call("/v1/jev/pick", {
+        method: "POST",
+        body: {
+          goal: "Search",
+          state: {},
+          operations: { DONE: "Done." },
+          rules: "",
+          reason: "Jev isn't available.",
+        },
+      });
+      expect(response.status).toBe(503);
+      const [logged] = await tx.select().from(jevDecisions);
+      expect(logged?.error).toBe("The step picker answered 529.");
+      expect(await tx.select().from(costLedger)).toEqual([]);
+
+      for (let i = 0; i < siteReliability.minDecided; i++)
+        await tx.insert(jevDecisions).values({
+          userId: user.id,
+          runId: null,
+          domain: "shop.example",
+          question: { picker: {} },
+          outcome: "overridden",
+          latencyMs: 2_000,
+        });
+      const site = (await (
+        await call("/v1/jev/sites/shop.example")
+      ).json()) as {
+        reliable: boolean;
+        decided: number;
+      };
+      expect(site).toMatchObject({ reliable: true, decided: 0 });
+    });
   });
 
   test("a request that doesn't answer is backed up by a second, and the first good answer wins", async () => {

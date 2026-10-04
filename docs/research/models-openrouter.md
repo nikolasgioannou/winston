@@ -36,6 +36,13 @@
 - **Speed and cost:** about $0.000015 a call. In 25 sequential calls, most answered in 0.6–1.9 s, but 3 never did within 8 s, so the backend sends a second request after 2 s.
 - **Correctness:** it returns `{"text": null}` when the goal doesn't hold the value (a passport number for a check-in).
 
+## The step picker: Sonnet 5 for the steps Jev can't take (checked 2026-10-03)
+
+- **What it's for:** `winston browser act`'s steps that Jev can't be trusted with (docs/design.md §5): blocked, an invalid answer, Jev down, a repeated step that changed nothing, an unsure done. It chooses from the same operations as Jev, answering one JSON object.
+- **The model:** `anthropic/claude-sonnet-5` at `low` effort through chat completions, pinned to Anthropic with `data_collection: "deny"`. No `response_format`: the answer is the first JSON object in what it writes, checked against the page.
+- **Speed and cost:** about 0.9–1.6 s and $0.003–0.005 a call on pages like Google Flights and Maps.
+- **Gotcha:** given the commit question's rules ("choose none if none would"), it answered `"target": "none"` for clicks; with only the operation and target rules, and told to choose another operation when no listed element fits, its answers checked out.
+
 ## OpenRouter + Anthropic: what works and gotchas
 
 - ✅ **Prompt caching:** `cache_control`, 5-min and 1-h TTLs. **Sticky routing lasts only 10 min**, so pin the provider (Anthropic) to keep caches warm for agents that pause.

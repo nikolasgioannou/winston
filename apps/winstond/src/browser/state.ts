@@ -3,7 +3,6 @@
  * timings, and a window's state in winstond's registry.
  */
 import type { ApiErrorCode } from "@winston/domain/api-errors";
-import type { RefTarget } from "./snapshot.ts";
 
 /** A browser command that can't be done, as the CLI should report it. */
 export class BrowserFailure extends Error {
@@ -49,11 +48,6 @@ export interface WindowEntry {
   sessionId?: string;
   /** Cross-site frames' sessions (auto-attached), by target id. */
   frames: Map<string, string>;
-  /** Refs from the owner's last snapshot, valid until the next. */
-  refs: Map<string, RefTarget>;
-  /** Every ref given in this window, by node, so a node keeps its ref. */
-  refByNode: Map<string, string>;
-  nextRef: number;
   /** When a request last started or ended in the page (for settling). */
   lastNetwork: number;
   /**

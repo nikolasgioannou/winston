@@ -65,17 +65,17 @@ export interface BrowserSnapshotRequest {
 
 export interface BrowserSnapshotResponse {
   window: BrowserWindowInfo;
-  /** The page as indented lines; refs look like `[e3]`. */
+  /** The page as indented lines, for reading. */
   lines: string[];
   /** Lines left out to keep the output bounded. */
   more: number;
-  /** A peek at another run's window: no refs, nothing to act on. */
+  /** A peek at another run's window. */
   readOnly: boolean;
 }
 
-/** What an action (click, type, select, press, scroll, wait) answers. */
+/** What a coordinate click, a wait or a dialog answer answers. */
 export interface BrowserActionResponse {
-  /** What was done: `Clicked e5 (button "Sign in").` */
+  /** What was done: `Clicked at (120, 340).` */
   did: string;
   /** Anything worth knowing about how it went. */
   note?: string;
@@ -111,26 +111,27 @@ export interface BrowserEvalResponse {
   more: number;
 }
 
-/** Why autopilot handed back (docs/design.md §5, Jev fast path). */
+/** Why `winston browser act` stopped (docs/design.md §5, Jev fast path). */
 export type AutopilotStop =
-  /** Jev says the goal is visibly met; the agent checks. */
+  /** The instruction is visibly done; the agent checks. */
   | "done"
-  /** Jev says nothing it can do makes progress (a sign-in, a bot check, a frame). */
+  /** Nothing it can do makes progress (a sign-in, a bot check, something it can't operate). */
   | "blocked"
   /** Three actions in a row changed nothing. */
   | "no_progress"
   /** The next step would place an order, pay, send, book or delete. */
   | "commits"
-  /** A field needs a value the goal doesn't give. */
+  /** It took the one committing step `--commit` allowed; the agent checks. */
+  | "committed"
+  /** A field needs a value the instruction doesn't give. */
   | "needs_value"
   | "max_steps"
   | "max_time"
-  /** Jev keeps being overridden on this site. */
-  | "unreliable"
+  /** Neither Jev nor the step picker could decide. */
   | "unavailable"
   | "failed";
 
-/** What `winston browser autopilot` answers. */
+/** What `winston browser act` answers. */
 export interface BrowserAutopilotResponse {
   /** What it did, in order: `Clicked [3] Search.` */
   actions: string[];
@@ -140,6 +141,10 @@ export interface BrowserAutopilotResponse {
   window: BrowserWindowInfo;
   /** How long it ran. */
   elapsedMs: number;
+  /** Steps the step picker decided because Jev wasn't sure (absent from older daemons). */
+  escalated?: number;
+  /** The page it ended on, so checking needs no snapshot (absent from older daemons). */
+  page?: { title: string; url: string; text: string };
 }
 
 /** A window as the signed-in browser page shows it (docs/design.md §5). */

@@ -24,18 +24,8 @@ export function isBrowserPath(path: string) {
   return path.startsWith(browserPathPrefix);
 }
 
-/** Routes that act in a window: the agent's next move after autopilot. */
-const acting = new Set([
-  "navigate",
-  "click",
-  "type",
-  "select",
-  "press",
-  "scroll",
-  "click-xy",
-  "eval",
-  "dialog",
-]);
+/** Routes that act in a window: the agent's next move after `act`. */
+const acting = new Set(["autopilot", "navigate", "click-xy", "eval", "dialog"]);
 
 export function browserRpc(browser: Browser, autopilot?: Autopilot) {
   return async (request: {
@@ -66,7 +56,7 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
         if (!goal)
           throw new BrowserFailure(
             "invalid_request",
-            "What's the sub-goal? Say it in a few words.",
+            "What should it do? Say it in a few words.",
           );
         return reply(
           200,
@@ -78,6 +68,7 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
             ...(typeof body.maxSeconds === "number"
               ? { maxSeconds: body.maxSeconds }
               : {}),
+            commit: body.commit === true,
             window: text("window"),
           }),
         );
@@ -115,7 +106,6 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
       if (request.method === "POST") {
         const token = request.runToken;
         const window = text("window");
-        const ref = text("ref") ?? "";
         switch (route) {
           case "screenshot":
             return reply(
@@ -137,41 +127,6 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
                 window,
               ),
             );
-          case "click":
-            return reply(200, await browser.click(token, ref, window));
-          case "type":
-            return reply(
-              200,
-              await browser.type(
-                token,
-                ref,
-                text("text") ?? "",
-                { clear: body.clear === true, submit: body.submit === true },
-                window,
-              ),
-            );
-          case "select":
-            return reply(
-              200,
-              await browser.select(token, ref, text("option") ?? "", window),
-            );
-          case "press":
-            return reply(
-              200,
-              await browser.press(token, text("key") ?? "", window),
-            );
-          case "scroll":
-            return reply(
-              200,
-              await browser.scroll(
-                token,
-                {
-                  ...(text("to") ? { to: text("to") } : {}),
-                  up: body.up === true,
-                },
-                window,
-              ),
-            );
           case "click-xy":
             return reply(
               200,
@@ -189,7 +144,6 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
                 token,
                 {
                   ...(text("text") ? { text: text("text") } : {}),
-                  ...(text("ref") ? { ref: text("ref") } : {}),
                   timeoutMs:
                     typeof body.timeoutMs === "number"
                       ? body.timeoutMs
