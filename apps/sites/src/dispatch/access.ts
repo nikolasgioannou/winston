@@ -189,3 +189,30 @@ export async function enter(
     setCookie(url, names.nonce, "", 0),
   ]);
 }
+
+/**
+ * A site's response, minus cookies it mustn't set: any with a `Domain`
+ * (which would reach `runwinston.app` and every other site under it, until
+ * the domain is on the Public Suffix List), and any named like the dispatch
+ * Worker's own, so a site can't replace its visitor's pass or share key.
+ */
+export function withSafeCookies(response: Response) {
+  const cookies = response.headers.getSetCookie();
+  const safe = cookies.filter((cookie) => {
+    const [pair = "", ...attributes] = cookie.split(";");
+    const name = pair.split("=")[0]?.trim() ?? "";
+    return (
+      !/^(__Host-)?winston_site_/.test(name) &&
+      !attributes.some((attribute) => /^\s*domain\s*=/i.test(attribute))
+    );
+  });
+  if (safe.length === cookies.length) return response;
+  const headers = new Headers(response.headers);
+  headers.delete("set-cookie");
+  for (const cookie of safe) headers.append("set-cookie", cookie);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}

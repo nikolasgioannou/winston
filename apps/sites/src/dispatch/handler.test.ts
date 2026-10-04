@@ -260,6 +260,30 @@ describe("dispatch", () => {
     });
   });
 
+  test("a site's cookies for the whole domain, or named like ours, are dropped", async () => {
+    const response = await get(
+      "https://blog.runwinston.app/",
+      { cookie: ownerCookie() },
+      {
+        site: () => {
+          const headers = new Headers();
+          headers.append("set-cookie", "theme=dark; Path=/; HttpOnly");
+          headers.append("set-cookie", "tracker=1; Domain=runwinston.app");
+          headers.append(
+            "set-cookie",
+            "__Host-winston_site_pass=forged; Path=/",
+          );
+          headers.append("set-cookie", "winston_site_share=x");
+          return Promise.resolve(new Response("the site", { headers }));
+        },
+      },
+    );
+    expect(response.headers.getSetCookie()).toEqual([
+      "theme=dark; Path=/; HttpOnly",
+    ]);
+    expect(await response.text()).toBe("the site");
+  });
+
   test("a site that throws (over its limits, or a bug) gets the failed page", async () => {
     const response = await get(
       "https://blog.runwinston.app/",

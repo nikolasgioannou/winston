@@ -11,6 +11,7 @@ import {
   passFor,
   signInFor,
   withoutAccessCookies,
+  withSafeCookies,
   type AccessDeps,
 } from "./access.ts";
 import { failedPage, noSitePage, pausedPage, privatePage } from "./pages.ts";
@@ -61,13 +62,12 @@ export async function dispatch(
     if (pass.sub !== route.ownerId) return privatePage();
   }
   try {
-    return (
-      (await deps.site(
-        route.script,
-        withoutAccessCookies(request),
-        siteLimits,
-      )) ?? noSitePage()
+    const response = await deps.site(
+      route.script,
+      withoutAccessCookies(request),
+      siteLimits,
     );
+    return response ? withSafeCookies(response) : noSitePage();
   } catch {
     return failedPage();
   }
