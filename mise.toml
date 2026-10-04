@@ -2,7 +2,8 @@
 bun = "1.4.2"
 node = "24.21.0"
 cloudflared = "2026.9.3"
-# The ticket tracker (.moth/), from its GitHub releases.
+# The ticket tracker (.moth/), from its GitHub releases. After changing the
+# version, run `moth skill install --agent claude` to update its skill to match.
 "github:nikolasgioannou/moth" = "0.6.0"
 # Builds the VM image (image/).
 packer = "1.16.1"

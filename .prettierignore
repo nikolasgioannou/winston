@@ -1,5 +1,6 @@
 # Moth writes and owns these files; formatting them would fight its output.
 .moth/
+.claude/skills/moth-method/
 # drizzle-kit writes these; reformatting them would fight its output.
 packages/db/migrations/
 # TanStack Router generates the route tree.

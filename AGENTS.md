@@ -4,11 +4,11 @@ These are the rules for how work happens in this repo. What Winston is and how i
 
 ## Tickets
 
-- Work comes from Moth tickets in `.moth/`: the ones the founder asks for, or else the unblocked ones (`moth list --status todo --unblocked`), highest priority first. Tickets labeled `spec` need a spec with the founder before any building.
-- Before starting a ticket, re-check it against the current docs and the tickets it depends on. If things have moved on, update the ticket first.
+- Work comes from Moth tickets in `.moth/`: the ones the founder asks for, or else the next unblocked one. How to write, find, claim and close tickets is the `moth-method` skill; what follows is specific to this repo.
+- Tickets labeled `spec` need a spec with the founder before any building.
+- Re-check a ticket against the current docs as well as the code before starting it.
 - If a ticket's instructions conflict with the principles below, raise it with the user instead of following the ticket as written.
-- Claim a ticket by moving it to `in-progress`. Move it to `done` in the same commit as the work.
-- One ticket per commit.
+- Group new milestones and features as parent tickets. Existing tickets are grouped by milestone labels (`m0`, `m1`, …) and stay that way.
 - When asked to use a worktree (to work alongside other sessions), follow the `worktree` skill.
 
 ## Principles

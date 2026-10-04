@@ -609,7 +609,7 @@ Prompt and model changes are measured on real failures, not guessed (ea2e27; `ap
   - **Prettier** for formatting, with its default style (config in `prettier.config.ts`). Plugins:
     - **`prettier-plugin-packagejson`** sorts `package.json` keys (via `sort-package-json`) whenever Prettier formats one, so there's no separate sort step.
     - **`prettier-plugin-tailwindcss`** sorts Tailwind classes (and removes duplicates and stray whitespace). It must be the last plugin. Class order comes from `tailwindStylesheet: apps/web/src/styles/app.css` (Tailwind v4 has no JS config), and `cn`, `clsx` and `cva` calls are sorted too.
-  - Prettier formats everything it can parse, including `docs/`, but **ignores `.moth/`** and the generated `routeTree.gen.ts`, since Moth writes those files and reformatting them would fight its output. `bun.lock` is skipped automatically (no parser). Scripts: `format`, `format:check`.
+  - Prettier formats everything it can parse, including `docs/`, but **ignores `.moth/`**, the Moth Method skill and the generated `routeTree.gen.ts`, since Moth writes those files and reformatting them would fight its output. `bun.lock` is skipped automatically (no parser). Scripts: `format`, `format:check`.
   - **ESLint 10** (flat config, `eslint.config.ts`, loaded through `jiti`), chosen over Biome for its plugin ecosystem. It lints with the correctness rules, and Prettier owns formatting:
     - `@eslint/js` recommended + `typescript-eslint`'s **`strictTypeChecked`** and **`stylisticTypeChecked`** presets (they include `no-explicit-any`, `no-floating-promises` and `no-misused-promises`). Plus **`switch-exhaustiveness-check`**, which isn't in the presets, so a switch over a union must handle every member. `typescript-eslint` is pinned exactly, because its strict preset can change outside major versions.
     - **Typed linting via `projectService`:** each file uses its nearest `tsconfig.json`. A root `tsconfig.json` covers repo-root TypeScript files (tool configs), so they're type-checked and linted too. The root `typecheck` script runs `tsc` for them before each package's check.
@@ -653,8 +653,10 @@ Prompt and model changes are measured on real failures, not guessed (ea2e27; `ap
 ## 8c. Work tracking
 
 - Tickets are tracked in the repo with **Moth** (`.moth/`, schema-checked Markdown, statuses and `blocked_by` dependencies). Moth is pinned in `mise.toml` (installed from its GitHub releases), so `setup.sh` and CI get the same version. `moth check` runs as part of `bun run check`. Retitle tickets with `moth edit --title`, which also renames the file, as `moth check` requires.
+- **How agents work tickets** is the Moth Method, Moth's own skill, installed at `.claude/skills/moth-method/` by `moth skill install --agent claude` and re-installed whenever Moth's pin changes so it matches that version. AGENTS.md adds only the rules specific to this repo.
 - **One ticket per commit.** The whole product is broken into tickets before building starts, detailed enough to execute fairly autonomously.
-- **No standard ticket template.** Each ticket is written on its own, with whatever that piece of work needs.
+- **Grouping:** milestones up to M9 are labels (`m0`…`m9`). New milestones and features are parent tickets, with their work filed under them; the labeled tickets aren't migrated.
+- **No fixed ticket template.** Each ticket says what is wrong or missing, what to build and how to tell it's done, in whatever shape that piece of work needs.
 - **Order:** v1 was built in the order of a hand-written plan (`docs/plan.md`, retired on 2026-10-03 once every ticket was done; it's in git history). Since then, work comes from the founder's requests and Moth's unblocked tickets by priority (AGENTS.md); `spec`-labeled tickets are fleshed out with the founder first.
 
 ## 8d. Build order
