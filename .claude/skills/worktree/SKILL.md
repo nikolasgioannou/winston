@@ -32,4 +32,4 @@ Only when the user says so. When the work is committed and checked, tell the use
 
 1. Stop this worktree's `bun dev` if it's running, so another checkout can run its own.
 2. Run `bun run worktree remove` to drop its databases and its local VM.
-3. Leave and delete the worktree with `ExitWorktree` (`action: "remove"`). If the session didn't create it (a desktop worktree session), tell the user it can be archived instead.
+3. Leave and delete the worktree with `ExitWorktree` (`action: "remove"`). If the session didn't create it (a desktop worktree session), tell the user it can be archived instead. If a worktree goes without step 2, the next `bun run worktree setup` (or `bun run worktree prune`) cleans up after it.

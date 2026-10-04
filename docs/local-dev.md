@@ -67,6 +67,14 @@ Before removing a worktree, drop its databases and local VM:
 bun run worktree remove
 ```
 
+A worktree that goes without that (archiving a desktop worktree session deletes its folder, for example) leaves them behind until the next `bun run worktree setup`, which first removes the databases and VMs of every worktree whose folder is gone. To do that right away, from any checkout:
+
+```bash
+bun run worktree prune
+```
+
+It only touches databases that setup marked as a worktree's, and never one whose folder still exists. A session whose folder the desktop app's storage cleanup removed comes back to a fresh database when it runs setup again.
+
 ## Webhook tunnel
 
 Telegram and Google push webhooks to a public HTTPS URL. Locally, a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) gives the local `api` that URL. `bun dev` runs it, and `bun run tunnel` runs it on its own. The maintainer's tunnel is `winston-dev`, serving `https://dev.runwinston.com` (`runwinston.com` is on Cloudflare DNS).
