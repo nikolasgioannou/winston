@@ -72,6 +72,8 @@ export interface BrowserDeps {
   now?: () => number;
   /** Saves a file in Winston's home, as winston (screenshots). */
   saveFile?: (path: string, bytes: Uint8Array) => Promise<void>;
+  /** The real path of a file in Winston's home, for uploads; throws a `FileOpError` otherwise. */
+  findFile?: (path: string) => Promise<string>;
 }
 
 export type Browser = ReturnType<typeof createBrowser>;
@@ -200,19 +202,44 @@ export function createBrowser(deps: BrowserDeps) {
             .catch(() => undefined);
           return;
         }
+        if (!event.sessionId) return;
         entry.dialog = {
           type,
           message,
           defaultPrompt: text(event.params.defaultPrompt),
+          sessionId: event.sessionId,
         };
         return;
       }
       case "Page.javascriptDialogClosed":
         entry.dialog = undefined;
         return;
+      case "Page.fileChooserOpened": {
+        // Only a file input can be given files; other pickers stay unanswered.
+        const node = event.params.backendNodeId;
+        if (typeof node !== "number" || !event.sessionId) return;
+        entry.fileChooser = {
+          multiple: event.params.mode === "selectMultiple",
+          backendNodeId: node,
+          sessionId: event.sessionId,
+        };
+        return;
+      }
       default:
         return;
     }
+  }
+
+  /**
+   * Chrome's own file picker never opens: it would wait on the VM's screen,
+   * where nothing can answer it. The page's request is recorded instead.
+   */
+  async function interceptFilePickers(c: Cdp, sessionId: string) {
+    await c.send(
+      "Page.setInterceptFileChooserDialog",
+      { enabled: true },
+      sessionId,
+    );
   }
 
   function onEvent(event: CdpEvent) {
@@ -252,17 +279,30 @@ export function createBrowser(deps: BrowserDeps) {
         if (entry && frame?.id)
           entry.worlds.delete(`${String(event.sessionId)}:${frame.id}`);
         if (frame?.parentId !== undefined) return;
-        // A new document in the window: every world went with the old one.
-        if (entry && entry.sessionId === event.sessionId) entry.worlds.clear();
+        // A new document in the window: every world, and any file picker,
+        // went with the old one.
+        if (entry && entry.sessionId === event.sessionId) {
+          entry.worlds.clear();
+          entry.fileChooser = undefined;
+        }
         return;
       }
       case "Target.attachedToTarget": {
         // A cross-site frame in one of our pages (auto-attach).
         const child = event.params.targetInfo as TargetInfo | undefined;
         if (child?.type !== "iframe") return;
+        const frameSession = String(event.params.sessionId);
         for (const entry of windows.values())
-          if (entry.sessionId === event.sessionId)
-            entry.frames.set(child.targetId, String(event.params.sessionId));
+          if (entry.sessionId === event.sessionId) {
+            entry.frames.set(child.targetId, frameSession);
+            // An upload control inside the frame asks through its own session.
+            const c = cdp;
+            if (c)
+              void c
+                .send("Page.enable", {}, frameSession)
+                .then(() => interceptFilePickers(c, frameSession))
+                .catch(() => undefined);
+          }
         return;
       }
       case "Target.detachedFromTarget": {
@@ -386,6 +426,7 @@ export function createBrowser(deps: BrowserDeps) {
     );
     entry.sessionId = sessionId;
     await c.send("Page.enable", {}, sessionId);
+    await interceptFilePickers(c, sessionId);
     await c.send(
       "Page.setLifecycleEventsEnabled",
       { enabled: true },
@@ -571,6 +612,9 @@ export function createBrowser(deps: BrowserDeps) {
     saveFile:
       deps.saveFile ??
       (() => Promise.reject(new Error("This browser can't save files."))),
+    findFile:
+      deps.findFile ??
+      (() => Promise.reject(new Error("This browser can't upload files."))),
   });
 
   return {

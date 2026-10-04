@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Upload</title>
+  </head>
+  <body>
+    <input type="file" id="one" />
+    <input type="file" id="many" multiple />
+    <!-- Like Google Drive: a script makes a file input and clicks it. -->
+    <button id="drive">File upload</button>
+    <p id="got"></p>
+    <iframe id="frame" width="300" height="80"></iframe>
+    <script>
+      const got = document.getElementById("got");
+      const show = (from, files) =>
+        (got.textContent = `${from}: ${[...files].map((f) => f.name).join(", ")}`);
+      for (const id of ["one", "many"])
+        document
+          .getElementById(id)
+          .addEventListener("change", (e) => show(id, e.target.files));
+      document.getElementById("drive").onclick = () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.multiple = true;
+        input.onchange = () => show("drive", input.files);
+        input.click();
+      };
+      addEventListener("message", (e) => (got.textContent = `frame: ${e.data}`));
+      // Cross-site: the same pages under this host's other name.
+      const other = new URL("upload-frame.html", location.href);
+      other.hostname =
+        location.hostname === "localhost" ? "127.0.0.1" : "localhost";
+      document.getElementById("frame").src = other.href;
+    </script>
+  </body>
+</html>

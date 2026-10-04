@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { locateFile } from "../file-ops.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import {
   BrowserFailure,
@@ -19,7 +23,15 @@ function fakeChrome() {
   const closed = new Promise<void>((resolve) => (crash = resolve));
   const urls = new Map<string, string>();
   const history = new Map<string, string[]>();
-  const sent: { method: string; params: Record<string, unknown> }[] = [];
+  const sent: {
+    method: string;
+    params: Record<string, unknown>;
+    sessionId?: string;
+  }[] = [];
+  /** A file input a click opens the picker of, as Chrome reports it. */
+  const picker: {
+    next?: { mode: string; backendNodeId: number; sessionId: string };
+  } = {};
   let targets = 0;
   let loads = 0;
   const emit = (event: CdpEvent) => {
@@ -33,7 +45,7 @@ function fakeChrome() {
       params: Record<string, unknown> = {},
       sessionId?: string,
     ) {
-      sent.push({ method, params });
+      sent.push({ method, params, ...(sessionId ? { sessionId } : {}) });
       const answer = (value: unknown) => Promise.resolve(value as T);
       switch (method) {
         case "Target.createTarget": {
@@ -91,6 +103,9 @@ function fakeChrome() {
           return answer({ executionContextId: 7 });
         case "Runtime.evaluate": {
           const code = String(params.expression);
+          // Settling: the page's DOM has been quiet for a second.
+          if (code.includes("__winstonDom.last"))
+            return answer({ result: { type: "number", value: 1_000 } });
           if (code.includes("boom"))
             return answer({
               result: { type: "object" },
@@ -126,6 +141,21 @@ function fakeChrome() {
               },
             ],
           });
+        case "Input.dispatchMouseEvent":
+          if (params.type === "mouseReleased" && picker.next) {
+            const { sessionId: from, ...asked } = picker.next;
+            emit({
+              method: "Page.fileChooserOpened",
+              params: { frameId: "f", ...asked },
+              sessionId: from,
+            });
+          }
+          return answer({});
+        case "DOM.setFileInputFiles":
+          // The input went with the page.
+          if (params.backendNodeId === 404)
+            return Promise.reject(new Error("No node found"));
+          return answer({});
         case "Page.getNavigationHistory":
           // Every window here is on its first page.
           return answer({ currentIndex: 0, entries: [{ id: 0 }] });
@@ -154,13 +184,14 @@ function fakeChrome() {
     cdp,
     emit,
     sent,
+    picker,
     crash: () => {
       crash();
     },
   };
 }
 
-function setup(now?: () => number) {
+function setup(now?: () => number, home = "/home/winston") {
   let chrome = fakeChrome();
   const saved: { path: string; bytes: string }[] = [];
   const browser = createBrowser({
@@ -169,6 +200,7 @@ function setup(now?: () => number) {
       saved.push({ path, bytes: Buffer.from(bytes).toString() });
       return Promise.resolve();
     },
+    findFile: async (path) => (await locateFile(home, path)).path,
     ...(now ? { now } : {}),
   });
   return {
@@ -583,5 +615,164 @@ describe("agent windows", () => {
     await browser.open(token("run_g", "front"), "https://shop.test");
     browser.hold("front");
     expect(browser.transfer("front", "task_2")).toBeNull();
+  });
+});
+
+describe("file uploads", () => {
+  /** A home folder with two files and a folder in it, as its real path. */
+  async function home() {
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "winston-home-")));
+    await mkdir(join(dir, "inbox"));
+    await Bun.write(join(dir, "inbox/lease.pdf"), "%PDF");
+    await Bun.write(join(dir, "inbox/id.png"), "png");
+    return dir;
+  }
+
+  /** A cross-site frame in the run's first window, auto-attached. */
+  const frameAttached = {
+    method: "Target.attachedToTarget",
+    params: {
+      sessionId: "s-frame",
+      targetInfo: { targetId: "fr1", type: "iframe" },
+    },
+    sessionId: "s-t1",
+  };
+
+  test("a click that opens a file picker says so, and upload gives it files from home, checked first", async () => {
+    const dir = await home();
+    const { browser, chrome } = setup(undefined, dir);
+    const run = token("run_u");
+    await browser.open(run, "forms.test");
+    // Chrome's own picker never opens: every window intercepts it.
+    expect(
+      chrome().sent.find(
+        (s) => s.method === "Page.setInterceptFileChooserDialog",
+      ),
+    ).toEqual({
+      method: "Page.setInterceptFileChooserDialog",
+      params: { enabled: true },
+      sessionId: "s-t1",
+    });
+    chrome().picker.next = {
+      mode: "selectSingle",
+      backendNodeId: 5,
+      sessionId: "s-t1",
+    };
+    const clicked = await browser.clickXY(run, 10, 10);
+    expect(clicked.fileChooser).toEqual({ multiple: false });
+
+    const lease = join(dir, "inbox/lease.pdf");
+    expect(
+      (await failure(browser.upload(run, [lease, join(dir, "inbox/id.png")])))
+        .message,
+    ).toBe("The page's upload takes one file; you gave 2.");
+    expect(
+      (await failure(browser.upload(run, [join(dir, "inbox/nope.pdf")])))
+        .message,
+    ).toBe(`Nothing uploaded: there's no file at ${dir}/inbox/nope.pdf.`);
+    expect(
+      (await failure(browser.upload(run, [join(dir, "inbox")]))).message,
+    ).toBe(`Nothing uploaded: ${dir}/inbox isn't a file.`);
+    expect(
+      chrome().sent.some((s) => s.method === "DOM.setFileInputFiles"),
+    ).toBe(false);
+
+    const given = await browser.upload(run, [lease]);
+    expect(given.did).toBe("Gave the page 1 file: lease.pdf.");
+    expect(given.fileChooser).toBeNull();
+    expect(
+      chrome().sent.find((s) => s.method === "DOM.setFileInputFiles"),
+    ).toEqual({
+      method: "DOM.setFileInputFiles",
+      params: { files: [lease], backendNodeId: 5 },
+      sessionId: "s-t1",
+    });
+    const again = await failure(browser.upload(run, [lease]));
+    expect(again.message).toBe(
+      "The page isn't asking for files in your window.",
+    );
+  });
+
+  test("a picker in a cross-site frame is answered there; a new page or a gone input drops it", async () => {
+    const dir = await home();
+    const { browser, chrome } = setup(undefined, dir);
+    const run = token("run_f");
+    await browser.open(run, "forms.test");
+    chrome().emit(frameAttached);
+    await Bun.sleep(1);
+    // Frames report pickers only with their Page domain on.
+    expect(
+      chrome()
+        .sent.filter((s) => s.sessionId === "s-frame")
+        .map((s) => s.method),
+    ).toEqual(["Page.enable", "Page.setInterceptFileChooserDialog"]);
+
+    chrome().picker.next = {
+      mode: "selectMultiple",
+      backendNodeId: 9,
+      sessionId: "s-frame",
+    };
+    expect((await browser.clickXY(run, 10, 10)).fileChooser).toEqual({
+      multiple: true,
+    });
+    const files = [join(dir, "inbox/lease.pdf"), join(dir, "inbox/id.png")];
+    // Every problem at once, and nothing given.
+    expect(
+      (await failure(browser.upload(run, [...files, "/etc/hosts", "~/x"])))
+        .message,
+    ).toBe(
+      `Nothing uploaded: /etc/hosts is outside your home folder; there's no file at ~/x.`,
+    );
+    expect((await browser.upload(run, files)).did).toBe(
+      "Gave the page 2 files: lease.pdf, id.png.",
+    );
+    expect(
+      chrome().sent.find((s) => s.method === "DOM.setFileInputFiles")
+        ?.sessionId,
+    ).toBe("s-frame");
+
+    // A new document drops the picker the old one opened.
+    await browser.clickXY(run, 10, 10);
+    chrome().emit({
+      method: "Page.frameNavigated",
+      params: { frame: { id: "t1" } },
+      sessionId: "s-t1",
+    });
+    expect(
+      (await failure(browser.upload(run, files.slice(0, 1)))).message,
+    ).toBe("The page isn't asking for files in your window.");
+
+    // The input went away before the files came.
+    chrome().picker.next = {
+      mode: "selectSingle",
+      backendNodeId: 404,
+      sessionId: "s-t1",
+    };
+    await browser.clickXY(run, 10, 10);
+    const gone = await failure(browser.upload(run, files.slice(0, 1)));
+    expect(gone.message).toBe(
+      "The page's upload field is gone; the page changed since it asked.",
+    );
+  });
+
+  test("a confirm inside a frame is answered in the frame's session", async () => {
+    const { browser, chrome } = setup();
+    const run = token("run_d");
+    await browser.open(run, "forms.test");
+    chrome().emit(frameAttached);
+    chrome().emit({
+      method: "Page.javascriptDialogOpening",
+      params: { type: "confirm", message: "Remove it?" },
+      sessionId: "s-frame",
+    });
+    const answered = await browser.dialog(run, { accept: true });
+    expect(answered.did).toBe('Accepted the confirm: "Remove it?".');
+    expect(
+      chrome().sent.find((s) => s.method === "Page.handleJavaScriptDialog"),
+    ).toEqual({
+      method: "Page.handleJavaScriptDialog",
+      params: { accept: true },
+      sessionId: "s-frame",
+    });
   });
 });

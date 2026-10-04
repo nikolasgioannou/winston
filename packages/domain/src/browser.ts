@@ -73,7 +73,7 @@ export interface BrowserSnapshotResponse {
   readOnly: boolean;
 }
 
-/** What a coordinate click, a wait or a dialog answer answers. */
+/** What a coordinate click, a wait, a dialog answer or an upload answers. */
 export interface BrowserActionResponse {
   /** What was done: `Clicked at (120, 340).` */
   did: string;
@@ -90,6 +90,8 @@ export interface BrowserActionResponse {
   dialog: { type: string; message: string; defaultPrompt: string } | null;
   /** Alerts and leave-page prompts answered automatically. */
   handledDialogs: string[];
+  /** The page asked for files (browser upload); absent from older daemons. */
+  fileChooser?: { multiple: boolean } | null;
 }
 
 export interface BrowserScreenshotResponse {

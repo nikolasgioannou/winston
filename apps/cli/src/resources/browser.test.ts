@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { cli } from "../testing.ts";
-import { timeoutMs } from "./browser.ts";
+import { timeoutMs, uploadPath } from "./browser.ts";
 
 const win = (overrides: Record<string, unknown> = {}) => ({
   id: "win_01k5x9q8f3e2d1c0b9a8z7y6x5",
@@ -196,6 +198,58 @@ describe("winston browser", () => {
     expect(older.out.split("\n").at(-1)).toBe(
       'Now at https://example.com/ ("Example"). Snapshot to check.',
     );
+  });
+
+  test("a click that opens a file picker says to upload; upload sends absolute paths and says what it gave", async () => {
+    const asked = await cli(["browser", "click-xy", "10", "10"], () =>
+      Response.json(
+        action({
+          did: "Clicked at (10, 10).",
+          fileChooser: { multiple: true },
+        }),
+      ),
+    );
+    expect(asked.out.split("\n").at(-1)).toBe(
+      "The page is asking for files (it takes several): give them with winston browser upload <path…>.",
+    );
+
+    const { out, requests } = await cli(
+      [
+        "browser",
+        "upload",
+        "~/inbox/lease.pdf",
+        "/home/winston/id.png",
+        "a.txt",
+      ],
+      () =>
+        Response.json(
+          action({ did: "Gave the page 3 files: lease.pdf, id.png, a.txt." }),
+        ),
+    );
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/v1/browser/upload");
+    expect(await bodyOf(requests[0])).toEqual({
+      paths: [
+        join(homedir(), "inbox/lease.pdf"),
+        "/home/winston/id.png",
+        join(process.cwd(), "a.txt"),
+      ],
+    });
+    expect(out).toBe("Gave the page 3 files: lease.pdf, id.png, a.txt.");
+
+    const none = await cli(["browser", "upload"], () => Response.json({}));
+    expect(none.code).toBe(1);
+    expect(none.err).toContain("Which files? Pass their paths.");
+    expect(none.requests).toHaveLength(0);
+  });
+
+  test("upload paths: ~/ is home, anything else is from the working directory", () => {
+    expect(uploadPath("~/inbox/a.pdf", "/tmp", "/home/winston")).toBe(
+      "/home/winston/inbox/a.pdf",
+    );
+    expect(uploadPath("../b.pdf", "/home/winston/inbox", "/h")).toBe(
+      "/home/winston/b.pdf",
+    );
+    expect(uploadPath("/abs/c.pdf", "/tmp", "/h")).toBe("/abs/c.pdf");
   });
 
   test("timeouts read as seconds, minutes or milliseconds, capped at 2 minutes", () => {

@@ -243,6 +243,7 @@ function harness({
   });
   return {
     autopilot,
+    entry,
     acted,
     asked,
     picked,
@@ -474,6 +475,49 @@ describe("autopilot's loop", () => {
       "Jev wants to repeat a step that changed nothing.",
     );
     expect(result.stop).toBe("no_progress");
+  });
+
+  test("a click that makes the page ask for files stops the run there, for upload", async () => {
+    const drive = page({
+      actions: [
+        {
+          id: "e5",
+          kind: "click",
+          label: "File upload",
+          role: "menuitem",
+          value: "",
+          node: 30,
+        },
+      ],
+    });
+    const run = harness({
+      pages: [drive],
+      answers: [pick("CLICK", "1"), pick("CLICK", "1")],
+      act: () => {
+        // Chrome reports the picker the click opened (windows.ts).
+        run.entry.fileChooser = {
+          multiple: true,
+          backendNodeId: 16,
+          sessionId: "s1",
+        };
+        return Promise.resolve();
+      },
+    });
+    // One left from before doesn't count: only what this run opens does.
+    run.entry.fileChooser = {
+      multiple: false,
+      backendNodeId: 4,
+      sessionId: "s1",
+    };
+    const result = await run.autopilot.run(token, {
+      goal: "Click New, then File upload, and upload the receipts",
+    });
+    expect(run.acted).toEqual([{ id: "e5" }]);
+    expect(run.asked).toHaveLength(1);
+    expect(result.stop).toBe("blocked");
+    expect(result.reason).toBe(
+      "The page is asking for files (it takes several): give them with winston browser upload <path…>.",
+    );
   });
 
   test("an action is recorded even when the page won't settle afterwards", async () => {

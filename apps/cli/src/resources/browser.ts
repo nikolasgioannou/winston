@@ -9,6 +9,8 @@ import type {
   BrowserWindowInfo,
   BrowserWindowsResponse,
 } from "@winston/domain/browser";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { call } from "../client.ts";
 import type { Context, Resource } from "../commands.ts";
 import { CliError } from "../errors.ts";
@@ -105,11 +107,24 @@ export function actionText(result: BrowserActionResponse) {
     lines.push(
       `The page is asking (${result.dialog.type}): "${result.dialog.message}". Answer with winston browser dialog accept or dismiss${result.dialog.type === "prompt" ? " (accept takes the text to enter)" : ""}.`,
     );
+  if (result.fileChooser)
+    lines.push(
+      result.fileChooser.multiple
+        ? "The page is asking for files (it takes several): give them with winston browser upload <path…>."
+        : "The page is asking for a file: give it with winston browser upload <path>.",
+    );
   if (!result.settled)
     lines.push(
       "The page was still changing when the wait ended; look before your next step.",
     );
   return lines.join("\n");
+}
+
+/** A path as the agent typed it, made absolute: `~/` is home, the rest is from here. */
+export function uploadPath(path: string, cwd: string, home: string) {
+  if (path === "~") return home;
+  if (path.startsWith("~/")) return resolve(home, path.slice(2));
+  return resolve(cwd, path);
 }
 
 /** A duration for --timeout: `10s`, `2m`, `500ms`; at most 2 minutes. */
@@ -310,6 +325,33 @@ export const browser: Resource = {
         const result = await post<BrowserActionResponse>(context, "dialog", {
           accept: answer === "accept",
           ...(rest.length > 0 ? { text: rest.join(" ") } : {}),
+          ...(window ? { window } : {}),
+        });
+        return context.flags.json === true ? json(result) : actionText(result);
+      },
+    },
+    {
+      name: "upload",
+      summary:
+        "Give the page the files it asked for (act stops when the page asks), from your computer",
+      usage: "<path…>",
+      flags: [windowFlag],
+      examples: [
+        "winston browser upload ~/inbox/2026-10-04/lease.pdf",
+        "winston browser upload ~/downloads/receipts/*.pdf",
+      ],
+      run: async (context) => {
+        if (context.args.length === 0)
+          throw CliError.usage(
+            "Which files? Pass their paths.",
+            "winston browser upload ~/inbox/2026-10-04/lease.pdf",
+          );
+        const paths = context.args.map((path) =>
+          uploadPath(path, process.cwd(), homedir()),
+        );
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserActionResponse>(context, "upload", {
+          paths,
           ...(window ? { window } : {}),
         });
         return context.flags.json === true ? json(result) : actionText(result);

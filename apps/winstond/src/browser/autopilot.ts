@@ -38,6 +38,7 @@ import {
   type FastPage,
   type FastPageReader,
 } from "./fast-page.ts";
+import { fileChooserText, pendingFiles } from "./actions.ts";
 import { lockDomain } from "./locks.ts";
 import { BrowserFailure, type WindowEntry } from "./state.ts";
 
@@ -606,6 +607,8 @@ export function createAutopilot(deps: AutopilotDeps) {
       const owner = core.caller(runToken);
       const entry = core.windowFor(owner, request.window, "own");
       const started = core.now();
+      // A file picker counts only if this run opened it.
+      entry.fileChooser = undefined;
       const clamp = (
         value: number | undefined,
         fallback: number,
@@ -729,6 +732,9 @@ export function createAutopilot(deps: AutopilotDeps) {
         if (decisions.length >= maxSteps * 2)
           return done("max_steps", "Stopped: too many decisions.");
         if (entry.dialog) return asking();
+        // The page's file picker never shows; the agent gives it the files.
+        const chooser = pendingFiles(entry);
+        if (chooser) return done("blocked", fileChooserText(chooser.multiple));
         const siteNow = lockDomain(entry.url);
         // A step whose page moved on before input is tried once more on the
         // fresh read if its element is still there as it was: a page that

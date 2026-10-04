@@ -162,7 +162,12 @@ describe("autopilot's page reader", () => {
         if (method === "Page.createIsolatedWorld")
           return Promise.resolve({ executionContextId: 7 });
         // Chrome holds the reply while a confirm is open.
-        entry.dialog = { type: "confirm", message: "Sure?", defaultPrompt: "" };
+        entry.dialog = {
+          type: "confirm",
+          message: "Sure?",
+          defaultPrompt: "",
+          sessionId: "s1",
+        };
         return new Promise(() => undefined);
       },
     } as unknown as Cdp;

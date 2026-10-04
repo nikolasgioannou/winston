@@ -35,6 +35,18 @@ export interface OpenDialog {
   defaultPrompt: string;
 }
 
+/**
+ * A file picker the page opened (a click on an upload control). Chrome's
+ * own picker is never shown: the files come from `winston browser upload`.
+ */
+export interface OpenFileChooser {
+  /** Whether the input takes several files. */
+  multiple: boolean;
+  /** The `<input type="file">` and the session (page or frame) it's in. */
+  backendNodeId: number;
+  sessionId: string;
+}
+
 export interface WindowEntry {
   id: string;
   targetId: string;
@@ -55,8 +67,10 @@ export interface WindowEntry {
    * count: a widget whose frame never finishes would hold every action.
    */
   loading: boolean;
-  /** A confirm or prompt waiting for an answer. */
-  dialog?: OpenDialog | undefined;
+  /** A confirm or prompt waiting for an answer, and the session (page or frame) it's in. */
+  dialog?: (OpenDialog & { sessionId: string }) | undefined;
+  /** A file picker waiting for files (`upload`). */
+  fileChooser?: OpenFileChooser | undefined;
   /** Alerts and leave-page prompts accepted since the last action. */
   handledDialogs: string[];
   /** Isolated worlds for looking at the page, by session and frame. */

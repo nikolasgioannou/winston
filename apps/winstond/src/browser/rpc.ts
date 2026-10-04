@@ -25,7 +25,14 @@ export function isBrowserPath(path: string) {
 }
 
 /** Routes that act in a window: the agent's next move after `act`. */
-const acting = new Set(["autopilot", "navigate", "click-xy", "eval", "dialog"]);
+const acting = new Set([
+  "autopilot",
+  "navigate",
+  "click-xy",
+  "eval",
+  "dialog",
+  "upload",
+]);
 
 export function browserRpc(browser: Browser, autopilot?: Autopilot) {
   return async (request: {
@@ -161,6 +168,19 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
                   accept: body.accept === true,
                   ...(text("text") !== undefined ? { text: text("text") } : {}),
                 },
+                window,
+              ),
+            );
+          case "upload":
+            return reply(
+              200,
+              await browser.upload(
+                token,
+                Array.isArray(body.paths)
+                  ? body.paths.filter(
+                      (path): path is string => typeof path === "string",
+                    )
+                  : [],
                 window,
               ),
             );

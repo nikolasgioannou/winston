@@ -16,6 +16,7 @@ import { watchChrome } from "./chrome-watch.ts";
 import { serveCliSocket } from "./cli-socket.ts";
 import { createDaemon } from "./daemon.ts";
 import { createExecutor } from "./exec.ts";
+import { locateFile } from "./file-ops.ts";
 import { helperFiles, runFileHelper } from "./files.ts";
 import { tokenStore } from "./token-store.ts";
 import { signingPublicKey } from "./signing-key.ts";
@@ -77,6 +78,9 @@ const browser = createBrowser({
       },
       new Blob([bytes]).stream(),
     ),
+  // Uploads are confined to the home folder; Chrome, running as winston,
+  // reads them itself.
+  findFile: async (path) => (await locateFile("/home/winston", path)).path,
 });
 // The live view of a handed-over tab streams through the daemon's connection.
 const screencasts = createScreencasts({

@@ -60,8 +60,8 @@ async function real(root: string, path: string) {
   return resolved;
 }
 
-/** Opens a file inside `root` for reading. */
-export async function openForRead(root: string, path: string) {
+/** A file inside `root`: its real path, after symlinks, and its size. */
+export async function locateFile(root: string, path: string) {
   const target = lexical(root, path);
   let resolved: string;
   try {
@@ -74,9 +74,15 @@ export async function openForRead(root: string, path: string) {
   const info = await stat(resolved);
   if (!info.isFile())
     throw new FileOpError("not_a_file", `${path} isn't a file`);
-  if (info.size > maxFileBytes)
+  return { path: resolved, size: info.size };
+}
+
+/** Opens a file inside `root` for reading. */
+export async function openForRead(root: string, path: string) {
+  const found = await locateFile(root, path);
+  if (found.size > maxFileBytes)
     throw new FileOpError("too_large", `${path} is over 50 MB`);
-  return { size: info.size, stream: Bun.file(resolved).stream() };
+  return { size: found.size, stream: Bun.file(found.path).stream() };
 }
 
 /**

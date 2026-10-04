@@ -11,6 +11,9 @@ import { BrowserFailure, createBrowser } from "./windows.ts";
 const devtools = process.env.WINSTON_TEST_CHROME;
 const pages = process.env.WINSTON_TEST_PAGES;
 const run = devtools && pages ? test : test.skip;
+/** Where that Chrome sees fixtures/ on its own disk, for uploads (default: here). */
+const fixtures =
+  process.env.WINSTON_TEST_FIXTURES ?? `${import.meta.dir}/fixtures`;
 
 const token = `${Buffer.from(JSON.stringify({ runId: "run_test", userId: "usr_1", kind: "background", exp: Date.now() + 3_600_000 })).toString("base64url")}.sig`;
 
@@ -20,6 +23,8 @@ const browser = createBrowser({
     saved.set(path, bytes);
     return Promise.resolve();
   },
+  // Paths are the test's own, already where Chrome can read them.
+  findFile: (path) => Promise.resolve(path),
   connect: async () => {
     const version = (await (
       await fetch(`${devtools ?? ""}/json/version`)
@@ -147,6 +152,52 @@ describe("browser actions in Chrome", () => {
       expect(thrown.message).toBe(
         "The script threw: ReferenceError: nope is not defined",
       );
+      await browser.close(token);
+    },
+    30_000,
+  );
+
+  run(
+    "a page asking for files never opens Chrome's picker; upload fills the input it asked with, in a frame too",
+    async () => {
+      await browser.open(token, `${pages ?? ""}/upload.html`);
+      // Any file Chrome can read will do: the fixture itself.
+      const file = `${fixtures}/upload.html`;
+      const frameFile = `${fixtures}/upload-frame.html`;
+
+      expect((await clickAt("#one")).fileChooser).toEqual({ multiple: false });
+      expect((await browser.upload(token, [file])).fileChooser).toBeNull();
+      await browser.wait(token, { text: "one: upload.html", timeoutMs: 3_000 });
+
+      expect((await clickAt("#many")).fileChooser).toEqual({ multiple: true });
+      await browser.upload(token, [file, frameFile]);
+      await browser.wait(token, {
+        text: "many: upload.html, upload-frame.html",
+        timeoutMs: 3_000,
+      });
+
+      // A script's own input, clicked from the button's handler.
+      expect((await clickAt("#drive")).fileChooser).toEqual({ multiple: true });
+      await browser.upload(token, [frameFile]);
+      await browser.wait(token, {
+        text: "drive: upload-frame.html",
+        timeoutMs: 3_000,
+      });
+
+      // The cross-site frame's input sits at its top left.
+      await browser.wait(token, { timeoutMs: 5_000 });
+      const { value } = await browser.eval(token, {
+        code: `const r = document.getElementById("frame").getBoundingClientRect(); return { x: r.x + 20, y: r.y + 10 }`,
+      });
+      const at = JSON.parse(value) as { x: number; y: number };
+      expect((await browser.clickXY(token, at.x, at.y)).fileChooser).toEqual({
+        multiple: false,
+      });
+      await browser.upload(token, [file]);
+      await browser.wait(token, {
+        text: "frame: upload.html",
+        timeoutMs: 3_000,
+      });
       await browser.close(token);
     },
     30_000,

@@ -1,7 +1,8 @@
 /**
  * What's left of acting on a page directly (docs/design.md §5 Browser,
  * §11): a click at a point (the last resort, for what `act` can't operate),
- * waiting, answering dialogs, screenshots and scripts. Everything else on a
+ * waiting, answering dialogs, giving the page files, screenshots and
+ * scripts. Everything else on a
  * page goes through `act` (`autopilot.ts`). Input is trusted (`input.ts`);
  * looking at the page (has the DOM gone quiet) runs in an isolated world, a
  * separate JavaScript context the page can't see, and `Runtime.enable`
@@ -18,6 +19,8 @@ import type {
   BrowserScreenshotResponse,
   BrowserWindowInfo,
 } from "@winston/domain/browser";
+import { basename } from "node:path";
+import { FileOpError } from "../file-ops.ts";
 import type { Cdp } from "./cdp.ts";
 import { clickAt } from "./input.ts";
 import {
@@ -45,6 +48,8 @@ export interface ActionCore {
   lock: (owner: string, entry: WindowEntry) => unknown;
   /** Saves a file in Winston's home (as winston), at a path relative to it. */
   saveFile: (path: string, bytes: Uint8Array) => Promise<void>;
+  /** The real path of a file in Winston's home; throws a `FileOpError` otherwise. */
+  findFile: (path: string) => Promise<string>;
 }
 
 export const captureLimits = {
@@ -79,6 +84,27 @@ export const settleTimings = {
 /** The dialog a window is waiting on now (it can change while an action runs). */
 const pendingDialog = (entry: WindowEntry) => entry.dialog;
 
+/** The file picker a window is waiting on now (an action can open one). */
+export const pendingFiles = (entry: WindowEntry) => entry.fileChooser;
+
+/** A waiting file picker as the agent sees it. */
+const filesAsked = (entry: WindowEntry) => {
+  const chooser = pendingFiles(entry);
+  return chooser ? { multiple: chooser.multiple } : null;
+};
+
+/** A waiting dialog as the agent sees it. */
+const shownDialog = (entry: WindowEntry) => {
+  const open = pendingDialog(entry);
+  return open
+    ? {
+        type: open.type,
+        message: open.message,
+        defaultPrompt: open.defaultPrompt,
+      }
+    : null;
+};
+
 /**
  * A page call that gives up when a dialog opens: Chrome holds script and
  * input until the dialog is answered. Resolves undefined in that case.
@@ -100,6 +126,29 @@ async function unlessDialog<T>(entry: WindowEntry, call: Promise<T>) {
 /** How a dialog waiting for an answer reads. */
 export const dialogText = (dialog: OpenDialog) =>
   `The page is asking (${dialog.type}): "${dialog.message}"`;
+
+/** How a page asking for files reads. */
+export const fileChooserText = (multiple: boolean) =>
+  multiple
+    ? "The page is asking for files (it takes several): give them with winston browser upload <path…>."
+    : "The page is asking for a file: give it with winston browser upload <path>.";
+
+/** Why a path can't be uploaded, in a few words. */
+function fileProblem(path: string, error: unknown) {
+  if (!(error instanceof FileOpError)) return `${path} couldn't be read`;
+  switch (error.code) {
+    case "not_found":
+      return `there's no file at ${path}`;
+    case "not_a_file":
+      return `${path} isn't a file`;
+    case "outside_home":
+      return `${path} is outside your home folder`;
+    case "permission_denied":
+    case "too_large":
+    case "mismatch":
+      return `${path} isn't accessible`;
+  }
+}
 
 export function createActions(core: ActionCore) {
   /** The isolated world for a session's main frame, made once per document. */
@@ -202,6 +251,8 @@ export function createActions(core: ActionCore) {
     const started = core.now();
     entry.lastUsedAt = started;
     entry.handledDialogs = [];
+    // A file picker counts only if this action opened it.
+    entry.fileChooser = undefined;
     const before = entry.url;
     // A dialog the action opens (a click on "Delete" asking to confirm)
     // holds Chrome's reply to the input until it's answered, so the action
@@ -231,8 +282,9 @@ export function createActions(core: ActionCore) {
       settled,
       opened: opened.map((other) => core.info(other, owner)),
       // Read again: a dialog may have opened while the action ran.
-      dialog: pendingDialog(entry) ?? null,
+      dialog: shownDialog(entry),
       handledDialogs: entry.handledDialogs,
+      fileChooser: alive ? filesAsked(entry) : null,
     };
   }
 
@@ -465,14 +517,15 @@ export function createActions(core: ActionCore) {
           "invalid_request",
           "No dialog is waiting in your window.",
         );
-      const { c, sessionId } = await core.sessionFor(entry);
+      const { c } = await core.sessionFor(entry);
+      // Asked in the session it came from: the page's, or a frame's.
       await c.send(
         "Page.handleJavaScriptDialog",
         {
           accept: answer.accept,
           ...(answer.text !== undefined ? { promptText: answer.text } : {}),
         },
-        sessionId,
+        open.sessionId,
       );
       entry.dialog = undefined;
       return act(
@@ -480,6 +533,75 @@ export function createActions(core: ActionCore) {
         windowId,
         `${answer.accept ? "Accepted" : "Dismissed"} the ${open.type}: "${open.message}".`,
         () => Promise.resolve(),
+      );
+    },
+
+    /**
+     * Gives the file picker the page opened files from Winston's home. Every
+     * path is checked first; if any fails, nothing is given.
+     */
+    async upload(
+      runToken: string,
+      paths: string[],
+      windowId?: string,
+    ): Promise<BrowserActionResponse> {
+      const owner = core.caller(runToken);
+      const entry = core.windowFor(owner, windowId, "own");
+      const chooser = entry.fileChooser;
+      if (!chooser)
+        throw new BrowserFailure(
+          "invalid_request",
+          "The page isn't asking for files in your window.",
+          "Click its upload control with winston browser act first: it stops when the page asks for files.",
+        );
+      if (paths.length === 0)
+        throw new BrowserFailure(
+          "invalid_request",
+          "Which files? Pass their paths.",
+        );
+      if (!chooser.multiple && paths.length > 1)
+        throw new BrowserFailure(
+          "invalid_request",
+          `The page's upload takes one file; you gave ${String(paths.length)}.`,
+          "Upload one; for the next, act on the upload control again.",
+        );
+      const found = await Promise.all(
+        paths.map((path) =>
+          core.findFile(path).then(
+            (real) => ({ real }),
+            (error: unknown) => ({ problem: fileProblem(path, error) }),
+          ),
+        ),
+      );
+      const problems = found.flatMap((f) =>
+        "problem" in f ? [f.problem] : [],
+      );
+      if (problems.length > 0)
+        throw new BrowserFailure(
+          "invalid_request",
+          `Nothing uploaded: ${problems.join("; ")}.`,
+        );
+      const files = found.flatMap((f) => ("real" in f ? [f.real] : []));
+      const names = files.map((file) => basename(file)).join(", ");
+      return act(
+        runToken,
+        windowId,
+        `Gave the page ${files.length === 1 ? "1 file" : `${String(files.length)} files`}: ${names}.`,
+        async (_entry, c) => {
+          try {
+            await c.send(
+              "DOM.setFileInputFiles",
+              { files, backendNodeId: chooser.backendNodeId },
+              chooser.sessionId,
+            );
+          } catch {
+            throw new BrowserFailure(
+              "not_found",
+              "The page's upload field is gone; the page changed since it asked.",
+              "Click its upload control with winston browser act again, then upload.",
+            );
+          }
+        },
       );
     },
   };
