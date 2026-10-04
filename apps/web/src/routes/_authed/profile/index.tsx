@@ -38,7 +38,7 @@ function Profile() {
           () => ({ ok: false, problem: "not_found" }) as const,
         );
         // Home greets by first name; keep the loaders current.
-        if (result.ok) await router.invalidate();
+        if (result.ok) await router.invalidate({ sync: true });
         else toast.error("Couldn't save your name. Please try again.");
         return result;
       }}

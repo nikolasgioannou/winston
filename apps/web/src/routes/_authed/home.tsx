@@ -23,7 +23,7 @@ function Home() {
     setRetrying(true);
     try {
       await retryComputer();
-      await router.invalidate();
+      await router.invalidate({ sync: true });
     } catch {
       toast.error("Couldn't retry. Please try again.");
     } finally {

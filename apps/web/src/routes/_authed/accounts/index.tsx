@@ -64,7 +64,7 @@ function Accounts() {
     const connection = connections.find((c) => c.id === connectionId);
     void disconnectAccount({ data: { id: connectionId } })
       .then(async () => {
-        await router.invalidate();
+        await router.invalidate({ sync: true });
         toast.success(
           `Disconnected ${connection?.externalEmail ?? "the account"}`,
         );
