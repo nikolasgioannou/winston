@@ -32,7 +32,7 @@ import {
 } from "./attachments.ts";
 import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
 import { closeTaskBrowserHandler } from "./background/close-browser.ts";
-import { createBlobStore } from "./blobs.ts";
+import { createBlobStore } from "@winston/blobs";
 import { receiveMailHandler } from "./mailbox/receive.ts";
 import {
   createInboundMailStore,

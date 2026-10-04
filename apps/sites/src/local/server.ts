@@ -28,6 +28,7 @@ export interface LocalSitesOptions {
 
 interface Meta {
   modules: string[];
+  databaseId?: string;
 }
 
 /** A site's Worker in Miniflare's options (its own types read as `any` here). */
@@ -41,7 +42,20 @@ interface SiteWorker {
     binding: string;
     routerConfig: { has_user_worker: boolean };
   };
+  d1Databases?: Record<string, string>;
 }
+
+/** D1 as the admin API uses it (Miniflare types it with Workers types). */
+interface D1 {
+  prepare(sql: string): { bind(...params: unknown[]): unknown };
+  batch(
+    statements: unknown[],
+  ): Promise<{ results: Record<string, unknown>[] }[]>;
+}
+
+/** The databases worker's binding for a database. */
+const bindingOf = (databaseId: string) =>
+  `DB_${databaseId.replaceAll("-", "")}`;
 
 /**
  * The local stand-in for Workers for Platforms (docs/design.md §9a): every
@@ -53,6 +67,13 @@ interface SiteWorker {
 export async function startLocalSites(options: LocalSitesOptions) {
   const scriptsDir = join(options.dir, "scripts");
   await mkdir(scriptsDir, { recursive: true });
+  // Every database created, so the admin API can reach each one through a
+  // binding on its own small worker, whether or not a site binds it yet.
+  const databasesFile = join(options.dir, "databases.json");
+  const databases = async () =>
+    (await Bun.file(databasesFile)
+      .json()
+      .catch(() => [])) as string[];
 
   const built = await Bun.build({
     entrypoints: [join(import.meta.dir, "../dispatch/local.ts")],
@@ -92,6 +113,7 @@ export async function startLocalSites(options: LocalSitesOptions) {
                 },
               }
             : {}),
+          ...(meta.databaseId ? { d1Databases: { DB: meta.databaseId } } : {}),
         };
       }),
     );
@@ -104,6 +126,8 @@ export async function startLocalSites(options: LocalSitesOptions) {
       port: options.port,
       defaultPersistRoot: join(options.dir, "state"),
       kvPersist: true,
+      d1Persist: true,
+      // The first worker gets every request: the dispatch Worker.
       workers: [
         {
           name: "dispatch",
@@ -118,6 +142,16 @@ export async function startLocalSites(options: LocalSitesOptions) {
           kvNamespaces: { ROUTES: "routes" },
           serviceBindings: Object.fromEntries(
             sites.map(({ name }) => [name, name]),
+          ),
+        },
+        {
+          name: "databases",
+          compatibilityDate,
+          modules: true,
+          script:
+            "export default { fetch: () => new Response(null, { status: 404 }) };",
+          d1Databases: Object.fromEntries(
+            (await databases()).map((id) => [bindingOf(id), id]),
           ),
         },
         ...sites,
@@ -157,7 +191,10 @@ export async function startLocalSites(options: LocalSitesOptions) {
     const upload = body as {
       modules: { name: string; content: string }[];
       assets: { path: string; base64: string }[];
+      databaseId?: string;
     };
+    if (upload.databaseId && !(await databases()).includes(upload.databaseId))
+      throw new Error(`no database ${upload.databaseId}`);
     const root = join(scriptsDir, script);
     // Every path is checked before anything is written.
     const files = [
@@ -177,9 +214,36 @@ export async function startLocalSites(options: LocalSitesOptions) {
     }
     await writeFile(
       join(root, "meta.json"),
-      JSON.stringify({ modules: upload.modules.map(({ name }) => name) }),
+      JSON.stringify({
+        modules: upload.modules.map(({ name }) => name),
+        ...(upload.databaseId ? { databaseId: upload.databaseId } : {}),
+      } satisfies Meta),
     );
     await rebuild();
+  };
+
+  const createDatabase = async () => {
+    const id = crypto.randomUUID();
+    await writeFile(
+      databasesFile,
+      JSON.stringify([...(await databases()), id]),
+    );
+    await rebuild();
+    return id;
+  };
+
+  const batch = async (databaseId: string, body: unknown) => {
+    const { statements } = body as {
+      statements: { sql: string; params?: unknown[] }[];
+    };
+    const db = (await mf.getD1Database(
+      bindingOf(databaseId),
+      "databases",
+    )) as unknown as D1;
+    const results = await db.batch(
+      statements.map(({ sql, params = [] }) => db.prepare(sql).bind(...params)),
+    );
+    return results.map((result) => result.results);
   };
 
   const admin = Bun.serve({
@@ -214,6 +278,18 @@ export async function startLocalSites(options: LocalSitesOptions) {
           if (request.method === "DELETE") {
             await (await routes()).delete(name);
             return new Response(null, { status: 204 });
+          }
+        }
+        if (kind === "databases" && request.method === "POST") {
+          if (!name) return Response.json({ id: await createDatabase() });
+          if (!(await databases()).includes(name))
+            return new Response("no such database", { status: 404 });
+          try {
+            return Response.json({
+              results: await batch(name, await request.json()),
+            });
+          } catch (error) {
+            return new Response((error as Error).message, { status: 400 });
           }
         }
         return new Response("not found", { status: 404 });

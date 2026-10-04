@@ -3,6 +3,7 @@
  * serves the internal API (docs/design.md §9, §15).
  */
 import { networkInterfaces } from "node:os";
+import { createBlobStore } from "@winston/blobs";
 import { googleAccessTokens } from "@winston/connectors/access-token";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
@@ -10,6 +11,7 @@ import { winstonMailProvider } from "@winston/connectors/winston-mail";
 import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
+import { localSiteHost } from "@winston/site-host/local-host";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
 import { gatewayBlobs } from "./blobs.ts";
@@ -65,6 +67,16 @@ const gateway = createGateway({
   runTokenSecret: config.RUN_TOKEN_SECRET,
   ...(config.ARTIFACTS_BUCKET
     ? { artifacts: s3Artifacts(config.ARTIFACTS_BUCKET) }
+    : {}),
+  // Locally, bun dev's sites service; production's Cloudflare host is d140ab.
+  ...(config.SITES_ADMIN_URL
+    ? {
+        sites: {
+          host: localSiteHost(config.SITES_ADMIN_URL),
+          blobs: createBlobStore(config),
+          sitesUrl: config.SITES_PUBLIC_URL,
+        },
+      }
     : {}),
   connectors: {
     webPublicUrl: config.WEB_PUBLIC_URL,

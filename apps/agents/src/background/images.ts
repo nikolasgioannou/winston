@@ -6,7 +6,7 @@
  * prefix (and the cache) changes only every few images.
  */
 import type { ModelMessage } from "ai";
-import type { BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 
 /** At least this many of the newest images are shown, and at most this plus two. */
 export const imagesShown = 3;

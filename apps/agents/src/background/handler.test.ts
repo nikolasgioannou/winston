@@ -4,7 +4,7 @@ import { jobs, runs } from "@winston/db/schema";
 import { insertUser, testDb, truncateAll } from "@winston/db/testing";
 import { createLogger } from "@winston/shared/logger";
 import { and, eq } from "drizzle-orm";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 import { lockSpaces, withAdvisoryLock } from "../lock.ts";
 import { fakeGateway, httpError, textReply } from "../model/testing.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";

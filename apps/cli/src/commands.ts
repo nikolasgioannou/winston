@@ -16,11 +16,17 @@ export interface Context {
   files: LocalFiles;
 }
 
-/** The VM's own disk, which the CLI runs on (choosing where downloads go). */
+/** The VM's own disk, which the CLI runs on (choosing where downloads go, packing sites). */
 export interface LocalFiles {
   home: string;
   cwd: string;
   exists: (path: string) => Promise<boolean>;
+  /** Every file under a folder, as paths relative to it; empty if there's no folder. */
+  list: (dir: string) => Promise<string[]>;
+  read: (path: string) => Promise<Uint8Array>;
+  /** Writes a file, creating its folder. */
+  write: (path: string, bytes: Uint8Array) => Promise<void>;
+  remove: (path: string) => Promise<void>;
 }
 
 export interface Verb {

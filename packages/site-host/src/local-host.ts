@@ -6,7 +6,7 @@ import type { SiteHost } from "./host.ts";
  */
 export function localSiteHost(adminUrl: string): SiteHost {
   const call = async (
-    method: "PUT" | "DELETE",
+    method: "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
   ) => {
@@ -23,23 +23,38 @@ export function localSiteHost(adminUrl: string): SiteHost {
       throw new Error(
         `local site host: ${method} ${path} failed (${String(response.status)}): ${await response.text()}`,
       );
+    return response.status === 204 ? undefined : response.json();
   };
 
   return {
     kind: "local",
-    putScript: (script, { modules, assets }) =>
-      call("PUT", `/scripts/${encodeURIComponent(script)}`, {
+    putScript: async (script, { modules, assets, databaseId }) => {
+      await call("PUT", `/scripts/${encodeURIComponent(script)}`, {
         modules,
         assets: assets.map(({ path, content }) => ({
           path,
           base64: Buffer.from(content).toString("base64"),
         })),
-      }),
-    deleteScript: (script) =>
-      call("DELETE", `/scripts/${encodeURIComponent(script)}`),
-    setRoute: (name, route) =>
-      route
+        databaseId,
+      });
+    },
+    deleteScript: async (script) => {
+      await call("DELETE", `/scripts/${encodeURIComponent(script)}`);
+    },
+    setRoute: async (name, route) => {
+      await (route
         ? call("PUT", `/routes/${encodeURIComponent(name)}`, route)
-        : call("DELETE", `/routes/${encodeURIComponent(name)}`),
+        : call("DELETE", `/routes/${encodeURIComponent(name)}`));
+    },
+    createDatabase: async (name) =>
+      ((await call("POST", "/databases", { name })) as { id: string }).id,
+    batchSql: async (databaseId, statements) =>
+      (
+        (await call(
+          "POST",
+          `/databases/${encodeURIComponent(databaseId)}/batch`,
+          { statements },
+        )) as { results: Record<string, unknown>[][] }
+      ).results,
   };
 }

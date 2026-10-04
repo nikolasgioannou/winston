@@ -8,7 +8,7 @@ import { mailboxDomain } from "@winston/domain/mailbox";
 import type { Logger } from "@winston/shared/logger";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { awsS3Objects } from "../blobs.ts";
+import { awsS3Objects } from "@winston/blobs";
 import type { InboundMailStore, MailBouncer } from "./receive.ts";
 
 /** Keys SES writes (`inbound/<SES message id>`), and nothing that could leave the directory. */

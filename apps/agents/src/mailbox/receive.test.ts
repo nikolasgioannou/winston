@@ -27,7 +27,7 @@ import {
 import type { ReceiveMailPayload } from "@winston/domain/jobs";
 import { createLogger } from "@winston/shared/logger";
 import { and, asc, eq } from "drizzle-orm";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 import { receiveMail, receiveMailHandler } from "./receive.ts";
 import { localInboundMailStore } from "./stores.ts";
 

@@ -40,6 +40,17 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   GATEWAY_INTERNAL_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
+  /** The local site host's admin API (`bun dev`'s sites service, §9a). Without a site host, deploying sites is unavailable. */
+  SITES_ADMIN_URL: z.url().optional(),
+  /** Where sites are served, each at a subdomain: https://runwinston.app. */
+  SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
+  /** The S3 bucket for sites' bundles and other binaries (production). */
+  BLOB_BUCKET: z.string().min(1).optional(),
+  /** Local blob storage, used when BLOB_BUCKET isn't set. */
+  BLOB_DIR: z
+    .string()
+    .min(1)
+    .default(new URL("../../../.data/blobs", import.meta.url).pathname),
   /** Jev and its helpers for `winston browser act`, served by OpenRouter (§5). Optional: without it, act can't decide steps. */
   OPENROUTER_API_KEY: z.string().min(1).optional(),
 });

@@ -37,6 +37,39 @@ export function siteUrl(sitesUrl: string, name: string) {
 export const isSiteName = (name: string) =>
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name);
 
+/** Names kept back: ours, and ones that pass for a service's own address. */
+const reservedNames = new Set([
+  "admin",
+  "api",
+  "app",
+  "auth",
+  "dev",
+  "docs",
+  "email",
+  "gateway",
+  "help",
+  "login",
+  "mail",
+  "runwinston",
+  "signin",
+  "sites",
+  "staging",
+  "status",
+  "support",
+  "winston",
+  "www",
+]);
+
+/** Why a name can't be claimed for a new site, or null when it can (taken names aside). */
+export function siteNameProblem(name: string): string | null {
+  if (!isSiteName(name))
+    return `"${name}" can't be a site's name: use lowercase letters, digits and hyphens (not at the ends), up to 63.`;
+  if (name.length < 3) return "Site names have at least 3 characters.";
+  if (reservedNames.has(name) || name.startsWith("xn--"))
+    return `"${name}" is reserved.`;
+  return null;
+}
+
 /** Narrows a stored route, so a malformed entry reads as no site. */
 export function parseSiteRoute(value: unknown): SiteRoute | null {
   if (typeof value !== "object" || value === null) return null;

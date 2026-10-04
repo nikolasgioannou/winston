@@ -23,7 +23,7 @@ import {
   saveAttachmentHandler,
   transcribeVoiceHandler,
 } from "./attachments.ts";
-import type { BlobStore } from "./blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 import type { TelegramFiles } from "./telegram/files.ts";
 import type { Transcriber } from "./transcribe.ts";
 import { GatewayError, type VmClient } from "./vm/gateway-client.ts";

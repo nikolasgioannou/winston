@@ -108,6 +108,20 @@ ensure_secret GATEWAY_INTERNAL_SECRET "gateway internal secret"
 ensure_secret RUN_TOKEN_SECRET "run token secret"
 ensure_secret TOKEN_ENCRYPTION_KEY "token encryption key"
 ensure_secret SITES_PASS_KEY "site pass key"
+
+# Adds a setting with its local value to .env.local if the file predates it
+# (a variable that's present, even empty, is left alone).
+ensure_setting() {
+  local name=$1 value=$2
+  if grep -qE "^#? ?$name=" .env.local; then
+    done_ "$name set"
+    return
+  fi
+  doing "adding $name to .env.local"
+  echo "$name=$value" >>.env.local
+}
+
+ensure_setting SITES_ADMIN_URL "http://127.0.0.1:3004"
 if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
   done_ "Telegram bot token set"
 else

@@ -18,6 +18,7 @@ import { events } from "./resources/events.ts";
 import { history } from "./resources/history.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
+import { site } from "./resources/site.ts";
 import { task } from "./resources/task.ts";
 import { trigger } from "./resources/trigger.ts";
 import { suggest } from "./suggest.ts";
@@ -33,6 +34,7 @@ export const resources: Resource[] = [
   events,
   history,
   browser,
+  site,
 ];
 
 /** Every prefix `winston get` knows, as `msg_, thr_, …`. */

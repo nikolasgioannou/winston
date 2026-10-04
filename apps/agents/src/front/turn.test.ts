@@ -30,7 +30,7 @@ import {
 } from "./turn.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 
 const testBlobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);
 

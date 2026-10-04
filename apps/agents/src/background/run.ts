@@ -33,7 +33,8 @@ import {
   type ToolResultPart,
 } from "ai";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { storableMessage, type BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
+import { storableMessage } from "../blobs.ts";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
 import type { Effort, ModelGateway } from "../model/gateway.ts";
 import {

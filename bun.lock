@@ -34,6 +34,7 @@
         "@aws-sdk/client-ses": "3.1144.0",
         "@aws-sdk/client-ssm": "3.1144.0",
         "@openrouter/ai-sdk-provider": "3.1.0",
+        "@winston/blobs": "workspace:*",
         "@winston/connectors": "workspace:*",
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
@@ -64,6 +65,7 @@
       "dependencies": {
         "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
+        "@winston/site-host": "workspace:*",
         "@winston/vm-api": "workspace:*",
         "hono": "4.13.9",
       },
@@ -74,10 +76,12 @@
         "@aws-sdk/client-s3": "3.1144.0",
         "@aws-sdk/client-sesv2": "3.1144.0",
         "@aws-sdk/s3-request-presigner": "3.1144.0",
+        "@winston/blobs": "workspace:*",
         "@winston/connectors": "workspace:*",
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
+        "@winston/site-host": "workspace:*",
         "@winston/vm-api": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "hono": "4.13.9",
@@ -91,6 +95,9 @@
         "@winston/site-host": "workspace:*",
       },
       "devDependencies": {
+        "@winston/blobs": "workspace:*",
+        "@winston/db": "workspace:*",
+        "@winston/vm-api": "workspace:*",
         "miniflare": "4.20260730.0",
       },
     },
@@ -139,6 +146,12 @@
       },
       "devDependencies": {
         "aws-cdk": "2.1143.0",
+      },
+    },
+    "packages/blobs": {
+      "name": "@winston/blobs",
+      "dependencies": {
+        "@aws-sdk/client-s3": "3.1144.0",
       },
     },
     "packages/connectors": {
@@ -228,10 +241,12 @@
     "packages/vm-api": {
       "name": "@winston/vm-api",
       "dependencies": {
+        "@winston/blobs": "workspace:*",
         "@winston/connectors": "workspace:*",
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
+        "@winston/site-host": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "hono": "4.13.9",
         "zod": "4.6.5",
@@ -756,6 +771,8 @@
     "@winston/agents": ["@winston/agents@workspace:apps/agents"],
 
     "@winston/api": ["@winston/api@workspace:apps/api"],
+
+    "@winston/blobs": ["@winston/blobs@workspace:packages/blobs"],
 
     "@winston/cli": ["@winston/cli@workspace:apps/cli"],
 

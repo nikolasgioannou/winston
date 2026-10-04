@@ -11,6 +11,9 @@
     "@winston/site-host": "workspace:*"
   },
   "devDependencies": {
+    "@winston/blobs": "workspace:*",
+    "@winston/db": "workspace:*",
+    "@winston/vm-api": "workspace:*",
     "miniflare": "4.20260730.0"
   }
 }

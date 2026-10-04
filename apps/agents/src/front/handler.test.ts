@@ -10,7 +10,7 @@ import { fakeGateway, textReply } from "../model/testing.ts";
 import { createWorker } from "../worker.ts";
 import { frontTurnHandler } from "./handler.ts";
 import { fakeVmClient, testRunTokenSecret } from "../vm/testing.ts";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 
 const testBlobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);
 

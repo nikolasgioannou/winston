@@ -19,7 +19,7 @@ import type { Logger } from "@winston/shared/logger";
 import { formatInTimeZone } from "@winston/shared/time";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import type { BlobStore } from "./blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 import type { Transcriber } from "./transcribe.ts";
 import { maxDownloadBytes, type TelegramFiles } from "./telegram/files.ts";
 import { showImage } from "./tools/view-image.ts";

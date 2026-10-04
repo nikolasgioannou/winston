@@ -25,6 +25,7 @@ import { historyRoutes } from "./history.ts";
 import { jevRoutes, type Jev } from "./jev.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
+import { siteRoutes, type SiteDeps } from "./sites.ts";
 import { taskRoutes, type TaskBrowser } from "./tasks.ts";
 import { triggerRoutes } from "./triggers.ts";
 import { z } from "zod";
@@ -42,6 +43,7 @@ export function createVmApi({
   vmFiles,
   browser,
   jev,
+  sites,
   now,
 }: {
   db: DbOrTx;
@@ -54,6 +56,8 @@ export function createVmApi({
   connectors?: ConnectorDeps;
   /** The browser's fast decision model (§5); absent without an OpenRouter key. */
   jev?: Jev | undefined;
+  /** Where sites are deployed (§9a); absent where there's no site host. */
+  sites?: SiteDeps | undefined;
   /** The clock, for tests. */
   now?: () => Date;
 }) {
@@ -158,7 +162,8 @@ export function createVmApi({
     .route("/v1/events", eventRoutes())
     .route("/v1/triggers", triggerRoutes({ db }))
     .route("/v1/jev", jevRoutes({ db, jev }))
-    .route("/v1/history", historyRoutes({ db }));
+    .route("/v1/history", historyRoutes({ db }))
+    .route("/v1/sites", siteRoutes({ db, sites, vmFiles }));
 }
 
 export type { VmApiEnv } from "./env.ts";

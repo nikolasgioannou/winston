@@ -26,7 +26,7 @@ import { createLogger } from "@winston/shared/logger";
 import { localTokenVault } from "@winston/shared/token-vault";
 import { count, eq, getColumns, getTableName, is, sql } from "drizzle-orm";
 import { PgTable, type PgColumn } from "drizzle-orm/pg-core";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 import type { VmProvider } from "../vm/provider.ts";
 import { deleteUserHandler, goodbyeMessage } from "./delete-user.ts";
 

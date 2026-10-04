@@ -9,6 +9,7 @@
   "dependencies": {
     "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",
+    "@winston/site-host": "workspace:*",
     "@winston/vm-api": "workspace:*",
     "hono": "4.13.9"
   }

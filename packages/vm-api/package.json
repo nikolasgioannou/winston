@@ -6,16 +6,20 @@
     ".": "./src/index.ts",
     "./connections": "./src/connections.ts",
     "./events": "./src/events.ts",
-    "./jev": "./src/jev.ts"
+    "./jev": "./src/jev.ts",
+    "./sites": "./src/sites.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@winston/blobs": "workspace:*",
     "@winston/connectors": "workspace:*",
     "@winston/db": "workspace:*",
     "@winston/domain": "workspace:*",
     "@winston/shared": "workspace:*",
+    "@winston/site-host": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
     "hono": "4.13.9",
     "zod": "4.6.5"

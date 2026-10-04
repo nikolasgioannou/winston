@@ -16,7 +16,7 @@ import { applyVmEvent } from "@winston/db/vm-state";
 import type { TokenVault } from "@winston/shared/token-vault";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 import type { RevokeGoogleToken } from "../connections/revoke.ts";
 import type { TelegramSender } from "../telegram/sender.ts";
 import type { VmProvider } from "../vm/provider.ts";

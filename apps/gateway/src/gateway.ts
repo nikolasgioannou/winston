@@ -15,6 +15,7 @@ import { Connections } from "./connections.ts";
 import { createVmApi } from "@winston/vm-api";
 import type { ConnectorDeps } from "@winston/vm-api/connections";
 import type { Jev } from "@winston/vm-api/jev";
+import type { SiteDeps } from "@winston/vm-api/sites";
 import { createExecs, VmUnavailableError } from "./execs.ts";
 import { createFileTransfers } from "./files.ts";
 import {
@@ -87,6 +88,7 @@ export function createGateway({
   connectors,
   selfUrl,
   jev,
+  sites,
 }: {
   db: DbOrTx;
   logger: Logger;
@@ -104,6 +106,8 @@ export function createGateway({
   connectors?: ConnectorDeps;
   /** Jev and its helpers for `winston browser act` (§5); absent without a key. */
   jev?: Jev;
+  /** Where `winston site deploy` puts sites (§9a); absent without a site host. */
+  sites?: SiteDeps;
 }) {
   const connections = new Connections<VmSocket>();
   /** Sends a frame to a VM's live connection; returns that socket, or undefined if it isn't connected. */
@@ -142,6 +146,7 @@ export function createGateway({
     db,
     runTokenSecret,
     jev,
+    sites,
     ...(connectors ? { connectors } : {}),
     ...(connectors
       ? {

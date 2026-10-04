@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SiteHost } from "@winston/site-host/host";
 import { localSiteHost } from "@winston/site-host/local-host";
+import { applyMigrations, MigrationError } from "@winston/site-host/migrations";
 import {
   signSitePass,
   sitePassPublicKey,
@@ -132,6 +133,66 @@ describe("the local site host", () => {
     expect((await sites.fetchSite("blog", "/", owner)).status).toBe(404);
     // Deleting again is fine.
     await host.deleteScript(route.script);
+  });
+
+  test("a site's Worker reads the database its migrations made", async () => {
+    const databaseId = await host.createDatabase("site_01db");
+    const applied = await applyMigrations(host, databaseId, [
+      {
+        name: "0002_seed.sql",
+        sql: "INSERT INTO notes (body) VALUES ('first;\nnote');",
+      },
+      {
+        name: "0001_notes.sql",
+        sql: "CREATE TABLE notes (\n  id INTEGER PRIMARY KEY,\n  body TEXT NOT NULL\n);",
+      },
+    ]);
+    expect(applied).toEqual(["0001_notes.sql", "0002_seed.sql"]);
+    // Applied ones are recorded, so running them again does nothing.
+    expect(
+      await applyMigrations(host, databaseId, [
+        { name: "0001_notes.sql", sql: "CREATE TABLE notes (id INTEGER)" },
+      ]),
+    ).toEqual([]);
+
+    await host.putScript("site_01db", {
+      modules: [
+        {
+          name: "worker.js",
+          content: `export default {
+            async fetch(request, env) {
+              const { results } = await env.DB.prepare("SELECT body FROM notes").all();
+              return Response.json(results);
+            },
+          };`,
+        },
+      ],
+      assets: [],
+      databaseId,
+    });
+    await host.setRoute("notes", { ...route, script: "site_01db" });
+    const notes = await sites.fetchSite(
+      "notes",
+      "/",
+      `winston_site_pass=${signSitePass({ sub: "usr_owner", site: "notes", nonce: "n", exp: Date.now() + 60_000 }, signingKey)}`,
+    );
+    expect(await notes.json()).toEqual([{ body: "first;\nnote" }]);
+  });
+
+  test("a failing migration applies nothing of itself", async () => {
+    const databaseId = await host.createDatabase("site_01bad");
+    const failing = applyMigrations(host, databaseId, [
+      {
+        name: "0001_half.sql",
+        sql: "CREATE TABLE ok (id INTEGER); CREATE TABLE ok (id INTEGER);",
+      },
+    ]);
+    expect(failing).rejects.toThrow(MigrationError);
+    await failing.catch(() => undefined);
+    const [tables = []] = await host.batchSql(databaseId, [
+      { sql: "SELECT name FROM sqlite_master WHERE name = 'ok'" },
+    ]);
+    expect(tables).toEqual([]);
   });
 
   test("asset paths can't escape the site", async () => {

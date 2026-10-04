@@ -1,0 +1,14 @@
+{
+  "name": "@winston/blobs",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/store.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1144.0"
+  }
+}

@@ -23,7 +23,7 @@ import type { ReceiveMailPayload } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { and, asc, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 import { matchEvents } from "../triggers/matching.ts";
 import type { JobHandler } from "../worker.ts";
 

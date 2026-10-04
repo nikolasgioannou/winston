@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import type { ModelMessage } from "ai";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 import { firstShown, imageType, rehydrateImages } from "./images.ts";
 
 const blobs = localBlobStore(`${tmpdir()}/winston-test-blobs`);

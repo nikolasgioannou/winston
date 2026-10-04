@@ -14,7 +14,7 @@ import { createLogger } from "@winston/shared/logger";
 import type { ExecResult } from "@winston/domain/frames";
 import type { ModelMessage } from "ai";
 import { and, asc, eq } from "drizzle-orm";
-import { localBlobStore } from "../blobs.ts";
+import { localBlobStore } from "@winston/blobs";
 import { dbModelCallSink } from "../model/log.ts";
 import {
   fakeCompletion,

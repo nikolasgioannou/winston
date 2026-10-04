@@ -5,6 +5,14 @@ export interface SiteScript {
   modules: { name: string; content: string }[];
   /** Paths from the site's root (`/index.html`). */
   assets: { path: string; content: Uint8Array }[];
+  /** Its database, bound as `DB`. */
+  databaseId?: string | undefined;
+}
+
+/** A statement for a site's database, with `?` parameters. */
+export interface SqlStatement {
+  sql: string;
+  params?: unknown[];
 }
 
 /**
@@ -20,4 +28,11 @@ export interface SiteHost {
   deleteScript(script: string): Promise<void>;
   /** Points a site name at its route, or removes it (null), in the routes map. */
   setRoute(name: string, route: SiteRoute | null): Promise<void>;
+  /** Creates a database (D1) for a site, returning its id. */
+  createDatabase(name: string): Promise<string>;
+  /** Runs statements on a database in one transaction, returning each one's rows. */
+  batchSql(
+    databaseId: string,
+    statements: SqlStatement[],
+  ): Promise<Record<string, unknown>[][]>;
 }

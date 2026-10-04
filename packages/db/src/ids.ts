@@ -32,6 +32,9 @@ export const idPrefixes = {
   mailboxThread: "wthr",
   /** A call to Jev, the browser's fast decision model (§5). */
   jevDecision: "jev",
+  /** A site Winston deployed, and each deploy of it (§9a). */
+  site: "site",
+  siteVersion: "sver",
 } as const;
 
 export type EntityKind = keyof typeof idPrefixes;

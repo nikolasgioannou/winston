@@ -21,6 +21,7 @@ import type { DbOrTx } from "@winston/db/client";
 import { mintRunToken } from "@winston/domain/run-token";
 import { createVmApi } from "./index.ts";
 import type { Jev } from "./jev.ts";
+import type { SiteDeps } from "./sites.ts";
 
 export const testSecret = "vm-api-test-secret-0123456789abcdef";
 
@@ -304,8 +305,8 @@ export function fakeCalendar() {
 /** The API over `tx` with the fake provider and VM files; `as(userId)` makes calls. */
 export function setupApi(
   tx: DbOrTx,
-  vmFileContents: Record<string, string> = {},
-  extra: { jev?: Jev; now?: () => Date } = {},
+  vmFileContents: Record<string, string | Uint8Array> = {},
+  extra: { jev?: Jev; now?: () => Date; sites?: SiteDeps } = {},
 ) {
   const mail = fakeMail();
   const calendar = fakeCalendar();
@@ -314,6 +315,7 @@ export function setupApi(
     db: tx,
     runTokenSecret: testSecret,
     jev: extra.jev,
+    sites: extra.sites,
     // Fixtures are dated late September 2026: free time is looked for from here.
     now: extra.now ?? (() => new Date("2026-09-28T12:00:00Z")),
     connectors: {
@@ -326,7 +328,11 @@ export function setupApi(
         const contents = vmFileContents[path];
         return contents === undefined
           ? Promise.reject(new Error(`No file ${path}`))
-          : Promise.resolve(new TextEncoder().encode(contents));
+          : Promise.resolve(
+              typeof contents === "string"
+                ? new TextEncoder().encode(contents)
+                : contents,
+            );
       },
       write: (userId, path, bytes) => {
         written.push({ userId, path, bytes });

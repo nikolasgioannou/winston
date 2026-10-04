@@ -61,7 +61,8 @@ import {
   type ModelGateway,
   type ModelProfile,
 } from "../model/gateway.ts";
-import { storableMessage, type BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
+import { storableMessage } from "../blobs.ts";
 import { attachDefinition, attachTool } from "../tools/attach.ts";
 import { bashDefinition, bashTool } from "../tools/bash.ts";
 import { startBackgroundRun } from "../background/run.ts";

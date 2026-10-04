@@ -1,6 +1,6 @@
 import { enqueue } from "@winston/db/queue";
 import { frontTurnJob } from "@winston/domain/jobs";
-import type { BlobStore } from "../blobs.ts";
+import type { BlobStore } from "@winston/blobs";
 import type { ModelGateway } from "../model/gateway.ts";
 import type { VmClient } from "../vm/gateway-client.ts";
 import type { Timers } from "../telegram/typing.ts";
