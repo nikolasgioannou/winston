@@ -1,26 +1,23 @@
 import { createBlobStore } from "@winston/blobs";
-import { localSiteHost } from "@winston/site-host/local-host";
+import { siteHostFrom } from "@winston/site-host/config";
 import type { ManageDeps } from "@winston/site-host/manage";
 import { sitePassMs } from "@winston/site-host/pass";
+import { signSitePass, sitePassSigningKey } from "@winston/site-host/pass-sign";
+import { isSiteName, siteUrl } from "@winston/site-host/route";
 import { webConfig } from "./config.server";
 import { database } from "./db.server";
 
 /**
- * What the Sites page changes sites with: locally, bun dev's sites service;
- * production's Cloudflare host comes with going live (d140ab).
+ * What the Sites page changes sites with: Cloudflare in production, bun
+ * dev's sites service locally.
  */
 export function siteDeps(): ManageDeps {
   const config = webConfig();
-  if (!config.SITES_ADMIN_URL)
+  const host = siteHostFrom(config);
+  if (!host)
     throw new Error("Sites can't be changed here: there's no site host.");
-  return {
-    db: database(),
-    host: localSiteHost(config.SITES_ADMIN_URL),
-    blobs: createBlobStore(config),
-  };
+  return { db: database(), host, blobs: createBlobStore(config) };
 }
-import { signSitePass, sitePassSigningKey } from "@winston/site-host/pass-sign";
-import { isSiteName, siteUrl } from "@winston/site-host/route";
 
 /**
  * Where a private site sends a browser with no pass (docs/design.md §9a):

@@ -1,4 +1,5 @@
 import { dbConfigSchema } from "@winston/db/config";
+import { siteHostConfigSchema } from "@winston/site-host/config";
 import { loadConfig } from "@winston/shared/config";
 import { logConfigSchema } from "@winston/shared/logger";
 import { tokenVaultConfigSchema } from "@winston/shared/token-vault";
@@ -55,8 +56,8 @@ const agentsConfigSchema = dbConfigSchema
     RUN_TOKEN_SECRET: z
       .string()
       .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
-    /** The local site host's admin API (bun dev's sites service, §9a): taking a deleted account's sites down. */
-    SITES_ADMIN_URL: z.url().optional(),
+    /** Where sites run (§9a): counting their usage, taking a deleted account's sites down. */
+    ...siteHostConfigSchema.shape,
     /** The S3 bucket for images and other binaries (production). */
     BLOB_BUCKET: z.string().min(1).optional(),
     /** Local blob storage, used when BLOB_BUCKET isn't set. */

@@ -156,28 +156,17 @@ describe("services stack", () => {
     // The gateway opens tokens for mail and calendar calls, but never seals.
     expect(actionsFor("gateway")).toContain("kms:Decrypt");
     expect(actionsFor("gateway")).not.toContain("kms:GenerateDataKey");
-    for (const service of ["api", "web"] as const)
-      expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
-    expect(actionsFor("agents")).toContain("s3:PutObject");
+    expect(actionsFor("api").some((a) => a.startsWith("s3:"))).toBe(false);
+    // Blobs: agents' images, attachments and received mail; the gateway's
+    // sent mail and site bundles; web's rollbacks and take-downs (§9a).
+    for (const service of ["agents", "gateway", "web"] as const)
+      expect(actionsFor(service)).toContain("s3:PutObject");
     // agents handles received mail and bounces it; the gateway sends his mail.
     expect(actionsFor("agents")).toContain("ses:SendBounce");
     expect(actionsFor("gateway")).toContain("ses:SendEmail");
     expect(actionsFor("gateway")).not.toContain("ses:SendBounce");
     for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("ses:"))).toBe(false);
-    // The gateway reads (VM binaries, Winston's mail) and writes only what he sends.
-    expect(
-      actionsFor("gateway")
-        .filter((a) => a.startsWith("s3:"))
-        .every(
-          (a) =>
-            a.startsWith("s3:Get") ||
-            a.startsWith("s3:List") ||
-            a.startsWith("s3:Put") ||
-            a === "s3:Abort*",
-        ),
-    ).toBe(true);
-    expect(actionsFor("gateway")).not.toContain("s3:DeleteObject*");
   });
 
   test("web is reachable only with CloudFront's origin header", () => {

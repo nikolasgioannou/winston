@@ -33,7 +33,7 @@ export interface DispatchDeps extends AccessDeps {
     script: string,
     request: Request,
     limits: typeof siteLimits,
-  ): Promise<Response> | null;
+  ): Promise<Response | null> | null;
 }
 
 /**

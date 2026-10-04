@@ -9,6 +9,7 @@
  *   bun run prod migrate
  *   bun run prod vm:restore someone@example.com
  *   bun run prod vm:roll someone@example.com      (onto the current image, now)
+ *   bun run prod sites pause-all | resume-all     (the sites kill switch, run by agents)
  *   bun run prod costs [--user <email>] [--month 2026-10]
  *
  * Anything that writes asks for confirmation first; `--yes` skips it (deploys).
@@ -38,6 +39,7 @@ const commands = [
   "sql",
   "vm:restore",
   "vm:roll",
+  "sites",
   "costs",
 ];
 if (!command || !commands.includes(command)) {
@@ -48,6 +50,7 @@ const writes =
   command === "migrate" ||
   command === "vm:restore" ||
   command === "vm:roll" ||
+  command === "sites" ||
   (command === "allowlist" &&
     (subcommand === "add" || subcommand === "remove"));
 

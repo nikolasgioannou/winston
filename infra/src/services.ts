@@ -70,6 +70,17 @@ const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
 /** Winston's Google Cloud project (docs/runbooks/google-cloud.md, infra/gcp). */
 export const gcpProject = "winston-510100";
 
+/**
+ * Where sites run (docs/design.md §9a, docs/runbooks/sites.md): Winston's
+ * Cloudflare account, set up by hand. None of it is secret.
+ */
+export const cloudflare = {
+  accountId: "137b768c2abe11d311f8a0f73e7a2be3",
+  dispatchNamespace: "winston-sites",
+  routesKvId: "185e3de3dc1a43a78b3687b3a1ce2e47",
+  sitesDomain: "runwinston.app",
+};
+
 /** How long agents gets after SIGTERM before it's killed: Fargate's maximum. */
 export const agentsStopSeconds = 120;
 
@@ -139,6 +150,13 @@ export class ServicesStack extends Stack {
     );
     const databaseUrl = `postgres://postgres@${props.database.endpoint}:${props.database.port}/winston`;
     const publicUrl = `https://${domain}`;
+    // Where sites run (§9a, docs/runbooks/sites.md); the token is a secret.
+    const siteHost = {
+      CLOUDFLARE_ACCOUNT_ID: cloudflare.accountId,
+      CLOUDFLARE_DISPATCH_NAMESPACE: cloudflare.dispatchNamespace,
+      CLOUDFLARE_ROUTES_KV_ID: cloudflare.routesKvId,
+      SITES_PUBLIC_URL: `https://${cloudflare.sitesDomain}`,
+    };
 
     const environment: Record<Service, Record<string, string>> = {
       api: {
@@ -158,6 +176,8 @@ export class ServicesStack extends Stack {
         SES_CONFIGURATION_SET: props.mail.configurationSetName,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         WEB_PUBLIC_URL: publicUrl,
+        ...siteHost,
+        BLOB_BUCKET: props.blobs.bucketName,
       },
       web: {
         WEB_HOST: "0.0.0.0",
@@ -166,12 +186,15 @@ export class ServicesStack extends Stack {
         GATEWAY_PUBLIC_URL: `wss://gateway.${domain}`,
         TELEGRAM_BOT_USERNAME: "RunWinstonBot",
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
+        ...siteHost,
+        BLOB_BUCKET: props.blobs.bucketName,
       },
       agents: {
         WEB_PUBLIC_URL: publicUrl,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         BLOB_BUCKET: props.blobs.bucketName,
         INBOUND_MAIL_BUCKET: props.mail.inboundBucket.bucketName,
+        ...siteHost,
         GATEWAY_INTERNAL_URL: `http://gateway.winston.internal:${String(servicePorts.gateway)}`,
         VM_GATEWAY_URL: `wss://gateway.${domain}`,
         VM_PROVIDER: "ec2",
@@ -286,10 +309,7 @@ export class ServicesStack extends Stack {
     taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);
     // The gateway reads the VM manifest and presigns binary downloads (§10).
     props.artifacts.grantRead(taskDefinitions.gateway.taskRole);
-    // Winston's raw mail is a blob: the gateway reads it for attachments
-    // and stores what he sends, which it sends through SES.
-    props.blobs.grantRead(taskDefinitions.gateway.taskRole);
-    props.blobs.grantPut(taskDefinitions.gateway.taskRole);
+    // The gateway sends Winston's mail through SES (its raw mail is a blob).
     taskDefinitions.gateway.taskRole.addToPrincipalPolicy(
       new PolicyStatement({
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
@@ -303,10 +323,14 @@ export class ServicesStack extends Stack {
         ],
       }),
     );
-    // Only agents stores blobs (§12).
-    props.blobs.grantRead(taskDefinitions.agents.taskRole);
-    props.blobs.grantPut(taskDefinitions.agents.taskRole);
-    props.blobs.grantDelete(taskDefinitions.agents.taskRole);
+    // Blobs (§12): agents stores images, attachments and received mail; the
+    // gateway the mail Winston sends and sites' bundles; web reads and
+    // deletes them (rollback, taking a site down).
+    for (const service of ["agents", "gateway", "web"] as const) {
+      props.blobs.grantRead(taskDefinitions[service].taskRole);
+      props.blobs.grantPut(taskDefinitions[service].taskRole);
+      props.blobs.grantDelete(taskDefinitions[service].taskRole);
+    }
     // agents takes Winston's received mail from where SES left it, and
     // bounces what no mailbox takes.
     props.mail.inboundBucket.grantRead(taskDefinitions.agents.taskRole);

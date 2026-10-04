@@ -116,6 +116,16 @@ export class CiStack extends Stack {
     }
     deploy(
       new PolicyStatement({
+        // The dispatch Worker's deploy derives the pass key's public half (§9a).
+        sid: "ReadTheSitesPassKey",
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [
+          `arn:aws:secretsmanager:${region}:${account}:secret:winston/sites-pass-key-*`,
+        ],
+      }),
+    );
+    deploy(
+      new PolicyStatement({
         sid: "SetTheImageTag",
         actions: ["ssm:PutParameter", "ssm:GetParameter"],
         resources: [

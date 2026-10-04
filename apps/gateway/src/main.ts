@@ -11,7 +11,7 @@ import { winstonMailProvider } from "@winston/connectors/winston-mail";
 import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
-import { localSiteHost } from "@winston/site-host/local-host";
+import { siteHostFrom } from "@winston/site-host/config";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
 import { gatewayBlobs } from "./blobs.ts";
@@ -56,6 +56,7 @@ const mailSender = config.SES_CONFIGURATION_SET
   ? sesSender(config.SES_CONFIGURATION_SET)
   : loggingSender(logger);
 logger.info({ selfUrl }, "advertising this gateway to agents");
+const siteHost = siteHostFrom(config);
 const gateway = createGateway({
   db,
   logger,
@@ -68,11 +69,11 @@ const gateway = createGateway({
   ...(config.ARTIFACTS_BUCKET
     ? { artifacts: s3Artifacts(config.ARTIFACTS_BUCKET) }
     : {}),
-  // Locally, bun dev's sites service; production's Cloudflare host is d140ab.
-  ...(config.SITES_ADMIN_URL
+  // Cloudflare in production, bun dev's sites service locally (§9a).
+  ...(siteHost
     ? {
         sites: {
-          host: localSiteHost(config.SITES_ADMIN_URL),
+          host: siteHost,
           blobs: createBlobStore(config),
           sitesUrl: config.SITES_PUBLIC_URL,
           passKey: config.SITES_PASS_KEY,

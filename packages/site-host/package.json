@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     "./bundle": "./src/bundle.ts",
+    "./cloudflare-host": "./src/cloudflare-host.ts",
+    "./config": "./src/config.ts",
     "./fetch": "./src/fetch.ts",
     "./host": "./src/host.ts",
     "./local-host": "./src/local-host.ts",
@@ -22,6 +24,7 @@
     "@winston/blobs": "workspace:*",
     "@winston/db": "workspace:*",
     "@winston/shared": "workspace:*",
-    "drizzle-orm": "1.0.0-rc.4"
+    "drizzle-orm": "1.0.0-rc.4",
+    "zod": "4.6.5"
   }
 }

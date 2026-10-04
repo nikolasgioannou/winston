@@ -33,7 +33,7 @@ Account API tokens (Manage Account → Account API Tokens), with no expiry and n
 
 **Workers Scripts is the legacy permission on purpose.** Cloudflare's newer Workers roles (Editor, Admin) don't yet say whether they cover dispatch namespaces, and Editor can't create or delete Workers, which every new or removed site needs. Legacy permissions have no deprecation date. Move to the new roles once Cloudflare documents them for Workers for Platforms.
 
-Storing them in Secrets Manager comes with going live (d140ab).
+`winston-backend` lives in Secrets Manager as `winston/cloudflare-api-token` (`bun run prod:keys` sets it); `winston-ci-sites` is the GitHub Actions secret `CLOUDFLARE_SITES_CI_TOKEN`.
 
 **Rotating one** (a leak, or someone leaving): create a replacement with the same policies, store it, restart the services that read it, then delete the old one in the dashboard.
 
@@ -45,7 +45,25 @@ To take every site offline at once (abuse, a runaway bill, an incident):
 bun run sites:switch pause-all
 ```
 
-Every running site shows its paused page and Winston tells each user. `resume-all` brings them back, leaving sites paused for a cap alone. Locally it works on the dev stack; the production command (`bun run prod sites …`) comes with going live (d140ab).
+Every running site shows its paused page and Winston tells each user. `resume-all` brings them back, leaving sites paused for a cap alone. That's the dev stack; in production:
+
+```bash
+bun run prod sites pause-all
+```
+
+It queues a `switch_sites` job, which agents runs (it holds the Cloudflare token); agents' logs say how many sites it switched.
+
+## Going live
+
+Once, in this order:
+
+1. Merge and deploy (`gh workflow run ci.yml`, docs/runbooks/deploys.md). The CDK deploy creates `winston/sites-pass-key` (generated) and `winston/cloudflare-api-token` (a placeholder), and gives the services the Cloudflare settings. Until step 2, deploying a site fails with Cloudflare's authentication error.
+2. `bun run prod:keys`: paste the `winston-backend` token at its prompt (leave the others blank). It restarts the services that read it.
+3. Add the CI token: `gh secret set CLOUDFLARE_SITES_CI_TOKEN` and paste `winston-ci-sites`.
+4. Deploy the dispatch Worker: run the CI workflow again, or from a laptop `CLOUDFLARE_API_TOKEN=<ci token> bun run sites:deploy-dispatch` (with `aws sso login --profile winston-prod`). It reads `winston/sites-pass-key`, derives its public half, and runs `wrangler deploy` (`apps/sites/wrangler.jsonc`) on `*.runwinston.app/*`.
+5. Check: `https://anything.runwinston.app` answers "No site here"; ask Winston for a small site, open it signed in, and in a private window see the sign-in redirect.
+
+Two details to confirm on the first real run (the docs were unclear): the analytics field for total CPU (`sum { cpuTimeUs }`; an introspection query settles it) and whether D1's REST `batch` is one transaction.
 
 ## Billing
 

@@ -14,6 +14,7 @@
     "@winston/blobs": "workspace:*",
     "@winston/db": "workspace:*",
     "@winston/vm-api": "workspace:*",
-    "miniflare": "4.20260730.0"
+    "miniflare": "4.20260730.0",
+    "wrangler": "4.147.0"
   }
 }

@@ -1,0 +1,25 @@
+// The sites' dispatch Worker on Cloudflare (docs/design.md §9a,
+// docs/runbooks/sites.md). Deployed by `bun run sites:deploy-dispatch`,
+// which adds SITES_PASS_PUBLIC_KEY (derived from the winston/sites-pass-key
+// secret) as a var.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "winston-dispatch",
+  "main": "src/dispatch/cloudflare.ts",
+  // The same date as sites' own Workers (@winston/site-host/host).
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "*.runwinston.app/*", "zone_name": "runwinston.app" },
+  ],
+  "dispatch_namespaces": [
+    { "binding": "DISPATCHER", "namespace": "winston-sites" },
+  ],
+  "kv_namespaces": [
+    { "binding": "ROUTES", "id": "185e3de3dc1a43a78b3687b3a1ce2e47" },
+  ],
+  "vars": {
+    "SITES_DOMAIN": "runwinston.app",
+    "WEB_PUBLIC_URL": "https://runwinston.com",
+  },
+}

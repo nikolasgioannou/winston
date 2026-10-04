@@ -4,23 +4,23 @@
  *   bun run sites:switch pause-all    every running site shows its paused page
  *   bun run sites:switch resume-all   undoes it (sites paused for a cap stay paused)
  *
- * Works on whatever DATABASE_URL and SITES_ADMIN_URL point at.
+ * Works on whatever DATABASE_URL and the site host config (Cloudflare, or
+ * SITES_ADMIN_URL locally) point at; `bun run prod sites` runs it in production.
  */
 import { createDb } from "@winston/db/client";
 import { loadDbConfig } from "@winston/db/config";
-import { localSiteHost } from "@winston/site-host/local-host";
+import { siteHostConfigSchema, siteHostFrom } from "@winston/site-host/config";
 import { pauseAllSites, resumeAllSites } from "@winston/site-host/usage";
 
 const [command] = process.argv.slice(2);
-const adminUrl = process.env.SITES_ADMIN_URL;
-if ((command !== "pause-all" && command !== "resume-all") || !adminUrl) {
+const host = siteHostFrom(siteHostConfigSchema.parse(process.env));
+if ((command !== "pause-all" && command !== "resume-all") || !host) {
   console.error(
-    "Usage: bun run sites:switch pause-all | resume-all (with SITES_ADMIN_URL set)",
+    "Usage: bun run sites:switch pause-all | resume-all (with a site host configured)",
   );
   process.exit(1);
 }
 const db = createDb(loadDbConfig().DATABASE_URL);
-const host = localSiteHost(adminUrl);
 const count =
   command === "pause-all"
     ? await pauseAllSites(db, host)

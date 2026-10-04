@@ -8,6 +8,7 @@
  *      checking Telegram sign-ins, derived from it (once, if it's missing)
  *   2. The production OpenRouter key
  *   3. The "Winston production" Google OAuth client's id and secret
+ *   4. The backend's Cloudflare token for sites ("winston-backend")
  *
  * Then it restarts the services that read what changed, and, once
  * api.runwinston.com resolves, registers the bot's webhook with the generated
@@ -131,6 +132,15 @@ if (!Bun.argv.includes("--webhook")) {
       JSON.stringify({ clientId, clientSecret }),
     );
     for (const service of readersOf("google-oauth")) changed.add(service);
+  }
+
+  const cloudflare = await askHidden(
+    'Cloudflare token "winston-backend" (docs/runbooks/sites.md): ',
+  );
+  if (cloudflare) {
+    await putSecret("winston/cloudflare-api-token", cloudflare);
+    for (const service of readersOf("cloudflare-api-token"))
+      changed.add(service);
   }
 
   if (changed.size > 0) {

@@ -1,13 +1,8 @@
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
+import { compatibilityDate } from "@winston/site-host/host";
 import { parseSiteRoute, siteNameOf } from "@winston/site-host/route";
 import { Miniflare } from "miniflare";
-
-/**
- * The newest date the pinned Miniflare's workerd accepts; production sites
- * use the same one (docs/design.md §9a).
- */
-export const compatibilityDate = "2026-08-01";
 
 /** Site Workers are named by their site's id. */
 const scriptPattern = /^site_[a-z0-9]+$/;

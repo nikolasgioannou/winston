@@ -1,10 +1,13 @@
 import { dbConfigSchema } from "@winston/db/config";
 import { tokenVaultConfigSchema } from "@winston/shared/token-vault";
 import { loadConfig } from "@winston/shared/config";
+import { siteHostConfigSchema } from "@winston/site-host/config";
 import { z } from "zod";
 
 const webConfigSchema = dbConfigSchema
   .extend(tokenVaultConfigSchema.shape)
+  // Where sites run (§9a): the Sites page's changes.
+  .extend(siteHostConfigSchema.shape)
   .extend({
     /** The Google OAuth client for this environment (docs/runbooks/google-cloud.md). */
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
@@ -23,17 +26,15 @@ const webConfigSchema = dbConfigSchema
      */
     TELEGRAM_LOGIN_KEY: z.string().min(1).optional(),
     /**
-     * Signs site passes (docs/design.md §9a): an Ed25519 seed, 32 bytes in
-     * hex. Without it, private sites can't be opened.
+     * Signs site passes (docs/design.md §9a): a long random secret, hashed
+     * into an Ed25519 key. Without it, private sites can't be opened.
      */
     SITES_PASS_KEY: z
       .string()
-      .regex(/^[0-9a-f]{64}$/, "expected 32 bytes in hex")
+      .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -")
       .optional(),
     /** Where sites are served, each at a subdomain: https://runwinston.app. */
     SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
-    /** The local site host's admin API (bun dev's sites service): the Sites page's changes. */
-    SITES_ADMIN_URL: z.url().optional(),
     /** Sites' bundles, for rollback: S3 in production, a directory locally. */
     BLOB_BUCKET: z.string().min(1).optional(),
     BLOB_DIR: z

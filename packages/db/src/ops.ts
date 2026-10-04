@@ -7,12 +7,13 @@
  *   allowlist list|add|remove …      who may sign in
  *   sql "<query>"                    a read-only query, rows printed as JSON
  *   vm:restore <email>               restore a user's VM from its latest snapshot
+ *   sites pause-all|resume-all       the sites kill switch (agents runs it)
  *   vm:roll <email>                  move a user's VM onto the current image now
  *   costs [--user <email>] [--month YYYY-MM]   spend, by category, agent, trigger and run
  */
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { restoreVmJob, rollVmJob } from "@winston/domain/jobs";
+import { restoreVmJob, rollVmJob, switchSitesJob } from "@winston/domain/jobs";
 import { eq } from "drizzle-orm";
 import { allowlistCommand } from "./allowlist-cli.ts";
 import { createDb, type Db } from "./client.ts";
@@ -89,6 +90,21 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
       );
       return 0;
     }
+    case "sites": {
+      const [action] = args;
+      if (action !== "pause-all" && action !== "resume-all") {
+        console.log("usage: sites pause-all | resume-all");
+        return 1;
+      }
+      await enqueue(db, switchSitesJob.type, {
+        payload: { action },
+        maxAttempts: switchSitesJob.maxAttempts,
+      });
+      console.log(
+        `Queued: agents ${action === "pause-all" ? "pauses every running site" : "resumes the sites the kill switch paused"} (its logs say how many; docs/runbooks/sites.md).`,
+      );
+      return 0;
+    }
     case "sql": {
       const [query] = args;
       if (!query) {
@@ -101,7 +117,7 @@ async function run(db: Db, [command, ...args]: string[]): Promise<number> {
     }
     default:
       console.log(
-        "usage: migrate | allowlist list|add|remove … | sql <query> | vm:restore <email> | vm:roll <email> | costs [--user <email>] [--month YYYY-MM]",
+        "usage: migrate | allowlist list|add|remove … | sql <query> | vm:restore <email> | vm:roll <email> | sites pause-all|resume-all | costs [--user <email>] [--month YYYY-MM]",
       );
       return 1;
   }

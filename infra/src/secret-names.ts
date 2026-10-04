@@ -23,6 +23,14 @@ export const secrets = {
   "google-oauth": { generated: false },
   "gateway-internal-secret": { generated: true },
   "run-token-secret": { generated: true },
+  /**
+   * Signs the passes that open private sites (docs/design.md §9a); any long
+   * random secret works, so the generated one does. The dispatch Worker gets
+   * its public half at deploy (`bun run sites:deploy-dispatch`).
+   */
+  "sites-pass-key": { generated: true },
+  /** The backend's Cloudflare token (docs/runbooks/sites.md); `prod:keys` sets it. */
+  "cloudflare-api-token": { generated: false },
 } as const;
 
 export type SecretName = keyof typeof secrets;
@@ -47,6 +55,8 @@ export const serviceSecrets = {
     // Refreshing connected accounts' tokens for watches and syncs (§3).
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
     GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
+    // Sites' usage, the kill switch, and taking a deleted account's sites down (§9a).
+    CLOUDFLARE_API_TOKEN: "cloudflare-api-token",
   },
   gateway: {
     GATEWAY_INTERNAL_SECRET: "gateway-internal-secret",
@@ -56,12 +66,18 @@ export const serviceSecrets = {
     // Trading connected accounts' refresh tokens for access tokens (mail, calendar).
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
     GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
+    // Deploying sites, and checking them as their owner (§9a).
+    CLOUDFLARE_API_TOKEN: "cloudflare-api-token",
+    SITES_PASS_KEY: "sites-pass-key",
   },
   web: {
     GOOGLE_OAUTH_CLIENT_ID: ["google-oauth", "clientId"],
     GOOGLE_OAUTH_CLIENT_SECRET: ["google-oauth", "clientSecret"],
     // Checking Telegram sign-in buttons' signatures (§13), not the bot's token.
     TELEGRAM_LOGIN_KEY: "telegram-login-key",
+    // The Sites page's changes, and the passes that open private sites (§9a).
+    CLOUDFLARE_API_TOKEN: "cloudflare-api-token",
+    SITES_PASS_KEY: "sites-pass-key",
   },
 } as const satisfies Record<string, Record<string, SecretRef>>;
 

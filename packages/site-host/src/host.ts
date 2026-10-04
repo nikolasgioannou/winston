@@ -1,5 +1,11 @@
 import type { SiteRoute } from "./route.ts";
 
+/**
+ * Sites' Workers' compatibility date, on both hosts: the newest the local
+ * host's pinned Miniflare accepts (docs/design.md §9a).
+ */
+export const compatibilityDate = "2026-08-01";
+
 /** A site's Worker as it's uploaded: ES modules (the first is the entry) and static assets. */
 export interface SiteScript {
   modules: { name: string; content: string }[];

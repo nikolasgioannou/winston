@@ -2,6 +2,7 @@ import { dbConfigSchema } from "@winston/db/config";
 import { loadConfig } from "@winston/shared/config";
 import { logConfigSchema } from "@winston/shared/logger";
 import { tokenVaultConfigSchema } from "@winston/shared/token-vault";
+import { siteHostConfigSchema } from "@winston/site-host/config";
 import { z } from "zod";
 
 const gatewayConfigSchema = dbConfigSchema.extend({
@@ -40,14 +41,14 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   GATEWAY_INTERNAL_SECRET: z
     .string()
     .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -"),
-  /** The local site host's admin API (`bun dev`'s sites service, §9a). Without a site host, deploying sites is unavailable. */
-  SITES_ADMIN_URL: z.url().optional(),
+  /** Where sites run (§9a): Cloudflare, or bun dev's sites service. Without either, deploying sites is unavailable. */
+  ...siteHostConfigSchema.shape,
   /** Where sites are served, each at a subdomain: https://runwinston.app. */
   SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
   /** Signs the passes `winston site fetch` opens private sites with: the same key the site signs with. */
   SITES_PASS_KEY: z
     .string()
-    .regex(/^[0-9a-f]{64}$/, "expected 32 bytes in hex")
+    .regex(/^[\w-]{32,}$/, "expected at least 32 letters, digits, _ or -")
     .optional(),
   /** Locally, where site fetches connect (bun dev's sites service), since `*.sites.localhost` doesn't resolve. */
   SITES_CONNECT_URL: z.url().optional(),

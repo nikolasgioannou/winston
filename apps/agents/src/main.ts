@@ -14,6 +14,7 @@ import {
   frontTurnJob,
   provisionVmJob,
   restoreVmJob,
+  switchSitesJob,
   rollVmJob,
   closeTaskBrowserJob,
   revokeConnectionTokenJob,
@@ -33,7 +34,7 @@ import {
 import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
 import { closeTaskBrowserHandler } from "./background/close-browser.ts";
 import { createBlobStore } from "@winston/blobs";
-import { localSiteHost } from "@winston/site-host/local-host";
+import { siteHostFrom } from "@winston/site-host/config";
 import { receiveMailHandler } from "./mailbox/receive.ts";
 import {
   createInboundMailStore,
@@ -49,6 +50,7 @@ import { openRouterTranscriber } from "./transcribe.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { startVmCostJob } from "./vm/costs.ts";
+import { switchSitesHandler } from "./sites/switch-job.ts";
 import { startSiteUsageJob } from "./sites/usage-job.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
@@ -125,6 +127,7 @@ const vm = gatewayClient({
     )[0]?.gatewayUrl,
 });
 const blobs = createBlobStore(config);
+const siteHost = siteHostFrom(config);
 
 /** When VMs move onto a new image: the quiet hours on EC2, any time locally. */
 const rolloutHours = parseHours(
@@ -169,6 +172,9 @@ const worker = createWorker({
   handlers: {
     [provisionVmJob.type]: provisionVmHandler(vmProvider),
     [restoreVmJob.type]: restoreVmHandler(vmProvider),
+    ...(siteHost
+      ? { [switchSitesJob.type]: switchSitesHandler(siteHost) }
+      : {}),
     [rollVmJob.type]: rollVmHandler(vmProvider, rolloutHours),
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
@@ -222,10 +228,8 @@ const worker = createWorker({
       revoke: googleTokenRevoker(),
       blobs,
       telegram,
-      // Locally, bun dev's sites service; production's Cloudflare host is d140ab.
-      ...(config.SITES_ADMIN_URL
-        ? { sites: localSiteHost(config.SITES_ADMIN_URL) }
-        : {}),
+      // Cloudflare in production, bun dev's sites service locally (§9a).
+      ...(siteHost ? { sites: siteHost } : {}),
     }),
     [closeTaskBrowserJob.type]: closeTaskBrowserHandler(vm),
     [saveAttachmentJob.type]: saveAttachmentHandler({
@@ -329,8 +333,8 @@ sweepRollout();
 // Each user's computer goes into their spend, hour by hour (§8).
 const stopVmCosts = startVmCostJob(db, logger);
 // Sites' usage goes into their spend too, and over a cap a site pauses (§9a).
-const stopSiteUsage = config.SITES_ADMIN_URL
-  ? startSiteUsageJob(db, localSiteHost(config.SITES_ADMIN_URL), logger)
+const stopSiteUsage = siteHost
+  ? startSiteUsageJob(db, siteHost, logger)
   : () => undefined;
 
 worker.start();

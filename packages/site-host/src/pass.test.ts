@@ -40,7 +40,20 @@ describe("site passes", () => {
     expect(await verifySitePass("a.b.c", key)).toBeNull();
   });
 
-  test("the key must be a 32-byte seed", () => {
-    expect(() => sitePassSigningKey("abcd")).toThrow(/32 bytes/);
+  test("any long secret makes a key, the same one each time; short ones don't", async () => {
+    const generated = "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5bC7dE9fG1hJ3";
+    expect(sitePassPublicKey(sitePassSigningKey(generated))).toBe(
+      sitePassPublicKey(sitePassSigningKey(generated)),
+    );
+    const key = await importSitePassKey(
+      sitePassPublicKey(sitePassSigningKey(generated)),
+    );
+    expect(
+      await verifySitePass(
+        signSitePass(pass, sitePassSigningKey(generated)),
+        key,
+      ),
+    ).toEqual(pass);
+    expect(() => sitePassSigningKey("abcd")).toThrow(/at least 32/);
   });
 });

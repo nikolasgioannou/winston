@@ -36,11 +36,16 @@ describe("secrets", () => {
     expect(namesFor("api").has("openrouter-api-key")).toBe(false);
     // The gateway's OpenRouter key is for Jev (the browser's autopilot).
     expect([...namesFor("gateway")].sort()).toEqual([
+      "cloudflare-api-token",
       "gateway-internal-secret",
       "google-oauth",
       "openrouter-api-key",
       "run-token-secret",
+      "sites-pass-key",
     ]);
+    // Only the services that sign passes hold the key that signs them (§9a).
+    expect(namesFor("agents").has("sites-pass-key")).toBe(false);
+    expect(namesFor("api").has("cloudflare-api-token")).toBe(false);
     // The site signs people in; the gateway and agents refresh connected
     // accounts' tokens (connector calls; watches and syncs). api never does.
     expect(namesFor("api").has("google-oauth")).toBe(false);
@@ -59,8 +64,10 @@ describe("secrets", () => {
   test("a service's ECS environment maps each variable to its secret", () => {
     const environment = stacks.services.secrets.environmentFor("web");
     expect(Object.keys(environment).sort()).toEqual([
+      "CLOUDFLARE_API_TOKEN",
       "GOOGLE_OAUTH_CLIENT_ID",
       "GOOGLE_OAUTH_CLIENT_SECRET",
+      "SITES_PASS_KEY",
       "TELEGRAM_LOGIN_KEY",
     ]);
     const clientId = stacks.services.resolve(

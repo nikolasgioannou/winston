@@ -163,6 +163,16 @@ export const restoreVmJob = {
 } as const;
 
 /**
+ * The sites kill switch (§9a), from `bun run prod sites`: payload
+ * `{ action: "pause-all" | "resume-all" }`. agents runs it, since it holds
+ * the site host.
+ */
+export const switchSitesJob = {
+  type: "switch_sites",
+  maxAttempts: 3,
+} as const;
+
+/**
  * Saving a file the user sent to their VM (§4, Media). Payload
  * `{ inboundItemId }`. The item stays `pending`, holding back the turn,
  * until this finishes; then it queues the turn.
