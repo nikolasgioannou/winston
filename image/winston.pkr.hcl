@@ -40,6 +40,12 @@ variable "version" {
   description = "The baked-in binaries' version, recorded as a tag on the AMI."
 }
 
+variable "commit" {
+  type        = string
+  default     = ""
+  description = "The commit the AMI is built from, recorded as a tag; a deploy of that commit moves production onto it."
+}
+
 locals {
   build_time = formatdate("YYYYMMDD-hhmmss", timestamp())
   # The order matters: ec2.sh (EC2 only) builds on the users and units.
@@ -97,6 +103,7 @@ source "amazon-ebs" "ec2" {
   tags = {
     Name      = "winston-vm"
     Version   = var.version
+    Commit    = var.commit
     SourceAmi = "{{ .SourceAMI }}"
     BuiltBy   = "packer"
   }

@@ -123,6 +123,25 @@ export class CiStack extends Stack {
         ],
       }),
     );
+    // The VM image (scripts/vm-image.ts): finding the AMI built from the
+    // commit, and moving production onto it.
+    deploy(
+      new PolicyStatement({
+        sid: "SetTheVmImage",
+        actions: ["ssm:PutParameter", "ssm:GetParameter"],
+        resources: [
+          `arn:aws:ssm:${region}:${account}:parameter/winston/vm-ami`,
+        ],
+      }),
+    );
+    deploy(
+      new PolicyStatement({
+        sid: "FindVmImages",
+        // DescribeImages has no resource-level permissions.
+        actions: ["ec2:DescribeImages"],
+        resources: ["*"],
+      }),
+    );
     deploy(
       new PolicyStatement({
         sid: "ReadStacks",
@@ -189,8 +208,9 @@ export class CiStack extends Stack {
     props.artifacts.grantPut(this.deployRole, "vm/*");
     props.signingKey.grant(this.deployRole, "kms:Sign");
 
-    // Building the AMI (CI when image/ changes, or ami.yml by hand): what Packer's
-    // amazon-ebs builder needs, and recording the AMI.
+    // Building the AMI (deploys, when image/ changed): what Packer's amazon-ebs
+    // builder needs, and reading which AMI production runs. Only the deploy
+    // role moves production onto a new one.
     this.amiRole = new Role(this, "AmiRole", {
       roleName: "winston-github-ami",
       assumedBy: trust(),
@@ -241,8 +261,8 @@ export class CiStack extends Stack {
     );
     this.amiRole.addToPolicy(
       new PolicyStatement({
-        sid: "RecordTheAmi",
-        actions: ["ssm:PutParameter"],
+        sid: "ReadTheLiveAmi",
+        actions: ["ssm:GetParameter"],
         resources: [
           `arn:aws:ssm:${region}:${account}:parameter/winston/vm-ami`,
         ],

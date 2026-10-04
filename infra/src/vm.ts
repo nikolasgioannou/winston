@@ -21,7 +21,7 @@ import {
 } from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
 
-/** The SSM parameter naming the AMI new VMs launch from (`image:build:ami`). */
+/** The SSM parameter naming the AMI new VMs launch from (set by deploys). */
 export const amiParameter = "/winston/vm-ami";
 
 /**

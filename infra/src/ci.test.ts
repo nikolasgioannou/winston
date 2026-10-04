@@ -79,7 +79,8 @@ describe("ci stack", () => {
             (action) =>
               action === "ecr:GetAuthorizationToken" ||
               action === "ecs:RegisterTaskDefinition" ||
-              action.startsWith("ecs:Describe"),
+              action.startsWith("ecs:Describe") ||
+              action === "ec2:DescribeImages",
           ),
         ).toBe(true);
     }
@@ -99,12 +100,25 @@ describe("ci stack", () => {
     expect(actions).toContain("kms:Sign");
   });
 
-  test("the AMI role can build images but can't pass roles or touch other services", () => {
+  test("the AMI role can build images but can't pass roles, touch other services or move production onto an image", () => {
     const actions = statementsFor("amiRole").flatMap((s) => [s.Action].flat());
     expect(
       actions.every(
-        (action) => action.startsWith("ec2:") || action === "ssm:PutParameter",
+        (action) => action.startsWith("ec2:") || action === "ssm:GetParameter",
       ),
     ).toBe(true);
+  });
+
+  test("only the deploy role moves production onto a VM image", () => {
+    const vmAmi = (role: "deployRole" | "amiRole") =>
+      statementsFor(role).filter((s) =>
+        [s.Resource].flat().some((r) => JSON.stringify(r).includes("vm-ami")),
+      );
+    expect(vmAmi("deployRole").flatMap((s) => [s.Action].flat())).toContain(
+      "ssm:PutParameter",
+    );
+    expect(vmAmi("amiRole").flatMap((s) => [s.Action].flat())).toEqual([
+      "ssm:GetParameter",
+    ]);
   });
 });

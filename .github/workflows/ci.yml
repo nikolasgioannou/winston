@@ -1,13 +1,18 @@
 name: CI
 
-# Every push to main is checked (and builds the VM image when image/
-# changed). Deploying is by hand: Actions → CI → Run workflow (or
-# `gh workflow run ci.yml`), which checks, builds the service images and
-# deploys that commit (docs/runbooks/deploys.md).
+# Every push to main is checked, and that's all. Deploying is by hand:
+# Actions → CI → Run workflow (or `gh workflow run ci.yml`), which checks,
+# builds the service images and the VM image (when image/ changed), and ships
+# that commit, all at once (docs/runbooks/deploys.md).
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      vm_image:
+        description: Rebuild the VM image even if image/ hasn't changed (say, for the base image's updates)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -87,12 +92,13 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-  # The VM image, when anything baked into it changed (docs/design.md §18).
-  # It's recorded in /winston/vm-ami, and agents moves each VM onto it in its
-  # user's quiet hours, so image changes ship like everything else.
+  # The VM image, when image/ changed since the one production runs (docs/design.md
+  # §18), tagged with this commit. It builds alongside the service images (about
+  # 15 minutes); the deploy then records it in /winston/vm-ami once the services
+  # are healthy, and agents moves each VM onto it in its user's quiet hours.
   ami:
     needs: check
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     concurrency:
       group: ami
@@ -104,37 +110,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          # The VM binaries' version counts commits on main.
+          # The VM binaries' version counts commits on main, and whether
+          # image/ changed is a diff against an older commit.
           fetch-depth: 0
-      - id: changed
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          # A push whose previous commit isn't known (the first, or a force
-          # push) builds anyway.
-          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null ||
-            git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -q '^image/'; then
-            echo "image=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.changed.outputs.image == 'true'
-        uses: jdx/mise-action@v4
-      - if: steps.changed.outputs.image == 'true'
-        run: bun install --frozen-lockfile
-      - if: steps.changed.outputs.image == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+      - uses: jdx/mise-action@v4
+      - run: bun install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::766577085959:role/winston-github-ami
           aws-region: us-east-1
-      - if: steps.changed.outputs.image == 'true'
-        run: bun run image:build:ami
+      # Builds nothing when image/ hasn't changed (scripts/image-build-ami.ts).
+      - run: bun run image:build:ami ${{ inputs.vm_image && '--force' || '' }}
 
-  # Production, after the checks pass and the images are pushed
+  # Production, after the checks pass and every image is built
   # (docs/runbooks/deploys.md). GitHub's OIDC token is exchanged for the
   # deploy role (infra/src/ci.ts); no AWS keys are stored in GitHub. Only a
   # run started by hand gets here; a second waits for the running deploy
   # rather than interleaving with it.
   deploy:
-    needs: images
+    needs: [images, ami]
     runs-on: ubuntu-24.04-arm
     concurrency:
       group: production
