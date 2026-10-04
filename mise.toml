@@ -3,7 +3,7 @@ bun = "1.4.2"
 node = "24.21.0"
 cloudflared = "2026.9.3"
 # The ticket tracker (.moth/), from its GitHub releases.
-"github:nikolasgioannou/moth" = "0.5.0"
+"github:nikolasgioannou/moth" = "0.6.0"
 # Builds the VM image (image/).
 packer = "1.16.1"
 # Reaches the winston-prod account through IAM Identity Center (docs/runbooks/aws-access.md).
