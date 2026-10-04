@@ -45,8 +45,7 @@ const services: Service[] = [
     optional: true,
     task: true,
   },
-  // Only with a tunnel set up: a worktree leaves it out (its webhooks go to
-  // the main checkout's api).
+  // Only with a tunnel set up (docs/local-dev.md).
   ...(process.env.TUNNEL_NAME
     ? [
         {
@@ -83,15 +82,40 @@ if (!existsSync(".env.local")) {
 if (!process.env.TUNNEL_NAME)
   log("No TUNNEL_NAME, so no webhook tunnel (see docs/local-dev.md).");
 const setupHint = "Is Docker running? ./scripts/setup.sh checks everything.";
+
+// One dev stack at a time, from any checkout (docs/local-dev.md, Worktrees):
+// they share the ports, the tunnel and the Google redirect URI. Checked up
+// front, since a second tunnel would split webhooks with the first.
+async function listening(port: number) {
+  for (const hostname of ["127.0.0.1", "::1"]) {
+    try {
+      const socket = await Bun.connect({
+        hostname,
+        port,
+        socket: { data: () => undefined },
+      });
+      socket.end();
+      return true;
+    } catch {
+      // Nothing there.
+    }
+  }
+  return false;
+}
+const ports = [
+  Number(process.env.API_PORT ?? 3000),
+  Number(process.env.GATEWAY_PORT ?? 3001),
+  3002,
+];
+for (const port of ports)
+  if (await listening(port)) {
+    log(
+      `Port ${String(port)} is in use: is bun dev already running in another checkout? Stop it first.`,
+    );
+    process.exit(1);
+  }
+
 await step("Starting Postgres…", ["bun", "run", "db:up"], setupHint);
-// Every checkout's site signs in through the shared OAuth relay
-// (docs/local-dev.md, Worktrees); Compose starts it unless it's already running.
-if (process.env.GOOGLE_OAUTH_REDIRECT_URL)
-  await step(
-    "Starting the OAuth relay…",
-    ["docker", "compose", "up", "--detach", "--wait", "oauth-relay"],
-    setupHint,
-  );
 await step("Migrating…", ["bun", "run", "db:migrate"], setupHint);
 
 async function pipe(stream: ReadableStream<Uint8Array>, prefix: string) {

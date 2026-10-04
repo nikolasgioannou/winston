@@ -57,11 +57,9 @@ To run several pieces of work at once (say, two agent sessions), give each its o
 bun run worktree setup
 ```
 
-It copies `.env.local` from the main checkout and rewrites it so the worktree shares nothing with other checkouts: its own databases (`winston_<name>`, and `winston_<name>_test` for tests) and its own ports from a free slot (slot n: api 30n0, gateway 30n1, site 30n2; the main checkout keeps 3000–3002). Then it installs dependencies and creates, migrates and seeds its database. Re-running it is safe. Its `bun dev` serves the site on its own port, with its own local VM.
+It copies `.env.local` from the main checkout and points it at the worktree's own databases (`winston_<name>`, and `winston_<name>_test` for tests), so its migrations, data and test runs never touch another checkout's. Then it installs dependencies and creates, migrates and seeds its database, which links your Telegram chat if `SEED_TELEGRAM_CHAT_ID` is set. Re-running it is safe, and picks up changes to the main checkout's `.env.local`.
 
-**Signing in:** Google sends the browser back only to the dev client's registered redirect URIs, so every checkout's site, the main one included, asks Google to send it to the **OAuth relay** on `localhost:3003` (`GOOGLE_OAUTH_REDIRECT_URL`) and leaves a cookie naming itself; cookies ignore ports, so the relay reads it and sends the browser on to that site. The relay is a Compose service (`scripts/oauth-relay.ts`) shared by every checkout, and `bun dev` starts it if it isn't running. Each site's session cookie is named for its port, so signing in to one doesn't sign you out of another. Connecting a Google account in a worktree creates another refresh token; Google keeps at most 100 per account per client, so connecting dozens of times would eventually invalidate the oldest.
-
-**What stays with the main checkout:** the webhook tunnel and with it Telegram messages, Gmail and Calendar pushes (a worktree runs without a tunnel).
+**One dev stack at a time.** Any checkout can run `bun dev`, the main one or a worktree, but only one at once: they share the ports (3000–3002), the webhook tunnel and Google's redirect URI. Whichever is running gets everything, Telegram and Google pushes included, so a worktree's change can be tried end to end before it lands. `bun dev` refuses to start while another checkout's is running. Each checkout has its own database, so switching means signing in again (and connecting Google accounts again in a worktree, if the work needs them). A stopped checkout's local VM keeps running; the running stack's gateway turns it away until its own stack is back.
 
 Before removing a worktree, drop its databases and local VM:
 

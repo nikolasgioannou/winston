@@ -1,7 +1,6 @@
 /**
- * `bun run worktree setup|remove`: makes a git worktree its own local
- * environment, with its own databases and ports, and cleans one up before the
- * worktree goes. docs/local-dev.md, Worktrees.
+ * `bun run worktree setup|remove`: gives a git worktree its own databases,
+ * and cleans them up before the worktree goes. docs/local-dev.md, Worktrees.
  *
  * Runs with --no-env-file: Bun would load .env.local before this rewrites it,
  * and the commands it starts would inherit those values over their own
@@ -9,11 +8,10 @@
  */
 import { $ } from "bun";
 import { existsSync } from "node:fs";
-import { copyFile, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 const marker = "# Worktree (bun run worktree setup):";
-const relayUrl = "http://localhost:3003";
 
 function log(message: string) {
   console.log(`  ${message}`);
@@ -30,7 +28,7 @@ const commonDir = resolve(
   root,
   (await $`git rev-parse --git-common-dir`.text()).trim(),
 );
-// Never the main checkout: its databases and ports are the defaults.
+// Never the main checkout: its databases are the defaults.
 if (gitDir === commonDir)
   fail("This is the main checkout. Run this inside a git worktree.");
 const mainCheckout = dirname(commonDir);
@@ -44,27 +42,8 @@ const databases = { dev: `winston_${slug}`, test: `winston_${slug}_test` };
 if (slug === "test")
   fail("A worktree named test would share the main checkout's test database.");
 
-/** Slot n uses api 30n0, gateway 30n1 and web 30n2; the main checkout is slot 0. */
-function ports(slot: number) {
-  const base = 3000 + slot * 10;
-  return { api: base, gateway: base + 1, web: base + 2 };
-}
-
 function envValue(env: string, name: string) {
   return new RegExp(`^${name}=(.*)$`, "m").exec(env)?.[1];
-}
-
-async function slotsInUse() {
-  const list = await $`git worktree list --porcelain`.text();
-  const used = new Set<number>();
-  for (const [, path] of list.matchAll(/^worktree (.+)$/gm)) {
-    if (!path || path === root) continue;
-    const file = join(path, ".env.local");
-    if (!existsSync(file)) continue;
-    const web = envValue(await readFile(file, "utf8"), "WEB_PUBLIC_URL");
-    if (web) used.add((Number(new URL(web).port) - 3002) / 10);
-  }
-  return used;
 }
 
 function withDatabase(url: string | undefined, name: string) {
@@ -74,41 +53,23 @@ function withDatabase(url: string | undefined, name: string) {
   return parsed.href;
 }
 
+/**
+ * Writes the worktree's .env.local: the main checkout's, pointed at the
+ * worktree's own databases. A re-run picks up changes to the main checkout's.
+ */
 async function writeEnv() {
-  if (!existsSync(envPath)) {
-    const source = join(mainCheckout, ".env.local");
-    if (!existsSync(source))
-      fail(
-        "The main checkout has no .env.local. Run ./scripts/setup.sh there first.",
-      );
-    await copyFile(source, envPath);
-    log("copied .env.local from the main checkout");
-  }
-  const env = await readFile(envPath, "utf8");
-  if (env.includes(marker)) {
-    log(".env.local already set up for this worktree");
-    return;
-  }
-  const used = await slotsInUse();
-  const slot = [1, 2, 3, 4, 5, 6, 7, 8, 9].find((n) => !used.has(n));
-  if (slot === undefined)
-    fail("All nine worktree port slots are taken. Remove a worktree first.");
-  const port = ports(slot);
+  const source = join(mainCheckout, ".env.local");
+  if (!existsSync(source))
+    fail(
+      "The main checkout has no .env.local. Run ./scripts/setup.sh there first.",
+    );
+  const env = await readFile(source, "utf8");
   const overrides = {
     DATABASE_URL: withDatabase(envValue(env, "DATABASE_URL"), databases.dev),
     TEST_DATABASE_URL: withDatabase(
       envValue(env, "TEST_DATABASE_URL"),
       databases.test,
     ),
-    API_PORT: String(port.api),
-    GATEWAY_PORT: String(port.gateway),
-    GATEWAY_INTERNAL_URL: `http://127.0.0.1:${String(port.gateway)}`,
-    GATEWAY_PUBLIC_URL: `ws://localhost:${String(port.gateway)}`,
-    VM_GATEWAY_URL: `ws://host.docker.internal:${String(port.gateway)}`,
-    WEB_PUBLIC_URL: `http://localhost:${String(port.web)}`,
-    GOOGLE_OAUTH_REDIRECT_URL: relayUrl,
-    // Webhooks reach only the main checkout's api.
-    TUNNEL_NAME: "",
   };
   const kept = env
     .split("\n")
@@ -119,16 +80,10 @@ async function writeEnv() {
   const block = Object.entries(overrides).map(([k, v]) => `${k}=${v}`);
   await writeFile(
     envPath,
-    [
-      ...kept,
-      "",
-      `${marker} its own databases and ports (slot ${String(slot)}).`,
-      ...block,
-      "",
-    ].join("\n"),
+    [...kept, "", `${marker} its own databases.`, ...block, ""].join("\n"),
   );
   log(
-    `slot ${String(slot)}: api ${String(port.api)}, gateway ${String(port.gateway)}, site http://localhost:${String(port.web)}`,
+    `.env.local copied from the main checkout, with databases ${databases.dev} and ${databases.test}`,
   );
 }
 
@@ -156,7 +111,7 @@ async function setup() {
     log("database seeded");
   }
   console.log(
-    `Done. bun dev serves ${envValue(env, "WEB_PUBLIC_URL") ?? ""}; sign in there.`,
+    "Done. Run bun dev here once any other checkout's has stopped: one dev stack runs at a time.",
   );
 }
 

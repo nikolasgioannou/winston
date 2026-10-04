@@ -14,11 +14,6 @@ const webConfigSchema = dbConfigSchema
      * makes cookies Secure.
      */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
-    /**
-     * Where Google sends the browser back, when not straight to the site:
-     * locally, the OAuth relay (http://localhost:3003, docs/local-dev.md).
-     */
-    GOOGLE_OAUTH_REDIRECT_URL: z.url().optional(),
     /** The gateway's address for the browser page's live views (§5): wss://gateway.runwinston.com. */
     GATEWAY_PUBLIC_URL: z.url().default("ws://localhost:3001"),
     /**

@@ -23,12 +23,8 @@ function secure() {
   return webConfig().WEB_PUBLIC_URL.startsWith("https:");
 }
 
-// Locally, every checkout's site is on localhost and cookies ignore ports, so
-// the name carries the port: signing in to a worktree's site doesn't replace
-// the main checkout's session (docs/local-dev.md, Worktrees).
 function sessionCookieName() {
-  const url = new URL(webConfig().WEB_PUBLIC_URL);
-  return secure() ? "__Host-winston_session" : `winston_session_${url.port}`;
+  return secure() ? "__Host-winston_session" : "winston_session";
 }
 
 export function setSessionCookie(token: string) {
@@ -100,7 +96,6 @@ export function setFlowCookies(values: {
     path: "/auth/google",
     maxAge: 600,
   };
-  setRelayCookie();
   setCookie(flowCookieNames.state, values.state, options);
   setCookie(flowCookieNames.codeVerifier, values.codeVerifier, options);
   if (values.timezone)
@@ -128,25 +123,8 @@ export function setConnectCookies(values: {
     path: connectCookiePath,
     maxAge: 600,
   };
-  setRelayCookie();
   for (const [key, name] of Object.entries(connectCookieNames))
     setCookie(name, values[key as keyof typeof values], options);
-}
-
-/**
- * Behind the local OAuth relay, names this site for the relay
- * to send Google's callback on to. The relay reads it on its own port, since
- * cookies ignore ports (scripts/oauth-relay.ts).
- */
-function setRelayCookie() {
-  const config = webConfig();
-  if (!config.GOOGLE_OAUTH_REDIRECT_URL) return;
-  setCookie("winston_oauth_return", new URL(config.WEB_PUBLIC_URL).origin, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/auth/google",
-    maxAge: 600,
-  });
 }
 
 /** Reads the connect flow's cookies once and clears them. */
@@ -174,18 +152,12 @@ export function takeFlowCookies() {
   return values;
 }
 
-/**
- * The Google client for this environment, redirecting back to `callbackPath`
- * on the site (or on the local OAuth relay, which sends it on to the site).
- */
+/** The Google client for this environment, redirecting back to `callbackPath` on the site. */
 export function googleClient(callbackPath = "/auth/google/callback") {
   const config = webConfig();
   return {
     clientId: config.GOOGLE_OAUTH_CLIENT_ID,
     clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
-    redirectUri: new URL(
-      callbackPath,
-      config.GOOGLE_OAUTH_REDIRECT_URL ?? config.WEB_PUBLIC_URL,
-    ).toString(),
+    redirectUri: new URL(callbackPath, config.WEB_PUBLIC_URL).toString(),
   };
 }

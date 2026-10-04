@@ -8,8 +8,7 @@
 #   4. Install dependencies from bun.lock, without changing it.
 #   5. Check that the git hooks are installed, and install them if not.
 #   6. Create .env.local from .env.example if it doesn't exist (never overwrites it).
-#   7. Point Google sign-in at the local OAuth relay in .env.local if it predates
-#      that, generate the Telegram webhook, gateway internal and run token secrets and
+#   7. Generate the Telegram webhook, gateway internal and run token secrets and
 #      the token encryption key in .env.local if they're missing, and check that
 #      a bot token is set.
 #   8. Check that a Docker engine is reachable (starting Colima if it's installed but
@@ -104,18 +103,6 @@ ensure_secret() {
   mv .env.local.tmp .env.local
 }
 
-# Adds a fixed setting to .env.local if the file predates it.
-ensure_setting() {
-  local name=$1 value=$2 label=$3
-  if grep -qE "^$name=" .env.local; then
-    done_ "$label set"
-  else
-    doing "adding $label to .env.local"
-    printf '%s=%s\n' "$name" "$value" >>.env.local
-  fi
-}
-
-ensure_setting GOOGLE_OAUTH_REDIRECT_URL http://localhost:3003 "Google sign-in through the OAuth relay"
 ensure_secret TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret"
 ensure_secret GATEWAY_INTERNAL_SECRET "gateway internal secret"
 ensure_secret RUN_TOKEN_SECRET "run token secret"
