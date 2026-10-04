@@ -4,7 +4,6 @@ import { followBrowserTimezone, updateProfile } from "@winston/db/profile";
 import { z } from "zod";
 import { database } from "./db.server";
 import { endSession, requireUser } from "./session.server";
-import { telegramLinkOf } from "./telegram.server";
 
 /** `/profile`'s loader. */
 export const getProfileState = createServerFn({ method: "GET" }).handler(
@@ -14,7 +13,6 @@ export const getProfileState = createServerFn({ method: "GET" }).handler(
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      telegram: await telegramLinkOf(database(), user.id),
     };
   },
 );

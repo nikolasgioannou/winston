@@ -17,6 +17,7 @@ import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
 import { Route as AuthTelegramRouteImport } from './routes/auth/telegram'
 import { Route as TTokenRouteImport } from './routes/t/$token'
 import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
+import { Route as AuthedChannelsIndexRouteImport } from './routes/_authed/channels/index'
 import { Route as AuthedProfileIndexRouteImport } from './routes/_authed/profile/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as AuthGoogleStartRouteImport } from './routes/auth/google/start'
@@ -62,6 +63,11 @@ const TTokenRoute = TTokenRouteImport.update({
 const AuthedAccountsIndexRoute = AuthedAccountsIndexRouteImport.update({
   id: '/accounts/',
   path: '/accounts/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedChannelsIndexRoute = AuthedChannelsIndexRouteImport.update({
+  id: '/channels/',
+  path: '/channels/',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedProfileIndexRoute = AuthedProfileIndexRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
   '/accounts/': typeof AuthedAccountsIndexRoute
+  '/channels/': typeof AuthedChannelsIndexRoute
   '/profile/': typeof AuthedProfileIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
   '/accounts': typeof AuthedAccountsIndexRoute
+  '/channels': typeof AuthedChannelsIndexRoute
   '/profile': typeof AuthedProfileIndexRoute
   '/dev/design': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/auth/google/start': typeof AuthGoogleStartRoute
   '/dev/design/frame': typeof DevDesignFrameRoute
   '/_authed/accounts/': typeof AuthedAccountsIndexRoute
+  '/_authed/channels/': typeof AuthedChannelsIndexRoute
   '/_authed/profile/': typeof AuthedProfileIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/auth/google/start'
     | '/dev/design/frame'
     | '/accounts/'
+    | '/channels/'
     | '/profile/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/auth/google/start'
     | '/dev/design/frame'
     | '/accounts'
+    | '/channels'
     | '/profile'
     | '/dev/design'
     | '/auth/google/connect/callback'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/auth/google/start'
     | '/dev/design/frame'
     | '/_authed/accounts/'
+    | '/_authed/channels/'
     | '/_authed/profile/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
@@ -276,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAccountsIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/channels/': {
+      id: '/_authed/channels/'
+      path: '/channels'
+      fullPath: '/channels/'
+      preLoaderRoute: typeof AuthedChannelsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/profile/': {
       id: '/_authed/profile/'
       path: '/profile'
@@ -331,12 +350,14 @@ declare module '@tanstack/react-router' {
 interface AuthedRouteChildren {
   AuthedHomeRoute: typeof AuthedHomeRoute
   AuthedAccountsIndexRoute: typeof AuthedAccountsIndexRoute
+  AuthedChannelsIndexRoute: typeof AuthedChannelsIndexRoute
   AuthedProfileIndexRoute: typeof AuthedProfileIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedHomeRoute: AuthedHomeRoute,
   AuthedAccountsIndexRoute: AuthedAccountsIndexRoute,
+  AuthedChannelsIndexRoute: AuthedChannelsIndexRoute,
   AuthedProfileIndexRoute: AuthedProfileIndexRoute,
 }
 

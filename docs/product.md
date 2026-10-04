@@ -30,7 +30,8 @@ A small web app with a **sidebar**. All chat happens in Telegram.
 
 - **Home:** Winston's status, and the first-run setup checklist until everything is connected (computer ready, Telegram linked, first account connected).
 - **Connected accounts:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server.
-- **Profile:** first and last name, email, time zone, Telegram linking, and account deletion (destroys the computer and wipes everything). Telegram is also linked from Home's setup checklist.
+- **Channels:** the ways you reach Winston: Telegram linking (also on Home's setup checklist).
+- **Profile:** first and last name, email, and account deletion (destroys the computer and wipes everything).
 - **No behavior-specific settings** (for example, no "ping me N minutes before meetings"). See §3.
 - **No history page.** Conversation lives in Telegram. Background runs and triggers are internal.
 
