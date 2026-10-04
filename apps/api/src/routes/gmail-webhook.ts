@@ -58,7 +58,7 @@ export function gmailWebhookRoutes(
       .from(connections)
       .where(
         and(
-          eq(connections.domain, "mail"),
+          eq(connections.provider, "gmail"),
           eq(connections.externalEmail, address),
           ne(connections.status, "disconnected"),
         ),

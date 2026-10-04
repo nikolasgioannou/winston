@@ -4,6 +4,7 @@
  */
 import { networkInterfaces } from "node:os";
 import { googleAccessTokens } from "@winston/connectors/access-token";
+import { NotSupportedError } from "@winston/connectors/errors";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
 import { reconnectUrlFor } from "@winston/connectors/grants";
@@ -61,11 +62,17 @@ const gateway = createGateway({
     : {}),
   connectors: {
     webPublicUrl: config.WEB_PUBLIC_URL,
-    mail: (connection) =>
-      gmailProvider({
+    mail: (connection) => {
+      // Reading and sending from his own mailbox come with 44bcf2 and 201a9b.
+      if (connection.provider === "winston")
+        throw new NotSupportedError(
+          "Winston's own mailbox can't be read or sent from yet.",
+        );
+      return gmailProvider({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),
-      }),
+      });
+    },
     calendar: (connection) =>
       googleCalendarProvider({
         address: connection.externalEmail,

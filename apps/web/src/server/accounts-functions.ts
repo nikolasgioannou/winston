@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   connectionDtoColumns,
   disconnectConnection,
+  googleBacked,
   setCapability,
   toConnectionDto,
 } from "@winston/db/connections";
@@ -13,14 +14,17 @@ import { z } from "zod";
 import { database } from "./db.server";
 import { requireUser } from "./session.server";
 
-/** `/accounts`'s loader: the user's connections, oldest first, as DTOs. */
+/**
+ * `/accounts`'s loader: the user's connections, oldest first, as DTOs.
+ * Winston's own mailbox is a channel (on `/channels`), not one of these.
+ */
 export const getAccounts = createServerFn({ method: "GET" }).handler(
   async () => {
     const user = await requireUser();
     const rows = await database()
       .select(connectionDtoColumns)
       .from(connections)
-      .where(eq(connections.userId, user.id))
+      .where(and(eq(connections.userId, user.id), googleBacked))
       .orderBy(asc(connections.createdAt));
     return rows.map(toConnectionDto);
   },
@@ -39,7 +43,13 @@ export const getAccount = createServerFn({ method: "GET" })
     const [row] = await database()
       .select(connectionDtoColumns)
       .from(connections)
-      .where(and(eq(connections.id, data.id), eq(connections.userId, user.id)));
+      .where(
+        and(
+          eq(connections.id, data.id),
+          eq(connections.userId, user.id),
+          googleBacked,
+        ),
+      );
     if (!row) throw notFound();
     const unavailable = unavailableCapabilities(
       row.provider,

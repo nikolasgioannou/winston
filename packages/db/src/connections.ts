@@ -71,6 +71,12 @@ export function toConnectionDto(
   };
 }
 
+/**
+ * Connections backed by a Google grant: everything but Winston's own
+ * mailbox, which has no token to expire, watch or sync from Google.
+ */
+export const googleBacked = ne(connections.provider, "winston");
+
 /** The vault context a connection's token is sealed with. */
 export const tokenContext = (connectionId: string) => ({ connectionId });
 
@@ -169,7 +175,7 @@ async function connectionFacts(db: DbOrTx, connectionId: string) {
   return facts;
 }
 
-async function recordConnected(
+export async function recordConnected(
   db: DbOrTx,
   userId: string,
   connectionId: string,
@@ -183,8 +189,13 @@ async function recordConnected(
   });
 }
 
+/** One of the user's connected (Google) accounts; never Winston's mailbox. */
 const ownedBy = (userId: string, connectionId: string) =>
-  and(eq(connections.id, connectionId), eq(connections.userId, userId));
+  and(
+    eq(connections.id, connectionId),
+    eq(connections.userId, userId),
+    googleBacked,
+  );
 
 /**
  * Turns one capability of a user's connection on or off (the toggles M5
@@ -238,38 +249,50 @@ export async function disconnectConnection(
       )
       .returning({ id: connections.id });
     if (!disconnected) return false;
-    // Subscriptions tied to the account end with it (docs/design.md §3).
-    const cancelled = await tx
-      .update(triggers)
-      .set({ status: "deleted", updatedAt: sql`now()` })
-      .where(
-        and(
-          eq(triggers.connectionId, connectionId),
-          eq(triggers.status, "active"),
-        ),
-      )
-      .returning({ id: triggers.id });
-    if (cancelled.length > 0)
-      await tx.delete(derivedTimers).where(
-        inArray(
-          derivedTimers.triggerId,
-          cancelled.map((t) => t.id),
-        ),
-      );
-    await recordSystemEvent(tx, {
-      userId,
-      type: "system.app.disconnected",
-      payload: {
-        ...(await connectionFacts(tx, connectionId)),
-        cancelledTriggers: cancelled.map((t) => t.id),
-      },
-      sourceRef: `connection:${connectionId}:disconnected:${String(Date.now())}`,
-    });
+    await endConnection(tx, userId, connectionId);
     await enqueue(tx, revokeConnectionTokenJob.type, {
       userId,
       payload: { connectionId },
       dedupeKey: revokeConnectionTokenJob.dedupeKey(connectionId),
     });
     return true;
+  });
+}
+
+/**
+ * What follows a connection going `disconnected` (an account disconnected,
+ * or Winston's mailbox turned off): subscriptions tied to it end with it
+ * (docs/design.md §3), and Winston is told (`system.app.disconnected`).
+ */
+export async function endConnection(
+  tx: DbOrTx,
+  userId: string,
+  connectionId: string,
+) {
+  const cancelled = await tx
+    .update(triggers)
+    .set({ status: "deleted", updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(triggers.connectionId, connectionId),
+        eq(triggers.status, "active"),
+      ),
+    )
+    .returning({ id: triggers.id });
+  if (cancelled.length > 0)
+    await tx.delete(derivedTimers).where(
+      inArray(
+        derivedTimers.triggerId,
+        cancelled.map((t) => t.id),
+      ),
+    );
+  await recordSystemEvent(tx, {
+    userId,
+    type: "system.app.disconnected",
+    payload: {
+      ...(await connectionFacts(tx, connectionId)),
+      cancelledTriggers: cancelled.map((t) => t.id),
+    },
+    sourceRef: `connection:${connectionId}:disconnected:${String(Date.now())}`,
   });
 }

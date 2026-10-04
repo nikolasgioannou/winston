@@ -11,6 +11,7 @@
     "./frames": "./src/frames.ts",
     "./inbound": "./src/inbound.ts",
     "./jobs": "./src/jobs.ts",
+    "./mailbox": "./src/mailbox.ts",
     "./run-token": "./src/run-token.ts",
     "./triggers": "./src/triggers.ts",
     "./vm-versions": "./src/vm-versions.ts"

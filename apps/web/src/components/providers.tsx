@@ -13,6 +13,7 @@ export const domainNames: Record<ConnectionDomain, string> = {
 export const providerNames: Record<ConnectionProvider, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
+  winston: "Winston",
 };
 
 /** A provider's brand icon (see the note on `GmailIcon` about Google's permission). */

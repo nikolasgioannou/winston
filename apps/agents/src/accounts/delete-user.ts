@@ -10,6 +10,7 @@ import {
   users,
   vms,
 } from "@winston/db/schema";
+import { retireMailboxAddresses } from "@winston/db/mailbox";
 import { applyVmEvent } from "@winston/db/vm-state";
 import type { TokenVault } from "@winston/shared/token-vault";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
@@ -42,7 +43,8 @@ export interface DeleteUserDeps {
  * 3. Terminate the VM: the instance, then its data volume.
  * 4. Revoke every connected Google grant.
  * 5. Delete blobs only this user's rows refer to.
- * 6. Delete the user row, which cascades to every table with a `user_id`.
+ * 6. Retire Winston's addresses (by hash), so nobody else ever gets them.
+ * 7. Delete the user row, which cascades to every table with a `user_id`.
  *
  * The allowlist entry stays: whether they may come back is the founder's call.
  */
@@ -66,6 +68,7 @@ export function deleteUserHandler(deps: DeleteUserDeps): JobHandler {
     await revokeGrants(db, deps, userId);
     const blobKeys = await blobsOnlyTheyUse(db, userId);
     for (const key of blobKeys) await deps.blobs.delete(key);
+    await retireMailboxAddresses(db, userId);
     await db.delete(users).where(eq(users.id, userId));
     logger.info({ userId, blobs: blobKeys.length }, "account deleted");
   };

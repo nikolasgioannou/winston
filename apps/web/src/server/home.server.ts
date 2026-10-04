@@ -1,4 +1,5 @@
 import type { DbOrTx } from "@winston/db/client";
+import { googleBacked } from "@winston/db/connections";
 import { connections, telegramLinks } from "@winston/db/schema";
 import { computerStatus } from "@winston/db/vms";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
@@ -19,6 +20,7 @@ export async function homeState(
     .where(
       and(
         eq(connections.userId, user.id),
+        googleBacked,
         ne(connections.status, "disconnected"),
       ),
     );

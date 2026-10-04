@@ -5,6 +5,7 @@ import {
   insertUser,
   testDb,
 } from "@winston/db/testing";
+import { turnOnMailbox } from "@winston/db/mailbox";
 import { setupApi } from "./testing.ts";
 
 const db = await testDb();
@@ -83,6 +84,28 @@ describe("accounts routes", () => {
         },
       ]);
       expect(body.accounts[0]?.id).toStartWith("acct_");
+    });
+  });
+
+  test("Winston's own mailbox is listed, but isn't one to connect or reconnect", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await turnOnMailbox(tx, user.id, "ada");
+      const as = setupApi(tx).as(user.id);
+      const list = (await (await as("/v1/accounts")).json()) as {
+        accounts: Json[];
+      };
+      expect(list.accounts).toMatchObject([
+        { domain: "mail", provider: "winston", email: "ada@runwinston.email" },
+      ]);
+      expect(
+        await (await as("/v1/accounts/connect/mail")).json(),
+      ).toMatchObject({ connected: [] });
+      const got = (await (
+        await as("/v1/accounts/ada@runwinston.email")
+      ).json()) as { accounts: Account[] };
+      expect(got.accounts[0]?.links).toBeNull();
+      expect(got.accounts[0]?.notes[0]).toStartWith("Winston's own mailbox");
     });
   });
 

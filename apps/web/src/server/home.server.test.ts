@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { turnOnMailbox } from "@winston/db/mailbox";
 import { connections, telegramLinks } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { requestVm } from "@winston/db/vms";
@@ -18,6 +19,14 @@ describe("homeState", () => {
         accountsConnected: 0,
         attention: [],
       });
+    });
+  });
+
+  test("Winston's own mailbox isn't one of the user's accounts", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await turnOnMailbox(tx, user.id, "ada");
+      expect((await homeState(tx, user)).accountsConnected).toBe(0);
     });
   });
 

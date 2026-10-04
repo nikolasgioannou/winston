@@ -31,8 +31,10 @@ export function syncConnectionHandler(deps: {
       .select()
       .from(connections)
       .where(eq(connections.id, connectionId));
+    // Winston's own mailbox isn't synced from anywhere: its mail is pushed to us.
     if (
       !connection ||
+      connection.provider === "winston" ||
       connection.status === "expired" ||
       connection.status === "disconnected"
     )

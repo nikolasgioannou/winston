@@ -3,6 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { DbOrTx } from "@winston/db/client";
 import { saveConnection } from "@winston/db/connections";
+import { checkMailboxName, turnOnMailbox } from "@winston/db/mailbox";
 import type { Job } from "@winston/db/queue";
 import * as schema from "@winston/db/schema";
 import {
@@ -69,6 +70,7 @@ async function fullAccount(tx: DbOrTx, blobKey: string) {
     scopes: ["gmail.modify"],
     refreshToken: "refresh-mail",
   });
+  await turnOnMailbox(tx, user.id, "ada-winston");
   await tx.insert(inboundItems).values({
     userId: user.id,
     type: "user_message",
@@ -179,6 +181,11 @@ describe("deleteUserHandler", () => {
           n: 0,
         });
       }
+      // Winston's address is gone, but nobody else can ever have it.
+      expect(await checkMailboxName(tx, "ada-winston")).toEqual({
+        ok: false,
+        problem: "taken",
+      });
       // Whether they may come back is the founder's call.
       expect(
         await tx

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import { saveConnection } from "@winston/db/connections";
+import { turnOnMailbox } from "@winston/db/mailbox";
 import { connections, inboundItems } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { createLogger } from "@winston/shared/logger";
@@ -140,6 +141,24 @@ describe("sweepConnectionGrants", () => {
       });
       expect(await statusOf(tx, id)).toBe("disconnected");
       expect(await grantEvents(tx, userId)).toEqual([]);
+    });
+  });
+
+  test("leaves Winston's own mailbox alone: it has no grant to expire", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await turnOnMailbox(tx, user.id, "ada");
+      const [mailbox] = await tx
+        .select()
+        .from(connections)
+        .where(eq(connections.userId, user.id));
+      if (!mailbox) throw new Error("expected the mailbox");
+      await sweepConnectionGrants(tx, logger, {
+        reconnectUrl,
+        now: new Date(mailbox.grantedAt.getTime() + 2 * grantLifetimeMs),
+      });
+      expect(await statusOf(tx, mailbox.id)).toBe("ok");
+      expect(await grantEvents(tx, user.id)).toEqual([]);
     });
   });
 });

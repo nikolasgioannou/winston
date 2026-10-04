@@ -7,8 +7,15 @@
 export const connectionDomains = ["mail", "calendar"] as const;
 export type ConnectionDomain = (typeof connectionDomains)[number];
 
-/** Who serves a domain today; an attribute of the connection. */
-export const connectionProviders = ["gmail", "google_calendar"] as const;
+/**
+ * Who serves a connection; an attribute of the connection. `winston` is
+ * Winston's own mailbox, which we serve ourselves.
+ */
+export const connectionProviders = [
+  "gmail",
+  "google_calendar",
+  "winston",
+] as const;
 export type ConnectionProvider = (typeof connectionProviders)[number];
 
 export const capabilitiesByDomain = {
@@ -72,7 +79,18 @@ export const capabilityScopes = {
   google_calendar: Record<Capability<"calendar">, string>;
 };
 
-/** The provider that serves each domain today. */
+/**
+ * Every capability of Winston's own mailbox is on, with no switches: limits
+ * on it are the server's (ead827).
+ */
+export const winstonMailboxCapabilities = {
+  read: true,
+  draft: true,
+  send: true,
+  modify_labels: true,
+} as const satisfies CapabilityMap;
+
+/** The provider the user connects for each domain. */
 export const providerOf = {
   mail: "gmail",
   calendar: "google_calendar",
@@ -88,12 +106,16 @@ export function isCapabilityOf<D extends ConnectionDomain>(
   );
 }
 
-/** A connection's capabilities whose Google scope wasn't granted: unusable until it's reconnected. */
+/**
+ * A connection's capabilities whose Google scope wasn't granted: unusable
+ * until it's reconnected. Winston's own mailbox has no grant to lack.
+ */
 export function unavailableCapabilities(
   provider: ConnectionProvider,
   domain: ConnectionDomain,
   scopes: readonly string[],
 ): Capability[] {
+  if (provider === "winston") return [];
   const needed: Record<string, string> = capabilityScopes[provider];
   return capabilitiesByDomain[domain].filter(
     (capability) => !scopes.includes(needed[capability] ?? ""),

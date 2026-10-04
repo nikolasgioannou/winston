@@ -70,8 +70,10 @@ export function accountLinks(webPublicUrl: string, connectionId: string) {
 
 /**
  * The connection `--account` names (its address or `acct_` id) for a domain.
- * Without the flag, the user's only connection for that domain. Disconnected
- * connections don't count. Throws `ApiFailure` with the choices otherwise.
+ * Without the flag, the user's only connection for that domain; Winston's
+ * own mailbox is used only when it's named, so "my mail" stays the user's.
+ * Disconnected connections don't count. Throws `ApiFailure` with the
+ * choices otherwise.
  */
 export async function resolveConnection(
   db: DbOrTx,
@@ -98,8 +100,15 @@ export async function resolveConnection(
       "The user can connect one at runwinston.com/accounts.",
     );
   if (account === undefined) {
-    const [only] = candidates;
-    if (candidates.length === 1 && only) return only;
+    const users = candidates.filter((c) => c.provider !== "winston");
+    const [only] = users;
+    if (users.length === 1 && only) return only;
+    if (users.length === 0)
+      throw new ApiFailure(
+        "not_found",
+        `The user has no connected ${domainName[domain]} account; ${choices} is Winston's own.`,
+        `Name it with --account ${choices}, or the user can connect theirs at runwinston.com/accounts.`,
+      );
     throw new ApiFailure(
       "invalid_request",
       `There are ${String(candidates.length)} ${domainName[domain]} accounts: ${choices}.`,
@@ -129,6 +138,15 @@ export function requireCapability(
   capability: Capability,
   webPublicUrl: string,
 ) {
+  if (connection.provider === "winston") {
+    if (connection.status === "disconnected")
+      throw new ApiFailure(
+        "permission_disabled",
+        `Winston's email address ${connection.externalEmail} is turned off.`,
+        `The user can turn it on at ${new URL("/channels", webPublicUrl).href}`,
+      );
+    return;
+  }
   const links = accountLinks(webPublicUrl, connection.id);
   if (connection.status === "expired" || connection.status === "disconnected")
     throw new ApiFailure(

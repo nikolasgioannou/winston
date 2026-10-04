@@ -32,7 +32,63 @@ async function failure(call: () => unknown) {
   throw new Error("expected a failure");
 }
 
+const winstonMailbox = {
+  provider: "winston" as const,
+  externalEmail: "ada@runwinston.email",
+  tokenCiphertext: null,
+  scopes: [],
+  capabilities: { read: true, draft: true, send: true, modify_labels: true },
+};
+
 describe("account resolution", () => {
+  test("Winston's own mailbox is used only when it's named", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const winston = await insertConnection(tx, user.id, winstonMailbox);
+      expect(
+        await failure(() => resolveConnection(tx, user.id, "mail", undefined)),
+      ).toEqual({
+        code: "not_found",
+        message:
+          "The user has no connected mail account; ada@runwinston.email is Winston's own.",
+        hint: "Name it with --account ada@runwinston.email, or the user can connect theirs at runwinston.com/accounts.",
+      });
+      const gmail = await insertConnection(tx, user.id, {
+        externalEmail: "ada@gmail.com",
+      });
+      expect((await resolveConnection(tx, user.id, "mail", undefined)).id).toBe(
+        gmail.id,
+      );
+      expect(
+        (await resolveConnection(tx, user.id, "mail", "ada@runwinston.email"))
+          .id,
+      ).toBe(winston.id);
+    });
+  });
+
+  test("Winston's mailbox may do everything while it's on, and says how to turn it on when it's off", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const winston = await insertConnection(tx, user.id, winstonMailbox);
+      expect(() => {
+        requireCapability(winston, "send", web);
+      }).not.toThrow();
+      expect(
+        await failure(() => {
+          requireCapability(
+            { ...winston, status: "disconnected" },
+            "read",
+            web,
+          );
+        }),
+      ).toEqual({
+        code: "permission_disabled",
+        message: "Winston's email address ada@runwinston.email is turned off.",
+        hint: "The user can turn it on at https://runwinston.com/channels",
+      });
+    });
+  });
+
   test("with one account for the domain, it's used without --account", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

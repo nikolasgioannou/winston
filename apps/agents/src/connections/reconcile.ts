@@ -6,11 +6,12 @@
  * events have dedupe keys.
  */
 import type { DbOrTx } from "@winston/db/client";
+import { googleBacked } from "@winston/db/connections";
 import { enqueue } from "@winston/db/queue";
 import { connections } from "@winston/db/schema";
 import { syncConnectionJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
-import { inArray } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
 import { queueTimerRefreshes } from "../triggers/timers.ts";
 import { renewWatches } from "./watch.ts";
 
@@ -27,7 +28,7 @@ export function offsetOf(connectionId: string) {
 }
 
 /**
- * Queues a sync for every healthy connection, each at its offset, and
+ * Queues a sync for every healthy Google-backed connection, each at its offset, and
  * renews watches. A sync already queued (say, from a push) is left as it
  * is, so this never delays one. Returns how many connections it covered.
  */
@@ -35,7 +36,7 @@ export async function reconcileConnections(db: DbOrTx, now = new Date()) {
   const healthy = await db
     .select({ id: connections.id, userId: connections.userId })
     .from(connections)
-    .where(inArray(connections.status, ["ok", "expiring"]));
+    .where(and(googleBacked, inArray(connections.status, ["ok", "expiring"])));
   for (const connection of healthy)
     await enqueue(db, syncConnectionJob.type, {
       userId: connection.userId,

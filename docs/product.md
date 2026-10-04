@@ -30,7 +30,7 @@ A small web app with a **sidebar**. All chat happens in Telegram.
 
 - **Home:** Winston's status, and the first-run setup checklist until everything is connected (computer ready, Telegram linked, first account connected).
 - **Connected accounts:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server.
-- **Channels:** the ways you reach Winston: Telegram linking (also on Home's setup checklist).
+- **Channels:** the ways you reach Winston: Telegram linking (also on Home's setup checklist), and Winston's own email address.
 - **Profile:** first and last name, email, and account deletion (destroys the computer and wipes everything).
 - **No behavior-specific settings** (for example, no "ping me N minutes before meetings"). See §3.
 - **No history page.** Conversation lives in Telegram. Background runs and triggers are internal.
@@ -94,8 +94,9 @@ Winston **can act on the user's behalf**: send emails, create or delete calendar
 
 ### Identity
 
-- **Winston always acts as the user**: their Gmail, their logged-in browser, bookings in their name. When he writes on the user's behalf in an assistant voice, he does it from the user's own email (for example, signing "Winston, on behalf of Nik").
-- **He has no email address or phone number of his own.** Verification codes sent to the user's email are read through Gmail. SMS codes are handled through a handoff.
+- **Winston acts as the user** in the user's own things: their Gmail, their logged-in browser, bookings in their name. When he writes on the user's behalf in an assistant voice in the user's threads, he does it from the user's own email (for example, signing "Winston, on behalf of Nik").
+- **His own email address (being built, ead827).** The user can turn on an address for Winston, `<name>@runwinston.email`, from the site's Channels page, picking the name then. He uses it to sign up for things in his own name and read their verification codes, and the user forwards mail to him or CCs him to hand work off. The name is the user's choice, may be changed twice (old addresses keep delivering), and is never given to anyone else, even after the account is deleted. Turning it off makes mail to it bounce until it's on again.
+- **He has no phone number of his own.** Verification codes sent to the user's email are read through Gmail, and SMS codes are handled through a handoff.
 
 Trust is controlled in two layers:
 
@@ -113,7 +114,7 @@ Decided _not_ to build:
 - Behavior-specific settings (for example, meeting-reminder timing).
 - A dedicated onboarding study. The user guides Winston.
 - Tool-approval machinery (approval buttons, gated tool calls).
-- Winston's own email address or phone number.
+- Winston's own phone number.
 - Public signup. Access is by email allowlist.
 - Google OAuth production verification. The app stays in testing mode.
 - Observability/eval tooling. The database is the record.

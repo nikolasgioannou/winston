@@ -16,7 +16,11 @@ type ConnectLink = InferResponseType<
   200
 >;
 
-const providerNames = { gmail: "Gmail", google_calendar: "Google Calendar" };
+const providerNames = {
+  gmail: "Gmail",
+  google_calendar: "Google Calendar",
+  winston: "Winston's own",
+};
 const statusWords = {
   ok: "ok",
   expiring: "auth expiring",

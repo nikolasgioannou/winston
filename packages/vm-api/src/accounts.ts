@@ -6,6 +6,7 @@
  */
 import type { CalendarInfo } from "@winston/connectors/calendar";
 import type { DbOrTx } from "@winston/db/client";
+import { googleBacked } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
 import {
   capabilitiesByDomain,
@@ -32,6 +33,12 @@ export const providerNotes: Record<ConnectionProvider, string[]> = {
     "Labels are Gmail labels; adding one that doesn't exist creates it.",
     "Delete moves mail to the trash, which Gmail empties after 30 days.",
     "Mail is sent from this address, under the name set in Gmail.",
+  ],
+  winston: [
+    "Winston's own mailbox, at his own address, not the user's: mail here is to and from Winston.",
+    "Mail commands use it only when it's named with --account.",
+    "The user turns it on or off, or changes its address, at runwinston.com/channels.",
+    "It can't be read or sent from yet.",
   ],
   google_calendar: [
     "Lists cover the calendars the user shows in Google Calendar; pick another with --calendar.",
@@ -116,7 +123,11 @@ export function accountRoutes({
         .select({ email: connections.externalEmail })
         .from(connections)
         .where(
-          and(connected(c.get("run").userId), eq(connections.domain, domain)),
+          and(
+            connected(c.get("run").userId),
+            eq(connections.domain, domain),
+            googleBacked,
+          ),
         )
         .orderBy(asc(connections.externalEmail));
       return c.json({
@@ -165,10 +176,11 @@ export function accountRoutes({
             })),
             ...(await calendarsOf(row)),
             notes: providerNotes[row.provider],
-            /** Where the user changes permissions or reconnects. */
-            links: connectors
-              ? accountLinks(connectors.webPublicUrl, row.id)
-              : null,
+            /** Where the user changes permissions or reconnects (Google accounts only). */
+            links:
+              connectors && row.provider !== "winston"
+                ? accountLinks(connectors.webPublicUrl, row.id)
+                : null,
           };
         }),
       );

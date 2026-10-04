@@ -15,6 +15,7 @@ import { googleCalendarSync } from "@winston/connectors/google-calendar-sync";
 import { ProviderNotFoundError } from "@winston/connectors/errors";
 import { gmailSync, WatchRefusedError } from "@winston/connectors/gmail-sync";
 import type { DbOrTx } from "@winston/db/client";
+import { googleBacked } from "@winston/db/connections";
 import { enqueue } from "@winston/db/queue";
 import { calendarChannels, connections } from "@winston/db/schema";
 import { watchConnectionJob } from "@winston/domain/jobs";
@@ -50,6 +51,7 @@ export function watchConnectionHandler(deps: {
       .where(eq(connections.id, connectionId));
     if (
       !connection ||
+      connection.provider === "winston" ||
       connection.status === "expired" ||
       connection.status === "disconnected"
     )
@@ -224,13 +226,14 @@ export function watchStopper(
   };
 }
 
-/** Queues a watch for each usable connection whose watch is missing or ends soon. */
+/** Queues a watch for each usable Google connection whose watch is missing or ends soon. */
 export async function renewWatches(db: DbOrTx, now = new Date()) {
   const due = await db
     .select({ id: connections.id, userId: connections.userId })
     .from(connections)
     .where(
       and(
+        googleBacked,
         inArray(connections.status, ["ok", "expiring"]),
         or(
           isNull(connections.watchExpiresAt),

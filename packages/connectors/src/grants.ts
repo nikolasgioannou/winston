@@ -1,5 +1,6 @@
 import type { DbOrTx } from "@winston/db/client";
 import { connections } from "@winston/db/schema";
+import { googleBacked } from "@winston/db/connections";
 import { recordSystemEvent } from "@winston/db/system-events";
 import type { Logger } from "@winston/shared/logger";
 import { and, eq, inArray, lte } from "drizzle-orm";
@@ -117,6 +118,7 @@ export async function sweepConnectionGrants(
     .from(connections)
     .where(
       and(
+        googleBacked,
         inArray(connections.status, ["ok", "expiring"]),
         lte(connections.grantedAt, expiredBefore),
       ),
@@ -131,6 +133,7 @@ export async function sweepConnectionGrants(
     .set({ status: "expiring" })
     .where(
       and(
+        googleBacked,
         eq(connections.status, "ok"),
         lte(connections.grantedAt, expiringBefore),
       ),
