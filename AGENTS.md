@@ -10,6 +10,7 @@ These are the rules for how work happens in this repo. What Winston is and how i
 - If a ticket's instructions conflict with the principles below, raise it with the user instead of following the ticket as written.
 - Group new milestones and features as parent tickets. Existing tickets are grouped by milestone labels (`m0`, `m1`, …) and stay that way.
 - When asked to use a worktree (to work alongside other sessions), follow the `worktree` skill.
+- Other sessions push to `main` too. Before starting a ticket and before pushing, bring the checkout up to date with `git pull --rebase --autostash` (in a worktree, the `worktree` skill's landing steps do this instead).
 
 ## Principles
 
