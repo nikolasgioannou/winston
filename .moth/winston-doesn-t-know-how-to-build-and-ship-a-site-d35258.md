@@ -1,14 +1,14 @@
 ---
 id: "d35258"
 title: Winston doesn't know how to build and ship a site
-status: backlog
+status: todo
 priority: none
 labels:
   - agents
   - prompts
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.449Z
-updated_at: 2026-10-04T02:55:07.449Z
+updated_at: 2026-10-04T02:59:13.667Z
 blocked_by:
   - "bf7f34"
 ---

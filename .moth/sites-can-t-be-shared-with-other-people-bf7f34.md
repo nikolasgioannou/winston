@@ -1,7 +1,7 @@
 ---
 id: "bf7f34"
 title: Sites can't be shared with other people
-status: backlog
+status: todo
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.189Z
-updated_at: 2026-10-04T02:55:07.189Z
+updated_at: 2026-10-04T02:59:13.410Z
 blocked_by:
   - "28a208"
 ---

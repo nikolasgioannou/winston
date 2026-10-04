@@ -1,14 +1,14 @@
 ---
 id: "0a3197"
 title: Sites can run up an unbounded bill
-status: backlog
+status: todo
 priority: none
 labels:
   - backend
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.292Z
-updated_at: 2026-10-04T02:55:07.292Z
+updated_at: 2026-10-04T02:59:13.513Z
 blocked_by:
   - "28a208"
 ---

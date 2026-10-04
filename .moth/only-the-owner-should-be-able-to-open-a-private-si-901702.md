@@ -1,7 +1,7 @@
 ---
 id: "901702"
 title: Only the owner should be able to open a private site
-status: backlog
+status: todo
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - web
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.085Z
-updated_at: 2026-10-04T02:55:07.085Z
+updated_at: 2026-10-04T02:59:13.307Z
 blocked_by:
   - "4bacc0"
 ---

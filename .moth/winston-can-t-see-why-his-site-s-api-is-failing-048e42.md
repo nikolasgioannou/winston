@@ -1,14 +1,14 @@
 ---
 id: "048e42"
 title: Winston can't see why his site's API is failing
-status: backlog
+status: todo
 priority: low
 labels:
   - backend
   - cli
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.500Z
-updated_at: 2026-10-04T02:55:07.500Z
+updated_at: 2026-10-04T02:59:13.720Z
 blocked_by:
   - "28a208"
 ---

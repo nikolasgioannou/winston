@@ -1,14 +1,14 @@
 ---
 id: "f432a3"
 title: Sites have no domain or Cloudflare platform to run on
-status: backlog
+status: todo
 priority: none
 labels:
   - collab
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:06.982Z
-updated_at: 2026-10-04T02:55:06.982Z
+updated_at: 2026-10-04T02:59:13.206Z
 ---
 
 Done with the founder: these steps need their accounts.

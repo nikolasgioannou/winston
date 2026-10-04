@@ -1,14 +1,14 @@
 ---
 id: "b2c4a6"
 title: A bad deploy can't be undone
-status: backlog
+status: todo
 priority: none
 labels:
   - backend
   - cli
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.241Z
-updated_at: 2026-10-04T02:55:07.241Z
+updated_at: 2026-10-04T02:59:13.461Z
 blocked_by:
   - "28a208"
 ---

@@ -1,14 +1,13 @@
 ---
 id: "57e0e7"
 title: Let Winston build and deploy sites the user can reach and share
-status: backlog
+status: in-progress
 priority: none
 labels:
   - collab
   - infra
-  - spec
 created_at: 2026-10-03T16:31:57.420Z
-updated_at: 2026-10-04T02:53:33.211Z
+updated_at: 2026-10-04T02:59:13.924Z
 ---
 
 The founder's idea (2026-10-03), specced together on 2026-10-03. Winston builds a small website or app (static pages, or pages with an API and a database) on his computer and deploys it to the internet, where the user can reach it and share it.
