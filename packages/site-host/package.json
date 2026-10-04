@@ -5,6 +5,8 @@
   "exports": {
     "./host": "./src/host.ts",
     "./local-host": "./src/local-host.ts",
+    "./pass": "./src/pass.ts",
+    "./pass-sign": "./src/pass-sign.ts",
     "./route": "./src/route.ts"
   },
   "scripts": {

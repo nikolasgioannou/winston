@@ -104,6 +104,7 @@
         "@winston/db": "workspace:*",
         "@winston/domain": "workspace:*",
         "@winston/shared": "workspace:*",
+        "@winston/site-host": "workspace:*",
         "@winston/ui": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "lucide-react": "1.48.0",

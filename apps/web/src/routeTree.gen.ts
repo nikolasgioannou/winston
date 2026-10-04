@@ -15,6 +15,7 @@ import { Route as BrowserRouteImport } from './routes/browser'
 import { Route as AuthedHomeRouteImport } from './routes/_authed/home'
 import { Route as AuthSignOutRouteImport } from './routes/auth/sign-out'
 import { Route as AuthTelegramRouteImport } from './routes/auth/telegram'
+import { Route as SitesOpenRouteImport } from './routes/sites/open'
 import { Route as TTokenRouteImport } from './routes/t/$token'
 import { Route as AuthedAccountsIndexRouteImport } from './routes/_authed/accounts/index'
 import { Route as AuthedChannelsIndexRouteImport } from './routes/_authed/channels/index'
@@ -53,6 +54,11 @@ const AuthSignOutRoute = AuthSignOutRouteImport.update({
 const AuthTelegramRoute = AuthTelegramRouteImport.update({
   id: '/auth/telegram',
   path: '/auth/telegram',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitesOpenRoute = SitesOpenRouteImport.update({
+  id: '/sites/open',
+  path: '/sites/open',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TTokenRoute = TTokenRouteImport.update({
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/telegram': typeof AuthTelegramRoute
+  '/sites/open': typeof SitesOpenRoute
   '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/telegram': typeof AuthTelegramRoute
+  '/sites/open': typeof SitesOpenRoute
   '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/_authed/home': typeof AuthedHomeRoute
   '/auth/sign-out': typeof AuthSignOutRoute
   '/auth/telegram': typeof AuthTelegramRoute
+  '/sites/open': typeof SitesOpenRoute
   '/t/$token': typeof TTokenRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/auth/google/start': typeof AuthGoogleStartRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/auth/sign-out'
     | '/auth/telegram'
+    | '/sites/open'
     | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/auth/sign-out'
     | '/auth/telegram'
+    | '/sites/open'
     | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/_authed/home'
     | '/auth/sign-out'
     | '/auth/telegram'
+    | '/sites/open'
     | '/t/$token'
     | '/auth/google/callback'
     | '/auth/google/start'
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   BrowserRoute: typeof BrowserRoute
   AuthSignOutRoute: typeof AuthSignOutRoute
   AuthTelegramRoute: typeof AuthTelegramRoute
+  SitesOpenRoute: typeof SitesOpenRoute
   TTokenRoute: typeof TTokenRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
   AuthGoogleStartRoute: typeof AuthGoogleStartRoute
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/telegram'
       fullPath: '/auth/telegram'
       preLoaderRoute: typeof AuthTelegramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sites/open': {
+      id: '/sites/open'
+      path: '/sites/open'
+      fullPath: '/sites/open'
+      preLoaderRoute: typeof SitesOpenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/t/$token': {
@@ -370,6 +390,7 @@ const rootRouteChildren: RootRouteChildren = {
   BrowserRoute: BrowserRoute,
   AuthSignOutRoute: AuthSignOutRoute,
   AuthTelegramRoute: AuthTelegramRoute,
+  SitesOpenRoute: SitesOpenRoute,
   TTokenRoute: TTokenRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
   AuthGoogleStartRoute: AuthGoogleStartRoute,

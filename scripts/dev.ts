@@ -38,7 +38,13 @@ const services: Service[] = [
     cmd: ["bun", "--env-file=../../.env.local", "--bun", "vite", "dev"],
   },
   // Serves sites at http://<name>.sites.localhost:3003 (docs/local-dev.md).
-  { name: "sites", cwd: "apps/sites", cmd: watch("src/local/main.ts") },
+  // Optional: it needs SITES_PASS_KEY, which setup.sh generates.
+  {
+    name: "sites",
+    cwd: "apps/sites",
+    cmd: watch("src/local/main.ts"),
+    optional: true,
+  },
   // Checks the seeded user's VM, provisions or replaces it as needed, and reports it until it's ready.
   {
     name: "vm",

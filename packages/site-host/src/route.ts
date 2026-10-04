@@ -26,6 +26,17 @@ export function siteNameOf(hostname: string, domain: string): string | null {
   return name && !name.includes(".") ? name : null;
 }
 
+/** A site's address: `https://runwinston.app` and `blog` → `https://blog.runwinston.app`. */
+export function siteUrl(sitesUrl: string, name: string) {
+  const url = new URL(sitesUrl);
+  url.hostname = `${name}.${url.hostname}`;
+  return url.origin;
+}
+
+/** Whether a name can be a site's (one DNS label, lowercase). */
+export const isSiteName = (name: string) =>
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name);
+
 /** Narrows a stored route, so a malformed entry reads as no site. */
 export function parseSiteRoute(value: unknown): SiteRoute | null {
   if (typeof value !== "object" || value === null) return null;

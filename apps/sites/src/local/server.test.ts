@@ -1,14 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SiteHost } from "@winston/site-host/host";
 import { localSiteHost } from "@winston/site-host/local-host";
+import {
+  signSitePass,
+  sitePassPublicKey,
+  sitePassSigningKey,
+} from "@winston/site-host/pass-sign";
 import { startLocalSites } from "./server.ts";
 
 const route = {
   script: "site_01test",
-  ownerId: "usr_1",
+  ownerId: "usr_owner",
   access: "private" as const,
   paused: false,
 };
@@ -20,6 +26,14 @@ const worker = `export default {
     return env.ASSETS.fetch(request);
   },
 };`;
+
+const signingKey = sitePassSigningKey(randomBytes(32).toString("hex"));
+const pass = (sub = "usr_owner", nonce = "n") =>
+  signSitePass(
+    { sub, site: "blog", nonce, exp: Date.now() + 60_000 },
+    signingKey,
+  );
+const owner = `winston_site_pass=${pass()}`;
 
 describe("the local site host", () => {
   let dir: string;
@@ -33,7 +47,8 @@ describe("the local site host", () => {
       domain: "sites.localhost",
       port: 0,
       adminPort: 0,
-      admitAll: true,
+      webUrl: "http://localhost:3002",
+      passPublicKey: sitePassPublicKey(signingKey),
     });
     host = localSiteHost(sites.adminUrl);
   });
@@ -43,7 +58,7 @@ describe("the local site host", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("a site's Worker and assets answer through the dispatch Worker", async () => {
+  test("the owner reaches a site's Worker and assets through the dispatch Worker", async () => {
     await host.putScript(route.script, {
       modules: [{ name: "worker.js", content: worker }],
       assets: [
@@ -55,12 +70,39 @@ describe("the local site host", () => {
     });
     await host.setRoute("blog", route);
 
-    expect(await (await sites.fetchSite("blog")).text()).toContain(
+    expect(await (await sites.fetchSite("blog", "/", owner)).text()).toContain(
       "<h1>Hello</h1>",
     );
-    expect(await (await sites.fetchSite("blog", "/api/hello")).json()).toEqual({
-      hello: "blog.sites.localhost",
-    });
+    const api = await sites.fetchSite("blog", "/api/hello", owner);
+    expect(await api.json()).toEqual({ hello: "blog.sites.localhost" });
+  });
+
+  test("a signed-out browser goes to sign in, and comes back in with its pass", async () => {
+    const signedOut = await sites.fetchSite("blog", "/");
+    expect(signedOut.status).toBe(303);
+    const location = new URL(signedOut.headers.get("location") ?? "");
+    expect(location.origin).toBe("http://localhost:3002");
+    const nonce = location.searchParams.get("nonce") ?? "";
+
+    const token = pass("usr_owner", nonce);
+    const back = await sites.fetchSite(
+      "blog",
+      `/__winston/enter?pass=${token}&path=/`,
+      `winston_site_nonce=${nonce}`,
+    );
+    expect(back.status).toBe(303);
+    expect(back.headers.getSetCookie()[0]).toStartWith(
+      `winston_site_pass=${token};`,
+    );
+  });
+
+  test("someone else's pass gets the private page", async () => {
+    const response = await sites.fetchSite(
+      "blog",
+      "/",
+      `winston_site_pass=${pass("usr_other")}`,
+    );
+    expect(response.status).toBe(403);
   });
 
   test("a replaced Worker serves its new version", async () => {
@@ -73,21 +115,21 @@ describe("the local site host", () => {
       ],
       assets: [],
     });
-    expect(await (await sites.fetchSite("blog")).text()).toBe("v2");
+    expect(await (await sites.fetchSite("blog", "/", owner)).text()).toBe("v2");
   });
 
   test("unknown and paused names get their pages", async () => {
     expect((await sites.fetchSite("nothing")).status).toBe(404);
     await host.setRoute("blog", { ...route, paused: true });
-    expect((await sites.fetchSite("blog")).status).toBe(503);
+    expect((await sites.fetchSite("blog", "/", owner)).status).toBe(503);
     await host.setRoute("blog", route);
   });
 
   test("a deleted Worker or route leaves no site", async () => {
     await host.deleteScript(route.script);
-    expect((await sites.fetchSite("blog")).status).toBe(404);
+    expect((await sites.fetchSite("blog", "/", owner)).status).toBe(404);
     await host.setRoute("blog", null);
-    expect((await sites.fetchSite("blog")).status).toBe(404);
+    expect((await sites.fetchSite("blog", "/", owner)).status).toBe(404);
     // Deleting again is fine.
     await host.deleteScript(route.script);
   });

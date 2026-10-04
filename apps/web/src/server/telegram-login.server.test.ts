@@ -77,6 +77,7 @@ describe("Telegram sign-in", () => {
     expect(returnPath("/auth/google/connect?domain=mail")).toBe(
       "/auth/google/connect?domain=mail",
     );
+    expect(returnPath("/sites/open?site=blog")).toBe("/sites/open?site=blog");
     expect(returnPath("https://evil.test/browser")).toBeUndefined();
     expect(returnPath("//evil.test/browser")).toBeUndefined();
     expect(returnPath("/home")).toBeUndefined();

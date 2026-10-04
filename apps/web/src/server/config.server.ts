@@ -22,6 +22,16 @@ const webConfigSchema = dbConfigSchema
      * signing in with Google.
      */
     TELEGRAM_LOGIN_KEY: z.string().min(1).optional(),
+    /**
+     * Signs site passes (docs/design.md §9a): an Ed25519 seed, 32 bytes in
+     * hex. Without it, private sites can't be opened.
+     */
+    SITES_PASS_KEY: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, "expected 32 bytes in hex")
+      .optional(),
+    /** Where sites are served, each at a subdomain: https://runwinston.app. */
+    SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
     /** The bot Connect Telegram opens: @RunWinstonBot in production. */
     TELEGRAM_BOT_USERNAME: z
       .string()

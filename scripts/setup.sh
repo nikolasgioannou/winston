@@ -107,6 +107,7 @@ ensure_secret TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret"
 ensure_secret GATEWAY_INTERNAL_SECRET "gateway internal secret"
 ensure_secret RUN_TOKEN_SECRET "run token secret"
 ensure_secret TOKEN_ENCRYPTION_KEY "token encryption key"
+ensure_secret SITES_PASS_KEY "site pass key"
 if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
   done_ "Telegram bot token set"
 else

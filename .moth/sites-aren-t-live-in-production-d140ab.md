@@ -7,7 +7,7 @@ labels:
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:59:05.230Z
-updated_at: 2026-10-04T03:21:06.452Z
+updated_at: 2026-10-04T03:31:13.715Z
 blocked_by:
   - "28a208"
   - "f432a3"
@@ -28,3 +28,5 @@ Everything up to deploying works on the local stack; this puts it on Cloudflare 
 - The dispatch Worker's Cloudflare entry: `env.DISPATCHER.get(script, {}, { limits })`, treating "Worker not found" as no site, and the `ROUTES` KV binding.
 - The Cloudflare `SiteHost` (`@winston/site-host`): script upload with assets (upload session, then the script PUT), delete, and KV writes. Check the D1 binding's field name (`id` or `database_id`) and whether assets-only user Workers are allowed.
 - [ ] A site that loops is cut off by the CPU limit and shows the "failed" page
+
+- `SITES_PASS_KEY` for `web` in Secrets Manager (and the CDK task definition), `SITES_PUBLIC_URL=https://runwinston.app`; the dispatch Worker gets the public half (`sitePassPublicKey`) and `WEB_PUBLIC_URL` as plain vars.

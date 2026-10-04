@@ -20,8 +20,10 @@ export interface LocalSitesOptions {
   port: number;
   /** The admin API the backend's `localSiteHost` calls. 0 picks one. */
   adminPort: number;
-  /** Tests only, until owners can sign in (901702): opens every site. */
-  admitAll?: boolean;
+  /** Where private sites send browsers to sign in: the local site. */
+  webUrl: string;
+  /** Verifies site passes (`sitePassPublicKey` of `SITES_PASS_KEY`). */
+  passPublicKey: string;
 }
 
 interface Meta {
@@ -110,7 +112,8 @@ export async function startLocalSites(options: LocalSitesOptions) {
           script: dispatchScript,
           bindings: {
             SITES_DOMAIN: options.domain,
-            ...(options.admitAll ? { ADMIT_ALL: "1" } : {}),
+            WEB_PUBLIC_URL: options.webUrl,
+            SITES_PASS_PUBLIC_KEY: options.passPublicKey,
           },
           kvNamespaces: { ROUTES: "routes" },
           serviceBindings: Object.fromEntries(
@@ -220,10 +223,14 @@ export async function startLocalSites(options: LocalSitesOptions) {
   return {
     url: `http://${options.domain}:${String(port)}`,
     adminUrl: `http://127.0.0.1:${String(admin.port)}`,
-    /** Fetches a site page as a browser would, by its name. */
-    fetchSite: (name: string, path = "/") =>
+    /** Fetches a site page as a browser would, by its name (tests). */
+    fetchSite: (name: string, path = "/", cookie?: string) =>
       fetch(`http://127.0.0.1:${String(port)}${path}`, {
-        headers: { host: `${name}.${options.domain}` },
+        headers: {
+          host: `${name}.${options.domain}`,
+          ...(cookie ? { cookie } : {}),
+        },
+        redirect: "manual",
       }),
     stop: async () => {
       await admin.stop(true);
