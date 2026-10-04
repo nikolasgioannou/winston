@@ -6,6 +6,7 @@ const site = {
   name: "blog",
   url: "https://blog.runwinston.app",
   access: "private",
+  shareLink: null,
   paused: false,
   version: 1,
   database: true,
@@ -62,9 +63,9 @@ describe("winston site", () => {
     expect([...files.keys()].some((path) => path.endsWith(".tar"))).toBe(false);
     expect(out).toMatchInlineSnapshot(`
       "site_01abc · blog · https://blog.runwinston.app · private · version 1 · database
+      Private: only the user can open it, signed in to Winston.
       Deployed 1 static file, worker.js, 1 migration.
-      Applied migrations: 0001_notes.sql.
-      Private: only the user can open it, signed in to Winston."
+      Applied migrations: 0001_notes.sql."
     `);
   });
 
@@ -136,7 +137,28 @@ describe("winston site", () => {
       return Response.json({ site: { ...site, paused: true } });
     });
     expect(shown.out).toBe(
-      "site_01abc · blog · https://blog.runwinston.app · paused · version 1 · database",
+      "site_01abc · blog · https://blog.runwinston.app · paused · version 1 · database\nPrivate: only the user can open it, signed in to Winston.",
     );
+  });
+
+  test("share prints the link anyone can open; unshare says it's private again", async () => {
+    const link = "https://blog.runwinston.app/__winston/share?key=k3y";
+    const shared = await cli(["site", "share", "blog"], (request) => {
+      expect(request.method).toBe("POST");
+      expect(new URL(request.url).pathname).toBe("/v1/sites/blog/share");
+      return Response.json({
+        site: { ...site, access: "link", shareLink: link },
+      });
+    });
+    expect(shared.out).toBe(
+      `site_01abc · blog · https://blog.runwinston.app · shared by link · version 1 · database\nAnyone with this link can open it: ${link}`,
+    );
+    const unshared = await cli(["site", "unshare", "blog"], (request) => {
+      expect(new URL(request.url).pathname).toBe("/v1/sites/blog/unshare");
+      return Response.json({ site });
+    });
+    expect(unshared.out).toContain("Private: only the user can open it");
+    const missing = await cli(["site", "share"], () => Response.json({}));
+    expect(missing.code).toBe(1);
   });
 });

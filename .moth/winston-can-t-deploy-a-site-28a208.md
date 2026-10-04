@@ -1,7 +1,7 @@
 ---
 id: "28a208"
 title: Winston can't deploy a site
-status: in-progress
+status: done
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - vm
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:07.137Z
-updated_at: 2026-10-04T04:13:55.158Z
+updated_at: 2026-10-04T05:43:08.088Z
 blocked_by:
   - "901702"
 ---
@@ -25,7 +25,7 @@ blocked_by:
 - docs/design.md: the Sites section, §11 command reference, §14.
 
 **Done when**
-- [ ] Winston deploys a static site and a site with an API and a database from the VM, and the owner opens both
+- [x] Winston deploys a static site and a site with an API and a database from the VM, and the owner opens both
 - [x] A redeploy replaces the site and keeps its data; migrations apply once
 - [x] Taken and reserved names, an 11th site and an oversized bundle are refused with clear errors (tests)
 - [x] No Cloudflare credential is on the VM
@@ -38,4 +38,4 @@ blocked_by:
 - `SiteHost` gained `createDatabase` and `batchSql`. D1 runs one statement at a time (Miniflare's `exec` even reads one per line), so migrations are split with `splitSql` and each runs as one batch with its `_winston_migrations` record, applying whole or not at all.
 - Names are 3–63 characters, with a reserved list. Taken names are exit 6 with a `--name` hint.
 - Tests: route tests with a fake host, CLI tests with an in-memory disk, the local host with real D1, and an end-to-end deploy through the real VM-facing API into the local host, opened with the owner's pass.
-- **Not yet run on a real VM through `bun dev`**: another checkout's stack holds the ports.
+- **Run on the real stack** (2026-10-04): a background task asked Winston to build a notes app. In 6 steps he wrote `public/index.html`, a `worker.js` API on `env.DB` and a migration, and deployed with `winston site deploy` from his VM. Opened with an owner pass, the page, `GET` and `POST /api/notes` all worked, and another user got the private page. He had to guess the `env.DB`/`env.ASSETS` contract (now in the CLI help), and couldn't check the site himself (filed separately).

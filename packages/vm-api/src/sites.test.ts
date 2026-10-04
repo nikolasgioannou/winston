@@ -4,6 +4,7 @@ import { sites as sitesTable, siteVersions } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import type { SiteHost, SiteScript } from "@winston/site-host/host";
 import type { SiteRoute } from "@winston/site-host/route";
+import { hashToken } from "@winston/shared/tokens";
 import { asc, eq } from "drizzle-orm";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -122,6 +123,7 @@ describe("site routes", () => {
         script: id,
         ownerId: user.id,
         access: "private",
+        shareKeyHash: null,
         paused: false,
       });
       const [version] = await tx
@@ -250,6 +252,70 @@ describe("site routes", () => {
         .from(sitesTable)
         .orderBy(asc(sitesTable.name));
       expect(rows.map((row) => row.name)).toEqual(["mine", "theirs"]);
+    });
+  });
+
+  test("share gives a link whose key only the route's hash knows; again, the same link; unshare, then share, a new one", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const { as, routes } = await setup(tx, {
+        "/site.tar": { "public/index.html": "hi" },
+      });
+      const call = as(user.id);
+      await deploy(call, "/site.tar", "blog");
+      const share = async () =>
+        (
+          (await (
+            await call("/v1/sites/blog/share", { method: "POST" })
+          ).json()) as { site: { access: string; shareLink: string } }
+        ).site;
+
+      const first = await share();
+      expect(first.access).toBe("link");
+      const key = new URL(first.shareLink).searchParams.get("key") ?? "missing";
+      expect(first.shareLink).toStartWith(
+        "https://blog.runwinston.app/__winston/share?key=",
+      );
+      expect(routes.get("blog")).toMatchObject({
+        access: "link",
+        shareKeyHash: hashToken(key),
+      });
+      expect(JSON.stringify(routes.get("blog"))).not.toContain(key);
+      expect((await share()).shareLink).toBe(first.shareLink);
+
+      const unshared = (await (
+        await call("/v1/sites/blog/unshare", { method: "POST" })
+      ).json()) as { site: { access: string; shareLink: string | null } };
+      expect(unshared.site).toMatchObject({
+        access: "private",
+        shareLink: null,
+      });
+      expect(routes.get("blog")).toMatchObject({
+        access: "private",
+        shareKeyHash: null,
+      });
+      expect((await share()).shareLink).not.toBe(first.shareLink);
+    });
+  });
+
+  test("only the user's own deployed sites can be shared", async () => {
+    await inRollback(db, async (tx) => {
+      const owner = await insertUser(tx);
+      const other = await insertUser(tx);
+      const { as } = await setup(tx, {
+        "/site.tar": { "public/index.html": "hi" },
+      });
+      await deploy(as(owner.id), "/site.tar", "blog");
+      const theirs = await as(other.id)("/v1/sites/blog/share", {
+        method: "POST",
+      });
+      expect(theirs.status).toBe(404);
+      // A site whose first deploy failed has no version to share.
+      await tx.insert(sitesTable).values({ userId: owner.id, name: "empty" });
+      const empty = await as(owner.id)("/v1/sites/empty/share", {
+        method: "POST",
+      });
+      expect(empty.status).toBe(409);
     });
   });
 });

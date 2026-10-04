@@ -3,19 +3,22 @@ import {
   verifySitePass,
   type SitePass,
 } from "@winston/site-host/pass";
-import { privatePage } from "./pages.ts";
+import type { SiteRoute } from "@winston/site-host/route";
+import { expiredLinkPage, privatePage } from "./pages.ts";
 
 /**
- * Who may open a private site (docs/design.md §9a, "Owner access"): a browser
- * holding a pass for this site issued to its owner. Without one, a page load
+ * Who may open a site (docs/design.md §9a, "Owner access", "Sharing"): its
+ * owner, with a pass for this site issued to them. Without one, a page load
  * goes to `runwinston.com` to get one, carrying a nonce this site keeps in a
  * cookie, so a pass that leaks from the URL is useless in another browser.
+ * While a site is shared by link, also anyone holding its current share key.
  */
 
 /** The path the site sends a browser back to with its pass. Reserved on every site. */
 export const enterPath = "/__winston/enter";
 
 const nonceMs = 10 * 60 * 1000;
+const shareMs = 30 * 24 * 60 * 60 * 1000;
 
 /** Over https the cookies are `__Host-` (host-only, Secure); dev sites are plain http. */
 const cookieNames = (url: URL) => {
@@ -23,8 +26,49 @@ const cookieNames = (url: URL) => {
   return {
     pass: `${prefix}winston_site_pass`,
     nonce: `${prefix}winston_site_nonce`,
+    share: `${prefix}winston_site_share`,
   };
 };
+
+/** SHA-256 in hex: share keys are compared by hash, as the route holds only that. */
+async function hashKey(key: string) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(key),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Whether `key` is the site's current share key (and it's shared by link at all). */
+async function opensShared(key: string | null | undefined, route: SiteRoute) {
+  return (
+    route.access === "link" &&
+    route.shareKeyHash !== null &&
+    Boolean(key) &&
+    (await hashKey(key ?? "")) === route.shareKeyHash
+  );
+}
+
+/** Whether this browser holds the site's current share key. */
+export const hasShareKey = (request: Request, route: SiteRoute) =>
+  opensShared(
+    cookies(request).get(cookieNames(new URL(request.url)).share),
+    route,
+  );
+
+/**
+ * Opening the share link: the key goes in a cookie and the browser on to the
+ * site, without the key in the address. An old or wrong key gets a page
+ * saying the link doesn't work any more.
+ */
+export async function openShareLink(request: Request, route: SiteRoute) {
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key");
+  if (!key || !(await opensShared(key, route))) return expiredLinkPage();
+  return redirect("/", [setCookie(url, cookieNames(url).share, key, shareMs)]);
+}
 
 const setCookie = (url: URL, name: string, value: string, maxAgeMs: number) =>
   [
@@ -84,7 +128,10 @@ export async function passFor(request: Request, name: string, key: CryptoKey) {
 export function withoutAccessCookies(request: Request) {
   const names = cookieNames(new URL(request.url));
   const kept = [...cookies(request)]
-    .filter(([key]) => key !== names.pass && key !== names.nonce)
+    .filter(
+      ([key]) =>
+        key !== names.pass && key !== names.nonce && key !== names.share,
+    )
     .map(([key, value]) => `${key}=${value}`);
   const headers = new Headers(request.headers);
   if (kept.length) headers.set("cookie", kept.join("; "));

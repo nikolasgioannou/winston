@@ -1,3 +1,6 @@
+export const siteAccesses = ["private", "link"] as const;
+export type SiteAccess = (typeof siteAccesses)[number];
+
 /**
  * What the dispatch Worker knows about a site (docs/design.md §9a): one
  * entry per name in the routes map (Workers KV in production), written by
@@ -6,9 +9,12 @@
 export interface SiteRoute {
   /** The site's Worker in the dispatch namespace. */
   script: string;
-  /** The user who owns it, and so may open it while it's private. */
+  /** The user who owns it, and so may always open it. */
   ownerId: string;
-  access: "private";
+  /** Its owner only, or also anyone with its share link. */
+  access: SiteAccess;
+  /** SHA-256 (hex) of the share link's key while it's shared by link; never the key itself. */
+  shareKeyHash: string | null;
   /** Over a cap or switched off: visitors get the "paused" page. */
   paused: boolean;
 }
@@ -31,6 +37,16 @@ export function siteUrl(sitesUrl: string, name: string) {
   const url = new URL(sitesUrl);
   url.hostname = `${name}.${url.hostname}`;
   return url.origin;
+}
+
+/** The share link's path: `/__winston/share?key=…`. Reserved on every site. */
+export const sharePath = "/__winston/share";
+
+/** A site's share link, which opens it for anyone while it's shared by link. */
+export function shareLink(sitesUrl: string, name: string, key: string) {
+  const link = new URL(sharePath, siteUrl(sitesUrl, name));
+  link.searchParams.set("key", key);
+  return link.toString();
 }
 
 /** Whether a name can be a site's (one DNS label, lowercase). */
@@ -74,14 +90,18 @@ export function siteNameProblem(name: string): string | null {
 export function parseSiteRoute(value: unknown): SiteRoute | null {
   if (typeof value !== "object" || value === null) return null;
   const route = value as Record<string, unknown>;
+  const access = siteAccesses.find((known) => known === route.access);
+  const shareKeyHash = route.shareKeyHash ?? null;
   return typeof route.script === "string" &&
     typeof route.ownerId === "string" &&
-    route.access === "private" &&
+    access &&
+    (shareKeyHash === null || typeof shareKeyHash === "string") &&
     typeof route.paused === "boolean"
     ? {
         script: route.script,
         ownerId: route.ownerId,
-        access: route.access,
+        access,
+        shareKeyHash,
         paused: route.paused,
       }
     : null;

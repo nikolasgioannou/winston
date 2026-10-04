@@ -1,7 +1,13 @@
-import { parseSiteRoute, siteNameOf } from "@winston/site-host/route";
+import {
+  parseSiteRoute,
+  sharePath,
+  siteNameOf,
+} from "@winston/site-host/route";
 import {
   enter,
   enterPath,
+  hasShareKey,
+  openShareLink,
   passFor,
   signInFor,
   withoutAccessCookies,
@@ -31,7 +37,8 @@ export interface DispatchDeps extends AccessDeps {
 
 /**
  * Routes a request on `<name>.<domain>` to that site's Worker
- * (docs/design.md §9a) when the browser holds its owner's pass, or answers
+ * (docs/design.md §9a) when the browser holds its owner's pass or its
+ * share key, or answers
  * with one of the pages: no site, paused, private, or failed.
  */
 export async function dispatch(
@@ -46,10 +53,13 @@ export async function dispatch(
   if (route.paused) return pausedPage();
   if (url.pathname === enterPath)
     return enter(request, name, route.ownerId, deps.passKey);
-  const pass = await passFor(request, name, deps.passKey);
-  if (!pass) return signInFor(request, name, deps);
-  // Someone else's pass: signing in again wouldn't change anything.
-  if (pass.sub !== route.ownerId) return privatePage();
+  if (url.pathname === sharePath) return openShareLink(request, route);
+  if (!(await hasShareKey(request, route))) {
+    const pass = await passFor(request, name, deps.passKey);
+    if (!pass) return signInFor(request, name, deps);
+    // Someone else's pass: signing in again wouldn't change anything.
+    if (pass.sub !== route.ownerId) return privatePage();
+  }
   try {
     return (
       (await deps.site(

@@ -10,7 +10,13 @@ import { sites, siteVersions, users } from "@winston/db/schema";
 import { BundleError, readBundle } from "@winston/site-host/bundle";
 import type { SiteHost } from "@winston/site-host/host";
 import { applyMigrations, MigrationError } from "@winston/site-host/migrations";
-import { siteNameProblem, siteUrl } from "@winston/site-host/route";
+import {
+  shareLink,
+  siteNameProblem,
+  siteUrl,
+  type SiteRoute,
+} from "@winston/site-host/route";
+import { generateToken, hashToken } from "@winston/shared/tokens";
 import { and, count, desc, eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
@@ -37,6 +43,16 @@ const deployBody = z.object({
 
 type Site = typeof sites.$inferSelect;
 
+/** A site's entry in the routes map (§9a): the share key only as its hash. */
+const routeOf = (site: Site): SiteRoute => ({
+  script: site.id,
+  ownerId: site.userId,
+  access: site.access,
+  shareKeyHash:
+    site.access === "link" && site.shareKey ? hashToken(site.shareKey) : null,
+  paused: site.paused,
+});
+
 export function siteRoutes({
   db,
   sites: deps,
@@ -51,6 +67,11 @@ export function siteRoutes({
     name: site.name,
     url: deps ? siteUrl(deps.sitesUrl, site.name) : null,
     access: site.access,
+    /** Opens the site for anyone, while it's shared by link. */
+    shareLink:
+      deps && site.access === "link" && site.shareKey
+        ? shareLink(deps.sitesUrl, site.name, site.shareKey)
+        : null,
     paused: site.paused,
     version: site.currentVersion,
     database: site.databaseId !== null,
@@ -137,129 +158,176 @@ export function siteRoutes({
     });
   }
 
-  return new Hono<VmApiEnv>()
-    .get("/", async (c) => {
-      const rows = await db
-        .select()
-        .from(sites)
-        .where(eq(sites.userId, c.get("run").userId))
-        .orderBy(desc(sites.updatedAt));
-      return c.json({ sites: rows.map(dto) });
-    })
-    .get("/:site", async (c) => {
-      const site = await ownSite(c.get("run").userId, c.req.param("site"));
-      return c.json({ site: dto(site) });
-    })
-    .post(
-      "/deploy",
-      validator("json", (value) => {
-        const parsed = deployBody.safeParse(value);
-        if (!parsed.success)
-          throw new ApiFailure(
-            "invalid_request",
-            z.prettifyError(parsed.error),
-            "Run winston site deploy <folder>.",
-          );
-        return parsed.data;
-      }),
-      async (c) => {
-        const { host, blobs, sitesUrl, vmFiles } = available();
+  /** Changes who may open a site: the row and its route together. */
+  async function setAccess(
+    userId: string,
+    idOrName: string,
+    changes: Pick<Site, "access" | "shareKey">,
+  ) {
+    const { host } = available();
+    const site = await ownSite(userId, idOrName);
+    if (site.currentVersion === null)
+      throw new ApiFailure(
+        "conflict",
+        `${site.name} hasn't been deployed yet.`,
+        "Deploy it first with winston site deploy.",
+      );
+    return db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(sites)
+        .set({ ...changes, updatedAt: new Date() })
+        .where(eq(sites.id, site.id))
+        .returning();
+      if (!updated) throw new Error("the site disappeared");
+      await host.setRoute(updated.name, routeOf(updated));
+      return updated;
+    });
+  }
+
+  return (
+    new Hono<VmApiEnv>()
+      .get("/", async (c) => {
+        const rows = await db
+          .select()
+          .from(sites)
+          .where(eq(sites.userId, c.get("run").userId))
+          .orderBy(desc(sites.updatedAt));
+        return c.json({ sites: rows.map(dto) });
+      })
+      .get("/:site", async (c) => {
+        const site = await ownSite(c.get("run").userId, c.req.param("site"));
+        return c.json({ site: dto(site) });
+      })
+      // Shared already: the same link. Shared again after unsharing: a new one.
+      .post("/:site/share", async (c) => {
         const { userId } = c.get("run");
-        const { path, name } = c.req.valid("json");
+        const current = await ownSite(userId, c.req.param("site"));
+        const site =
+          current.access === "link" && current.shareKey
+            ? current
+            : await setAccess(userId, current.id, {
+                access: "link",
+                shareKey: generateToken(),
+              });
+        return c.json({ site: dto(site) });
+      })
+      .post("/:site/unshare", async (c) => {
+        const site = await setAccess(c.get("run").userId, c.req.param("site"), {
+          access: "private",
+          shareKey: null,
+        });
+        return c.json({ site: dto(site) });
+      })
+      .post(
+        "/deploy",
+        validator("json", (value) => {
+          const parsed = deployBody.safeParse(value);
+          if (!parsed.success)
+            throw new ApiFailure(
+              "invalid_request",
+              z.prettifyError(parsed.error),
+              "Run winston site deploy <folder>.",
+            );
+          return parsed.data;
+        }),
+        async (c) => {
+          const { host, blobs, sitesUrl, vmFiles } = available();
+          const { userId } = c.get("run");
+          const { path, name } = c.req.valid("json");
 
-        let bytes: Uint8Array;
-        try {
-          bytes = await vmFiles.read(userId, path);
-        } catch (error) {
-          throw new ApiFailure(
-            "invalid_request",
-            `Couldn't read the site's bundle: ${error instanceof Error ? error.message : String(error)}`,
-            "Run winston site deploy again.",
-          );
-        }
-        let bundle: Awaited<ReturnType<typeof readBundle>>;
-        try {
-          bundle = await readBundle(bytes);
-        } catch (error) {
-          if (error instanceof BundleError)
-            throw new ApiFailure("invalid_request", error.message, null);
-          throw error;
-        }
+          let bytes: Uint8Array;
+          try {
+            bytes = await vmFiles.read(userId, path);
+          } catch (error) {
+            throw new ApiFailure(
+              "invalid_request",
+              `Couldn't read the site's bundle: ${error instanceof Error ? error.message : String(error)}`,
+              "Run winston site deploy again.",
+            );
+          }
+          let bundle: Awaited<ReturnType<typeof readBundle>>;
+          try {
+            bundle = await readBundle(bytes);
+          } catch (error) {
+            if (error instanceof BundleError)
+              throw new ApiFailure("invalid_request", error.message, null);
+            throw error;
+          }
 
-        const claimed = await claim(userId, name, sitesUrl);
-        // Its own step, so the database is kept even if this deploy fails.
-        if (!claimed.databaseId && bundle.migrations.length > 0)
-          await db.transaction(async (tx) => {
-            const [site] = await tx
-              .select({ databaseId: sites.databaseId })
+          const claimed = await claim(userId, name, sitesUrl);
+          // Its own step, so the database is kept even if this deploy fails.
+          if (!claimed.databaseId && bundle.migrations.length > 0)
+            await db.transaction(async (tx) => {
+              const [site] = await tx
+                .select({ databaseId: sites.databaseId })
+                .from(sites)
+                .where(eq(sites.id, claimed.id))
+                .for("update");
+              if (site && !site.databaseId)
+                await tx
+                  .update(sites)
+                  .set({ databaseId: await host.createDatabase(claimed.id) })
+                  .where(eq(sites.id, claimed.id));
+            });
+          // The rest runs under a lock on the site, one deploy at a time.
+          const result = await db.transaction(async (tx) => {
+            const [site = claimed] = await tx
+              .select()
               .from(sites)
               .where(eq(sites.id, claimed.id))
               .for("update");
-            if (site && !site.databaseId)
-              await tx
-                .update(sites)
-                .set({ databaseId: await host.createDatabase(claimed.id) })
-                .where(eq(sites.id, claimed.id));
-          });
-        // The rest runs under a lock on the site, one deploy at a time.
-        const result = await db.transaction(async (tx) => {
-          const [site = claimed] = await tx
-            .select()
-            .from(sites)
-            .where(eq(sites.id, claimed.id))
-            .for("update");
-          const databaseId = site.databaseId;
-          let migrated: string[] = [];
-          if (databaseId)
-            try {
-              migrated = await applyMigrations(
-                host,
-                databaseId,
-                bundle.migrations,
-              );
-            } catch (error) {
-              if (error instanceof MigrationError)
-                throw new ApiFailure(
-                  "invalid_request",
-                  `Migration ${error.message}`,
-                  error.applied.length
-                    ? `${error.applied.join(", ")} did apply. Fix the failing one and deploy again; nothing was deployed.`
-                    : "Fix it and deploy again; nothing was deployed.",
+            const databaseId = site.databaseId;
+            let migrated: string[] = [];
+            if (databaseId)
+              try {
+                migrated = await applyMigrations(
+                  host,
+                  databaseId,
+                  bundle.migrations,
                 );
-              throw error;
-            }
-          const bundleKey = await blobs.put(bytes);
-          await host.putScript(site.id, {
-            ...bundle.script,
-            databaseId: databaseId ?? undefined,
+              } catch (error) {
+                if (error instanceof MigrationError)
+                  throw new ApiFailure(
+                    "invalid_request",
+                    `Migration ${error.message}`,
+                    error.applied.length
+                      ? `${error.applied.join(", ")} did apply. Fix the failing one and deploy again; nothing was deployed.`
+                      : "Fix it and deploy again; nothing was deployed.",
+                  );
+                throw error;
+              }
+            const bundleKey = await blobs.put(bytes);
+            await host.putScript(site.id, {
+              ...bundle.script,
+              databaseId: databaseId ?? undefined,
+            });
+            await host.setRoute(site.name, routeOf(site));
+            const [latest] = await tx
+              .select({ number: siteVersions.number })
+              .from(siteVersions)
+              .where(eq(siteVersions.siteId, site.id))
+              .orderBy(desc(siteVersions.number))
+              .limit(1);
+            const version = (latest?.number ?? 0) + 1;
+            await tx.insert(siteVersions).values({
+              siteId: site.id,
+              number: version,
+              bundleKey,
+              size: bytes.byteLength,
+            });
+            const [updated] = await tx
+              .update(sites)
+              .set({
+                databaseId,
+                currentVersion: version,
+                updatedAt: new Date(),
+              })
+              .where(eq(sites.id, site.id))
+              .returning();
+            return { site: updated ?? site, migrated };
           });
-          await host.setRoute(site.name, {
-            script: site.id,
-            ownerId: userId,
-            access: site.access,
-            paused: site.paused,
-          });
-          const [latest] = await tx
-            .select({ number: siteVersions.number })
-            .from(siteVersions)
-            .where(eq(siteVersions.siteId, site.id))
-            .orderBy(desc(siteVersions.number))
-            .limit(1);
-          const version = (latest?.number ?? 0) + 1;
-          await tx.insert(siteVersions).values({
-            siteId: site.id,
-            number: version,
-            bundleKey,
-            size: bytes.byteLength,
-          });
-          const [updated] = await tx
-            .update(sites)
-            .set({ databaseId, currentVersion: version, updatedAt: new Date() })
-            .where(eq(sites.id, site.id))
-            .returning();
-          return { site: updated ?? site, migrated };
-        });
-        return c.json({ site: dto(result.site), migrated: result.migrated });
-      },
-    );
+          return c.json({ site: dto(result.site), migrated: result.migrated });
+        },
+      )
+  );
 }

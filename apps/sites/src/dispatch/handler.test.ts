@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { importSitePassKey, type SitePass } from "@winston/site-host/pass";
 import {
   signSitePass,
@@ -13,6 +13,7 @@ const route: SiteRoute = {
   script: "site_1",
   ownerId: "usr_owner",
   access: "private",
+  shareKeyHash: null,
   paused: false,
 };
 
@@ -193,6 +194,70 @@ describe("dispatch", () => {
     const [cookie] = setCookies(response);
     expect(cookie).toStartWith("winston_site_nonce=");
     expect(cookie).not.toContain("Secure");
+  });
+
+  describe("shared by link", () => {
+    const key = "the-share-key";
+    const shared: SiteRoute = {
+      ...route,
+      access: "link",
+      shareKeyHash: createHash("sha256").update(key).digest("hex"),
+    };
+    const sharedDeps = { route: () => Promise.resolve(shared) };
+
+    test("the link keeps its key in a cookie and goes on to the site", async () => {
+      const response = await get(
+        `https://blog.runwinston.app/__winston/share?key=${key}`,
+        {},
+        sharedDeps,
+      );
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/");
+      expect(setCookies(response)[0]).toStartWith(
+        `__Host-winston_site_share=${key};`,
+      );
+    });
+
+    test("the key's cookie opens the site without signing in, and the site never sees it", async () => {
+      const site = mock(() => Promise.resolve(new Response("the site")));
+      const response = await get(
+        "https://blog.runwinston.app/",
+        { cookie: `__Host-winston_site_share=${key}; theme=dark` },
+        { ...sharedDeps, site },
+      );
+      expect(await response.text()).toBe("the site");
+      const [, request] = site.mock.calls[0] as unknown as [string, Request];
+      expect(request.headers.get("cookie")).toBe("theme=dark");
+    });
+
+    test("a wrong key, or the old one once the site is private again, stops working", async () => {
+      const wrong = await get(
+        "https://blog.runwinston.app/__winston/share?key=guess",
+        {},
+        sharedDeps,
+      );
+      expect(wrong.status).toBe(403);
+      expect(await wrong.text()).toContain("doesn't work any more");
+
+      // Unshared: the route is private, with no hash.
+      const link = await get(
+        `https://blog.runwinston.app/__winston/share?key=${key}`,
+      );
+      expect(link.status).toBe(403);
+      const cookie = await get("https://blog.runwinston.app/", {
+        cookie: `__Host-winston_site_share=${key}`,
+      });
+      expect(cookie.status).toBe(303);
+    });
+
+    test("the owner still gets in with their pass", async () => {
+      const response = await get(
+        "https://blog.runwinston.app/",
+        { cookie: ownerCookie() },
+        sharedDeps,
+      );
+      expect(await response.text()).toBe("the site");
+    });
   });
 
   test("a site that throws (over its limits, or a bug) gets the failed page", async () => {

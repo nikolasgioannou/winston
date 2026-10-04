@@ -9,6 +9,9 @@ import {
 } from "@winston/site-host/pass-sign";
 import { createLogger } from "@winston/shared/logger";
 import { startLocalSites } from "./server.ts";
+// Not used here: the import makes `bun --watch` restart the service when the
+// dispatch Worker changes, since the server bundles it with Bun.build.
+import "../dispatch/local.ts";
 
 const log = createLogger("sites");
 

@@ -11,12 +11,14 @@ import {
   sitePassPublicKey,
   sitePassSigningKey,
 } from "@winston/site-host/pass-sign";
+import { generateToken, hashToken } from "@winston/shared/tokens";
 import { startLocalSites } from "./server.ts";
 
 const route = {
   script: "site_01test",
   ownerId: "usr_owner",
   access: "private" as const,
+  shareKeyHash: null,
   paused: false,
 };
 
@@ -104,6 +106,24 @@ describe("the local site host", () => {
       `winston_site_pass=${pass("usr_other")}`,
     );
     expect(response.status).toBe(403);
+  });
+
+  test("a share link opens the site for anyone, until it's unshared", async () => {
+    const key = generateToken();
+    await host.setRoute("blog", {
+      ...route,
+      access: "link",
+      shareKeyHash: hashToken(key),
+    });
+    const opened = await sites.fetchSite("blog", `/__winston/share?key=${key}`);
+    expect(opened.status).toBe(303);
+    const cookie = opened.headers.getSetCookie()[0]?.split(";")[0] ?? "";
+    expect(cookie).toBe(`winston_site_share=${key}`);
+    expect(await (await sites.fetchSite("blog", "/", cookie)).text()).toContain(
+      "<h1>Hello</h1>",
+    );
+    await host.setRoute("blog", route);
+    expect((await sites.fetchSite("blog", "/", cookie)).status).toBe(303);
   });
 
   test("a replaced Worker serves its new version", async () => {

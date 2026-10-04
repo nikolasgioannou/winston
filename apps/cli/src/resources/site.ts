@@ -12,16 +12,31 @@ type Listed = InferResponseType<Sites["$get"], 200>;
 type Site = Listed["sites"][number];
 type Shown = InferResponseType<Sites[":site"]["$get"], 200>;
 type Deployed = InferResponseType<Sites["deploy"]["$post"], 200>;
+type Shared = InferResponseType<Sites[":site"]["share"]["$post"], 200>;
+type Unshared = InferResponseType<Sites[":site"]["unshare"]["$post"], 200>;
 
 const line = (site: Site) =>
   record(
     site.id,
     site.name,
     site.url,
-    site.paused ? "paused" : site.access,
+    site.paused
+      ? "paused"
+      : site.access === "link"
+        ? "shared by link"
+        : "private",
     site.version === null ? "not deployed" : `version ${String(site.version)}`,
     site.database ? "database" : undefined,
   );
+
+/** One site, with who can open it spelled out. */
+const detail = (site: Site) =>
+  [
+    line(site),
+    site.shareLink
+      ? `Anyone with this link can open it: ${site.shareLink}`
+      : "Private: only the user can open it, signed in to Winston.",
+  ].join("\n");
 
 /** A site folder on the VM: `~` and relative paths resolved, kept inside the home. */
 function folder(path: string | undefined, files: Context["files"]) {
@@ -99,7 +114,7 @@ export const site: Resource = {
     {
       name: "deploy",
       summary:
-        "Deploy a site folder (public/ for static files, worker.js for an API, migrations/*.sql for its database); a new site starts private to the user",
+        "Deploy a site folder: public/ for static files (served first), worker.js for an API (one ES module, `export default { fetch(request, env) }`, a Cloudflare Worker: env.ASSETS.fetch(request) serves public/, env.DB is the site's D1 SQLite database), migrations/*.sql for its schema, applied once each in name order. A new site starts private to the user",
       usage: "<folder>",
       flags: [
         {
@@ -137,13 +152,11 @@ export const site: Resource = {
             : undefined,
         ].filter(Boolean);
         return [
-          line(deployed.site),
+          detail(deployed.site),
           `Deployed ${packed.join(", ")}.`,
           deployed.migrated.length
             ? `Applied migrations: ${deployed.migrated.join(", ")}.`
             : undefined,
-          // Every site is private until link sharing (bf7f34).
-          "Private: only the user can open it, signed in to Winston.",
         ]
           .filter(Boolean)
           .join("\n");
@@ -168,14 +181,52 @@ export const site: Resource = {
       flags: [],
       examples: ["winston site get blog"],
       run: async ({ client, flags, args }) => {
-        const [id] = args;
-        if (!id)
-          throw CliError.usage("Which site?", "Run winston site get <name>.");
         const shown = await call<Shown>(
-          client.v1.sites[":site"].$get({ param: { site: id } }),
+          client.v1.sites[":site"].$get({
+            param: { site: siteArg(args, "get") },
+          }),
         );
-        return flags.json === true ? json(shown) : line(shown.site);
+        return flags.json === true ? json(shown) : detail(shown.site);
+      },
+    },
+    {
+      name: "share",
+      summary:
+        "Share a site by link: anyone with the link can open it. Only when the user asks. Sharing again gives the same link",
+      usage: "<site_id|name>",
+      flags: [],
+      examples: ["winston site share blog"],
+      run: async ({ client, flags, args }) => {
+        const shared = await call<Shared>(
+          client.v1.sites[":site"].share.$post({
+            param: { site: siteArg(args, "share") },
+          }),
+        );
+        return flags.json === true ? json(shared) : detail(shared.site);
+      },
+    },
+    {
+      name: "unshare",
+      summary:
+        "Make a site private again: its share link and anyone who opened it stop working. Sharing it again makes a new link",
+      usage: "<site_id|name>",
+      flags: [],
+      examples: ["winston site unshare blog"],
+      run: async ({ client, flags, args }) => {
+        const unshared = await call<Unshared>(
+          client.v1.sites[":site"].unshare.$post({
+            param: { site: siteArg(args, "unshare") },
+          }),
+        );
+        return flags.json === true ? json(unshared) : detail(unshared.site);
       },
     },
   ],
 };
+
+function siteArg(args: string[], verb: string) {
+  const [id] = args;
+  if (!id)
+    throw CliError.usage("Which site?", `Run winston site ${verb} <name>.`);
+  return id;
+}

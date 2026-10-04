@@ -40,6 +40,13 @@ export const pausedPage = () =>
 export const privatePage = () =>
   page(403, "This site is private", "Only its owner can open it.");
 
+export const expiredLinkPage = () =>
+  page(
+    403,
+    "This link doesn't work any more",
+    "Its owner stopped sharing the site, or shared a new link.",
+  );
+
 export const failedPage = () =>
   page(
     502,

@@ -10,8 +10,8 @@ import {
 import { newId } from "../ids.ts";
 import { users } from "./users.ts";
 
-/** Who may open a site (docs/design.md §9a): its owner only, for now. */
-export const siteAccess = pgEnum("site_access", ["private"]);
+/** Who may open a site (docs/design.md §9a): its owner only, or also anyone with its share link. */
+export const siteAccess = pgEnum("site_access", ["private", "link"]);
 
 /**
  * A site Winston deployed, at `<name>.runwinston.app` (docs/design.md §9a).
@@ -27,6 +27,12 @@ export const sites = snakeCase.table("sites", {
   /** One DNS label, first come first served across every user. */
   name: text().notNull().unique(),
   access: siteAccess().notNull().default("private"),
+  /**
+   * The share link's key while it's shared by link, kept so the link can be
+   * shown again (the routes map holds only its hash). A new one each time
+   * it's shared after being made private, so old links stop working.
+   */
+  shareKey: text(),
   paused: boolean().notNull().default(false),
   /** Its D1 database, created by the first deploy that has migrations. */
   databaseId: text(),

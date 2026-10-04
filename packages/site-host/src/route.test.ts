@@ -16,6 +16,7 @@ describe("site routes", () => {
       script: "site_1",
       ownerId: "usr_1",
       access: "private",
+      shareKeyHash: null,
       paused: false,
     };
     expect(parseSiteRoute(route)).toEqual(route as never);
