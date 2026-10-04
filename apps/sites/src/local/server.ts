@@ -1,6 +1,6 @@
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
-import { parseSiteRoute } from "@winston/site-host/route";
+import { parseSiteRoute, siteNameOf } from "@winston/site-host/route";
 import { Miniflare } from "miniflare";
 
 /**
@@ -123,7 +123,7 @@ export async function startLocalSites(options: LocalSitesOptions) {
     const sites = await siteWorkers();
     const mf = new Miniflare({
       host: "127.0.0.1",
-      port: options.port,
+      port: internalPort,
       defaultPersistRoot: join(options.dir, "state"),
       kvPersist: true,
       d1Persist: true,
@@ -161,10 +161,12 @@ export async function startLocalSites(options: LocalSitesOptions) {
     return mf;
   };
 
+  // Miniflare listens on a port of its own, picked once and kept across
+  // rebuilds; the public port is a proxy in front of it that counts each
+  // site's requests (usage, which Cloudflare's analytics give in production).
+  let internalPort = 0;
   let mf = await build();
-  // A port of 0 is picked once, then kept across rebuilds.
-  const port = Number((await mf.ready).port);
-  options = { ...options, port };
+  internalPort = Number((await mf.ready).port);
 
   // One change at a time: each rebuild disposes the Miniflare the next uses.
   let queue = Promise.resolve();
@@ -186,6 +188,68 @@ export async function startLocalSites(options: LocalSitesOptions) {
       put(key: string, value: string): Promise<void>;
       delete(key: string): Promise<void>;
     }>;
+
+  // Which site's Worker each name routes to, kept in step with the routes
+  // map, so the proxy can count requests by script.
+  const scriptsByName = new Map<string, string>();
+  {
+    const kv = (await routes()) as unknown as {
+      list(): Promise<{ keys: { name: string }[] }>;
+      get(key: string, type: "json"): Promise<unknown>;
+    };
+    for (const { name } of (await kv.list()).keys) {
+      const route = parseSiteRoute(await kv.get(name, "json"));
+      if (route) scriptsByName.set(name, route.script);
+    }
+  }
+  const requestTimes = new Map<string, number[]>();
+
+  const proxy = Bun.serve({
+    hostname: "127.0.0.1",
+    port: options.port,
+    fetch: async (request) => {
+      const url = new URL(request.url);
+      const host = request.headers.get("host") ?? url.host;
+      const name = siteNameOf(host.replace(/:\d+$/, ""), options.domain);
+      const script = name ? scriptsByName.get(name) : undefined;
+      if (script)
+        requestTimes.set(script, [
+          ...(requestTimes.get(script) ?? []),
+          Date.now(),
+        ]);
+      return fetch(
+        `http://127.0.0.1:${String(internalPort)}${url.pathname}${url.search}`,
+        {
+          method: request.method,
+          headers: request.headers,
+          ...(request.body ? { body: request.body } : {}),
+          redirect: "manual",
+          // Passed on as it came, still compressed.
+          decompress: false,
+        },
+      );
+    },
+  });
+
+  const usage = (script: string, from: Date, to: Date) => ({
+    requests: (requestTimes.get(script) ?? []).filter(
+      (at) => at >= from.getTime() && at < to.getTime(),
+    ).length,
+    // workerd doesn't report CPU time locally.
+    cpuMs: 0,
+  });
+
+  const databaseSize = async (databaseId: string) => {
+    const db = (await mf.getD1Database(
+      bindingOf(databaseId),
+      "databases",
+    )) as unknown as {
+      prepare(sql: string): {
+        all(): Promise<{ meta: { size_after: number } }>;
+      };
+    };
+    return (await db.prepare("SELECT 1").all()).meta.size_after;
+  };
 
   const putScript = async (script: string, body: unknown) => {
     const upload = body as {
@@ -273,12 +337,33 @@ export async function startLocalSites(options: LocalSitesOptions) {
             const route = parseSiteRoute(await request.json());
             if (!route) return new Response("bad route", { status: 400 });
             await (await routes()).put(name, JSON.stringify(route));
+            scriptsByName.set(name, route.script);
             return new Response(null, { status: 204 });
           }
           if (request.method === "DELETE") {
             await (await routes()).delete(name);
+            scriptsByName.delete(name);
             return new Response(null, { status: 204 });
           }
+        }
+        if (kind === "usage" && request.method === "GET" && name) {
+          const query = new URL(request.url).searchParams;
+          return Response.json(
+            usage(
+              name,
+              new Date(query.get("from") ?? 0),
+              new Date(query.get("to") ?? Date.now()),
+            ),
+          );
+        }
+        if (
+          kind === "databases" &&
+          request.method === "GET" &&
+          new URL(request.url).pathname.endsWith("/size")
+        ) {
+          if (!(await databases()).includes(name))
+            return new Response("no such database", { status: 404 });
+          return Response.json({ bytes: await databaseSize(name) });
         }
         if (kind === "databases" && request.method === "DELETE" && name) {
           const ids = await databases();
@@ -309,11 +394,11 @@ export async function startLocalSites(options: LocalSitesOptions) {
   });
 
   return {
-    url: `http://${options.domain}:${String(port)}`,
+    url: `http://${options.domain}:${String(proxy.port)}`,
     adminUrl: `http://127.0.0.1:${String(admin.port)}`,
     /** Fetches a site page as a browser would, by its name (tests). */
     fetchSite: (name: string, path = "/", cookie?: string) =>
-      fetch(`http://127.0.0.1:${String(port)}${path}`, {
+      fetch(`http://127.0.0.1:${String(proxy.port)}${path}`, {
         headers: {
           host: `${name}.${options.domain}`,
           ...(cookie ? { cookie } : {}),
@@ -322,6 +407,7 @@ export async function startLocalSites(options: LocalSitesOptions) {
       }),
     stop: async () => {
       await admin.stop(true);
+      await proxy.stop(true);
       await serially(() => mf.dispose());
     },
   };

@@ -7,7 +7,7 @@ labels:
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:59:05.230Z
-updated_at: 2026-10-04T05:06:35.811Z
+updated_at: 2026-10-04T06:28:44.154Z
 blocked_by:
   - "28a208"
   - "f432a3"
@@ -32,3 +32,5 @@ Everything up to deploying works on the local stack; this puts it on Cloudflare 
 - `SITES_PASS_KEY` for `web` in Secrets Manager (and the CDK task definition), `SITES_PUBLIC_URL=https://runwinston.app`; the dispatch Worker gets the public half (`sitePassPublicKey`) and `WEB_PUBLIC_URL` as plain vars.
 
 - [ ] The backend's token, read from Secrets Manager, can list the `winston-sites` namespace's scripts (moved from f432a3). Both tokens go in through `bun run prod:keys` with hidden input, like the other external keys.
+
+- The Cloudflare `SiteHost`'s `usage` (Workers analytics GraphQL, per script in the dispatch namespace; check the dataset and its dimensions) and `databaseSize` (`meta.size_after` from a query, or the database's info). `bun run prod sites pause-all|resume-all` for the kill switch.

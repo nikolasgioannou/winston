@@ -33,16 +33,19 @@ describe("site bundles", () => {
   });
 
   test("empty bundles, stray files, unsafe paths and oversized bundles are refused", async () => {
-    expect(readBundle(await tar({}))).rejects.toThrow(/nothing to deploy/);
+    const refusal = async (bytes: Uint8Array) => {
+      const error = await readBundle(bytes).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(BundleError);
+      return String(error);
+    };
+    expect(await refusal(await tar({}))).toMatch(/nothing to deploy/);
     expect(
-      readBundle(await tar({ "worker.js": "x", "README.md": "hi" })),
-    ).rejects.toThrow(/README\.md/);
-    expect(readBundle(await tar({ "public/../x": "x" }))).rejects.toThrow(
-      BundleError,
-    );
-    expect(readBundle(new Uint8Array(maxBundleBytes + 1))).rejects.toThrow(
+      await refusal(await tar({ "worker.js": "x", "README.md": "hi" })),
+    ).toMatch(/README\.md/);
+    await refusal(await tar({ "public/../x": "x" }));
+    expect(await refusal(new Uint8Array(maxBundleBytes + 1))).toMatch(
       /the most is 25\.0 MB/,
     );
-    expect(readBundle(new Uint8Array([1, 2, 3]))).rejects.toThrow(BundleError);
+    await refusal(new Uint8Array([1, 2, 3]));
   });
 });

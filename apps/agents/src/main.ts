@@ -49,6 +49,7 @@ import { openRouterTranscriber } from "./transcribe.ts";
 import { grammySender } from "./telegram/sender.ts";
 import { dockerEngine, dockerSocketPath } from "./vm/docker-engine.ts";
 import { startVmCostJob } from "./vm/costs.ts";
+import { startSiteUsageJob } from "./sites/usage-job.ts";
 import { gatewayClient } from "./vm/gateway-client.ts";
 import { dockerVmProvider } from "./vm/docker-provider.ts";
 import { ec2VmProvider } from "./vm/ec2-provider.ts";
@@ -288,6 +289,7 @@ async function shutdown(signal: string) {
   clearInterval(grantSweeper);
   clearInterval(rolloutSweeper);
   stopVmCosts();
+  stopSiteUsage();
   scheduler.stop();
   reconciliation.stop();
   await Promise.all([worker.stop(), backgroundWorker.stop()]);
@@ -326,6 +328,10 @@ sweepRollout();
 
 // Each user's computer goes into their spend, hour by hour (§8).
 const stopVmCosts = startVmCostJob(db, logger);
+// Sites' usage goes into their spend too, and over a cap a site pauses (§9a).
+const stopSiteUsage = config.SITES_ADMIN_URL
+  ? startSiteUsageJob(db, localSiteHost(config.SITES_ADMIN_URL), logger)
+  : () => undefined;
 
 worker.start();
 backgroundWorker.start();

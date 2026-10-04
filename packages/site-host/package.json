@@ -11,7 +11,8 @@
     "./pass": "./src/pass.ts",
     "./pass-sign": "./src/pass-sign.ts",
     "./remove": "./src/remove.ts",
-    "./route": "./src/route.ts"
+    "./route": "./src/route.ts",
+    "./usage": "./src/usage.ts"
   },
   "scripts": {
     "typecheck": "tsc"

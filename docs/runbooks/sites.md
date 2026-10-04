@@ -37,6 +37,16 @@ Storing them in Secrets Manager comes with going live (d140ab).
 
 **Rotating one** (a leak, or someone leaving): create a replacement with the same policies, store it, restart the services that read it, then delete the old one in the dashboard.
 
+## The kill switch
+
+To take every site offline at once (abuse, a runaway bill, an incident):
+
+```bash
+bun run sites:switch pause-all
+```
+
+Every running site shows its paused page and Winston tells each user. `resume-all` brings them back, leaving sites paused for a cap alone. Locally it works on the dev stack; the production command (`bun run prod sites …`) comes with going live (d140ab).
+
 ## Billing
 
 The account's budget alert (Notifications → "Default budget alert") emails the founder past **$40 a month**: the $25 plan plus headroom, so it fires only when sites use more than the plan includes. Per-site and per-user caps pause sites well before that (0a3197).

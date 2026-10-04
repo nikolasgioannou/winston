@@ -10,12 +10,13 @@ import {
 import { runs } from "./runs.ts";
 import { users } from "./users.ts";
 
-/** What a charge was for: model calls, speech-to-text, Jev, or the user's computer. */
+/** What a charge was for: model calls, speech-to-text, Jev, the user's computer, or their sites. */
 export const costCategory = pgEnum("cost_category", [
   "model",
   "stt",
   "jev",
   "vm",
+  "hosting",
 ]);
 
 /** One row per charge, so spend is a sum over this table. */

@@ -1,4 +1,4 @@
-import type { SiteHost } from "./host.ts";
+import type { SiteHost, SiteUsage } from "./host.ts";
 
 /**
  * The dev stack's site host: the `sites` service's admin API
@@ -6,7 +6,7 @@ import type { SiteHost } from "./host.ts";
  */
 export function localSiteHost(adminUrl: string): SiteHost {
   const call = async (
-    method: "POST" | "PUT" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
   ) => {
@@ -46,6 +46,18 @@ export function localSiteHost(adminUrl: string): SiteHost {
         ? call("PUT", `/routes/${encodeURIComponent(name)}`, route)
         : call("DELETE", `/routes/${encodeURIComponent(name)}`));
     },
+    usage: async (script, from, to) =>
+      (await call(
+        "GET",
+        `/usage/${encodeURIComponent(script)}?from=${from.toISOString()}&to=${to.toISOString()}`,
+      )) as SiteUsage,
+    databaseSize: async (databaseId) =>
+      (
+        (await call(
+          "GET",
+          `/databases/${encodeURIComponent(databaseId)}/size`,
+        )) as { bytes: number }
+      ).bytes,
     deleteDatabase: async (databaseId) => {
       await call("DELETE", `/databases/${encodeURIComponent(databaseId)}`);
     },

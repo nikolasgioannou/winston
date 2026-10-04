@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   integer,
   pgEnum,
@@ -12,6 +13,18 @@ import { users } from "./users.ts";
 
 /** Who may open a site (docs/design.md §9a): its owner only, or also anyone with its share link. */
 export const siteAccess = pgEnum("site_access", ["private", "link"]);
+
+/**
+ * Why a site is paused: over its monthly request cap, the user over their
+ * monthly hosting spend, its database over its size cap, or every site
+ * switched off at once (the kill switch).
+ */
+export const sitePauseReason = pgEnum("site_pause_reason", [
+  "requests",
+  "spend",
+  "database",
+  "kill_switch",
+]);
 
 /**
  * A site Winston deployed, at `<name>.runwinston.app` (docs/design.md §9a).
@@ -34,6 +47,15 @@ export const sites = snakeCase.table("sites", {
    */
   shareKey: text(),
   paused: boolean().notNull().default(false),
+  /** Why it's paused (§9a guardrails): over a monthly cap, or every site switched off. */
+  pausedReason: sitePauseReason(),
+  /** The month (`2026-10`) the usage counters below are for. */
+  usageMonth: text(),
+  /** Requests and CPU time this month, from the hourly usage job. */
+  monthRequests: bigint({ mode: "number" }).notNull().default(0),
+  monthCpuMs: bigint({ mode: "number" }).notNull().default(0),
+  /** Up to when its usage is counted and charged. */
+  usageAccruedAt: timestamp({ withTimezone: true }),
   /** Its D1 database, created by the first deploy that has migrations. */
   databaseId: text(),
   /** The deployed version's number (`site_versions.number`). */

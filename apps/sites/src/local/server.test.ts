@@ -207,20 +207,47 @@ describe("the local site host", () => {
         sql: "CREATE TABLE ok (id INTEGER); CREATE TABLE ok (id INTEGER);",
       },
     ]);
-    expect(failing).rejects.toThrow(MigrationError);
-    await failing.catch(() => undefined);
+    expect(await failing.catch((e: unknown) => e)).toBeInstanceOf(
+      MigrationError,
+    );
     const [tables = []] = await host.batchSql(databaseId, [
       { sql: "SELECT name FROM sqlite_master WHERE name = 'ok'" },
     ]);
     expect(tables).toEqual([]);
   });
 
+  test("requests are counted per site's Worker, and databases report their size", async () => {
+    const since = new Date();
+    await host.putScript("site_01counted", {
+      modules: [
+        {
+          name: "worker.js",
+          content: `export default { fetch: () => new Response("hi") };`,
+        },
+      ],
+      assets: [],
+    });
+    await host.setRoute("counted", { ...route, script: "site_01counted" });
+    for (let i = 0; i < 3; i++) await sites.fetchSite("counted", "/", owner);
+    await sites.fetchSite("nothing-here");
+    const used = await host.usage(
+      "site_01counted",
+      since,
+      new Date(Date.now() + 1),
+    );
+    expect(used).toEqual({ requests: 3, cpuMs: 0 });
+
+    const databaseId = await host.createDatabase("site_01sized");
+    expect(await host.databaseSize(databaseId)).toBeGreaterThan(0);
+  });
+
   test("a deleted database can't be reached, and deleting it again is fine", async () => {
     const databaseId = await host.createDatabase("site_01gone");
     await host.deleteDatabase(databaseId);
     const reach = host.batchSql(databaseId, [{ sql: "SELECT 1" }]);
-    expect(reach).rejects.toThrow(/no such database/);
-    await reach.catch(() => undefined);
+    expect(String(await reach.catch((e: unknown) => e))).toMatch(
+      /no such database/,
+    );
     await host.deleteDatabase(databaseId);
   });
 
@@ -229,7 +256,8 @@ describe("the local site host", () => {
       modules: [{ name: "worker.js", content: worker }],
       assets: [{ path: "/../../oops", content: new Uint8Array() }],
     });
-    expect(escape).rejects.toThrow(/escapes the site/);
-    await escape.catch(() => undefined);
+    expect(String(await escape.catch((e: unknown) => e))).toMatch(
+      /escapes the site/,
+    );
   });
 });

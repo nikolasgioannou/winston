@@ -37,4 +37,13 @@ export interface SiteHost {
     databaseId: string,
     statements: SqlStatement[],
   ): Promise<Record<string, unknown>[][]>;
+  /** The requests a site's Worker served, and the CPU time they took, in `[from, to)`. */
+  usage(script: string, from: Date, to: Date): Promise<SiteUsage>;
+  /** A database's size, in bytes. */
+  databaseSize(databaseId: string): Promise<number>;
+}
+
+export interface SiteUsage {
+  requests: number;
+  cpuMs: number;
 }

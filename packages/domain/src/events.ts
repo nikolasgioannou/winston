@@ -236,6 +236,21 @@ export const eventCatalog = define([
     }),
     filters: [],
   },
+  {
+    type: "system.site.paused",
+    domain: "system",
+    description:
+      "One of the user's sites was paused (docs/design.md §9a): over its monthly request cap, its database over its size cap, the user over their monthly hosting spend, or every site switched off. Visitors see a paused page until it's resumed.",
+    delivery: "always",
+    payload: z.object({
+      siteId: z.string(),
+      name: z.string(),
+      reason: z.enum(["requests", "database", "spend", "kill_switch"]),
+      /** When it comes back by itself (the next month), or null. */
+      resumesAt: z.iso.datetime().nullable(),
+    }),
+    filters: [],
+  },
   // Subscribable.
   {
     type: "mail.message.received",

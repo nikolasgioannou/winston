@@ -219,8 +219,10 @@ describe("deleteUserHandler", () => {
       const { deps } = fakes();
 
       // Without a host the job fails, and is retried once one is configured.
-      expect(run(tx, { ...deps, blobs }, user.id)).rejects.toThrow(/site host/);
-      await run(tx, { ...deps, blobs }, user.id).catch(() => undefined);
+      const error = await run(tx, { ...deps, blobs }, user.id).catch(
+        (e: unknown) => e,
+      );
+      expect(String(error)).toMatch(/site host/);
 
       const removed: string[] = [];
       const host: SiteHost = {
@@ -240,6 +242,8 @@ describe("deleteUserHandler", () => {
           return Promise.resolve();
         },
         batchSql: () => Promise.resolve([]),
+        usage: () => Promise.resolve({ requests: 0, cpuMs: 0 }),
+        databaseSize: () => Promise.resolve(0),
       };
       await run(tx, { ...deps, blobs, sites: host }, user.id);
       expect(removed).toEqual([

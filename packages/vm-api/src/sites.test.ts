@@ -36,6 +36,8 @@ function fakeHost() {
       else routes.delete(name);
       return Promise.resolve();
     },
+    usage: () => Promise.resolve({ requests: 0, cpuMs: 0 }),
+    databaseSize: () => Promise.resolve(0),
     deleteDatabase: (databaseId) => {
       databases.delete(databaseId);
       return Promise.resolve();
@@ -432,7 +434,7 @@ describe("site routes", () => {
       expect(rows.map((row) => row.number)).toEqual([
         3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
       ]);
-      expect(blobs.get(firstKey)).rejects.toThrow();
+      expect(await blobs.get(firstKey).catch(() => "gone")).toBe("gone");
       expect(
         (await blobs.get(rows[0]?.bundleKey ?? "")).byteLength,
       ).toBeGreaterThan(0);
@@ -484,7 +486,9 @@ describe("site routes", () => {
       expect(scripts.size).toBe(0);
       expect(databases.size).toBe(0);
       expect(await tx.select().from(sitesTable)).toEqual([]);
-      expect(blobs.get(version?.bundleKey ?? "")).rejects.toThrow();
+      expect(
+        await blobs.get(version?.bundleKey ?? "").catch(() => "gone"),
+      ).toBe("gone");
       // The name is free again, for anyone.
       expect((await deploy(as(other.id), "/notes.tar", "notes")).status).toBe(
         200,
