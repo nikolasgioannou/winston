@@ -114,17 +114,6 @@ export const frontRetries = 2;
 /** Each model call's time limit, so a hung request can't hold the user's turn. */
 export const frontCallTimeoutMs = 90_000;
 
-/**
- * Tools whose step's text is a message rather than a status: it ends the
- * turn, hands over (to the user or a background task), or comes with a file.
- */
-const messageTools = new Set([
-  "end_turn",
-  "browser_handoff",
-  "delegate",
-  "attach",
-]);
-
 /** Sent, without a model, when every attempt failed. At most once until a turn succeeds. */
 export const outageNotice =
   "I'm having trouble thinking right now; I'll reply as soon as I'm back.";
@@ -261,16 +250,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
 
   // Streamed replies (§4): a step's text goes out as soon as its model call
   // ends, before its tools run, unless new input arrived meanwhile. Then the
-  // step is dropped: nothing is shown and its tools return `notRun`. Text
-  // beside tools that do work is interim and held, never shown; text that
-  // ends the turn, hands over or comes with a file is a message.
+  // step is dropped: nothing is sent and its tools return `notRun`.
   // Mutated from the SDK callback, so kept in an object TypeScript won't narrow.
   const stream = {
     sent: 0,
     dropStep: false,
     deliveryError: undefined as Error | undefined,
-    /** The latest interim text held since the last message, if any. */
-    held: undefined as string | undefined,
   };
   const deliverStepText = async ({
     content,
@@ -286,17 +271,8 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     if (!text) return;
     if (await hasClaimableInput(db, userId)) {
       stream.dropStep = true;
-      stream.held = undefined;
       return;
     }
-    const calls = content.flatMap((part) =>
-      part.type === "tool-call" ? [part.toolName] : [],
-    );
-    if (calls.length > 0 && !calls.some((name) => messageTools.has(name))) {
-      stream.held = text;
-      return;
-    }
-    stream.held = undefined;
     try {
       await deliverReply({
         db,
@@ -515,29 +491,6 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       const nudge: ModelMessage = { role: "user", content: emptyReplyNudge };
       messages.push(nudge);
       await log.store(db, nudge);
-    }
-
-    // Never left with nothing (§4): a turn that held interim text but sent
-    // no message sends that text as its message, unless the server is
-    // about to say it handed the rest over.
-    if (
-      stream.sent === 0 &&
-      stream.held !== undefined &&
-      (outcome === "silent" ||
-        outcome === "empty" ||
-        (outcome === "unfinished" && lastStepDelegated))
-    ) {
-      await deliverReply({
-        db,
-        logger,
-        telegram,
-        userId,
-        runId,
-        chatId: user.chatId,
-        text: stream.held,
-      });
-      stream.sent += 1;
-      if (outcome !== "unfinished") outcome = "reply";
     }
 
     // Out of steps with work left: the model handed it over on its last

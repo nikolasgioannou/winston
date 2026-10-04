@@ -926,45 +926,40 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("text beside a tool that does work is held, never shown; the final text is the message", async () => {
+  test("text beside a tool that does work is a message, sent before the tool runs", async () => {
+    let sentWhenCommandRan = -1;
+    let sentSoFar: Sent[] = [];
     await scenario(
       [
         [
-          toolCallReply("bash", { command: "ls ~" }, "On it."),
-          toolCallReply("bash", { command: "ls ~/notes" }, "Looking inside."),
+          toolCallReply(
+            "bash",
+            { command: "ls ~" },
+            "On it, this'll take a minute.",
+          ),
           textReply("Two files: notes.md and todo.md."),
         ],
       ],
       async ({ tx, userId, say, turn, sent }) => {
+        sentSoFar = sent;
         await say("what's in your home folder?");
         await turn();
+        expect(sentWhenCommandRan).toBe(1);
         expect(sent.map((message) => message.text)).toEqual([
+          "On it, this'll take a minute.",
           "Two files: notes.md and todo.md.",
         ]);
         const rows = await tx
           .select()
           .from(outboundMessages)
           .where(eq(outboundMessages.userId, userId));
-        expect(rows.map((row) => row.text)).toEqual([
-          "Two files: notes.md and todo.md.",
-        ]);
+        expect(rows).toHaveLength(2);
       },
-      { vmAnswer: () => ({ stdout: "notes.md\ntodo.md\n" }) },
-    );
-  });
-
-  test("a turn that only held interim text and ends without a message sends that text", async () => {
-    await scenario(
-      [
-        [
-          toolCallReply("bash", { command: "df -h" }, "40 GB free."),
-          toolCallReply("end_turn", {}),
-        ],
-      ],
-      async ({ say, turn, sent }) => {
-        await say("disk space?");
-        await turn();
-        expect(sent.map((message) => message.text)).toEqual(["40 GB free."]);
+      {
+        vmAnswer: (cmd) => {
+          if (cmd === "ls ~") sentWhenCommandRan = sentSoFar.length;
+          return { stdout: "notes.md\ntodo.md\n" };
+        },
       },
     );
   });
