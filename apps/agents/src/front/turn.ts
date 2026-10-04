@@ -82,7 +82,6 @@ import {
 } from "./window.ts";
 import {
   deliverReply,
-  showStatus,
   endTurnDefinition,
   endTurnTool,
   type TelegramSender,
@@ -263,18 +262,16 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
   // Streamed replies (§4): a step's text goes out as soon as its model call
   // ends, before its tools run, unless new input arrived meanwhile. Then the
   // step is dropped: nothing is shown and its tools return `notRun`. Text
-  // beside tools that do work is interim, a passing status (a draft); text
-  // that ends the turn, hands over or comes with a file is a message.
+  // beside tools that do work is interim and held, never shown; text that
+  // ends the turn, hands over or comes with a file is a message.
   // Mutated from the SDK callback, so kept in an object TypeScript won't narrow.
   const stream = {
     sent: 0,
     dropStep: false,
     deliveryError: undefined as Error | undefined,
-    /** The latest status shown since the last message, if any. */
-    status: undefined as string | undefined,
+    /** The latest interim text held since the last message, if any. */
+    held: undefined as string | undefined,
   };
-  /** One draft per turn, so each status replaces the last in place. */
-  const draftId = 1 + Math.floor(Math.random() * 2_000_000_000);
   const deliverStepText = async ({
     content,
     finishReason,
@@ -289,24 +286,17 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
     if (!text) return;
     if (await hasClaimableInput(db, userId)) {
       stream.dropStep = true;
-      stream.status = undefined;
+      stream.held = undefined;
       return;
     }
     const calls = content.flatMap((part) =>
       part.type === "tool-call" ? [part.toolName] : [],
     );
     if (calls.length > 0 && !calls.some((name) => messageTools.has(name))) {
-      stream.status = text;
-      await showStatus({
-        logger,
-        telegram,
-        chatId: user.chatId,
-        draftId,
-        text,
-      });
+      stream.held = text;
       return;
     }
-    stream.status = undefined;
+    stream.held = undefined;
     try {
       await deliverReply({
         db,
@@ -527,12 +517,12 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       await log.store(db, nudge);
     }
 
-    // Never left with nothing (§4): a turn that showed a status but sent
-    // no message sends that status as its message, unless the server is
+    // Never left with nothing (§4): a turn that held interim text but sent
+    // no message sends that text as its message, unless the server is
     // about to say it handed the rest over.
     if (
       stream.sent === 0 &&
-      stream.status !== undefined &&
+      stream.held !== undefined &&
       (outcome === "silent" ||
         outcome === "empty" ||
         (outcome === "unfinished" && lastStepDelegated))
@@ -544,7 +534,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
         userId,
         runId,
         chatId: user.chatId,
-        text: stream.status,
+        text: stream.held,
       });
       stream.sent += 1;
       if (outcome !== "unfinished") outcome = "reply";

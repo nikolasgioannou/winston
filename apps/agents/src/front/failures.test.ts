@@ -66,7 +66,6 @@ async function withUser(
         messageIds += 1;
         return Promise.resolve({ message_id: messageIds });
       },
-      sendRichMessageDraft: () => Promise.resolve(true),
       sendChatAction: () => Promise.resolve(true),
       sendFiles: () => Promise.resolve([]),
     };

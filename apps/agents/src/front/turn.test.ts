@@ -66,16 +66,12 @@ async function scenario(
     say: (text: string, extra?: Partial<UserMessagePayload>) => Promise<number>;
     turn: (index?: number) => Promise<string | undefined>;
     sent: Sent[];
-    /** Statuses shown as drafts, in order. */
-    drafts: { draftId: number; text: string }[];
     requests: Record<string, unknown>[][];
     commands: string[];
     typing: { sends: number; running: boolean };
   }) => Promise<void>,
   options: {
     rejectRich?: boolean;
-    /** Telegram refuses every draft. */
-    rejectDrafts?: boolean;
     /** Telegram refuses sign-in buttons (the bot's domain isn't linked yet). */
     rejectLogin?: boolean;
     /** How the fake computer answers each command. */
@@ -95,7 +91,6 @@ async function scenario(
       .insert(telegramLinks)
       .values({ userId: user.id, chatId: 42, telegramUserId: 42 });
     const sent: Sent[] = [];
-    const drafts: { draftId: number; text: string }[] = [];
     const telegram = {
       sendMessage: (chatId: number, text: string) => {
         sent.push({ chatId, text });
@@ -121,16 +116,6 @@ async function scenario(
         });
         telegramIds += 1;
         return Promise.resolve({ message_id: telegramIds });
-      },
-      sendRichMessageDraft: (
-        _chatId: number,
-        draftId: number,
-        markdown: string,
-      ) => {
-        if (options.rejectDrafts)
-          return Promise.reject(new Error("Bad Request: draft rejected"));
-        drafts.push({ draftId, text: markdown });
-        return Promise.resolve(true);
       },
       sendChatAction: () => {
         typing.sends += 1;
@@ -205,7 +190,6 @@ async function scenario(
       say,
       turn,
       sent,
-      drafts,
       requests,
       typing,
       commands: vm.commands,
@@ -942,9 +926,7 @@ describe("runFrontTurn", () => {
     );
   });
 
-  test("text beside a tool that does work is a passing status, shown before the tool runs; the final text is the message", async () => {
-    let shownWhenCommandRan = -1;
-    let shownSoFar: { text: string }[] = [];
+  test("text beside a tool that does work is held, never shown; the final text is the message", async () => {
     await scenario(
       [
         [
@@ -953,17 +935,9 @@ describe("runFrontTurn", () => {
           textReply("Two files: notes.md and todo.md."),
         ],
       ],
-      async ({ tx, userId, say, turn, sent, drafts }) => {
-        shownSoFar = drafts;
+      async ({ tx, userId, say, turn, sent }) => {
         await say("what's in your home folder?");
         await turn();
-        expect(shownWhenCommandRan).toBe(1);
-        expect(drafts.map((d) => d.text)).toEqual([
-          "On it.",
-          "Looking inside.",
-        ]);
-        // One draft for the turn, so each status replaces the last in place.
-        expect(new Set(drafts.map((d) => d.draftId)).size).toBe(1);
         expect(sent.map((message) => message.text)).toEqual([
           "Two files: notes.md and todo.md.",
         ]);
@@ -975,16 +949,11 @@ describe("runFrontTurn", () => {
           "Two files: notes.md and todo.md.",
         ]);
       },
-      {
-        vmAnswer: (cmd) => {
-          if (cmd === "ls ~") shownWhenCommandRan = shownSoFar.length;
-          return { stdout: "notes.md\ntodo.md\n" };
-        },
-      },
+      { vmAnswer: () => ({ stdout: "notes.md\ntodo.md\n" }) },
     );
   });
 
-  test("a turn that only showed a status and ends without a message sends that status", async () => {
+  test("a turn that only held interim text and ends without a message sends that text", async () => {
     await scenario(
       [
         [
@@ -992,30 +961,11 @@ describe("runFrontTurn", () => {
           toolCallReply("end_turn", {}),
         ],
       ],
-      async ({ say, turn, sent, drafts }) => {
+      async ({ say, turn, sent }) => {
         await say("disk space?");
         await turn();
-        expect(drafts.map((d) => d.text)).toEqual(["40 GB free."]);
         expect(sent.map((message) => message.text)).toEqual(["40 GB free."]);
       },
-    );
-  });
-
-  test("a status Telegram won't show is dropped, never sent as a message instead", async () => {
-    await scenario(
-      [
-        [
-          toolCallReply("bash", { command: "ls" }, "Checking."),
-          textReply("Three files."),
-        ],
-      ],
-      async ({ say, turn, sent, drafts }) => {
-        await say("how many files?");
-        await turn();
-        expect(drafts).toEqual([]);
-        expect(sent.map((message) => message.text)).toEqual(["Three files."]);
-      },
-      { rejectDrafts: true },
     );
   });
 
@@ -1087,11 +1037,10 @@ describe("runFrontTurn", () => {
           textReply("Okay, I've left it."),
         ],
       ],
-      async ({ say, turn, sent, drafts, requests, commands }) => {
+      async ({ say, turn, sent, requests, commands }) => {
         await say("delete my notes file");
         await turn();
         expect(commands).toEqual([]);
-        expect(drafts).toEqual([]);
         expect(sent.map((message) => message.text)).toEqual([
           "Okay, I've left it.",
         ]);

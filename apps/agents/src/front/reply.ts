@@ -62,36 +62,6 @@ export function loginButton(text: string, webPublicUrl: string) {
     : undefined;
 }
 
-/** A status is a line or two; anything past this is cut. */
-const statusLimit = 1_000;
-
-/**
- * Shows interim text as a passing status (§4): a draft that updates in
- * place, never a message. A draft that can't be shown is dropped and
- * logged, never sent as a message instead.
- */
-export async function showStatus(context: {
-  logger: Logger;
-  telegram: TelegramSender;
-  chatId: number;
-  draftId: number;
-  text: string;
-}) {
-  const text =
-    context.text.length > statusLimit
-      ? `${context.text.slice(0, statusLimit - 1)}…`
-      : context.text;
-  await context.telegram
-    .sendRichMessageDraft(
-      context.chatId,
-      context.draftId,
-      sanitizeRichMarkdown(keepLineBreaks(text)),
-    )
-    .catch((error: unknown) => {
-      context.logger.warn({ err: error }, "showing a status failed; dropped");
-    });
-}
-
 export async function deliverReply(context: {
   db: DbOrTx;
   logger: Logger;

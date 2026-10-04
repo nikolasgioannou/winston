@@ -93,7 +93,6 @@ function fakeTelegram() {
   const telegram: TelegramSender = {
     sendMessage: () => Promise.resolve({ message_id: 1 }),
     sendRichMessage: () => Promise.resolve({ message_id: 1 }),
-    sendRichMessageDraft: () => Promise.resolve(true),
     sendChatAction: () => Promise.resolve(true),
     sendFiles: (_chatId, list) => {
       uploads.push([...list]);

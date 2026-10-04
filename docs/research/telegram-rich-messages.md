@@ -51,4 +51,4 @@ Checked on desktop. A second test (same day) confirmed the same rendering on the
 - 10.3 added `can_stop` (a stop button; the bot gets a `stopped_message_generation` update) and `keep_on_stop` (the partial draft stays briefly after a stop).
 - No rate limit is documented for draft updates.
 - **Decision:** not adopted for streaming replies (docs/design.md decision #72): refused outputs must never be shown, and some are cut mid-stream; most replies are short.
-- **Used for statuses (feebd3, decision #75):** a front-of-house step's interim text, whole and from a step that ended normally, is shown with `sendRichMessageDraft` under one `draft_id` per turn, and the turn's messages replace it. Not yet checked on a phone: how the 30-second fade looks during a long browser step, and whether re-sending to keep it alive is worth it.
+- **Statuses tried and removed:** feebd3 (decision #75) showed a front-of-house step's interim text as a draft under one `draft_id` per turn; 22672b (decision #77) removed it because the founder didn't want animated previews. Drafts aren't used anywhere now.
