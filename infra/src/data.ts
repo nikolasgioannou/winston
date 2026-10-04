@@ -45,6 +45,8 @@ export class DataStack extends Stack {
   readonly artifacts: Bucket;
   /** Screenshots and attachments referenced from the model-call log. */
   readonly blobs: Bucket;
+  /** Mail to Winston's addresses, as SES received it (raw MIME). */
+  readonly inboundMail: Bucket;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -118,5 +120,8 @@ export class DataStack extends Stack {
     // Keyed by content hash, so objects never change; they're the record and
     // never expire.
     this.blobs = bucket("Blobs", false);
+    // SES writes each message once; it's the mailbox's record, deleted with
+    // its user's account.
+    this.inboundMail = bucket("InboundMail", false);
   }
 }

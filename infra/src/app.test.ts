@@ -24,6 +24,7 @@ describe("infra app", () => {
       "winston-vm",
       "winston-ci",
       "winston-budget",
+      "winston-mail",
     ]);
   });
 

@@ -3,6 +3,7 @@ import { BudgetStack } from "./budget.ts";
 import { CiStack } from "./ci.ts";
 import { DataStack } from "./data.ts";
 import { EdgeStack } from "./edge.ts";
+import { MailStack } from "./mail.ts";
 import { NetworkStack } from "./network.ts";
 import { ServicesStack } from "./services.ts";
 import { VmStack } from "./vm.ts";
@@ -12,6 +13,8 @@ export const production = {
   account: "766577085959",
   region: "us-east-1",
   domain: "runwinston.com",
+  /** Winston's own addresses (ead827), apart from the site's domain. */
+  mailDomain: "runwinston.email",
 } as const;
 
 export type Environment = typeof production;
@@ -83,6 +86,12 @@ export function defineStacks(app: App, environment: Environment = production) {
     },
   });
 
+  const mail = new MailStack(app, "Mail", {
+    ...props("Mail", "Winston's own mail: SES sending and receiving"),
+    mailDomain: environment.mailDomain,
+    inboundMail: data.inboundMail,
+  });
+
   return {
     network,
     data,
@@ -91,5 +100,6 @@ export function defineStacks(app: App, environment: Environment = production) {
     vm,
     ci,
     budget: new BudgetStack(app, "Budget", props("Budget", "Budget alerts")),
+    mail,
   };
 }

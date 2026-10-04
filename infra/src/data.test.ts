@@ -40,7 +40,7 @@ describe("data stack", () => {
 
   test("buckets block public access, are encrypted and require TLS", () => {
     const buckets = template.findResources("AWS::S3::Bucket");
-    expect(Object.keys(buckets)).toHaveLength(2);
+    expect(Object.keys(buckets)).toHaveLength(3);
     for (const bucket of Object.values(buckets)) {
       const properties = bucket.Properties as Record<string, unknown>;
       expect(properties.PublicAccessBlockConfiguration).toEqual({
@@ -63,7 +63,7 @@ describe("data stack", () => {
           ]),
         },
       },
-      2,
+      3,
     );
   });
 
