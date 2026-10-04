@@ -1,7 +1,6 @@
 import type { MailboxNameCheck, MailboxNameRefusal } from "@winston/db/mailbox";
 import { mailboxDomain, mailboxNameProblemText } from "@winston/domain/mailbox";
 import { Button, Dialog, TextField } from "@winston/ui";
-import { Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /** Why a name or a change was refused, as the dialog says it. */
@@ -99,7 +98,6 @@ export function MailboxDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      icon={<Mail />}
       title={
         mode === "setup" ? "Winston's email address" : "Change his address"
       }
@@ -120,14 +118,12 @@ export function MailboxDialog({
           autoComplete="off"
           spellCheck={false}
           {...(problem ? { error: problemText[problem] } : {})}
-          {...(problem === undefined
+          {...(problem === undefined && mode === "change"
             ? {
                 description:
-                  mode === "setup"
-                    ? "You can change it twice."
-                    : changesLeft === 1
-                      ? "This is the last change."
-                      : `${String(changesLeft ?? 0)} changes left.`,
+                  changesLeft === 1
+                    ? "This is the last change."
+                    : `${String(changesLeft ?? 0)} changes left.`,
               }
             : {})}
         />

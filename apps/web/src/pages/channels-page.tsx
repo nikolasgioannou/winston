@@ -200,16 +200,13 @@ function EmailRow({
           icon={icon}
           label="Email"
           control={
-            <span className="flex items-center gap-3">
-              <StatusPill tone="neutral">Not set up</StatusPill>
-              <Button
-                onClick={() => {
-                  onMailboxDialogChange("setup");
-                }}
-              >
-                Set up
-              </Button>
-            </span>
+            <Button
+              onClick={() => {
+                onMailboxDialogChange("setup");
+              }}
+            >
+              Set up
+            </Button>
           }
         />
         <MailboxDialog
