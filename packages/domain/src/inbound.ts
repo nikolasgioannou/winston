@@ -67,6 +67,48 @@ export const userMessagePayloadSchema = z.object({
   source: z.literal("voice").optional(),
 });
 
+const person = z.object({ name: z.string().nullable(), email: z.string() });
+
+/**
+ * An email the user sent to Winston's own address (ead827), forwarding a
+ * thread or copying him in, that SES's DKIM and DMARC checks proved came
+ * from one of the user's own addresses. Its `occurred_at` is when it was
+ * sent. Only the receive job writes these, after that check.
+ */
+export const userEmailPayloadSchema = z.object({
+  /** His address it came to. */
+  account: z.string(),
+  from: person,
+  to: z.array(person),
+  cc: z.array(person),
+  subject: z.string(),
+  /** CLI ids, for `winston mail get`. */
+  messageId: z.string(),
+  threadId: z.string(),
+  /** What the user wrote: the body above any forwarded message. */
+  text: z.string(),
+  /** The forwarded message, as text, when there is one. */
+  forwarded: z.string().nullable(),
+  /** Attachment names. */
+  attachments: z.array(z.string()),
+});
+
+/**
+ * Mail to Winston's own address that claims to be from the user but failed
+ * SES's DKIM or DMARC check: possibly someone posing as them. It was stored
+ * as outside mail.
+ */
+export const mailImpersonationPayloadSchema = z.object({
+  account: z.string(),
+  /** The user's address the message claimed to be from. */
+  claimedFrom: z.string(),
+  subject: z.string(),
+  messageId: z.string(),
+  threadId: z.string(),
+  dkim: z.string(),
+  dmarc: z.string(),
+});
+
 /**
  * An emoji reaction the user added to one of Winston's messages
  * (`telegram.reaction.added`). The target's text is captured when the
@@ -83,6 +125,7 @@ export const reactionPayloadSchema = z.object({
 
 export type ForwardOrigin = z.infer<typeof forwardOriginSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
+export type UserEmailPayload = z.infer<typeof userEmailPayloadSchema>;
 export type UserMessagePayload = z.infer<typeof userMessagePayloadSchema>;
 export type ReactionPayload = z.infer<typeof reactionPayloadSchema>;
 

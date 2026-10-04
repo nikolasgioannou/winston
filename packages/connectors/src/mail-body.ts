@@ -61,3 +61,29 @@ export function readableBody(
     quotedTextHidden: quoteMarkers.test(html),
   };
 }
+
+/** Where clients start a forwarded message in a body read as text. */
+const forwardMarkers = [
+  /^-{2,}\s*Forwarded message\s*-{2,}$/i, // Gmail
+  /^Begin forwarded message:$/i, // Apple Mail
+  /^-{2,}\s*Original Message\s*-{2,}$/i, // Outlook
+];
+
+/**
+ * A body split at the forwarded message, if there is one: what the sender
+ * wrote above it, and the forwarded message itself.
+ */
+export function splitForwarded(body: string): {
+  own: string;
+  forwarded: string | null;
+} {
+  const lines = body.split(/\r?\n/);
+  const at = lines.findIndex((line) =>
+    forwardMarkers.some((marker) => marker.test(line.trim())),
+  );
+  if (at === -1) return { own: body, forwarded: null };
+  return {
+    own: lines.slice(0, at).join("\n").trim(),
+    forwarded: lines.slice(at).join("\n").trim(),
+  };
+}

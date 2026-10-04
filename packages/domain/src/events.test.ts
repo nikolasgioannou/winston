@@ -29,7 +29,9 @@ describe("event catalog", () => {
     const types = eventCatalog.map((event) => event.type);
     expect(new Set(types).size).toBe(types.length);
     for (const event of eventCatalog) {
-      expect(event.type).toMatch(/^(user_message|[a-z]+(\.[a-z_]+)+)$/);
+      expect(event.type).toMatch(
+        /^(user_message|user_email|[a-z]+(\.[a-z_]+)+)$/,
+      );
       expect(event.description).toMatch(/^[A-Z].*\.$/);
       expect(typeof event.payload.safeParse).toBe("function");
       expect(payloadFields(event)).toBeInstanceOf(Array);

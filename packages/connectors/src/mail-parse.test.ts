@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { splitForwarded } from "./mail-body.ts";
 import { attachmentContent, parseMail } from "./mail-parse.ts";
 
 /*
@@ -122,5 +123,25 @@ describe("parseMail", () => {
     expect(parsed.references).toEqual([]);
     expect(parsed.from).toEqual({ name: null, email: "shop@example.com" });
     expect(parsed.attachments).toEqual([]);
+  });
+});
+
+describe("splitForwarded", () => {
+  test("splits at Gmail's, Apple Mail's and Outlook's markers, or not at all", () => {
+    for (const marker of [
+      "---------- Forwarded message ---------",
+      "Begin forwarded message:",
+      "-----Original Message-----",
+    ])
+      expect(
+        splitForwarded(`Can you handle this?\n\n${marker}\nFrom: Sam\nHi`),
+      ).toEqual({
+        own: "Can you handle this?",
+        forwarded: `${marker}\nFrom: Sam\nHi`,
+      });
+    expect(splitForwarded("Winston, find us a time.")).toEqual({
+      own: "Winston, find us a time.",
+      forwarded: null,
+    });
   });
 });

@@ -6,9 +6,11 @@
  */
 import { z } from "zod";
 import {
+  mailImpersonationPayloadSchema,
   reactionPayloadSchema,
   taskNeedsUserPayloadSchema,
   taskResultPayloadSchema,
+  userEmailPayloadSchema,
   userMessagePayloadSchema,
 } from "./inbound.ts";
 
@@ -155,6 +157,15 @@ export const eventCatalog = define([
     filters: [],
   },
   {
+    type: "user_email",
+    domain: "conversation",
+    description:
+      "The user emailed Winston's own address (a forward or a CC), proven to come from one of their addresses.",
+    delivery: "always",
+    payload: userEmailPayloadSchema,
+    filters: [],
+  },
+  {
     type: "telegram.reaction.added",
     domain: "conversation",
     description: "The user reacted to one of Winston's messages.",
@@ -268,6 +279,15 @@ export const eventCatalog = define([
     }),
     filters: ["label"],
     scope: "thread",
+  },
+  {
+    type: "mail.impersonation.suspected",
+    domain: "mail",
+    description:
+      "Mail to Winston's own address claimed to be from the user but failed SES's DKIM or DMARC check.",
+    delivery: "always",
+    payload: mailImpersonationPayloadSchema,
+    filters: [],
   },
   {
     type: "calendar.invitation.received",

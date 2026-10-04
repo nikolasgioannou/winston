@@ -33,7 +33,11 @@ describe("winston events", () => {
       mail.message.labels_changed  (subscribable; --scope one thread)
         A message was read or marked unread, starred, archived or labeled.
         Filters: --label <name>
-        Data: messageId, threadId, account, added, removed"
+        Data: messageId, threadId, account, added, removed
+
+      mail.impersonation.suspected  (always delivered)
+        Mail to Winston's own address claimed to be from the user but failed SES's DKIM or DMARC check.
+        Data: account, claimedFrom, subject, messageId, threadId, dkim, dmarc"
     `);
   });
 

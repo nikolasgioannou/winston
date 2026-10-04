@@ -5,6 +5,7 @@
  * `mail.message.received` through the usual matching, and bounces it for
  * addresses no mailbox takes.
  */
+import { splitForwarded } from "@winston/connectors/mail-body";
 import { parseMail, type ParsedMail } from "@winston/connectors/mail-parse";
 import type { DbOrTx } from "@winston/db/client";
 import { refsFor } from "@winston/db/external-refs";
@@ -14,11 +15,13 @@ import {
   mailboxAddresses,
   mailboxMessages,
   mailboxThreads,
+  users,
 } from "@winston/db/schema";
+import { recordSystemEvent } from "@winston/db/system-events";
 import { parseEventPayload } from "@winston/domain/events";
 import type { ReceiveMailPayload } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { BlobStore } from "../blobs.ts";
 import { matchEvents } from "../triggers/matching.ts";
@@ -146,6 +149,32 @@ export async function receiveMail(
   return stored;
 }
 
+/**
+ * Whether an address is the user's own: their sign-in email, or a mail
+ * account they've connected (not his).
+ */
+async function isUsersAddress(tx: DbOrTx, userId: string, email: string) {
+  const wanted = email.trim().toLowerCase();
+  const [user] = await tx
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (user?.email.toLowerCase() === wanted) return true;
+  const [connected] = await tx
+    .select({ id: connections.id })
+    .from(connections)
+    .where(
+      and(
+        eq(connections.userId, userId),
+        eq(connections.domain, "mail"),
+        ne(connections.provider, "winston"),
+        ne(connections.status, "disconnected"),
+        eq(connections.externalEmail, wanted),
+      ),
+    );
+  return connected !== undefined;
+}
+
 /** The thread a message belongs to: the one holding what it replies to. */
 async function threadFor(
   tx: DbOrTx,
@@ -267,6 +296,58 @@ async function storeReceived(
   // Spam is kept, like Gmail's, but isn't news.
   if (spam) return undefined;
 
+  const [messageRefs, threadRefs] = await Promise.all([
+    refsFor(tx, connection.userId, connection.id, "message", [message.id]),
+    refsFor(tx, connection.userId, connection.id, "thread", [threadId]),
+  ]);
+  const ids = {
+    messageId: messageRefs.get(message.id) ?? "",
+    threadId: threadRefs.get(threadId) ?? "",
+  };
+
+  // From the user: proven, it's them speaking; unproven, someone may be
+  // posing as them, and it's outside mail like any other.
+  if (
+    parsed.from &&
+    (await isUsersAddress(tx, connection.userId, parsed.from.email))
+  ) {
+    const { dkim, dmarc } = received.verdicts;
+    if (dkim === "PASS" && dmarc === "PASS") {
+      const { own, forwarded } = splitForwarded(parsed.body);
+      await recordSystemEvent(tx, {
+        userId: connection.userId,
+        type: "user_email",
+        payload: {
+          account: connection.externalEmail,
+          from: parsed.from,
+          to: parsed.to,
+          cc: parsed.cc,
+          subject: parsed.subject,
+          ...ids,
+          text: own,
+          forwarded,
+          attachments: parsed.attachments.map((a) => a.filename),
+        },
+        sourceRef: `mail:${connection.id}:${received.sesMessageId}:user`,
+      });
+      // It reaches the front of house as the user; it isn't also news.
+      return undefined;
+    }
+    await recordSystemEvent(tx, {
+      userId: connection.userId,
+      type: "mail.impersonation.suspected",
+      payload: {
+        account: connection.externalEmail,
+        claimedFrom: parsed.from.email,
+        subject: parsed.subject,
+        ...ids,
+        dkim,
+        dmarc,
+      },
+      sourceRef: `mail:${connection.id}:${received.sesMessageId}:impersonation`,
+    });
+  }
+
   const [previous] = await tx
     .select({ direction: mailboxMessages.direction })
     .from(mailboxMessages)
@@ -278,10 +359,6 @@ async function storeReceived(
     )
     .orderBy(desc(mailboxMessages.date), asc(mailboxMessages.id))
     .limit(1);
-  const [messageRefs, threadRefs] = await Promise.all([
-    refsFor(tx, connection.userId, connection.id, "message", [message.id]),
-    refsFor(tx, connection.userId, connection.id, "thread", [threadId]),
-  ]);
   const type = "mail.message.received";
   const [event] = await tx
     .insert(events)
@@ -290,8 +367,7 @@ async function storeReceived(
       connectionId: connection.id,
       type,
       payload: parseEventPayload(type, {
-        messageId: messageRefs.get(message.id) ?? "",
-        threadId: threadRefs.get(threadId) ?? "",
+        ...ids,
         account: connection.externalEmail,
         from: parsed.from,
         to: parsed.to,

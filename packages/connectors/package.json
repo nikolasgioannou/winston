@@ -13,6 +13,7 @@
     "./google-calendar-sync": "./src/google-calendar-sync.ts",
     "./grants": "./src/grants.ts",
     "./mail": "./src/mail.ts",
+    "./mail-body": "./src/mail-body.ts",
     "./mail-compose": "./src/mail-compose.ts",
     "./mail-parse": "./src/mail-parse.ts",
     "./winston-mail": "./src/winston-mail.ts"

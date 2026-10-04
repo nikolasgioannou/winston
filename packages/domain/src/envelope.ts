@@ -4,7 +4,8 @@
  *
  * - Security: every interpolated string is XML-escaped, so no payload (an
  *   email body, a web page, the user's own text) can close a tag or open a
- *   fake envelope. Only `renderUserMessage` produces `type="user_message"`.
+ *   fake envelope. Only `renderUserMessage` produces `type="user_message"`
+ *   and only `renderUserEmail` `type="user_email"`: the user speaking.
  * - Caching: output depends only on the inputs (never the clock or the
  *   process's time zone), so the same item always renders to the same bytes.
  */
@@ -15,6 +16,7 @@ import type {
   TaskNeedsUserPayload,
   TaskResultPayload,
   TaskResultType,
+  UserEmailPayload,
   UserMessagePayload,
 } from "./inbound.ts";
 
@@ -29,6 +31,12 @@ export interface UserMessageItem {
   payload: UserMessagePayload;
   /** Set when the replied-to message was found; a reply without it renders as `<reply_to/>`. */
   replyTo?: ReplyContext;
+}
+
+/** An email the user sent Winston's own address, proven theirs (ead827). */
+export interface UserEmailItem {
+  occurredAt: Date;
+  payload: UserEmailPayload;
 }
 
 export interface EventItem {
@@ -51,6 +59,7 @@ export type TaskItem =
 
 export type EnvelopeItem =
   | ({ kind: "user_message" } & UserMessageItem)
+  | ({ kind: "user_email" } & UserEmailItem)
   | ({ kind: "event" } & EventItem)
   | ({ kind: "task" } & TaskItem);
 
@@ -126,6 +135,33 @@ export function renderUserMessage(item: UserMessageItem, timeZone: string) {
   if (payload.text !== "" || !payload.attachment)
     lines.push(element("text", payload.text));
   return envelope("user_message", lines);
+}
+
+/**
+ * The only renderer that may produce a `user_email` envelope: mail to
+ * Winston's address that DKIM and DMARC proved the user sent. What the user
+ * wrote is their words (`text`); what they forwarded, and who else is on
+ * it, is data, like any outside content.
+ */
+export function renderUserEmail(item: UserEmailItem, timeZone: string) {
+  const { payload } = item;
+  const from = payload.from.name
+    ? `${payload.from.name} <${payload.from.email}>`
+    : payload.from.email;
+  return envelope("user_email", [
+    element("sent_at", formatEnvelopeTime(item.occurredAt, timeZone)),
+    `  <mail${attributes({ account: payload.account, from, message: payload.messageId, thread: payload.threadId })}>${escapeText(payload.subject)}</mail>`,
+    element("text", payload.text),
+    element(
+      "data",
+      canonicalJson({
+        to: payload.to,
+        cc: payload.cc,
+        forwarded: payload.forwarded,
+        attachments: payload.attachments,
+      }),
+    ),
+  ]);
 }
 
 /** Why a file isn't on the VM, in words the model can pass on. */
@@ -249,9 +285,11 @@ export function renderBatch(items: readonly EnvelopeItem[], timeZone: string) {
     .map((item) =>
       item.kind === "user_message"
         ? renderUserMessage(item, timeZone)
-        : item.kind === "task"
-          ? renderTaskResult(item, timeZone)
-          : renderEvent(item, timeZone),
+        : item.kind === "user_email"
+          ? renderUserEmail(item, timeZone)
+          : item.kind === "task"
+            ? renderTaskResult(item, timeZone)
+            : renderEvent(item, timeZone),
     )
     .join("\n\n");
 }

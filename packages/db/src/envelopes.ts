@@ -10,6 +10,7 @@ import {
   taskNeedsUserPayloadSchema,
   taskResultPayloadSchema,
   taskResultTypes,
+  userEmailPayloadSchema,
   userMessagePayloadSchema,
 } from "@winston/domain/inbound";
 import { and, arrayContains, eq, sql } from "drizzle-orm";
@@ -38,6 +39,12 @@ export async function toEnvelopeItems(
           type: taskType,
           occurredAt: item.occurredAt,
           payload: taskResultPayloadSchema.parse(item.payload),
+        };
+      if (item.type === "user_email")
+        return {
+          kind: "user_email",
+          occurredAt: item.occurredAt,
+          payload: userEmailPayloadSchema.parse(item.payload),
         };
       if (item.type !== "user_message")
         return {
