@@ -1,14 +1,14 @@
 ---
 id: "f432a3"
 title: Sites have no domain or Cloudflare platform to run on
-status: todo
+status: done
 priority: none
 labels:
   - collab
   - infra
 parent: "57e0e7"
 created_at: 2026-10-04T02:55:06.982Z
-updated_at: 2026-10-04T02:59:13.206Z
+updated_at: 2026-10-04T05:06:35.860Z
 ---
 
 Done with the founder: these steps need their accounts.
@@ -21,6 +21,12 @@ Done with the founder: these steps need their accounts.
 - A runbook, `docs/runbooks/sites.md`, recording all of this.
 
 **Done when**
-- [ ] `runwinston.app` is registered and on Cloudflare DNS
+- [x] `runwinston.app` is registered and on Cloudflare DNS
 - [ ] The namespace exists and the token can list its scripts, from the backend's secret
-- [ ] The billing alert is set and the runbook says how all of this was set up
+- [x] The billing alert is set and the runbook says how all of this was set up
+
+## As built
+
+Done by the founder in the dashboard on 2026-10-04 and recorded in `docs/runbooks/sites.md`: the domain, the plan, the `winston-sites` namespace (created in the dashboard), the `winston-site-routes` KV namespace, the `*` record, both tokens and a $40 budget alert.
+
+The tokens use the legacy Workers Scripts permission, because the new Workers roles don't document dispatch namespaces yet. They sit in the founder's password manager: putting them in Secrets Manager and checking the backend's token against the namespace moved to d140ab, which builds the code that reads them.
