@@ -151,6 +151,7 @@ export class ServicesStack extends Stack {
         GATEWAY_HOST: "0.0.0.0",
         GATEWAY_PORT: String(servicePorts.gateway),
         ARTIFACTS_BUCKET: props.artifacts.bucketName,
+        BLOB_BUCKET: props.blobs.bucketName,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         WEB_PUBLIC_URL: publicUrl,
       },
@@ -281,6 +282,8 @@ export class ServicesStack extends Stack {
     taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);
     // The gateway reads the VM manifest and presigns binary downloads (§10).
     props.artifacts.grantRead(taskDefinitions.gateway.taskRole);
+    // Winston's raw mail is a blob: the gateway reads it for attachments.
+    props.blobs.grantRead(taskDefinitions.gateway.taskRole);
     // Only agents stores blobs (§12).
     props.blobs.grantRead(taskDefinitions.agents.taskRole);
     props.blobs.grantPut(taskDefinitions.agents.taskRole);

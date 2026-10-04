@@ -216,9 +216,18 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
     if (input.account !== undefined) {
       if (domain !== "mail" && domain !== "calendar")
         throw invalid(`--account doesn't apply to ${input.on}.`);
-      connectionId = (
-        await resolveConnection(db, userId, domain, input.account)
-      ).id;
+      const connection = await resolveConnection(
+        db,
+        userId,
+        domain,
+        input.account,
+      );
+      if (nativeQuery !== null && connection.provider === "winston")
+        throw invalid(
+          "--native is Gmail's search syntax; Winston's own mailbox has none.",
+          "Use the structured filters, like --from or --subject.",
+        );
+      connectionId = connection.id;
     }
     const scopeRef = input.scope ?? current?.scopeRef ?? null;
     if (scopeRef !== null) {

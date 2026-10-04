@@ -26,6 +26,13 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
   /** The site, for links in errors (permission toggles, reconnecting). */
   WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
+  /** Production: the blobs bucket agents writes to (Winston's raw mail, for attachments). */
+  BLOB_BUCKET: z.string().min(1).optional(),
+  /** Locally: agents' blob directory, used when BLOB_BUCKET isn't set. */
+  BLOB_DIR: z
+    .string()
+    .min(1)
+    .default(new URL("../../../.data/blobs", import.meta.url).pathname),
   /** Production: the bucket VM binaries are published to (self-update). */
   ARTIFACTS_BUCKET: z.string().min(1).optional(),
   GATEWAY_INTERNAL_SECRET: z

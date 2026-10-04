@@ -4,14 +4,15 @@
  */
 import { networkInterfaces } from "node:os";
 import { googleAccessTokens } from "@winston/connectors/access-token";
-import { NotSupportedError } from "@winston/connectors/errors";
 import { gmailProvider } from "@winston/connectors/gmail";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
+import { winstonMailProvider } from "@winston/connectors/winston-mail";
 import { reconnectUrlFor } from "@winston/connectors/grants";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
+import { blobReader } from "./blobs.ts";
 import { loadGatewayConfig } from "./config.ts";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
@@ -47,6 +48,7 @@ function ownUrl() {
     : undefined;
 }
 const selfUrl = ownUrl();
+const readBlob = blobReader(config);
 logger.info({ selfUrl }, "advertising this gateway to agents");
 const gateway = createGateway({
   db,
@@ -63,11 +65,9 @@ const gateway = createGateway({
   connectors: {
     webPublicUrl: config.WEB_PUBLIC_URL,
     mail: (connection) => {
-      // Reading and sending from his own mailbox come with 44bcf2 and 201a9b.
+      // Winston's own mailbox: we're its provider (ead827).
       if (connection.provider === "winston")
-        throw new NotSupportedError(
-          "Winston's own mailbox can't be read or sent from yet.",
-        );
+        return winstonMailProvider({ db, connection, rawMessage: readBlob });
       return gmailProvider({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),

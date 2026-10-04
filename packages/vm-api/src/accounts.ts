@@ -39,7 +39,8 @@ export const providerNotes: Record<ConnectionProvider, string[]> = {
     "Winston's own mailbox, at his own address, not the user's: mail here is to and from Winston.",
     "Mail commands use it only when it's named with --account.",
     "The user turns it on or off, or changes its address, at runwinston.com/channels.",
-    "It can't be read or sent from yet.",
+    "Read, search and organize it with the usual mail commands; there's no --native syntax, and it has no category tabs (everything is primary).",
+    "It can't send yet.",
   ],
   google_calendar: [
     "Lists cover the calendars the user shows in Google Calendar; pick another with --calendar.",

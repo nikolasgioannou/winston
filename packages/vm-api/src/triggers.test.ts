@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { refFor } from "@winston/db/external-refs";
+import { turnOnMailbox } from "@winston/db/mailbox";
 import {
   inRollback,
   insertConnection,
@@ -83,6 +84,28 @@ describe("trigger routes", () => {
         account: "me@example.com",
         maxFires: 1,
         nextFireAt: null,
+      });
+    });
+  });
+
+  test("Winston's own mailbox takes structured filters but not --native", async () => {
+    await inRollback(db, async (tx) => {
+      const { user, create } = await api(tx);
+      await turnOnMailbox(tx, user.id, "ada");
+      const native = await create({
+        on: "mail.message.received",
+        account: "ada@runwinston.email",
+        native: "from:github",
+      });
+      expect(native.error?.message).toContain("Winston's own mailbox has none");
+      const structured = await create({
+        on: "mail.message.received",
+        account: "ada@runwinston.email",
+        filter: { from: "github" },
+        note: "Verification codes from GitHub",
+      });
+      expect(structured.trigger).toMatchObject({
+        account: "ada@runwinston.email",
       });
     });
   });

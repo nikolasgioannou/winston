@@ -14,7 +14,8 @@
     "./grants": "./src/grants.ts",
     "./mail": "./src/mail.ts",
     "./mail-compose": "./src/mail-compose.ts",
-    "./mail-parse": "./src/mail-parse.ts"
+    "./mail-parse": "./src/mail-parse.ts",
+    "./winston-mail": "./src/winston-mail.ts"
   },
   "scripts": {
     "typecheck": "tsc"
