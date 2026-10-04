@@ -45,6 +45,13 @@ describe("mail stack", () => {
     template.resourceCountIs("Custom::AWS", 1);
   });
 
+  test("received mail is announced to the api's webhook", () => {
+    template.hasResourceProperties("AWS::SNS::Subscription", {
+      Protocol: "https",
+      Endpoint: "https://api.runwinston.com/webhooks/ses",
+    });
+  });
+
   test("its topics sign with SHA256", () => {
     const topics = Object.values(template.findResources("AWS::SNS::Topic"));
     expect(topics).toHaveLength(2);

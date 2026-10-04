@@ -12,6 +12,7 @@ import {
 } from "aws-cdk-lib/aws-ses";
 import { S3 } from "aws-cdk-lib/aws-ses-actions";
 import { Topic } from "aws-cdk-lib/aws-sns";
+import { UrlSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
 import {
   AwsCustomResource,
   AwsCustomResourcePolicy,
@@ -22,6 +23,8 @@ import type { Construct } from "constructs";
 export interface MailStackProps extends StackProps {
   /** Winston's mail domain, `runwinston.email` (ead827). */
   mailDomain: string;
+  /** The site's domain: SNS posts to its api. */
+  domain: string;
   inboundMail: Bucket;
 }
 
@@ -46,6 +49,11 @@ export class MailStack extends Stack {
     this.sendingEvents = new Topic(this, "SendingEvents", {
       signatureVersion: "2",
     });
+    // The api confirms the subscription when SNS first posts (its own
+    // signed confirmation), then gets each received message's notice.
+    this.inbound.addSubscription(
+      new UrlSubscription(`https://api.${props.domain}/webhooks/ses`),
+    );
 
     this.configurationSet = new ConfigurationSet(this, "Sending");
     this.configurationSet.addEventDestination("Events", {

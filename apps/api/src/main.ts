@@ -32,6 +32,7 @@ const server = Bun.serve({
             serviceAccount: config.GMAIL_PUSH_SERVICE_ACCOUNT,
           }
         : undefined,
+    sesInboundTopicArn: config.SES_INBOUND_TOPIC_ARN,
   }).fetch,
 });
 

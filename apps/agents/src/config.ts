@@ -62,6 +62,15 @@ const agentsConfigSchema = dbConfigSchema
       .string()
       .min(1)
       .default(new URL("../../../.data/blobs", import.meta.url).pathname),
+    /** Where SES writes mail for Winston's addresses (production; docs/runbooks/email.md). */
+    INBOUND_MAIL_BUCKET: z.string().min(1).optional(),
+    /** Locally, where `bun run mail:receive` leaves messages instead. */
+    INBOUND_MAIL_DIR: z
+      .string()
+      .min(1)
+      .default(
+        new URL("../../../.data/inbound-mail", import.meta.url).pathname,
+      ),
     /** The OAuth client connected accounts were granted to: refreshing their tokens. */
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),

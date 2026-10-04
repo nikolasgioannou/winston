@@ -42,7 +42,7 @@ import {
   SslPolicy,
   TargetType,
 } from "aws-cdk-lib/aws-elasticloadbalancingv2";
-import type { IManagedPolicy } from "aws-cdk-lib/aws-iam";
+import { PolicyStatement, type IManagedPolicy } from "aws-cdk-lib/aws-iam";
 import type { IKey } from "aws-cdk-lib/aws-kms";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import type { IBucket } from "aws-cdk-lib/aws-s3";
@@ -86,6 +86,12 @@ export interface ServicesStackProps extends StackProps {
   blobs: IBucket;
   /** VM binaries; the gateway presigns downloads from it. */
   artifacts: IBucket;
+  /** Winston's own mail (the Mail stack): where it arrives, and SES's identity. */
+  mail: {
+    inboundBucket: IBucket;
+    inboundTopicArn: string;
+    identityArn: string;
+  };
   /** What agents needs to run users' VMs on EC2 (the Vm stack). */
   vm: {
     backendPolicy: IManagedPolicy;
@@ -139,6 +145,7 @@ export class ServicesStack extends Stack {
         // Gmail push (infra/gcp/prod): the audience and signer Pub/Sub uses.
         GMAIL_PUSH_AUDIENCE: `https://api.${domain}/webhooks/gmail`,
         GMAIL_PUSH_SERVICE_ACCOUNT: `gmail-push@${gcpProject}.iam.gserviceaccount.com`,
+        SES_INBOUND_TOPIC_ARN: props.mail.inboundTopicArn,
       },
       gateway: {
         GATEWAY_HOST: "0.0.0.0",
@@ -159,6 +166,7 @@ export class ServicesStack extends Stack {
         WEB_PUBLIC_URL: publicUrl,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         BLOB_BUCKET: props.blobs.bucketName,
+        INBOUND_MAIL_BUCKET: props.mail.inboundBucket.bucketName,
         GATEWAY_INTERNAL_URL: `http://gateway.winston.internal:${String(servicePorts.gateway)}`,
         VM_GATEWAY_URL: `wss://gateway.${domain}`,
         VM_PROVIDER: "ec2",
@@ -277,6 +285,16 @@ export class ServicesStack extends Stack {
     props.blobs.grantRead(taskDefinitions.agents.taskRole);
     props.blobs.grantPut(taskDefinitions.agents.taskRole);
     props.blobs.grantDelete(taskDefinitions.agents.taskRole);
+    // agents takes Winston's received mail from where SES left it, and
+    // bounces what no mailbox takes.
+    props.mail.inboundBucket.grantRead(taskDefinitions.agents.taskRole);
+    props.mail.inboundBucket.grantDelete(taskDefinitions.agents.taskRole);
+    taskDefinitions.agents.taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ["ses:SendBounce"],
+        resources: [props.mail.identityArn],
+      }),
+    );
 
     this.loadBalancer = new ApplicationLoadBalancer(this, "LoadBalancer", {
       vpc: props.vpc,

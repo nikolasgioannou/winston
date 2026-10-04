@@ -28,6 +28,7 @@
     "infra:synth": "bun run --filter @winston/infra synth",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "mail:receive": "bun --env-file=.env.local apps/agents/src/mailbox/receive-cli.ts",
     "model:smoke": "bun run --filter @winston/agents model:smoke",
     "prepare": "lefthook install",
     "prod": "bun scripts/prod.ts",

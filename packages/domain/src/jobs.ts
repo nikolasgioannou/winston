@@ -100,6 +100,32 @@ export const syncConnectionJob = {
 } as const;
 
 /**
+ * SES received a message for Winston's domain (ead827): store it in the
+ * mailboxes it's addressed to, or bounce it. Payload `ReceiveMailPayload`.
+ */
+export const receiveMailJob = {
+  type: "receive_mail",
+  /** SES may announce a message more than once. */
+  dedupeKey: (sesMessageId: string) => `receive_mail:${sesMessageId}`,
+} as const;
+
+/** What `receive_mail` needs: where the raw message is, and SES's view of it. */
+export interface ReceiveMailPayload {
+  /** The raw message's key in the inbound store. */
+  key: string;
+  sesMessageId: string;
+  /** The addresses on Winston's domain it was delivered to. */
+  recipients: string[];
+  verdicts: {
+    spf: string;
+    dkim: string;
+    dmarc: string;
+    spam: string;
+    virus: string;
+  };
+}
+
+/**
  * Provisioning a user's VM (§10, §15). Queued when a user's VM is requested
  * (at sign-up), by a setup failure's automatic retry, and by the retry
  * button. Payload `{ replace: true }` rebuilds a VM that's already running: a

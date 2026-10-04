@@ -18,7 +18,7 @@
  *   (`Content-Disposition: inline` with a `Content-ID`). Gmail's attachment ids
  *   change between fetches, so an attachment is named `<message id>/<part id>`.
  */
-import { compile } from "html-to-text";
+import { readableBody } from "./mail-body.ts";
 import { composeRaw } from "./mail-compose.ts";
 import {
   NotSupportedError,
@@ -201,64 +201,15 @@ function attachmentsOf(message: GmailMessage): MailAttachment[] {
     }));
 }
 
-const htmlToText = compile({
-  wordwrap: false,
-  selectors: [
-    { selector: "img", format: "skip" },
-    { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
-    // Quoted earlier messages, as each client marks them.
-    { selector: "div.gmail_quote", format: "skip" },
-    { selector: "blockquote[type=cite]", format: "skip" },
-    { selector: "div.yahoo_quoted", format: "skip" },
-  ],
-});
-
-const quoteMarkers =
-  /class=["'][^"']*\b(gmail_quote|yahoo_quoted)\b|<blockquote[^>]*type=["']?cite/i;
-
-/**
- * Hides a plain-text reply's quoted tail: from an "On … wrote:" line (which
- * mail clients sometimes wrap over two lines) when `>` lines follow it.
- */
-export function stripQuotedText(text: string): {
-  text: string;
-  hidden: boolean;
-} {
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    const joined = `${line} ${lines[i + 1] ?? ""}`;
-    const intro = /^On .+wrote:\s*$/.test(line)
-      ? 1
-      : /^On .+wrote:\s*$/.test(joined)
-        ? 2
-        : 0;
-    if (!intro) continue;
-    const rest = lines.slice(i + intro).filter((l) => l.trim() !== "");
-    if (rest.length > 0 && rest.every((l) => l.startsWith(">")))
-      return { text: lines.slice(0, i).join("\n").trimEnd(), hidden: true };
-  }
-  return { text, hidden: false };
-}
-
 /** The readable body: plain text if there is some, else the HTML as text. */
-function bodyOf(message: GmailMessage): {
-  body: string;
-  quotedTextHidden: boolean;
-} {
+function bodyOf(message: GmailMessage) {
   const parts = leaves(message.payload).filter((part) => !isAttachment(part));
   const plain = parts.find((part) => part.mimeType === "text/plain");
-  if (plain) {
-    const { text, hidden } = stripQuotedText(decodeBody(plain));
-    return { body: text.trim(), quotedTextHidden: hidden };
-  }
   const html = parts.find((part) => part.mimeType === "text/html");
-  if (!html) return { body: "", quotedTextHidden: false };
-  const source = decodeBody(html);
-  return {
-    body: htmlToText(source).trim(),
-    quotedTextHidden: quoteMarkers.test(source),
-  };
+  return readableBody(
+    plain ? decodeBody(plain) : undefined,
+    html ? decodeBody(html) : undefined,
+  );
 }
 
 /** Gmail's snippets come HTML-escaped. */

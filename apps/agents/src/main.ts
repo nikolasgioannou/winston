@@ -18,6 +18,7 @@ import {
   closeTaskBrowserJob,
   revokeConnectionTokenJob,
   runStepJob,
+  receiveMailJob,
   syncConnectionJob,
   watchConnectionJob,
   saveAttachmentJob,
@@ -32,6 +33,12 @@ import {
 import { runStepHandler, stepLeaseMs } from "./background/handler.ts";
 import { closeTaskBrowserHandler } from "./background/close-browser.ts";
 import { createBlobStore } from "./blobs.ts";
+import { receiveMailHandler } from "./mailbox/receive.ts";
+import {
+  createInboundMailStore,
+  loggingBouncer,
+  sesBouncer,
+} from "./mailbox/stores.ts";
 import { loadAgentsConfig } from "./config.ts";
 import { frontTurnHandler } from "./front/handler.ts";
 import { createModelGateway } from "./model/gateway.ts";
@@ -170,6 +177,14 @@ const worker = createWorker({
     [matchEventsJob.type]: matchEventsHandler,
     [refreshTimersJob.type]: refreshTimersHandler(calendarFor),
     [fireDerivedTimerJob.type]: fireDerivedTimerHandler(calendarFor),
+    [receiveMailJob.type]: receiveMailHandler({
+      inbound: createInboundMailStore(config),
+      blobs,
+      // SES bounces only mail it received, which local stacks never get.
+      bouncer: config.INBOUND_MAIL_BUCKET
+        ? sesBouncer()
+        : loggingBouncer(logger),
+    }),
     [syncConnectionJob.type]: syncConnectionHandler({
       native: gmailNativeCheck(async (connectionId) => {
         const [connection] = await db

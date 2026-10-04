@@ -6,7 +6,9 @@ import type { PushIdentity } from "./google-oidc.ts";
 import { calendarWebhookRoutes } from "./routes/calendar-webhook.ts";
 import { gmailWebhookRoutes } from "./routes/gmail-webhook.ts";
 import { healthRoutes } from "./routes/health.ts";
+import { sesWebhookRoutes } from "./routes/ses-webhook.ts";
 import { telegramWebhookRoutes } from "./routes/telegram-webhook.ts";
+import { snsVerifier, type SnsVerify } from "./sns.ts";
 import type { TelegramSender } from "./telegram/handle-update.ts";
 
 export interface ApiDeps {
@@ -19,6 +21,10 @@ export interface ApiDeps {
   };
   /** Gmail push's identity, when it's configured (docs/runbooks/gcp-terraform.md). */
   gmailPush?: PushIdentity | undefined;
+  /** Where SES announces Winston's received mail, when it's set up (docs/runbooks/email.md). */
+  sesInboundTopicArn?: string | undefined;
+  /** Checks SNS signatures; tests pass one that trusts their own key. */
+  verifySns?: SnsVerify;
 }
 
 export interface ApiEnv {
@@ -61,6 +67,14 @@ export function createApp(deps: ApiDeps) {
   app.route(
     "/webhooks/gmail",
     gmailWebhookRoutes({ db: deps.db, push: deps.gmailPush }),
+  );
+  app.route(
+    "/webhooks/ses",
+    sesWebhookRoutes({
+      db: deps.db,
+      inboundTopicArn: deps.sesInboundTopicArn,
+      verify: deps.verifySns ?? snsVerifier(),
+    }),
   );
   return app;
 }

@@ -16,6 +16,7 @@
   "dependencies": {
     "@aws-sdk/client-ec2": "3.1144.0",
     "@aws-sdk/client-s3": "3.1144.0",
+    "@aws-sdk/client-ses": "3.1144.0",
     "@aws-sdk/client-ssm": "3.1144.0",
     "@openrouter/ai-sdk-provider": "3.1.0",
     "@winston/connectors": "workspace:*",

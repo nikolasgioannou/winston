@@ -4,12 +4,8 @@ import {
   ProviderNotFoundError,
   ProviderUnavailableError,
 } from "./errors.ts";
-import {
-  gmailQuery,
-  gmailProvider,
-  parseAddresses,
-  stripQuotedText,
-} from "./gmail.ts";
+import { gmailQuery, gmailProvider, parseAddresses } from "./gmail.ts";
+import { stripQuotedText } from "./mail-body.ts";
 
 /*
  * Synthetic Gmail API responses, shaped exactly like the API's (users.messages,

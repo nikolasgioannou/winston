@@ -55,6 +55,12 @@ export function defineStacks(app: App, environment: Environment = production) {
     ...props("Vm", "The user VMs' launch template, permissions and snapshots"),
     vmSecurityGroup: network.securityGroups.vm,
   });
+  const mail = new MailStack(app, "Mail", {
+    ...props("Mail", "Winston's own mail: SES sending and receiving"),
+    mailDomain: environment.mailDomain,
+    domain: environment.domain,
+    inboundMail: data.inboundMail,
+  });
   const services = new ServicesStack(app, "Services", {
     ...props(
       "Services",
@@ -79,17 +85,16 @@ export function defineStacks(app: App, environment: Environment = production) {
     tokensKey: data.tokensKey,
     blobs: data.blobs,
     artifacts: data.artifacts,
+    mail: {
+      inboundBucket: data.inboundMail,
+      inboundTopicArn: mail.inbound.topicArn,
+      identityArn: mail.identity.emailIdentityArn,
+    },
     vm: {
       backendPolicy: vm.backendPolicy,
       launchTemplateName: "winston-vm",
       subnetIds: network.vpc.publicSubnets.map((subnet) => subnet.subnetId),
     },
-  });
-
-  const mail = new MailStack(app, "Mail", {
-    ...props("Mail", "Winston's own mail: SES sending and receiving"),
-    mailDomain: environment.mailDomain,
-    inboundMail: data.inboundMail,
   });
 
   return {

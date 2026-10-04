@@ -6,7 +6,7 @@ Winston's own addresses are `<name>@runwinston.email` (ead827). The domain is ap
 
 - **Sending:** an SES domain identity for `runwinston.email` with Easy DKIM (2048-bit RSA), a custom MAIL FROM domain `mail.runwinston.email` (mail bounces rather than falls back if its MX is missing), and the `Sending` configuration set, which publishes bounces, complaints and deliveries to the `SendingEvents` topic.
 - **Receiving:** the `Receiving` receipt rule set with one rule for every address on the domain (not its subdomains): spam and virus scanning on, TLS required, and an S3 action writing the raw message to the `InboundMail` bucket under `inbound/<SES message id>` and notifying the `Inbound` topic. SES can only have **one active rule set per account and region**, and CloudFormation can't activate one, so a custom resource calls `setActiveReceiptRuleSet` on deploy (and clears it if the stack is deleted). Nothing else in `winston-prod` may use SES receiving.
-- **Topics** sign with SHA256 (`SignatureVersion` 2), which the api verifies. Their subscriptions to `https://api.runwinston.com/webhooks/ses` come with the endpoint (9ad1b4, 201a9b).
+- **Topics** sign with SHA256 (`SignatureVersion` 2), which the api verifies. `Inbound` is subscribed to `https://api.runwinston.com/webhooks/ses`, which confirms the subscription itself (a signed `SubscriptionConfirmation`); `SendingEvents` gets its subscription with sending (201a9b).
 - Classic receipt rules rather than SES Mail Manager: Mail Manager's ingress endpoint costs $50 a month before any mail, and receipt rules do everything this needs (checked 2026-10-03).
 
 ## Setting it up
@@ -31,6 +31,8 @@ Winston's own addresses are `<name>@runwinston.email` (ead827). The domain is ap
 
 ## Checking it
 
+- **The api's subscription:** SNS asks for confirmation as soon as the Mail stack creates the subscription, which in a deploy is before the api has the new route, so the first request can fail. SNS console → Topics → the `Inbound` topic → Subscriptions: the `https` one must say **Confirmed**. If it says Pending confirmation, select it and **Request confirmation**; the api confirms within seconds (its log says "confirmed the SNS subscription"). A pending request expires after three days.
+
 - **Verified:** SES console → Identities → `runwinston.email` shows Verified, DKIM Successful and MAIL FROM Successful; or `aws sesv2 get-email-identity --email-identity runwinston.email --profile winston-prod` (`VerifiedForSendingStatus: true`, `DkimAttributes.Status: SUCCESS`, `MailFromAttributes.MailFromDomainStatus: SUCCESS`).
 - **DNS:** `dig +short MX runwinston.email`, `dig +short MX mail.runwinston.email`, `dig +short TXT mail.runwinston.email`, `dig +short TXT _dmarc.runwinston.email`, and each DKIM CNAME.
 - **Receiving:** `aws ses describe-active-receipt-rule-set --profile winston-prod` names the `Receiving` set. Send a message from any address to `test@runwinston.email`; within a minute an object appears under `inbound/` in the `InboundMail` bucket (`aws s3 ls s3://<bucket>/inbound/ --profile winston-prod`), and the `Inbound` topic's delivery metrics count one notification. Delete the test object afterwards: it's someone's mail.
@@ -39,4 +41,11 @@ Winston's own addresses are `<name>@runwinston.email` (ead827). The domain is ap
 
 ## Local development
 
-Local stacks don't receive real mail: SES allows one active receipt rule set per account and region, and that's production's. Inbound mail is exercised locally by handing the api a raw message instead (with the inbound ticket, 9ad1b4).
+Local stacks don't receive real mail: SES allows one active receipt rule set per account and region, and that's production's. Instead, hand the local stack a raw message:
+
+```sh
+bun run mail:receive message.eml                       # to its To and Cc addresses on runwinston.email
+bun run mail:receive message.eml --to ada@runwinston.email
+```
+
+It leaves the message in `.data/inbound-mail/inbound/` (where `INBOUND_MAIL_DIR` points) and queues the same `receive_mail` job SES's notification would, with every verdict PASS; the running `agents` stores it. A message to an address no mailbox takes is logged as a bounce ("would bounce mail"), since there's no SES to bounce through. Save a message from any mail client as `.eml` to get one.

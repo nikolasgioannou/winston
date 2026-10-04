@@ -27,6 +27,9 @@ export const idPrefixes = {
   draft: "drf",
   attachment: "att",
   calendarEvent: "evt",
+  /** Winston's own mailbox's messages and threads, as its provider stores them. */
+  mailboxMessage: "wmsg",
+  mailboxThread: "wthr",
   /** A call to Jev, the browser's fast decision model (§5). */
   jevDecision: "jev",
 } as const;

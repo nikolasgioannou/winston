@@ -10,6 +10,7 @@ export * from "./handoffs.ts";
 export * from "./inbound-items.ts";
 export * from "./jev-decisions.ts";
 export * from "./jobs.ts";
+export * from "./mailbox-mail.ts";
 export * from "./model-calls.ts";
 export * from "./outbound-messages.ts";
 export * from "./prompt-versions.ts";

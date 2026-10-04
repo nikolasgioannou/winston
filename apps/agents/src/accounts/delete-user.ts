@@ -4,6 +4,7 @@ import {
   connections,
   inboundItems,
   jobs,
+  mailboxMessages,
   runMessages,
   runs,
   telegramLinks,
@@ -169,7 +170,16 @@ async function referencedBlobs(
         ? eq(inboundItems.userId, userId)
         : ne(inboundItems.userId, userId),
     );
-  return [...fromMessages, ...fromAttachments].flatMap((row) =>
+  // Raw mail in Winston's own mailbox, received or sent.
+  const fromMail = await db
+    .selectDistinct({ key: mailboxMessages.rawBlobKey })
+    .from(mailboxMessages)
+    .where(
+      theirs
+        ? eq(mailboxMessages.userId, userId)
+        : ne(mailboxMessages.userId, userId),
+    );
+  return [...fromMessages, ...fromAttachments, ...fromMail].flatMap((row) =>
     row.key ? [row.key] : [],
   );
 }

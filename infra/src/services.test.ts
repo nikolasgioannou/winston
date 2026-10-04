@@ -36,6 +36,13 @@ describe("services stack", () => {
     }
   });
 
+  test("api knows the inbound mail topic and agents the inbound mail bucket", () => {
+    const names = (service: Service) =>
+      (container(service).Environment ?? []).map((e) => e.Name);
+    expect(names("api")).toContain("SES_INBOUND_TOPIC_ARN");
+    expect(names("agents")).toContain("INBOUND_MAIL_BUCKET");
+  });
+
   test("tasks get the database secret's ARN, never a password", () => {
     for (const service of Object.keys(serviceSecrets) as Service[]) {
       const environment = container(service).Environment ?? [];
@@ -152,6 +159,10 @@ describe("services stack", () => {
     for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
     expect(actionsFor("agents")).toContain("s3:PutObject");
+    // Only agents handles received mail, and bounces it.
+    expect(actionsFor("agents")).toContain("ses:SendBounce");
+    for (const service of ["api", "web", "gateway"] as const)
+      expect(actionsFor(service).some((a) => a.startsWith("ses:"))).toBe(false);
     // The gateway only reads (VM binaries, to presign their downloads).
     expect(
       actionsFor("gateway")

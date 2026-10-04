@@ -49,6 +49,8 @@ While working on the site, http://localhost:3002/dev/design shows every page in 
 
 Logs are human-readable in `bun dev` and in a terminal, and JSON lines otherwise. Set `LOG_PRETTY` in `.env.local` to force one or the other.
 
+Local stacks don't receive real mail for Winston's own addresses; `bun run mail:receive <file.eml>` hands the stack a message as SES would ([runbooks/email.md](runbooks/email.md#local-development)).
+
 ## Worktrees
 
 To run several pieces of work at once (say, two agent sessions), give each its own [git worktree](https://git-scm.com/docs/git-worktree): another checkout of the repo on its own branch. Claude Code creates them under `.claude/worktrees/<name>/` (the `worktree` skill, or a worktree session in the desktop app), and the main checkout's tools ignore that folder. In a new worktree, run:
