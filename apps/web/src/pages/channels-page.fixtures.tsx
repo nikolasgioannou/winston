@@ -53,7 +53,7 @@ const channels = (props: Partial<ChannelsPageProps>) => () => (
       onChangeMailboxAddress={() => Promise.resolve(undefined)}
       onTurnOnMailbox={noop}
       onTurnOffMailbox={noop}
-      onCopyAddress={noop}
+      onCopyAddress={() => Promise.resolve()}
       {...props}
     />
   </AppShell>

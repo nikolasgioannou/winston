@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  CopyText,
   IconButton,
   Menu,
   Page,
@@ -42,7 +43,8 @@ export interface ChannelsPageProps {
   onChangeMailboxAddress: (name: string) => Promise<MailboxProblem | undefined>;
   onTurnOnMailbox: () => void;
   onTurnOffMailbox: () => void;
-  onCopyAddress: (address: string) => void;
+  /** Copies to the clipboard; rejects if that failed. */
+  onCopyAddress: (address: string) => Promise<void>;
   /** Opens the turn-off confirmation, for the dev design view. */
   confirmingMailboxOff?: boolean;
   /** Starts the open dialog with a name typed, for the dev design view. */
@@ -242,7 +244,7 @@ function EmailRow({
       <SettingRow
         icon={icon}
         label="Email"
-        description={mailbox.address}
+        description={<CopyText text={mailbox.address} copy={onCopyAddress} />}
         control={
           <span className="flex items-center gap-2">
             <StatusPill tone="ok">On</StatusPill>
@@ -253,12 +255,6 @@ function EmailRow({
                 </IconButton>
               }
               actions={[
-                {
-                  label: "Copy address",
-                  onSelect: () => {
-                    onCopyAddress(mailbox.address);
-                  },
-                },
                 // Once the changes are used up, there's nothing to offer.
                 ...(mailbox.changesLeft > 0
                   ? [

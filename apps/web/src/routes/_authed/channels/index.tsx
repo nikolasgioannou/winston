@@ -109,16 +109,13 @@ function Channels() {
             toast.error("Couldn't turn Winston's email off. Please try again.");
           });
       }}
-      onCopyAddress={(address) => {
-        navigator.clipboard
-          .writeText(address)
-          .then(() => {
-            toast.success("Address copied");
-          })
-          .catch(() => {
-            toast.error("Couldn't copy the address.");
-          });
-      }}
+      onCopyAddress={(address) =>
+        // The button's check says it worked; only a failure needs words.
+        navigator.clipboard.writeText(address).catch((error: unknown) => {
+          toast.error("Couldn't copy the address.");
+          throw error;
+        })
+      }
     />
   );
 }
