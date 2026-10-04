@@ -12,6 +12,7 @@ import { sites, siteVersions, users } from "@winston/db/schema";
 import { BundleError, readBundle } from "@winston/site-host/bundle";
 import type { SiteHost } from "@winston/site-host/host";
 import { applyMigrations, MigrationError } from "@winston/site-host/migrations";
+import { fetchSiteAsOwner } from "@winston/site-host/fetch";
 import { deleteUnusedBundles, removeSite } from "@winston/site-host/remove";
 import {
   keptVersions,
@@ -41,6 +42,10 @@ export interface SiteDeps {
   blobs: BlobStore;
   /** Where sites are served: https://runwinston.app. */
   sitesUrl: string;
+  /** Signs the passes `winston site fetch` opens private sites with (`SITES_PASS_KEY`). */
+  passKey?: string | undefined;
+  /** Where fetches connect instead of the site's address: the dev stack's sites service. */
+  connectUrl?: string | undefined;
 }
 
 const dryRun = z.boolean().default(false);
@@ -57,6 +62,15 @@ const rollbackBody = z.object({
   dryRun,
 });
 const writeBody = z.object({ dryRun });
+const fetchBody = z.object({
+  /** A path on the site, with any query: `/api/notes?limit=5`. */
+  path: z.string().startsWith("/").default("/"),
+  method: z
+    .enum(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
+    .default("GET"),
+  body: z.string().max(100_000).optional(),
+  contentType: z.string().optional(),
+});
 
 /** A request body, validated, with the CLI's hint when it's wrong. */
 const body = <T extends z.ZodType>(schema: T, hint: string) =>
@@ -259,6 +273,41 @@ export function siteRoutes({
             site: dto(rolledBack.site),
             note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
           });
+        },
+      )
+      // Requests the site as its owner, so Winston can check what he deployed.
+      .post(
+        "/:site/fetch",
+        body(fetchBody, "Run winston site fetch <name> [<path>]."),
+        async (c) => {
+          const { sitesUrl, passKey, connectUrl } = available();
+          const site = await ownSite(c.get("run").userId, c.req.param("site"));
+          requireDeployed(site);
+          if (!passKey)
+            throw new ApiFailure(
+              "unavailable",
+              "Checking sites isn't available here.",
+              null,
+            );
+          const request = c.req.valid("json");
+          try {
+            return c.json(
+              await fetchSiteAsOwner({
+                sitesUrl,
+                connectUrl,
+                passKey,
+                name: site.name,
+                ownerId: site.userId,
+                ...request,
+              }),
+            );
+          } catch (error) {
+            throw new ApiFailure(
+              "unavailable",
+              `Couldn't reach ${site.name}: ${error instanceof Error ? error.message : String(error)}`,
+              "Try again in a moment.",
+            );
+          }
         },
       )
       .delete(

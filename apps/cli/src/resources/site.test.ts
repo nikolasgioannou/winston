@@ -224,4 +224,44 @@ describe("winston site", () => {
     );
     expect(share.out).toBe("Would share blog by link.");
   });
+
+  test("fetch prints the status and the body; --data posts JSON", async () => {
+    const page = await cli(["site", "fetch", "notes"], async (request) => {
+      expect(await request.json()).toEqual({ path: "/", method: "GET" });
+      return Response.json({
+        status: 200,
+        contentType: "text/html",
+        location: null,
+        size: 15,
+        body: "<h1>Notes</h1>",
+        truncated: false,
+      });
+    });
+    expect(page.out).toBe("200 · text/html · 15 bytes\n<h1>Notes</h1>");
+    const posted = await cli(
+      ["site", "fetch", "notes", "api/notes", "--data", '{"body":"hi"}'],
+      async (request) => {
+        expect(await request.json()).toEqual({
+          path: "/api/notes",
+          method: "POST",
+          body: '{"body":"hi"}',
+          contentType: "application/json",
+        });
+        return Response.json({
+          status: 201,
+          contentType: "application/json",
+          location: null,
+          size: 9,
+          body: '{"id":3}',
+          truncated: false,
+        });
+      },
+    );
+    expect(posted.out).toContain("201 · application/json");
+    const wrong = await cli(
+      ["site", "fetch", "notes", "--method", "TRACE"],
+      () => Response.json({}),
+    );
+    expect(wrong.code).toBe(1);
+  });
 });

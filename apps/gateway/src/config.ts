@@ -44,6 +44,13 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   SITES_ADMIN_URL: z.url().optional(),
   /** Where sites are served, each at a subdomain: https://runwinston.app. */
   SITES_PUBLIC_URL: z.url().default("http://sites.localhost:3003"),
+  /** Signs the passes `winston site fetch` opens private sites with: the same key the site signs with. */
+  SITES_PASS_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "expected 32 bytes in hex")
+    .optional(),
+  /** Locally, where site fetches connect (bun dev's sites service), since `*.sites.localhost` doesn't resolve. */
+  SITES_CONNECT_URL: z.url().optional(),
   /** The S3 bucket for sites' bundles and other binaries (production). */
   BLOB_BUCKET: z.string().min(1).optional(),
   /** Local blob storage, used when BLOB_BUCKET isn't set. */

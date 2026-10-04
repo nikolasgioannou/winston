@@ -4,7 +4,7 @@ import { posix } from "node:path";
 import { call, type ApiClient } from "../client.ts";
 import type { Context, Resource } from "../commands.ts";
 import { CliError } from "../errors.ts";
-import { standardFlags } from "../flags.ts";
+import { resolveText, standardFlags, textFlag } from "../flags.ts";
 import { json, list, record } from "../output.ts";
 
 /** Typed by the API itself (Hono RPC), so a change there breaks the build here. */
@@ -18,6 +18,9 @@ type Unshared = InferResponseType<Sites[":site"]["unshare"]["$post"], 200>;
 type Versions = InferResponseType<Sites[":site"]["versions"]["$get"], 200>;
 type RolledBack = InferResponseType<Sites[":site"]["rollback"]["$post"], 200>;
 type Deleted = InferResponseType<Sites[":site"]["$delete"], 200>;
+type Fetched = InferResponseType<Sites[":site"]["fetch"]["$post"], 200>;
+
+const fetchMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 const line = (site: Site) =>
   record(
@@ -195,6 +198,79 @@ export const site: Resource = {
           }),
         );
         return flags.json === true ? json(shown) : detail(shown.site);
+      },
+    },
+    {
+      name: "fetch",
+      summary:
+        "Request a page or API route of a site as its owner, to check it works: prints the status and the start of the body",
+      usage: "<site_id|name> [<path>]",
+      flags: [
+        {
+          name: "method",
+          value: "<GET|POST|PUT|PATCH|DELETE|HEAD>",
+          description: "The request's method (default GET)",
+        },
+        {
+          name: "data",
+          value: "<body>",
+          description: "The request's body: text, - for stdin or @path",
+          text: true,
+        },
+        {
+          name: "type",
+          value: "<content-type>",
+          description:
+            "The body's content type (default application/json when there's a body)",
+        },
+      ],
+      examples: [
+        "winston site fetch notes",
+        "winston site fetch notes /api/notes",
+        `winston site fetch notes /api/notes --method POST --data '{"body":"hello"}'`,
+      ],
+      run: async ({ client, flags, args, text }) => {
+        const [, path = "/"] = args;
+        const data = textFlag(flags, "data");
+        const body =
+          data === undefined ? undefined : await resolveText(data, text);
+        const wanted = (textFlag(flags, "method") ?? (body ? "POST" : "GET"))
+          .trim()
+          .toUpperCase();
+        const method = fetchMethods.find((known) => known === wanted);
+        if (!method)
+          throw CliError.usage(
+            `${wanted} isn't a method sites answer.`,
+            `Pass --method ${fetchMethods.join(", ")}.`,
+          );
+        const fetched = await call<Fetched>(
+          client.v1.sites[":site"].fetch.$post({
+            param: { site: siteArg(args, "fetch") },
+            json: {
+              path: path.startsWith("/") ? path : `/${path}`,
+              method,
+              ...(body === undefined
+                ? {}
+                : {
+                    body,
+                    contentType: textFlag(flags, "type") ?? "application/json",
+                  }),
+            },
+          }),
+        );
+        if (flags.json === true) return json(fetched);
+        return [
+          record(
+            String(fetched.status),
+            fetched.contentType,
+            `${String(fetched.size)} bytes`,
+            fetched.location ? `→ ${fetched.location}` : undefined,
+          ),
+          fetched.body ?? "(binary content, not shown)",
+          fetched.truncated ? "… (cut short)" : undefined,
+        ]
+          .filter((part) => part !== undefined && part !== "")
+          .join("\n");
       },
     },
     {

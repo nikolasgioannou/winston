@@ -12,6 +12,7 @@ import {
   sitePassSigningKey,
 } from "@winston/site-host/pass-sign";
 import { generateToken, hashToken } from "@winston/shared/tokens";
+import { fetchSiteAsOwner } from "@winston/site-host/fetch";
 import { startLocalSites } from "./server.ts";
 
 const route = {
@@ -30,7 +31,8 @@ const worker = `export default {
   },
 };`;
 
-const signingKey = sitePassSigningKey(randomBytes(32).toString("hex"));
+const passKeyHex = randomBytes(32).toString("hex");
+const signingKey = sitePassSigningKey(passKeyHex);
 const pass = (sub = "usr_owner", nonce = "n") =>
   signSitePass(
     { sub, site: "blog", nonce, exp: Date.now() + 60_000 },
@@ -239,6 +241,55 @@ describe("the local site host", () => {
 
     const databaseId = await host.createDatabase("site_01sized");
     expect(await host.databaseSize(databaseId)).toBeGreaterThan(0);
+  });
+
+  test("fetching as the owner reads a private site's pages and API, with no browser", async () => {
+    await host.putScript("site_01fetched", {
+      modules: [
+        {
+          name: "worker.js",
+          content: `export default {
+            async fetch(request) {
+              if (request.method === "POST") return Response.json({ got: await request.json() }, { status: 201 });
+              return new Response("<h1>Fetched</h1>", { headers: { "content-type": "text/html" } });
+            },
+          };`,
+        },
+      ],
+      assets: [],
+    });
+    await host.setRoute("fetched", { ...route, script: "site_01fetched" });
+    const connectUrl = sites.url.replace("sites.localhost", "127.0.0.1");
+    const asUser = (
+      ownerId: string,
+      path: string,
+      method = "GET",
+      body?: string,
+    ) =>
+      fetchSiteAsOwner({
+        sitesUrl: sites.url,
+        connectUrl,
+        passKey: passKeyHex,
+        name: "fetched",
+        ownerId,
+        path,
+        method,
+        body,
+        contentType: "application/json",
+      });
+    expect(await asUser(route.ownerId, "/")).toMatchObject({
+      status: 200,
+      body: "<h1>Fetched</h1>",
+      truncated: false,
+    });
+    expect(
+      await asUser(route.ownerId, "/api", "POST", '{"a":1}'),
+    ).toMatchObject({
+      status: 201,
+      body: '{"got":{"a":1}}',
+    });
+    // A pass for someone else is refused: only the owner's opens it.
+    expect((await asUser("usr_other", "/")).status).toBe(403);
   });
 
   test("a deleted database can't be reached, and deleting it again is fine", async () => {

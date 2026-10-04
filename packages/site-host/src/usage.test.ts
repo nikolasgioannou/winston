@@ -56,7 +56,14 @@ async function deployedSite(
 ) {
   const [site] = await tx
     .insert(sites)
-    .values({ userId, name, currentVersion: 1, ...values })
+    // Created before every test's `now`, whatever the real clock says.
+    .values({
+      userId,
+      name,
+      currentVersion: 1,
+      createdAt: new Date("2026-10-01T00:00:00Z"),
+      ...values,
+    })
     .returning();
   if (!site) throw new Error("no site");
   return site;

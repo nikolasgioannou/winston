@@ -528,4 +528,26 @@ describe("site routes", () => {
       expect(routes.get("blog")?.access).toBe("private");
     });
   });
+
+  test("fetch needs a deployed site and a pass key", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const { as } = await setup(tx, {
+        "/site.tar": { "public/index.html": "hi" },
+      });
+      await tx.insert(sitesTable).values({ userId: user.id, name: "empty" });
+      const undeployed = await as(user.id)("/v1/sites/empty/fetch", {
+        method: "POST",
+        body: {},
+      });
+      expect(undeployed.status).toBe(409);
+      await deploy(as(user.id), "/site.tar", "blog");
+      // The test setup has no pass key, as where checking isn't set up.
+      const unavailable = await as(user.id)("/v1/sites/blog/fetch", {
+        method: "POST",
+        body: { path: "/" },
+      });
+      expect(unavailable.status).toBe(503);
+    });
+  });
 });

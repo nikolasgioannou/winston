@@ -75,6 +75,8 @@ const gateway = createGateway({
           host: localSiteHost(config.SITES_ADMIN_URL),
           blobs: createBlobStore(config),
           sitesUrl: config.SITES_PUBLIC_URL,
+          passKey: config.SITES_PASS_KEY,
+          connectUrl: config.SITES_CONNECT_URL,
         },
       }
     : {}),

@@ -122,6 +122,7 @@ ensure_setting() {
 }
 
 ensure_setting SITES_ADMIN_URL "http://127.0.0.1:3004"
+ensure_setting SITES_CONNECT_URL "http://127.0.0.1:3003"
 if grep -qE '^TELEGRAM_BOT_TOKEN=.+' .env.local; then
   done_ "Telegram bot token set"
 else

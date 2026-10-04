@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./bundle": "./src/bundle.ts",
+    "./fetch": "./src/fetch.ts",
     "./host": "./src/host.ts",
     "./local-host": "./src/local-host.ts",
     "./manage": "./src/manage.ts",
