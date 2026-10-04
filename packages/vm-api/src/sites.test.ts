@@ -318,4 +318,126 @@ describe("site routes", () => {
       expect(empty.status).toBe(409);
     });
   });
+
+  test("rollback puts the previous (or a chosen) version's files back, and later deploys go on from the newest number", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const bundle = (n: number) => ({ "public/index.html": `v${String(n)}` });
+      const { as, scripts } = await setup(tx, {
+        "/v1.tar": bundle(1),
+        "/v2.tar": bundle(2),
+        "/v3.tar": bundle(3),
+        "/v4.tar": bundle(4),
+      });
+      const call = as(user.id);
+      for (const n of [1, 2, 3])
+        await deploy(call, `/v${String(n)}.tar`, "blog");
+      const served = async () => {
+        const [site] = await tx
+          .select()
+          .from(sitesTable)
+          .where(eq(sitesTable.name, "blog"));
+        const html = scripts.get(site?.id ?? "")?.assets[0]?.content;
+        return {
+          version: site?.currentVersion,
+          html: new TextDecoder().decode(html),
+        };
+      };
+
+      const back = await call("/v1/sites/blog/rollback", {
+        method: "POST",
+        body: {},
+      });
+      expect(back.status).toBe(200);
+      expect(JSON.stringify(await back.json())).toContain(
+        "database stays as it is",
+      );
+      expect(await served()).toEqual({ version: 2, html: "v2" });
+
+      await call("/v1/sites/blog/rollback", {
+        method: "POST",
+        body: { to: 1 },
+      });
+      expect(await served()).toEqual({ version: 1, html: "v1" });
+      // Already there, a missing version, and nothing before the first.
+      expect(
+        (
+          await call("/v1/sites/blog/rollback", {
+            method: "POST",
+            body: { to: 1 },
+          })
+        ).status,
+      ).toBe(409);
+      expect(
+        (
+          await call("/v1/sites/blog/rollback", {
+            method: "POST",
+            body: { to: 9 },
+          })
+        ).status,
+      ).toBe(404);
+      expect(
+        (await call("/v1/sites/blog/rollback", { method: "POST", body: {} }))
+          .status,
+      ).toBe(404);
+
+      await deploy(call, "/v4.tar", "blog");
+      expect(await served()).toEqual({ version: 4, html: "v4" });
+      const versions = (await (
+        await call("/v1/sites/blog/versions")
+      ).json()) as {
+        versions: { number: number; current: boolean }[];
+      };
+      expect(versions.versions.map((v) => [v.number, v.current])).toEqual([
+        [4, true],
+        [3, false],
+        [2, false],
+        [1, false],
+      ]);
+    });
+  });
+
+  test("only the newest 10 versions are kept, and bundles no version uses are deleted", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const files = Object.fromEntries(
+        Array.from({ length: 12 }, (_, i) => [
+          `/v${String(i + 1)}.tar`,
+          { "public/index.html": `v${String(i + 1)}` },
+        ]),
+      );
+      const { as, blobs } = await setup(tx, files);
+      const call = as(user.id);
+      await deploy(call, "/v1.tar", "blog");
+      const [v1] = await tx
+        .select({ bundleKey: siteVersions.bundleKey })
+        .from(siteVersions);
+      const firstKey = v1?.bundleKey ?? "missing";
+      expect((await blobs.get(firstKey)).byteLength).toBeGreaterThan(0);
+      for (let n = 2; n <= 12; n++)
+        await deploy(call, `/v${String(n)}.tar`, "blog");
+      const rows = await tx
+        .select({
+          number: siteVersions.number,
+          bundleKey: siteVersions.bundleKey,
+        })
+        .from(siteVersions)
+        .orderBy(asc(siteVersions.number));
+      expect(rows.map((row) => row.number)).toEqual([
+        3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+      ]);
+      expect(blobs.get(firstKey)).rejects.toThrow();
+      expect(
+        (await blobs.get(rows[0]?.bundleKey ?? "")).byteLength,
+      ).toBeGreaterThan(0);
+      expect(
+        (
+          await call("/v1/sites/blog/rollback", {
+            method: "POST",
+            body: { to: 2 },
+          })
+        ).status,
+      ).toBe(404);
+    });
+  });
 });

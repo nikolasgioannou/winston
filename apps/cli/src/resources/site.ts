@@ -14,6 +14,8 @@ type Shown = InferResponseType<Sites[":site"]["$get"], 200>;
 type Deployed = InferResponseType<Sites["deploy"]["$post"], 200>;
 type Shared = InferResponseType<Sites[":site"]["share"]["$post"], 200>;
 type Unshared = InferResponseType<Sites[":site"]["unshare"]["$post"], 200>;
+type Versions = InferResponseType<Sites[":site"]["versions"]["$get"], 200>;
+type RolledBack = InferResponseType<Sites[":site"]["rollback"]["$post"], 200>;
 
 const line = (site: Site) =>
   record(
@@ -187,6 +189,61 @@ export const site: Resource = {
           }),
         );
         return flags.json === true ? json(shown) : detail(shown.site);
+      },
+    },
+    {
+      name: "versions",
+      summary:
+        "A site's deploys, newest first; the last 10 are kept for rollback",
+      usage: "<site_id|name>",
+      flags: [],
+      examples: ["winston site versions blog"],
+      run: async ({ client, flags, args }) => {
+        const listed = await call<Versions>(
+          client.v1.sites[":site"].versions.$get({
+            param: { site: siteArg(args, "versions") },
+          }),
+        );
+        if (flags.json === true) return json(listed);
+        return list(
+          listed.versions.map((version) =>
+            record(
+              `version ${String(version.number)}`,
+              version.deployedAt,
+              `${(version.size / 1024).toFixed(0)} KB`,
+              version.current ? "current" : undefined,
+            ),
+          ),
+        );
+      },
+    },
+    {
+      name: "rollback",
+      summary:
+        "Put an earlier version back (by default the one before the current). Restores code and files only: the database keeps its data and migrations",
+      usage: "<site_id|name>",
+      flags: [
+        {
+          name: "to",
+          value: "<version>",
+          description:
+            "The version to go back to (winston site versions lists them)",
+          integer: true,
+        },
+      ],
+      examples: [
+        "winston site rollback blog",
+        "winston site rollback blog --to 3",
+      ],
+      run: async ({ client, flags, args }) => {
+        const rolledBack = await call<RolledBack>(
+          client.v1.sites[":site"].rollback.$post({
+            param: { site: siteArg(args, "rollback") },
+            json: typeof flags.to === "number" ? { to: flags.to } : {},
+          }),
+        );
+        if (flags.json === true) return json(rolledBack);
+        return [detail(rolledBack.site), rolledBack.note].join("\n");
       },
     },
     {

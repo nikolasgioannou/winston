@@ -17,7 +17,7 @@ import {
   type SiteRoute,
 } from "@winston/site-host/route";
 import { generateToken, hashToken } from "@winston/shared/tokens";
-import { and, count, desc, eq, or } from "drizzle-orm";
+import { and, count, desc, eq, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
 import { z } from "zod";
@@ -34,6 +34,14 @@ export interface SiteDeps {
   /** Where sites are served: https://runwinston.app. */
   sitesUrl: string;
 }
+
+/** Each site keeps its newest versions' bundles, for rollback. */
+export const keptVersions = 10;
+
+const rollbackBody = z.object({
+  /** The version to go back to; by default the one before the current. */
+  to: z.number().int().positive().optional(),
+});
 
 const deployBody = z.object({
   /** The bundle the CLI packed, on the VM. */
@@ -158,6 +166,22 @@ export function siteRoutes({
     });
   }
 
+  /**
+   * Deletes pruned bundles no version still uses. Blobs are keyed by
+   * content, so another version (this site redeployed unchanged, or another
+   * site) can share one.
+   */
+  async function deleteUnusedBundles(blobs: BlobStore, keys: string[]) {
+    for (const key of new Set(keys)) {
+      const [used] = await db
+        .select({ id: siteVersions.id })
+        .from(siteVersions)
+        .where(eq(siteVersions.bundleKey, key))
+        .limit(1);
+      if (!used) await blobs.delete(key);
+    }
+  }
+
   /** Changes who may open a site: the row and its route together. */
   async function setAccess(
     userId: string,
@@ -211,6 +235,101 @@ export function siteRoutes({
               });
         return c.json({ site: dto(site) });
       })
+      .get("/:site/versions", async (c) => {
+        const site = await ownSite(c.get("run").userId, c.req.param("site"));
+        const rows = await db
+          .select()
+          .from(siteVersions)
+          .where(eq(siteVersions.siteId, site.id))
+          .orderBy(desc(siteVersions.number));
+        return c.json({
+          site: dto(site),
+          versions: rows.map((row) => ({
+            number: row.number,
+            size: row.size,
+            current: row.number === site.currentVersion,
+            deployedAt: row.createdAt.toISOString(),
+          })),
+        });
+      })
+      .post(
+        "/:site/rollback",
+        validator("json", (value) => {
+          const parsed = rollbackBody.safeParse(value ?? {});
+          if (!parsed.success)
+            throw new ApiFailure(
+              "invalid_request",
+              z.prettifyError(parsed.error),
+              "Pass --to <version>; winston site versions lists them.",
+            );
+          return parsed.data;
+        }),
+        async (c) => {
+          const { host, blobs } = available();
+          const { userId } = c.get("run");
+          const { to } = c.req.valid("json");
+          const claimed = await ownSite(userId, c.req.param("site"));
+          const site = await db.transaction(async (tx) => {
+            const [locked = claimed] = await tx
+              .select()
+              .from(sites)
+              .where(eq(sites.id, claimed.id))
+              .for("update");
+            const current = locked.currentVersion;
+            if (current === null)
+              throw new ApiFailure(
+                "conflict",
+                `${locked.name} hasn't been deployed yet.`,
+                "Deploy it first with winston site deploy.",
+              );
+            // By default the newest version before the current one.
+            const [target] = await tx
+              .select()
+              .from(siteVersions)
+              .where(
+                and(
+                  eq(siteVersions.siteId, locked.id),
+                  to === undefined
+                    ? lt(siteVersions.number, current)
+                    : eq(siteVersions.number, to),
+                ),
+              )
+              .orderBy(desc(siteVersions.number))
+              .limit(1);
+            if (!target)
+              throw new ApiFailure(
+                "not_found",
+                to === undefined
+                  ? `${locked.name} has no version before ${String(current)} to go back to.`
+                  : `${locked.name} has no version ${String(to)} (only the last ${String(keptVersions)} are kept).`,
+                "winston site versions lists them.",
+              );
+            if (target.number === current)
+              throw new ApiFailure(
+                "conflict",
+                `${locked.name} is already on version ${String(current)}.`,
+                null,
+              );
+            const { script } = await readBundle(
+              await blobs.get(target.bundleKey),
+            );
+            await host.putScript(locked.id, {
+              ...script,
+              databaseId: locked.databaseId ?? undefined,
+            });
+            const [updated] = await tx
+              .update(sites)
+              .set({ currentVersion: target.number, updatedAt: new Date() })
+              .where(eq(sites.id, locked.id))
+              .returning();
+            return updated ?? locked;
+          });
+          return c.json({
+            site: dto(site),
+            note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
+          });
+        },
+      )
       .post("/:site/unshare", async (c) => {
         const site = await setAccess(c.get("run").userId, c.req.param("site"), {
           access: "private",
@@ -315,6 +434,15 @@ export function siteRoutes({
               bundleKey,
               size: bytes.byteLength,
             });
+            const pruned = await tx
+              .delete(siteVersions)
+              .where(
+                and(
+                  eq(siteVersions.siteId, site.id),
+                  lte(siteVersions.number, version - keptVersions),
+                ),
+              )
+              .returning({ bundleKey: siteVersions.bundleKey });
             const [updated] = await tx
               .update(sites)
               .set({
@@ -324,8 +452,14 @@ export function siteRoutes({
               })
               .where(eq(sites.id, site.id))
               .returning();
-            return { site: updated ?? site, migrated };
+            return {
+              site: updated ?? site,
+              migrated,
+              pruned: pruned.map((row) => row.bundleKey),
+            };
           });
+          // After the commit, so a failed deploy never loses a kept bundle.
+          await deleteUnusedBundles(blobs, result.pruned);
           return c.json({ site: dto(result.site), migrated: result.migrated });
         },
       )

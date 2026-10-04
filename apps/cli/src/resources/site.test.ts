@@ -161,4 +161,42 @@ describe("winston site", () => {
     const missing = await cli(["site", "share"], () => Response.json({}));
     expect(missing.code).toBe(1);
   });
+
+  test("versions lists deploys; rollback says the database stays as it is", async () => {
+    const versions = await cli(["site", "versions", "blog"], () =>
+      Response.json({
+        site,
+        versions: [
+          {
+            number: 2,
+            size: 2048,
+            current: true,
+            deployedAt: "2026-10-04T05:00:00.000Z",
+          },
+          {
+            number: 1,
+            size: 1024,
+            current: false,
+            deployedAt: "2026-10-03T05:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    expect(versions.out).toMatchInlineSnapshot(`
+      "version 2 · 2026-10-04T05:00:00.000Z · 2 KB · current
+      version 1 · 2026-10-03T05:00:00.000Z · 1 KB"
+    `);
+    const rolledBack = await cli(
+      ["site", "rollback", "blog", "--to", "1"],
+      async (request) => {
+        expect(new URL(request.url).pathname).toBe("/v1/sites/blog/rollback");
+        expect(await request.json()).toEqual({ to: 1 });
+        return Response.json({
+          site,
+          note: "The database stays as it is: rollback restores the code and files, not data or migrations.",
+        });
+      },
+    );
+    expect(rolledBack.out).toContain("The database stays as it is");
+  });
 });
