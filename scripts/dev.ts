@@ -37,6 +37,8 @@ const services: Service[] = [
     cwd: "apps/web",
     cmd: ["bun", "--env-file=../../.env.local", "--bun", "vite", "dev"],
   },
+  // Serves sites at http://<name>.sites.localhost:3003 (docs/local-dev.md).
+  { name: "sites", cwd: "apps/sites", cmd: watch("src/local/main.ts") },
   // Checks the seeded user's VM, provisions or replaces it as needed, and reports it until it's ready.
   {
     name: "vm",
@@ -106,6 +108,8 @@ const ports = [
   Number(process.env.API_PORT ?? 3000),
   Number(process.env.GATEWAY_PORT ?? 3001),
   3002,
+  Number(process.env.SITES_PORT ?? 3003),
+  Number(process.env.SITES_ADMIN_PORT ?? 3004),
 ];
 for (const port of ports)
   if (await listening(port)) {

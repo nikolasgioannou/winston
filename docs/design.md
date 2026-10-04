@@ -567,12 +567,14 @@ Prompt and model changes are measured on real failures, not guessed (ea2e27; `ap
   - `packages/connectors`: the Gmail and Google Calendar adapters and their sync.
   - `packages/vm-api`: the VM-facing Hono API (mail, calendar, accounts, triggers, events, history, tasks, the Jev proxy), hosted by `gateway`.
   - `packages/ui`: the design system (§9).
+  - `packages/site-host`: where sites run (§9a): the `SiteHost` interface the backend uses and the routes map's entries, shared with the dispatch Worker.
   - `apps/api`: public webhooks (Telegram, Gmail and Calendar push).
   - `apps/agents`: front-of-house turns, background steps and the other jobs.
   - `apps/gateway`: VM websockets, the VM-facing API and handoff relays.
   - `apps/web`: TanStack Start site: the sidebar app (home, accounts, channels, profile) and the handoff live-view page.
   - `apps/cli`: the Winston CLI (compiled binary).
   - `apps/winstond`: the VM daemon (compiled binary).
+  - `apps/sites`: the sites' dispatch Worker and the dev stack's local site host (§9a).
   - `infra`: CDK.
 - Key libraries: Vercel AI SDK v7 + `@openrouter/ai-sdk-provider` (agents), grammY (Telegram), Hono (`api`, `gateway`), TanStack Start + Tailwind (`web`), Drizzle (database), Zod (config and schemas), raw CDP (our own client over Bun's WebSocket), Google's REST APIs over `fetch` (`nodemailer` builds MIME), and Jev through OpenRouter. Bun compatibility is checked per library.
 
@@ -768,6 +770,22 @@ Thin vertical slices. Each milestone adds capabilities to something you can alre
   - The `api` service (Hono on Bun) keeps the public machine-facing endpoints: Telegram webhook and Gmail/Calendar push. Both OAuth callbacks are on the site, which has the session. The CLI's API lives behind `gateway` (§15).
   - Status note (checked 2026-09-28): Start is stable 1.x. Bun deployment requires React 19.
 - Rough shared base cost: ~$70–100/mo (small Fargate tasks, small RDS, ALB).
+
+## 9a. Sites
+
+Winston builds small websites and apps (static files, plus an optional JavaScript Worker for an API and a SQLite database) and deploys them to `<name>.runwinston.app`, private to their owner unless shared by link. The plan, and the order it's being built in, is ticket 57e0e7 and its sub-tickets; this section describes what's built so far.
+
+- **Platform: Cloudflare Workers for Platforms.** Every site is a user Worker in one dispatch namespace, run in Cloudflare's untrusted mode. AWS (S3, CloudFront, a Lambda per app) was considered and rejected: the routing, per-app isolation and database glue would all be ours to build.
+- **The dispatch Worker** (`apps/sites/src/dispatch`) takes every request on `*.<domain>`. `handler.ts` holds the logic, free of platform types so it's tested directly; each platform has a small entry around it.
+  1. The name is the one label before the domain (`siteNameOf`); the bare domain and deeper names have no site.
+  2. It looks the name up in the **routes map** (Workers KV: name → `SiteRoute`, `{ script, ownerId, access, paused }`, `@winston/site-host/route`), which the backend writes. A missing or malformed entry has no site.
+  3. Paused sites get the "paused" page (503), even for someone admitted.
+  4. `admit` decides who may open it. For now nobody may (`admitNobody`): owner sign-in is 901702.
+  5. The site's Worker is called with **custom limits** (`siteLimits`: 50 ms CPU and 50 subrequests per request). A site that throws (going over a limit throws inside it) gets the "failed" page (502); a missing Worker reads as no site.
+  - Its pages (no site 404, paused, private 403, failed) are plain HTML, `no-store` and `noindex`.
+- **`SiteHost`** (`@winston/site-host/host`), like `VmProvider`: `putScript` (a site's ES modules, the first being the entry, and its static assets), `deleteScript`, and `setRoute` (a name's routes-map entry, or null to remove it). Sites' Workers are named by their site's id (`site_…`). The Cloudflare implementation comes with going live (d140ab).
+- **The local site host** (`apps/sites/src/local`, the dev stack's `sites` service): Miniflare 4 (pinned: v5 is an alpha with a different options shape) runs the dispatch Worker and every site's Worker. Miniflare can't run dispatch namespaces, so the local entry (`dispatch/local.ts`) reaches each site through a service binding named by its script. Each site's files live under `.data/sites/scripts/<script>/` and its static assets are served first, with other paths going to its Worker, as in production. Changing a site rebuilds the whole Miniflare from disk (about 50 ms), because `setOptions` fails under Bun; changes are applied one at a time. The routes map is a persisted Miniflare KV namespace. An admin API on 127.0.0.1 (`PUT`/`DELETE` `/scripts/<script>` and `/routes/<name>`) is what `localSiteHost(adminUrl)` calls, and it refuses asset and module paths that would escape the site. **Custom limits aren't enforced locally**: workerd ignores them, so they're checked only in production.
+- **Compatibility date:** `2026-08-01`, the newest the pinned Miniflare's workerd accepts.
 
 ## 10. The VM
 

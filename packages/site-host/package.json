@@ -1,0 +1,13 @@
+{
+  "name": "@winston/site-host",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./host": "./src/host.ts",
+    "./local-host": "./src/local-host.ts",
+    "./route": "./src/route.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}
