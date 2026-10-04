@@ -88,6 +88,8 @@ export function defineStacks(app: App, environment: Environment = production) {
     mail: {
       inboundBucket: data.inboundMail,
       inboundTopicArn: mail.inbound.topicArn,
+      eventsTopicArn: mail.sendingEvents.topicArn,
+      configurationSetName: mail.configurationSet.configurationSetName,
       identityArn: mail.identity.emailIdentityArn,
     },
     vm: {

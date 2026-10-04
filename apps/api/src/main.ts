@@ -33,6 +33,7 @@ const server = Bun.serve({
           }
         : undefined,
     sesInboundTopicArn: config.SES_INBOUND_TOPIC_ARN,
+    sesEventsTopicArn: config.SES_EVENTS_TOPIC_ARN,
   }).fetch,
 });
 

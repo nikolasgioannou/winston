@@ -234,6 +234,56 @@ describe("receiving mail", () => {
     });
   });
 
+  test("a reply to something Winston sent finds its thread by SES's id, whatever host SES named", async () => {
+    await inRollback(db, async (tx) => {
+      const { connection } = await mailbox(tx);
+      const { deps, arrive } = await setup();
+      const [thread] = await tx
+        .insert(mailboxThreads)
+        .values({
+          userId: connection.userId,
+          connectionId: connection.id,
+          subject: "Hello",
+          lastMessageAt: new Date("2026-10-01T12:00:00Z"),
+        })
+        .returning();
+      await tx.insert(mailboxMessages).values({
+        userId: connection.userId,
+        connectionId: connection.id,
+        threadId: thread?.id ?? "",
+        direction: "sent",
+        sesMessageId: "0100018f-abc",
+        messageIdHeader: "<0100018f-abc@email.amazonses.com>",
+        subject: "Hello",
+        date: new Date("2026-10-01T12:00:00Z"),
+        body: "Hi",
+        snippet: "Hi",
+        rawBlobKey: "0".repeat(64),
+        size: 2,
+      });
+      const stored = await receiveMail(
+        tx,
+        deps,
+        await arrive(
+          "ses-2",
+          message({
+            Subject: "Re: Hello",
+            "Message-ID": "<r@acme.example>",
+            "In-Reply-To": "<0100018f-abc@us-east-1.amazonses.com>",
+          }),
+          ["ada@runwinston.email"],
+        ),
+        logger,
+      );
+      const rows = await messagesOf(tx, connection.id);
+      expect(rows.map((r) => r.threadId)).toEqual([
+        thread?.id ?? "",
+        thread?.id ?? "",
+      ]);
+      expect(stored[0]?.payload).toMatchObject({ isReplyToUser: true });
+    });
+  });
+
   test("an old address still delivers; addresses no mailbox takes are bounced", async () => {
     await inRollback(db, async (tx) => {
       const { user, connection } = await mailbox(tx, "ada");

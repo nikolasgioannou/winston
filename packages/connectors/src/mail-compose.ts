@@ -4,8 +4,8 @@
  *
  * - **MIME** comes from nodemailer's `MailComposer` (10.x, no dependencies,
  *   works on Bun): RFC 2047 headers for non-ASCII subjects and names,
- *   multipart with base64 attachments, and threading headers. There's no
- *   `From` header: Gmail fills in the account's own name and address.
+ *   multipart with base64 attachments, and threading headers. Gmail fills
+ *   in the `From` header itself; Winston's own mailbox passes `from`.
  * - **Replies** answer the `Reply-To` (or the sender), thread through
  *   `In-Reply-To` and `References`, and add "Re: " unless the subject has it.
  *   Reply-all adds everyone else from To and Cc, without the user and without
@@ -22,9 +22,17 @@ const display = (a: MailAddress) =>
 /** The raw RFC 5322 message, ready for the provider to upload. */
 export async function composeRaw(
   mail: OutgoingMail,
-  options: { messageId?: string; date?: Date } = {},
+  options: {
+    messageId?: string;
+    date?: Date;
+    /** The sender, when the provider doesn't fill it in. */
+    from?: string;
+    /** Keep Bcc in the headers for a provider that delivers from them (Gmail). */
+    keepBcc?: boolean;
+  } = {},
 ): Promise<Uint8Array> {
   const composer = new MailComposer({
+    ...(options.from ? { from: options.from } : {}),
     to: mail.to,
     ...(mail.cc?.length ? { cc: mail.cc } : {}),
     ...(mail.bcc?.length ? { bcc: mail.bcc } : {}),
@@ -49,8 +57,8 @@ export async function composeRaw(
     })),
   });
   const node = composer.compile();
-  // The provider delivers to Bcc recipients from the header, then drops it.
-  node.keepBcc = true;
+  // Gmail delivers to Bcc recipients from the header, then drops it.
+  node.keepBcc = options.keepBcc ?? true;
   return new Uint8Array(await node.build());
 }
 

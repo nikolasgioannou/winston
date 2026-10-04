@@ -117,5 +117,18 @@ export const mailboxMessages = snakeCase.table(
       .where(sql`ses_message_id is not null`),
     index("mailbox_messages_header_id").on(t.connectionId, t.messageIdHeader),
     index("mailbox_messages_thread").on(t.threadId, t.date),
+    // Counting what he sent today, for the daily limit.
+    index("mailbox_messages_sent").on(t.connectionId, t.direction, t.createdAt),
   ],
 );
+
+/**
+ * Addresses Winston's mail may no longer go to (ead827): they bounced for
+ * good or complained, as SES reported. Account-wide, like SES's reputation.
+ */
+export const mailSuppressions = snakeCase.table("mail_suppressions", {
+  /** Lowercase. */
+  address: text().primaryKey(),
+  reason: text({ enum: ["bounce", "complaint"] }).notNull(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});

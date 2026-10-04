@@ -90,7 +90,9 @@ export interface ServicesStackProps extends StackProps {
   mail: {
     inboundBucket: IBucket;
     inboundTopicArn: string;
+    eventsTopicArn: string;
     identityArn: string;
+    configurationSetName: string;
   };
   /** What agents needs to run users' VMs on EC2 (the Vm stack). */
   vm: {
@@ -146,12 +148,14 @@ export class ServicesStack extends Stack {
         GMAIL_PUSH_AUDIENCE: `https://api.${domain}/webhooks/gmail`,
         GMAIL_PUSH_SERVICE_ACCOUNT: `gmail-push@${gcpProject}.iam.gserviceaccount.com`,
         SES_INBOUND_TOPIC_ARN: props.mail.inboundTopicArn,
+        SES_EVENTS_TOPIC_ARN: props.mail.eventsTopicArn,
       },
       gateway: {
         GATEWAY_HOST: "0.0.0.0",
         GATEWAY_PORT: String(servicePorts.gateway),
         ARTIFACTS_BUCKET: props.artifacts.bucketName,
         BLOB_BUCKET: props.blobs.bucketName,
+        SES_CONFIGURATION_SET: props.mail.configurationSetName,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         WEB_PUBLIC_URL: publicUrl,
       },
@@ -282,8 +286,23 @@ export class ServicesStack extends Stack {
     taskDefinitions.agents.taskRole.addManagedPolicy(props.vm.backendPolicy);
     // The gateway reads the VM manifest and presigns binary downloads (§10).
     props.artifacts.grantRead(taskDefinitions.gateway.taskRole);
-    // Winston's raw mail is a blob: the gateway reads it for attachments.
+    // Winston's raw mail is a blob: the gateway reads it for attachments
+    // and stores what he sends, which it sends through SES.
     props.blobs.grantRead(taskDefinitions.gateway.taskRole);
+    props.blobs.grantPut(taskDefinitions.gateway.taskRole);
+    taskDefinitions.gateway.taskRole.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ["ses:SendEmail", "ses:SendRawEmail"],
+        resources: [
+          props.mail.identityArn,
+          Stack.of(this).formatArn({
+            service: "ses",
+            resource: "configuration-set",
+            resourceName: props.mail.configurationSetName,
+          }),
+        ],
+      }),
+    );
     // Only agents stores blobs (§12).
     props.blobs.grantRead(taskDefinitions.agents.taskRole);
     props.blobs.grantPut(taskDefinitions.agents.taskRole);

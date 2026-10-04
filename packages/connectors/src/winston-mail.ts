@@ -3,17 +3,22 @@
  * are the provider, so reading and organizing are queries over
  * `mailbox_messages` and `mailbox_threads`, and attachments come out of the
  * raw message. The portable filters mean what they mean for Gmail; there's
- * no native query language. Sending comes with 201a9b.
+ * no native query language. Sending goes through SES (`MailSender`), within
+ * a daily limit and never to a suppressed address; what he sends is stored
+ * in his mailbox too. He has no drafts: he sends once the user has agreed.
  */
 import type { DbOrTx } from "@winston/db/client";
 import {
   mailboxMessages,
   mailboxThreads,
+  mailSuppressions,
   type connections,
 } from "@winston/db/schema";
+import { dailySendLimit } from "@winston/domain/mailbox";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gte,
@@ -26,25 +31,50 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
-import { NotSupportedError, ProviderNotFoundError } from "./errors.ts";
+import {
+  NotSupportedError,
+  ProviderNotFoundError,
+  SendingRefusedError,
+} from "./errors.ts";
+import { parseAddresses } from "./gmail.ts";
 import type {
   FullMailMessage,
   MailFilter,
   MailMessage,
   MailProvider,
 } from "./mail.ts";
-import { attachmentContent } from "./mail-parse.ts";
+import { composeRaw } from "./mail-compose.ts";
+import { attachmentContent, parseMail } from "./mail-parse.ts";
+
+/** Delivers a raw message: SES in production. */
+export interface MailSender {
+  /** Returns SES's id for the message, which is also its Message-ID. */
+  send(
+    raw: Uint8Array,
+    envelope: { from: string; to: string[] },
+  ): Promise<{ sesMessageId: string }>;
+}
+
+/**
+ * The Message-ID SES gives a message it sends from us-east-1 (it replaces
+ * any we set). Replies are threaded by the SES id inside it, so a different
+ * host would still thread.
+ */
+export const sesMessageIdHeader = (sesMessageId: string) =>
+  `<${sesMessageId}@email.amazonses.com>`;
 
 type Row = typeof mailboxMessages.$inferSelect;
 
 /** Labels that are state, not his own labels; the flags show them. */
 const systemLabels = new Set(["inbox", "unread", "starred", "spam", "trash"]);
 
-const notSending = () =>
+const noDrafts = () =>
   new NotSupportedError(
-    "Winston's own mailbox can't send yet.",
-    "Read and organize it for now.",
+    "Winston's own mailbox has no drafts.",
+    "Send it once the user has agreed, or draft in the user's account.",
   );
+
+const dayMs = 24 * 60 * 60_000;
 
 /** A row as the mail domain's message. */
 function toMessage(row: Row): MailMessage {
@@ -180,11 +210,22 @@ export function winstonMailProvider({
   db,
   connection,
   rawMessage,
+  sending,
 }: {
   db: DbOrTx;
-  connection: Pick<typeof connections.$inferSelect, "id" | "externalEmail">;
+  connection: Pick<
+    typeof connections.$inferSelect,
+    "id" | "userId" | "externalEmail"
+  >;
   /** The raw MIME stored under a blob key. */
   rawMessage: (blobKey: string) => Promise<Uint8Array>;
+  /** Unset where sending isn't wired, as in some tests. */
+  sending?: {
+    sender: MailSender;
+    /** Stores the raw message as a blob, returning its key. */
+    storeRaw: (raw: Uint8Array) => Promise<string>;
+    now?: () => Date;
+  };
 }): MailProvider {
   const mine = eq(mailboxMessages.connectionId, connection.id);
 
@@ -216,6 +257,74 @@ export function winstonMailProvider({
       for (const { id } of inThreads) ids.add(id);
     }
     return [...ids];
+  }
+
+  /** Refuses once he's sent `dailySendLimit` messages in the last 24 hours. */
+  async function checkLimit(now: Date) {
+    const [sent] = await db
+      .select({ n: count() })
+      .from(mailboxMessages)
+      .where(
+        and(
+          mine,
+          eq(mailboxMessages.direction, "sent"),
+          gte(mailboxMessages.createdAt, new Date(now.getTime() - dayMs)),
+        ),
+      );
+    if ((sent?.n ?? 0) >= dailySendLimit)
+      throw new SendingRefusedError(
+        `Winston has sent ${String(dailySendLimit)} messages from ${connection.externalEmail} in the last 24 hours, the most he may.`,
+        "Send it later, or from the user's account.",
+        "limit",
+      );
+  }
+
+  /** Refuses recipients who bounced or complained before. */
+  async function checkSuppressed(recipients: string[]) {
+    if (recipients.length === 0) return;
+    const suppressed = await db
+      .select({ address: mailSuppressions.address })
+      .from(mailSuppressions)
+      .where(inArray(mailSuppressions.address, recipients));
+    if (suppressed.length > 0)
+      throw new SendingRefusedError(
+        `Winston's address can't send to ${suppressed.map((s) => s.address).join(", ")}: mail to it bounced or was marked as spam before.`,
+        "Leave them out, or send from the user's account.",
+        "suppressed",
+      );
+  }
+
+  /** The thread a sent message goes in: the one it answers, if it's his, else a new one. */
+  async function sentThread(
+    tx: DbOrTx,
+    answering: string | undefined,
+    subject: string,
+    now: Date,
+  ) {
+    if (answering) {
+      const [thread] = await tx
+        .update(mailboxThreads)
+        .set({ lastMessageAt: now })
+        .where(
+          and(
+            eq(mailboxThreads.id, answering),
+            eq(mailboxThreads.connectionId, connection.id),
+          ),
+        )
+        .returning({ id: mailboxThreads.id });
+      if (thread) return thread.id;
+    }
+    const [thread] = await tx
+      .insert(mailboxThreads)
+      .values({
+        userId: connection.userId,
+        connectionId: connection.id,
+        subject,
+        lastMessageAt: now,
+      })
+      .returning({ id: mailboxThreads.id });
+    if (!thread) throw new Error("expected the new thread");
+    return thread.id;
   }
 
   /** Adds and removes labels on messages of this mailbox, each at most once. */
@@ -331,13 +440,82 @@ export function winstonMailProvider({
     },
 
     async trash(target) {
-      if (target.drafts && target.drafts.length > 0) throw notSending();
+      if (target.drafts && target.drafts.length > 0) throw noDrafts();
       await relabel(await targetIds(target), ["trash"], ["inbox"]);
     },
 
-    send: () => Promise.reject(notSending()),
-    createDraft: () => Promise.reject(notSending()),
-    sendDraft: () => Promise.reject(notSending()),
-    getDraft: () => Promise.reject(notSending()),
+    async send(mail) {
+      if (!sending)
+        throw new NotSupportedError("Sending isn't available here.");
+      const now = sending.now?.() ?? new Date();
+      const recipients = [
+        ...new Set(
+          [...mail.to, ...(mail.cc ?? []), ...(mail.bcc ?? [])]
+            .flatMap((r) => parseAddresses(r))
+            .map((a) => a.email.toLowerCase()),
+        ),
+      ];
+      await checkLimit(now);
+      await checkSuppressed(recipients);
+
+      const from = connection.externalEmail;
+      const raw = await composeRaw(mail, {
+        from: `Winston <${from}>`,
+        // SES delivers to the envelope's recipients; Bcc stays out of the headers.
+        keepBcc: false,
+        date: now,
+      });
+      const { sesMessageId } = await sending.sender.send(raw, {
+        from,
+        to: recipients,
+      });
+      // Sent: from here on, storing it must not make it look unsent.
+      const rawBlobKey = await sending.storeRaw(raw);
+      const parsed = await parseMail(raw);
+      return db.transaction(async (tx) => {
+        const threadId = await sentThread(
+          tx,
+          mail.inReplyTo?.threadId,
+          parsed.subject,
+          now,
+        );
+        const [row] = await tx
+          .insert(mailboxMessages)
+          .values({
+            userId: connection.userId,
+            connectionId: connection.id,
+            threadId,
+            direction: "sent",
+            sesMessageId,
+            messageIdHeader: sesMessageIdHeader(sesMessageId),
+            inReplyTo: parsed.inReplyTo,
+            references: parsed.references,
+            from: { name: "Winston", email: from },
+            to: parsed.to,
+            cc: parsed.cc,
+            replyTo: [],
+            subject: parsed.subject,
+            date: now,
+            body: parsed.body,
+            quotedTextHidden: parsed.quotedTextHidden,
+            snippet: parsed.snippet,
+            attachments: parsed.attachments.map((a) => ({
+              partId: a.providerId,
+              filename: a.filename,
+              mimeType: a.mimeType,
+              size: a.size,
+            })),
+            labels: [],
+            rawBlobKey,
+            size: raw.byteLength,
+          })
+          .returning({ id: mailboxMessages.id });
+        if (!row) throw new Error("expected the sent message");
+        return { messageId: row.id, threadId };
+      });
+    },
+    createDraft: () => Promise.reject(noDrafts()),
+    sendDraft: () => Promise.reject(noDrafts()),
+    getDraft: () => Promise.reject(noDrafts()),
   };
 }

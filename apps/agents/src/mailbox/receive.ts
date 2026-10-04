@@ -18,7 +18,7 @@ import {
 import { parseEventPayload } from "@winston/domain/events";
 import type { ReceiveMailPayload } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { BlobStore } from "../blobs.ts";
 import { matchEvents } from "../triggers/matching.ts";
@@ -156,16 +156,28 @@ async function threadFor(
   const earlier = [parsed.inReplyTo, ...parsed.references].filter(
     (id): id is string => id !== null,
   );
+  // SES gives what Winston sends its own Message-ID (`<id@….amazonses.com>`):
+  // match those by the SES id, whatever host it names.
+  const sentIds = earlier.flatMap((id) => {
+    const ses = /^<([^@>]+)@(?:[a-z0-9-]+\.)*amazonses\.com>$/i.exec(id);
+    return ses?.[1] ? [ses[1]] : [];
+  });
   if (earlier.length > 0) {
+    const named = or(
+      inArray(mailboxMessages.messageIdHeader, earlier),
+      ...(sentIds.length > 0
+        ? [
+            and(
+              eq(mailboxMessages.direction, "sent"),
+              inArray(mailboxMessages.sesMessageId, sentIds),
+            ),
+          ]
+        : []),
+    );
     const [known] = await tx
       .select({ threadId: mailboxMessages.threadId })
       .from(mailboxMessages)
-      .where(
-        and(
-          eq(mailboxMessages.connectionId, connection.id),
-          inArray(mailboxMessages.messageIdHeader, earlier),
-        ),
-      )
+      .where(and(eq(mailboxMessages.connectionId, connection.id), named))
       .orderBy(desc(mailboxMessages.date))
       .limit(1);
     if (known) return known.threadId;

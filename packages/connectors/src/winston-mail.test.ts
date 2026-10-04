@@ -5,11 +5,17 @@ import {
   connections,
   mailboxMessages,
   mailboxThreads,
+  mailSuppressions,
 } from "@winston/db/schema";
 import { inRollback, insertUser, testDb } from "@winston/db/testing";
 import { eq } from "drizzle-orm";
-import { NotSupportedError, ProviderNotFoundError } from "./errors.ts";
-import { winstonMailProvider } from "./winston-mail.ts";
+import {
+  NotSupportedError,
+  ProviderNotFoundError,
+  SendingRefusedError,
+} from "./errors.ts";
+import { parseMail } from "./mail-parse.ts";
+import { winstonMailProvider, type MailSender } from "./winston-mail.ts";
 
 const db = await testDb();
 
@@ -304,6 +310,148 @@ describe("Winston's mailbox provider", () => {
       ).toEqual([]);
       await provider.modify({ messages: [theirs.id] }, { read: true });
       expect((await ada.provider.getMessage(theirs.id)).unread).toBe(true);
+    });
+  });
+
+  describe("sending", () => {
+    const now = new Date("2026-10-04T15:00:00Z");
+
+    async function sender(tx: DbOrTx) {
+      const box = await mailbox(tx);
+      const sent: { raw: Uint8Array; from: string; to: string[] }[] = [];
+      const stored = new Map<string, Uint8Array>();
+      const fake: MailSender = {
+        send(raw, envelope) {
+          sent.push({ raw, ...envelope });
+          return Promise.resolve({
+            sesMessageId: `ses-${String(sent.length)}`,
+          });
+        },
+      };
+      const provider = winstonMailProvider({
+        db: tx,
+        connection: box.connection,
+        rawMessage: (key) => Promise.resolve(stored.get(key) ?? raw),
+        sending: {
+          sender: fake,
+          storeRaw: (bytes) => {
+            const key = String(stored.size + 1).padStart(64, "0");
+            stored.set(key, bytes);
+            return Promise.resolve(key);
+          },
+          now: () => now,
+        },
+      });
+      return { ...box, provider, sent };
+    }
+
+    test("sends as Winston to everyone, Bcc out of the headers, and keeps a copy in his sent mail", async () => {
+      await inRollback(db, async (tx) => {
+        const { provider, sent } = await sender(tx);
+        const result = await provider.send({
+          to: ['"Dana Scully" <Dana@acme.example>'],
+          cc: ["fox@acme.example"],
+          bcc: ["nik@example.com"],
+          subject: "Lunch",
+          body: "Noon at Rosa's?",
+        });
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.from).toBe("ada@runwinston.email");
+        expect(sent[0]?.to).toEqual([
+          "dana@acme.example",
+          "fox@acme.example",
+          "nik@example.com",
+        ]);
+        const headers =
+          new TextDecoder().decode(sent[0]?.raw).split("\r\n\r\n")[0] ?? "";
+        expect(headers).toContain("From: Winston <ada@runwinston.email>");
+        expect(headers).not.toMatch(/^Bcc:/im);
+
+        const copy = await provider.getMessage(result.messageId);
+        expect(copy).toMatchObject({
+          from: { name: "Winston", email: "ada@runwinston.email" },
+          subject: "Lunch",
+          body: "Noon at Rosa's?",
+          messageIdHeader: "<ses-1@email.amazonses.com>",
+          inInbox: false,
+          unread: false,
+        });
+        const outbox = await provider.list({ folder: "sent" }, { limit: 10 });
+        expect(outbox.items.map((m) => m.providerId)).toEqual([
+          result.messageId,
+        ]);
+      });
+    });
+
+    test("a reply stays in its thread and says what it answers", async () => {
+      await inRollback(db, async (tx) => {
+        const { provider, sent, message, thread } = await sender(tx);
+        await message({ messageIdHeader: "<1@acme.example>" });
+        const result = await provider.send({
+          to: ["dana@acme.example"],
+          subject: "Re: Lunch",
+          body: "Yes.",
+          inReplyTo: {
+            threadId: thread?.id ?? "",
+            messageIdHeader: "<1@acme.example>",
+            references: [],
+          },
+        });
+        expect(result.threadId).toBe(thread?.id ?? "");
+        const parsed = await parseMail(sent[0]?.raw ?? new Uint8Array());
+        expect(parsed.inReplyTo).toBe("<1@acme.example>");
+        expect(parsed.references).toEqual(["<1@acme.example>"]);
+      });
+    });
+
+    test("at most 100 in 24 hours, and never to a suppressed address", async () => {
+      await inRollback(db, async (tx) => {
+        const { provider, sent, message } = await sender(tx);
+        const mail = { to: ["dana@acme.example"], subject: "Hi", body: "Hi" };
+        // A day and a bit ago doesn't count; the last 24 hours do.
+        const sentAt = async (subject: string, hoursAgo: number, n: number) => {
+          for (let i = 0; i < n; i++)
+            await message({ direction: "sent", subject });
+          await tx
+            .update(mailboxMessages)
+            .set({
+              createdAt: new Date(now.getTime() - hoursAgo * 60 * 60_000),
+            })
+            .where(eq(mailboxMessages.subject, subject));
+        };
+        await sentAt("Old", 25, 3);
+        await sentAt("Recent", 1, 99);
+        // 102 sent in all, 99 in the window: one more is allowed, then no more.
+        await provider.send(mail);
+        const refused = await rejection(provider.send(mail));
+        expect(refused).toBeInstanceOf(SendingRefusedError);
+        expect((refused as SendingRefusedError).reason).toBe("limit");
+
+        await tx.delete(mailboxMessages);
+        await tx
+          .insert(mailSuppressions)
+          .values({ address: "dana@acme.example", reason: "bounce" });
+        const suppressed = await rejection(
+          provider.send({ ...mail, to: ["Dana@Acme.example"] }),
+        );
+        expect((suppressed as SendingRefusedError).reason).toBe("suppressed");
+        expect(sent).toHaveLength(1);
+      });
+    });
+
+    test("there are no drafts", async () => {
+      await inRollback(db, async (tx) => {
+        const { provider } = await sender(tx);
+        expect(
+          await rejection(
+            provider.createDraft({
+              to: ["x@example.com"],
+              subject: "s",
+              body: "b",
+            }),
+          ),
+        ).toBeInstanceOf(NotSupportedError);
+      });
     });
   });
 });

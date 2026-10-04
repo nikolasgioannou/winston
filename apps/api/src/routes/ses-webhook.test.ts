@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import type { DbOrTx } from "@winston/db/client";
-import { jobs } from "@winston/db/schema";
+import { jobs, mailSuppressions } from "@winston/db/schema";
 import { inRollback, testDb } from "@winston/db/testing";
 import { createLogger } from "@winston/shared/logger";
 import { eq } from "drizzle-orm";
@@ -23,6 +23,8 @@ const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 const certUrl =
   "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc.pem";
 const topic = "arn:aws:sns:us-east-1:766577085959:winston-mail-Inbound";
+const eventsTopic =
+  "arn:aws:sns:us-east-1:766577085959:winston-mail-SendingEvents";
 const fetched: string[] = [];
 const verify = snsVerifier((url) => {
   fetched.push(url);
@@ -91,6 +93,7 @@ function app(tx: DbOrTx, confirmed: string[], configured = true) {
       sesWebhookRoutes({
         db: tx,
         inboundTopicArn: configured ? topic : undefined,
+        eventsTopicArn: eventsTopic,
         verify,
         confirm: (url) => {
           confirmed.push(url);
@@ -230,6 +233,50 @@ describe("SES webhook", () => {
           )
         ).status,
       ).toBe(503);
+    });
+  });
+
+  test("a permanent bounce or a complaint suppresses the address; a soft bounce or delivery doesn't", async () => {
+    await inRollback(db, async (tx) => {
+      const event = (body: unknown) =>
+        signed({
+          Type: "Notification",
+          TopicArn: eventsTopic,
+          Message: JSON.stringify(body),
+        });
+      const recipients = (...emails: string[]) =>
+        emails.map((emailAddress) => ({ emailAddress }));
+      for (const body of [
+        {
+          eventType: "Bounce",
+          bounce: {
+            bounceType: "Permanent",
+            bouncedRecipients: recipients("Gone@Acme.example"),
+          },
+        },
+        {
+          eventType: "Complaint",
+          complaint: { complainedRecipients: recipients("angry@example.com") },
+        },
+        {
+          eventType: "Bounce",
+          bounce: {
+            bounceType: "Transient",
+            bouncedRecipients: recipients("full@example.com"),
+          },
+        },
+        {
+          eventType: "Delivery",
+          delivery: { recipients: ["fine@example.com"] },
+        },
+      ])
+        expect((await post(tx, event(body))).status).toBe(204);
+      const rows = await tx.select().from(mailSuppressions);
+      expect(rows.map((r) => [r.address, r.reason]).toSorted()).toEqual([
+        ["angry@example.com", "complaint"],
+        ["gone@acme.example", "bounce"],
+      ]);
+      expect(await queued(tx)).toHaveLength(0);
     });
   });
 });

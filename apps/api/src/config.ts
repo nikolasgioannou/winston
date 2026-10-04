@@ -14,6 +14,8 @@ const apiConfigSchema = dbConfigSchema.extend({
   GMAIL_PUSH_SERVICE_ACCOUNT: z.email().optional(),
   /** The SNS topic SES announces Winston's received mail on (docs/runbooks/email.md). */
   SES_INBOUND_TOPIC_ARN: z.string().startsWith("arn:aws:sns:").optional(),
+  /** The SNS topic SES reports bounces and complaints of what Winston sends on. */
+  SES_EVENTS_TOPIC_ARN: z.string().startsWith("arn:aws:sns:").optional(),
 });
 
 export function loadApiConfig() {

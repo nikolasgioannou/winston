@@ -23,6 +23,8 @@ export interface ApiDeps {
   gmailPush?: PushIdentity | undefined;
   /** Where SES announces Winston's received mail, when it's set up (docs/runbooks/email.md). */
   sesInboundTopicArn?: string | undefined;
+  /** Where SES reports bounces and complaints of what Winston sends. */
+  sesEventsTopicArn?: string | undefined;
   /** Checks SNS signatures; tests pass one that trusts their own key. */
   verifySns?: SnsVerify;
 }
@@ -73,6 +75,7 @@ export function createApp(deps: ApiDeps) {
     sesWebhookRoutes({
       db: deps.db,
       inboundTopicArn: deps.sesInboundTopicArn,
+      eventsTopicArn: deps.sesEventsTopicArn,
       verify: deps.verifySns ?? snsVerifier(),
     }),
   );

@@ -159,16 +159,25 @@ describe("services stack", () => {
     for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("s3:"))).toBe(false);
     expect(actionsFor("agents")).toContain("s3:PutObject");
-    // Only agents handles received mail, and bounces it.
+    // agents handles received mail and bounces it; the gateway sends his mail.
     expect(actionsFor("agents")).toContain("ses:SendBounce");
-    for (const service of ["api", "web", "gateway"] as const)
+    expect(actionsFor("gateway")).toContain("ses:SendEmail");
+    expect(actionsFor("gateway")).not.toContain("ses:SendBounce");
+    for (const service of ["api", "web"] as const)
       expect(actionsFor(service).some((a) => a.startsWith("ses:"))).toBe(false);
-    // The gateway only reads (VM binaries, to presign their downloads).
+    // The gateway reads (VM binaries, Winston's mail) and writes only what he sends.
     expect(
       actionsFor("gateway")
         .filter((a) => a.startsWith("s3:"))
-        .every((a) => a.startsWith("s3:Get") || a.startsWith("s3:List")),
+        .every(
+          (a) =>
+            a.startsWith("s3:Get") ||
+            a.startsWith("s3:List") ||
+            a.startsWith("s3:Put") ||
+            a === "s3:Abort*",
+        ),
     ).toBe(true);
+    expect(actionsFor("gateway")).not.toContain("s3:DeleteObject*");
   });
 
   test("web is reachable only with CloudFront's origin header", () => {

@@ -8,6 +8,9 @@
 /** His mail's domain, apart from the site's and deployed apps' (ead827). */
 export const mailboxDomain = "runwinston.email";
 
+/** How many messages Winston may send from his address in any 24 hours (ead827). */
+export const dailySendLimit = 100;
+
 /** How many times a user may change the address after picking it. */
 export const maxAddressChanges = 2;
 

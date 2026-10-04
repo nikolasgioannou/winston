@@ -40,7 +40,8 @@ export const providerNotes: Record<ConnectionProvider, string[]> = {
     "Mail commands use it only when it's named with --account.",
     "The user turns it on or off, or changes its address, at runwinston.com/channels.",
     "Read, search and organize it with the usual mail commands; there's no --native syntax, and it has no category tabs (everything is primary).",
-    "It can't send yet.",
+    'Mail sent from it comes from "Winston" at this address, at most 100 messages in any 24 hours; addresses that bounced or complained before are refused.',
+    "It has no drafts: send once the user has agreed.",
   ],
   google_calendar: [
     "Lists cover the calendars the user shows in Google Calendar; pick another with --calendar.",

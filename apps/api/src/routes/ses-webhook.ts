@@ -1,12 +1,14 @@
 /**
- * Mail for Winston's addresses (ead827, docs/design.md §3): SES writes each
- * message to the inbound bucket and SNS posts a notification here. Once the
- * signature and topic check out, a `receive_mail` job is queued (once per
- * SES message) and the post is acknowledged at once. Subscription
- * confirmations are confirmed; anything else is acknowledged and ignored,
- * so SNS doesn't retry it.
+ * Winston's own mail (ead827, docs/design.md §3), from SES through SNS. On
+ * the inbound topic: SES wrote a received message to the inbound bucket, so
+ * a `receive_mail` job is queued (once per SES message). On the sending
+ * events topic: a permanent bounce or a complaint suppresses the address, so
+ * he never mails it again. Posts are checked (signature and topic) and
+ * acknowledged at once; subscription confirmations are confirmed; anything
+ * else is acknowledged and ignored, so SNS doesn't retry it.
  */
 import { enqueue } from "@winston/db/queue";
+import { mailSuppressions } from "@winston/db/schema";
 import { receiveMailJob, type ReceiveMailPayload } from "@winston/domain/jobs";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -33,9 +35,35 @@ const received = z.object({
   }),
 });
 
+/** SES's sending events (configuration set) that stop mail to an address. */
+const recipients = z.array(z.object({ emailAddress: z.string() }));
+const sendingEvent = z.discriminatedUnion("eventType", [
+  z.object({
+    eventType: z.literal("Bounce"),
+    bounce: z.object({
+      bounceType: z.string(),
+      bouncedRecipients: recipients,
+    }),
+  }),
+  z.object({
+    eventType: z.literal("Complaint"),
+    complaint: z.object({ complainedRecipients: recipients }),
+  }),
+]);
+
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+};
+
 export interface SesWebhookDeps extends Pick<ApiDeps, "db"> {
   /** The inbound topic's ARN; unset where SES isn't set up, and the route refuses everything. */
   inboundTopicArn: string | undefined;
+  /** The sending events topic's ARN (bounces and complaints). */
+  eventsTopicArn?: string | undefined;
   verify: SnsVerify;
   /** Visits a SubscribeURL, confirming the subscription. */
   confirm?: (url: string) => Promise<void>;
@@ -64,10 +92,8 @@ export function sesWebhookRoutes(deps: SesWebhookDeps) {
       return c.body(null, 204);
     }
     const message = body.data;
-    if (
-      message.TopicArn !== deps.inboundTopicArn ||
-      !(await deps.verify(message))
-    ) {
+    const topics = [deps.inboundTopicArn, deps.eventsTopicArn];
+    if (!topics.includes(message.TopicArn) || !(await deps.verify(message))) {
       logger.warn(
         { topic: message.TopicArn, type: message.Type },
         "rejected an SNS post",
@@ -87,15 +113,38 @@ export function sesWebhookRoutes(deps: SesWebhookDeps) {
     }
     if (message.Type !== "Notification") return c.body(null, 204);
 
-    const notification = received.safeParse(
-      (() => {
-        try {
-          return JSON.parse(message.Message) as unknown;
-        } catch {
-          return undefined;
-        }
-      })(),
-    );
+    if (message.TopicArn === deps.eventsTopicArn) {
+      const event = sendingEvent.safeParse(parseJson(message.Message));
+      // Deliveries, and bounces that may pass, need nothing.
+      if (!event.success) return c.body(null, 204);
+      const suppressed =
+        event.data.eventType === "Bounce"
+          ? event.data.bounce.bounceType === "Permanent"
+            ? event.data.bounce.bouncedRecipients
+            : []
+          : event.data.complaint.complainedRecipients;
+      if (suppressed.length > 0) {
+        await deps.db
+          .insert(mailSuppressions)
+          .values(
+            suppressed.map((r) => ({
+              address: r.emailAddress.trim().toLowerCase(),
+              reason:
+                event.data.eventType === "Bounce"
+                  ? ("bounce" as const)
+                  : ("complaint" as const),
+            })),
+          )
+          .onConflictDoNothing();
+        logger.info(
+          { reason: event.data.eventType, addresses: suppressed.length },
+          "suppressed addresses Winston's mail went wrong for",
+        );
+      }
+      return c.body(null, 204);
+    }
+
+    const notification = received.safeParse(parseJson(message.Message));
     if (!notification.success) {
       logger.warn(
         { messageId: message.MessageId },

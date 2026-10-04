@@ -23,6 +23,7 @@ import {
   NotSupportedError,
   ProviderNotFoundError,
   ProviderUnavailableError,
+  SendingRefusedError,
 } from "@winston/connectors/errors";
 import type { MailProvider } from "@winston/connectors/mail";
 import { TimeParseError } from "@winston/shared/time-flag";
@@ -210,6 +211,12 @@ export function toApiFailure(
   if (error instanceof ApiFailure) return error;
   if (error instanceof NotSupportedError)
     return new ApiFailure("not_supported", error.message, error.hint);
+  if (error instanceof SendingRefusedError)
+    return new ApiFailure(
+      error.reason === "limit" ? "permission_disabled" : "invalid_request",
+      error.message,
+      error.hint,
+    );
   if (error instanceof ProviderNotFoundError)
     return new ApiFailure(
       "not_found",

@@ -12,7 +12,8 @@ import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
-import { blobReader } from "./blobs.ts";
+import { gatewayBlobs } from "./blobs.ts";
+import { loggingSender, sesSender } from "./ses.ts";
 import { loadGatewayConfig } from "./config.ts";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
 import { sweepVms } from "./liveness.ts";
@@ -48,7 +49,10 @@ function ownUrl() {
     : undefined;
 }
 const selfUrl = ownUrl();
-const readBlob = blobReader(config);
+const blobs = gatewayBlobs(config);
+const mailSender = config.SES_CONFIGURATION_SET
+  ? sesSender(config.SES_CONFIGURATION_SET)
+  : loggingSender(logger);
 logger.info({ selfUrl }, "advertising this gateway to agents");
 const gateway = createGateway({
   db,
@@ -67,7 +71,12 @@ const gateway = createGateway({
     mail: (connection) => {
       // Winston's own mailbox: we're its provider (ead827).
       if (connection.provider === "winston")
-        return winstonMailProvider({ db, connection, rawMessage: readBlob });
+        return winstonMailProvider({
+          db,
+          connection,
+          rawMessage: (key) => blobs.get(key),
+          sending: { sender: mailSender, storeRaw: (raw) => blobs.put(raw) },
+        });
       return gmailProvider({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),

@@ -51,9 +51,9 @@ export class MailStack extends Stack {
     });
     // The api confirms the subscription when SNS first posts (its own
     // signed confirmation), then gets each received message's notice.
-    this.inbound.addSubscription(
-      new UrlSubscription(`https://api.${props.domain}/webhooks/ses`),
-    );
+    const webhook = `https://api.${props.domain}/webhooks/ses`;
+    this.inbound.addSubscription(new UrlSubscription(webhook));
+    this.sendingEvents.addSubscription(new UrlSubscription(webhook));
 
     this.configurationSet = new ConfigurationSet(this, "Sending");
     this.configurationSet.addEventDestination("Events", {

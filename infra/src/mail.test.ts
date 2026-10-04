@@ -45,11 +45,15 @@ describe("mail stack", () => {
     template.resourceCountIs("Custom::AWS", 1);
   });
 
-  test("received mail is announced to the api's webhook", () => {
-    template.hasResourceProperties("AWS::SNS::Subscription", {
-      Protocol: "https",
-      Endpoint: "https://api.runwinston.com/webhooks/ses",
-    });
+  test("received mail, bounces and complaints are announced to the api's webhook", () => {
+    template.resourcePropertiesCountIs(
+      "AWS::SNS::Subscription",
+      {
+        Protocol: "https",
+        Endpoint: "https://api.runwinston.com/webhooks/ses",
+      },
+      2,
+    );
   });
 
   test("its topics sign with SHA256", () => {
