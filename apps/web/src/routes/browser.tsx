@@ -298,8 +298,12 @@ function LiveBrowser() {
                 gestures.current?.move(point(event), event.pointerType);
             }}
             onPointerUp={(event) => {
-              if (control)
-                gestures.current?.up(point(event), event.pointerType);
+              if (!control) return;
+              gestures.current?.up(point(event), event.pointerType);
+              // A click takes the focus off the typing field (emptying it),
+              // so it goes back and keys keep reaching the tab, as in any
+              // browser. Not for touch: it would bring up the phone's keyboard.
+              if (event.pointerType === "mouse") field.current?.focus();
             }}
             onPointerCancel={() => {
               gestures.current?.cancel();
