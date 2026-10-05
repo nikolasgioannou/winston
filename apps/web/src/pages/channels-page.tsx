@@ -96,16 +96,13 @@ function TelegramRow({
           icon={icon}
           label="Telegram"
           control={
-            <span className="flex items-center gap-3">
-              <StatusPill tone="neutral">Not connected</StatusPill>
-              <Button
-                onClick={() => {
-                  onConnectingChange(true);
-                }}
-              >
-                Connect
-              </Button>
-            </span>
+            <Button
+              onClick={() => {
+                onConnectingChange(true);
+              }}
+            >
+              Connect
+            </Button>
           }
         />
         {dialog}
