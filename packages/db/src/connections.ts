@@ -91,6 +91,12 @@ export const synced = inArray(connections.provider, syncedProviders);
 /** The vault context a connection's token is sealed with. */
 export const tokenContext = (connectionId: string) => ({ connectionId });
 
+/** The vault context a connection's stored access token is sealed with (52bf55). */
+export const accessTokenContext = (connectionId: string) => ({
+  connectionId,
+  token: "access",
+});
+
 /**
  * Stores a new grant (docs/design.md §12a): a new connection with the
  * default capabilities, or, for an account the user already
@@ -143,6 +149,9 @@ export async function saveConnection(
   const fresh = {
     scopes: grant.scopes,
     tokenCiphertext,
+    // An access token from the old grant goes with it.
+    accessTokenCiphertext: null,
+    accessTokenExpiresAt: null,
     grantedAt: new Date(),
     status: "ok" as const,
   };

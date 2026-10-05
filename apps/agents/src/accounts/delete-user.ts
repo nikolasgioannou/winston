@@ -159,7 +159,11 @@ async function revokeGrants(
     );
     await db
       .update(connections)
-      .set({ tokenCiphertext: null })
+      .set({
+        tokenCiphertext: null,
+        accessTokenCiphertext: null,
+        accessTokenExpiresAt: null,
+      })
       .where(eq(connections.id, connection.id));
   }
 }

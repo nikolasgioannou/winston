@@ -9,7 +9,7 @@ labels:
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:23.152Z
-updated_at: 2026-10-05T23:01:42.132Z
+updated_at: 2026-10-05T23:38:42.149Z
 blocked_by:
   - "52bf55"
   - "8f6c44"
@@ -31,3 +31,6 @@ The read side of `winston ramp` (80fcf0), built like reading mail from Gmail (6a
 - [ ] vm-api tests: `read` off is `permission_disabled` with the link, an expired grant is `auth_expired`
 - [ ] Locally, against the founder's Ramp, `winston ramp approvals list` and `winston ramp transactions search` give the expected results
 - [ ] `design.md` §11 (command reference, the provider-named exception, sub-resources) and §5 describe what's built (decision #81 already records provider naming)
+
+
+**Added 2026-10-06 (from 52bf55):** the gateway is the first service to refresh Ramp's rotating tokens, so this ticket grants it `kms:GenerateDataKey` on the tokens key (`infra/src/services.ts`; its test currently asserts the gateway never seals, and `design.md` §13 and §19 say so). 52bf55 left the grant out because nothing used it yet.

@@ -55,6 +55,14 @@ export const connections = snakeCase.table(
      */
     tokenCiphertext: text(),
     /**
+     * For providers whose refresh tokens rotate (52bf55): the current access
+     * token, sealed with `accessTokenContext`, shared by every service so
+     * only one of them refreshes. Google's access tokens stay in memory.
+     */
+    accessTokenCiphertext: text(),
+    /** When the stored access token expires. */
+    accessTokenExpiresAt: timestamp({ withTimezone: true }),
+    /**
      * When Google granted the token; testing-mode grants last 7 days (§12a).
      * For Winston's mailbox, when it was turned on.
      */

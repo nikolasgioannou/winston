@@ -107,7 +107,12 @@ export function revokeConnectionTokenHandler({
 
       await tx
         .update(connections)
-        .set({ tokenCiphertext: null, watchExpiresAt: null })
+        .set({
+          tokenCiphertext: null,
+          accessTokenCiphertext: null,
+          accessTokenExpiresAt: null,
+          watchExpiresAt: null,
+        })
         .where(eq(connections.id, connectionId));
       logger.info(
         { connectionId, revoked: !sibling },
