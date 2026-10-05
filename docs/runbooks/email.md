@@ -13,21 +13,29 @@ Winston's own addresses are `<name>@runwinston.email` (ead827). The domain is ap
 
 1. **Buy the domain** (founder): Cloudflare dashboard → Domain Registration → Register Domains → `runwinston.email` (about $24 a year, at cost).
 2. **Deploy** the `Mail` stack. It deploys with everything else (`cdk deploy --all`, [deploys.md](deploys.md)); on its own: `AWS_PROFILE=winston-prod bunx cdk deploy winston-data winston-mail` from `infra/`. The identity can exist before its records do; it verifies once they resolve.
-3. **Add the records** (founder) in Cloudflare (runwinston.email → DNS → Records). The DKIM targets are the stack's outputs `Mail.DkimRecord1`–`3` (`aws cloudformation describe-stacks --stack-name winston-mail --query 'Stacks[0].Outputs'`):
+3. **Add the records** (founder) in Cloudflare (runwinston.email → DNS → Records). The DKIM targets are the stack's outputs `Mail.DkimRecord1`–`3` (`aws cloudformation describe-stacks --stack-name winston-mail --query 'Stacks[0].Outputs'`, or the deploy's log). Added 2026-10-05; they resolved within minutes and SES emailed "DKIM setup SUCCESS" and "Custom MAIL FROM Domain Setup SUCCESS":
 
-   | Name                  | Type  | Content                                              | Purpose                            |
-   | --------------------- | ----- | ---------------------------------------------------- | ---------------------------------- |
-   | `@`                   | MX    | `inbound-smtp.us-east-1.amazonaws.com`, priority 10  | Receiving                          |
-   | `<token1>._domainkey` | CNAME | `<token1>.dkim.amazonses.com`                        | DKIM (and verifies the domain)     |
-   | `<token2>._domainkey` | CNAME | `<token2>.dkim.amazonses.com`                        | DKIM                               |
-   | `<token3>._domainkey` | CNAME | `<token3>.dkim.amazonses.com`                        | DKIM                               |
-   | `mail`                | MX    | `feedback-smtp.us-east-1.amazonses.com`, priority 10 | MAIL FROM (bounces come back here) |
-   | `mail`                | TXT   | `v=spf1 include:amazonses.com ~all`                  | SPF for the MAIL FROM domain       |
-   | `_dmarc`              | TXT   | `v=DMARC1; p=quarantine; adkim=r; aspf=r`            | DMARC                              |
+   | Name                                          | Type  | Content                                               | Purpose                            |
+   | --------------------------------------------- | ----- | ----------------------------------------------------- | ---------------------------------- |
+   | `@`                                           | MX    | `inbound-smtp.us-east-1.amazonaws.com`, priority 10   | Receiving                          |
+   | `yvgnbpwfqj4s3spehj6zrr56gfq2l5af._domainkey` | CNAME | `yvgnbpwfqj4s3spehj6zrr56gfq2l5af.dkim.amazonses.com` | DKIM (and verifies the domain)     |
+   | `nzolkxfs4fgpow32v2rl3rtr723kafuk._domainkey` | CNAME | `nzolkxfs4fgpow32v2rl3rtr723kafuk.dkim.amazonses.com` | DKIM                               |
+   | `cnomigjrf5t2iv4umjhsnstwl4xymyly._domainkey` | CNAME | `cnomigjrf5t2iv4umjhsnstwl4xymyly.dkim.amazonses.com` | DKIM                               |
+   | `mail`                                        | MX    | `feedback-smtp.us-east-1.amazonses.com`, priority 10  | MAIL FROM (bounces come back here) |
+   | `mail`                                        | TXT   | `v=spf1 include:amazonses.com ~all`                   | SPF for the MAIL FROM domain       |
+   | `_dmarc`                                      | TXT   | `v=DMARC1; p=quarantine; adkim=r; aspf=r`             | DMARC                              |
 
    `mail` must have exactly that one MX and is never used as an address. DMARC starts at `quarantine` rather than `none`: the domain is new, so there's no existing mail to break, and AWS recommends a strict policy for new domains. There's no `rua` report address yet, since reports would arrive at an address no mailbox owns; add one once a mailbox for them exists.
 
-4. **Ask AWS for production access** (founder): SES console (us-east-1) → Account dashboard → **Request production access**. Mail type **Transactional**; website `https://runwinston.com`; use case: "Each user of Winston, a personal assistant, can give their assistant an address on runwinston.email. It sends replies on threads the user involved it in and signs up for services on the user's behalf; it never sends bulk or marketing mail. Sending is limited per user per day, and bounces and complaints are received through an SNS configuration set and suppress the address." AWS answers within about a day, sometimes asking for more. Until then SES is in the **sandbox**: it can send only to verified addresses, 200 a day and 1 a second. Receiving isn't limited by the sandbox.
+4. **Ask AWS for production access** (founder): sign in to the console through the access portal as winston-prod (the account menu shows `7665-7708-5959`), region **N. Virginia**, then SES → **Get set up** → **Request production access**. The form asks only for the mail type (**Transactional**), the website (`https://runwinston.com`) and a contact language; there's no box for the use case. So the first answer is an automated one asking for details (on 2026-10-05 it came within minutes, and `aws sesv2 get-account` showed the review as `DENIED`, case `179120791100829`). **Reply in the console** (Support Center → Your support cases → the case → Reply), not to the email: it comes from `no-reply-aws@amazon.com`, which bounces. The answers they ask for, as sent:
+   - **Website:** runwinston.com; each user can give their assistant an address on runwinston.email (verified, Easy DKIM, MAIL FROM `mail.runwinston.email`, DMARC).
+   - **Email type:** transactional only: replies on threads the user copied the assistant on, writing to a company about something the user forwarded, and sign-ups the user asked for. Never marketing or bulk.
+   - **Volume:** a few dozen users; under 100 a day at first, a few thousand a month at most; capped at 100 per user per 24 hours.
+   - **Recipients:** no lists; people already on a thread the user brought the assistant into, or a company the user asked it to contact. Anything beyond the user's request is approved by the user first.
+   - **Bounces and complaints:** the configuration set publishes them to SNS, delivered to our signed-checked webhook; permanent bounces and complaints suppress the address, and sending to it is refused.
+   - **Sample:** a reply-all offering meeting times on a thread the user copied the assistant on, signed "Winston".
+
+   Until it's granted SES is in the **sandbox**: it can send only to verified addresses, 200 a day and 1 a second. Receiving isn't limited by the sandbox. Verifying the domain covers every address on it; nothing else needs verifying.
 
 ## Checking it
 
