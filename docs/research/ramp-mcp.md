@@ -2,6 +2,8 @@
 
 > Researched 2026-10-06. Nothing here is built. Ramp says its MCP server "is subject to change" and its tools change continuously, so check the live metadata before building. Facts marked _unverified_ need one real sign-in to confirm (see "To verify first").
 
+> **Decided 2026-10-06** (80fcf0): curated commands like Gmail's, named by provider (`winston ramp …`), not the pass-through recommended under "Decisions for the founder"; capabilities `read`, `edit`, `submit` and `approve`; no Ramp events yet. The spec and its sub-tickets are under 80fcf0.
+
 ## Summary
 
 **Doable, and Ramp's side is standard.** Ramp's remote MCP server follows the MCP authorization spec as written: protected-resource metadata, dynamic client registration, PKCE with a public client (no secret) and refresh tokens. Winston can be an ordinary MCP client in the backend, so no Ramp credential goes near the VM (invariant 1).
