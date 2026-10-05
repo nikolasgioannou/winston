@@ -16,8 +16,11 @@ export function CopyText({
   className,
 }: {
   text: string;
-  /** Copies the text (the clipboard); a rejection leaves the icon as it was. */
-  copy: (text: string) => Promise<void>;
+  /**
+   * Copies to the clipboard: the text, or what it stands for (a site's
+   * share link under its address). A rejection leaves the icon as it was.
+   */
+  copy: () => Promise<void>;
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -37,7 +40,7 @@ export function CopyText({
       type="button"
       aria-label={copied ? `Copied ${text}` : `Copy ${text}`}
       onClick={() => {
-        copy(text).then(
+        copy().then(
           () => {
             setCopied(true);
           },
@@ -45,7 +48,7 @@ export function CopyText({
         );
       }}
       className={cn(
-        "-mx-1.5 inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-caption text-fg-muted transition-[background-color,color] duration-100 outline-none hover:bg-hover hover:text-fg focus-visible:shadow-[inset_0_0_0_1px_var(--w-focus),0_0_0_1px_var(--w-focus)]",
+        "-mx-1.5 -my-0.5 inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-caption text-fg-muted transition-[background-color,color] duration-100 outline-none hover:bg-hover hover:text-fg focus-visible:shadow-[inset_0_0_0_1px_var(--w-focus),0_0_0_1px_var(--w-focus)]",
         className,
       )}
     >

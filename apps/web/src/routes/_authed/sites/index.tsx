@@ -75,12 +75,13 @@ function Sites() {
             toast.error("Couldn't share it. Please try again.");
           });
       }}
-      onCopyLink={(link) => {
-        void navigator.clipboard
-          .writeText(link)
-          .then(() => toast.success("Link copied"))
-          .catch(() => toast.error("Couldn't copy the link."));
-      }}
+      onCopyLink={(link) =>
+        // The button's check says it worked; only a failure needs words.
+        navigator.clipboard.writeText(link).catch((error: unknown) => {
+          toast.error("Couldn't copy the link.");
+          throw error;
+        })
+      }
       onMakePrivate={(siteId) => {
         change(
           makeSitePrivate({ data: { id: siteId } }),

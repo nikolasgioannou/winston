@@ -60,7 +60,7 @@ const sites =
       <SitesPage
         sites={list}
         onShare={noop}
-        onCopyLink={noop}
+        onCopyLink={() => Promise.resolve()}
         onMakePrivate={noop}
         onShowVersions={noop}
         onTakeDown={noop}

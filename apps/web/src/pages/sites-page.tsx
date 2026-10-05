@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  CopyText,
   Dialog,
   EmptyState,
   IconButton,
@@ -25,8 +26,9 @@ export interface SiteVersion {
 
 /**
  * `/sites` (docs/design.md §9a, §20): the sites Winston deployed for the
- * user. Each row's menu opens the site, shares it by link or makes it
- * private, shows its versions in a dialog over the list, or takes it down.
+ * user. Each row's address copies its link. Its menu opens the site, shares
+ * it by link or makes it private, shows its versions in a dialog over the
+ * list, or takes it down.
  * Winston creates sites in chat, so there's nothing to add here.
  */
 export function SitesPage({
@@ -41,7 +43,8 @@ export function SitesPage({
 }: {
   sites: readonly SiteDto[];
   onShare: (siteId: string) => void;
-  onCopyLink: (link: string) => void;
+  /** Copies to the clipboard; rejects if that failed. */
+  onCopyLink: (link: string) => Promise<void>;
   onMakePrivate: (siteId: string) => void;
   /** Opens a site's versions. */
   onShowVersions: (siteId: string) => void;
@@ -81,7 +84,10 @@ export function SitesPage({
   );
 }
 
-/** One site: its name, its address under it, who can open it, and a ⋯ menu. */
+/**
+ * One site: its name, its address under it (copying the share link while
+ * it's shared, else the address), who can open it, and a ⋯ menu.
+ */
 function SiteRow({
   site,
   onShare,
@@ -93,7 +99,7 @@ function SiteRow({
 }: {
   site: SiteDto;
   onShare: (siteId: string) => void;
-  onCopyLink: (link: string) => void;
+  onCopyLink: (link: string) => Promise<void>;
   onMakePrivate: (siteId: string) => void;
   onShowVersions: (siteId: string) => void;
   onTakeDown: (siteId: string) => void;
@@ -107,7 +113,16 @@ function SiteRow({
     <SettingRow
       icon={<Globe />}
       label={site.name}
-      description={host}
+      description={
+        deployed ? (
+          <CopyText
+            text={host}
+            copy={() => onCopyLink(shareLink ?? site.url)}
+          />
+        ) : (
+          host
+        )
+      }
       control={
         <span className="flex items-center gap-2">
           <Access site={site} />
@@ -128,9 +143,9 @@ function SiteRow({
                     },
                     shareLink
                       ? {
-                          label: "Copy share link",
+                          label: "Make private",
                           onSelect: () => {
-                            onCopyLink(shareLink);
+                            onMakePrivate(site.id);
                           },
                         }
                       : {
@@ -139,16 +154,6 @@ function SiteRow({
                             onShare(site.id);
                           },
                         },
-                    ...(shareLink
-                      ? [
-                          {
-                            label: "Make private",
-                            onSelect: () => {
-                              onMakePrivate(site.id);
-                            },
-                          },
-                        ]
-                      : []),
                     {
                       label: "Versions",
                       onSelect: () => {

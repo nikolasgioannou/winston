@@ -162,7 +162,7 @@ function TelegramRow({
 
 /**
  * Winston's own email address: set it up, then copy, change or turn it off.
- * The address shows like a connected account's.
+ * The address shows under the label, like a connected account's.
  */
 function EmailRow({
   mailbox,
@@ -225,14 +225,8 @@ function EmailRow({
     return (
       <SettingRow
         icon={icon}
-        label={
-          <span className="flex min-w-0 items-center gap-3">
-            Email
-            <span className="truncate text-caption font-normal text-fg-muted">
-              {mailbox.address}
-            </span>
-          </span>
-        }
+        label="Email"
+        description={<span className="block truncate">{mailbox.address}</span>}
         control={
           <span className="flex items-center gap-3">
             <StatusPill tone="neutral">Off</StatusPill>
@@ -246,15 +240,12 @@ function EmailRow({
     <>
       <SettingRow
         icon={icon}
-        label={
-          <span className="flex min-w-0 items-center gap-3">
-            Email
-            <CopyText
-              text={mailbox.address}
-              copy={onCopyAddress}
-              className="font-normal"
-            />
-          </span>
+        label="Email"
+        description={
+          <CopyText
+            text={mailbox.address}
+            copy={() => onCopyAddress(mailbox.address)}
+          />
         }
         control={
           <span className="flex items-center gap-2">
