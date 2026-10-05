@@ -14,7 +14,6 @@ import { createTokenVault } from "@winston/shared/token-vault";
 import { siteHostFrom } from "@winston/site-host/config";
 import { createLogger } from "@winston/shared/logger";
 import { s3Artifacts } from "./artifacts.ts";
-import { gatewayBlobs } from "./blobs.ts";
 import { loggingSender, sesSender } from "./ses.ts";
 import { loadGatewayConfig } from "./config.ts";
 import { createGateway, type GatewaySocketData } from "./gateway.ts";
@@ -51,7 +50,7 @@ function ownUrl() {
     : undefined;
 }
 const selfUrl = ownUrl();
-const blobs = gatewayBlobs(config);
+const blobs = createBlobStore(config);
 const mailSender = config.SES_CONFIGURATION_SET
   ? sesSender(config.SES_CONFIGURATION_SET)
   : loggingSender(logger);
@@ -74,7 +73,7 @@ const gateway = createGateway({
     ? {
         sites: {
           host: siteHost,
-          blobs: createBlobStore(config),
+          blobs,
           sitesUrl: config.SITES_PUBLIC_URL,
           passKey: config.SITES_PASS_KEY,
           connectUrl: config.SITES_CONNECT_URL,

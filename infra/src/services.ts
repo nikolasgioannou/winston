@@ -177,7 +177,6 @@ export class ServicesStack extends Stack {
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         WEB_PUBLIC_URL: publicUrl,
         ...siteHost,
-        BLOB_BUCKET: props.blobs.bucketName,
       },
       web: {
         WEB_HOST: "0.0.0.0",

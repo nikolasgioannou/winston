@@ -27,7 +27,7 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
   /** The site, for links in errors (permission toggles, reconnecting). */
   WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
-  /** Production: the blobs bucket (Winston's raw mail: attachments, and what he sends). */
+  /** Production: the blobs bucket (Winston's raw mail, and sites' bundles, §9a). */
   BLOB_BUCKET: z.string().min(1).optional(),
   /** Locally: agents' blob directory, used when BLOB_BUCKET isn't set. */
   BLOB_DIR: z
@@ -52,13 +52,6 @@ const gatewayConfigSchema = dbConfigSchema.extend({
     .optional(),
   /** Locally, where site fetches connect (bun dev's sites service), since `*.sites.localhost` doesn't resolve. */
   SITES_CONNECT_URL: z.url().optional(),
-  /** The S3 bucket for sites' bundles and other binaries (production). */
-  BLOB_BUCKET: z.string().min(1).optional(),
-  /** Local blob storage, used when BLOB_BUCKET isn't set. */
-  BLOB_DIR: z
-    .string()
-    .min(1)
-    .default(new URL("../../../.data/blobs", import.meta.url).pathname),
   /** Jev and its helpers for `winston browser act`, served by OpenRouter (§5). Optional: without it, act can't decide steps. */
   OPENROUTER_API_KEY: z.string().min(1).optional(),
 });
