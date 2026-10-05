@@ -225,8 +225,14 @@ function EmailRow({
     return (
       <SettingRow
         icon={icon}
-        label="Email"
-        description={mailbox.address}
+        label={
+          <span className="flex min-w-0 items-center gap-3">
+            Email
+            <span className="truncate text-caption font-normal text-fg-muted">
+              {mailbox.address}
+            </span>
+          </span>
+        }
         control={
           <span className="flex items-center gap-3">
             <StatusPill tone="neutral">Off</StatusPill>
@@ -240,8 +246,16 @@ function EmailRow({
     <>
       <SettingRow
         icon={icon}
-        label="Email"
-        description={<CopyText text={mailbox.address} copy={onCopyAddress} />}
+        label={
+          <span className="flex min-w-0 items-center gap-3">
+            Email
+            <CopyText
+              text={mailbox.address}
+              copy={onCopyAddress}
+              className="font-normal"
+            />
+          </span>
+        }
         control={
           <span className="flex items-center gap-2">
             <StatusPill tone="ok">On</StatusPill>
