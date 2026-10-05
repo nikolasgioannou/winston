@@ -120,9 +120,11 @@ function fakes() {
     deps: {
       provider,
       vault,
-      revoke: (token: string) => {
-        revoked.push(token);
-        return Promise.resolve();
+      revoke: {
+        google: (token: string) => {
+          revoked.push(token);
+          return Promise.resolve();
+        },
       },
       telegram: {
         sendMessage: (chatId: number, text: string) => {
@@ -290,7 +292,9 @@ describe("deleteUserHandler", () => {
         {
           ...deps,
           blobs,
-          revoke: () => Promise.reject(new Error("Google is down")),
+          revoke: {
+            google: () => Promise.reject(new Error("Google is down")),
+          },
         },
         user.id,
       ).catch((e: unknown) => e);

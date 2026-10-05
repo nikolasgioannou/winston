@@ -59,6 +59,25 @@ describe("connections", () => {
     });
   });
 
+  test("a provider Winston doesn't sync gets no watch", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await saveConnection(tx, localTokenVault("ab".repeat(32)), {
+        userId: user.id,
+        domain: "mail",
+        provider: "winston",
+        externalEmail: "ada@runwinston.email",
+        scopes: [],
+        refreshToken: "none",
+      });
+      const watches = await tx
+        .select()
+        .from(jobs)
+        .where(eq(jobs.type, "watch_connection"));
+      expect(watches).toEqual([]);
+    });
+  });
+
   test("one connection per user, domain and account", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

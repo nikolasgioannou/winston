@@ -6,7 +6,7 @@
  */
 import type { CalendarInfo } from "@winston/connectors/calendar";
 import type { DbOrTx } from "@winston/db/client";
-import { googleBacked } from "@winston/db/connections";
+import { userConnected } from "@winston/db/connections";
 import { mailboxState } from "@winston/db/mailbox";
 import { connections } from "@winston/db/schema";
 import {
@@ -129,7 +129,7 @@ export function accountRoutes({
           and(
             connected(c.get("run").userId),
             eq(connections.domain, domain),
-            googleBacked,
+            userConnected,
           ),
         )
         .orderBy(asc(connections.externalEmail));
@@ -190,7 +190,7 @@ export function accountRoutes({
             ...summary(row),
             capabilities: capabilitiesByDomain[row.domain].map((name) => ({
               name,
-              description: describe[name],
+              description: describe(row.domain, name),
               on: row.capabilities[name] === true,
               granted: !ungranted.includes(name),
             })),
@@ -199,7 +199,7 @@ export function accountRoutes({
             /** Where the user changes permissions or reconnects (Google accounts only). */
             links:
               connectors && row.provider !== "winston"
-                ? accountLinks(connectors.webPublicUrl, row.id)
+                ? accountLinks(connectors.webPublicUrl, row)
                 : null,
           };
         }),

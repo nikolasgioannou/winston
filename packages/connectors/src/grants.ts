@@ -1,6 +1,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { connections } from "@winston/db/schema";
-import { googleBacked } from "@winston/db/connections";
+import { reconnectPath } from "@winston/domain/connections";
+import { issuedBy } from "@winston/db/connections";
 import { recordSystemEvent } from "@winston/db/system-events";
 import type { Logger } from "@winston/shared/logger";
 import { and, eq, inArray, lte } from "drizzle-orm";
@@ -19,15 +20,14 @@ type Connection = Pick<
 >;
 
 /** Makes each connection's one-tap reconnect link. */
-export type ReconnectUrl = (connectionId: string) => string;
+export type ReconnectUrl = (
+  connection: Pick<Connection, "id" | "provider">,
+) => string;
 
 export const reconnectUrlFor =
   (webPublicUrl: string): ReconnectUrl =>
-  (connectionId) =>
-    new URL(
-      `/auth/google/connect?reconnect=${connectionId}`,
-      webPublicUrl,
-    ).toString();
+  (connection) =>
+    new URL(reconnectPath(connection) ?? "/accounts", webPublicUrl).toString();
 
 const columns = {
   id: connections.id,
@@ -60,7 +60,7 @@ async function recordGrantEvent(
       expiresAt: new Date(
         connection.grantedAt.getTime() + grantLifetimeMs,
       ).toISOString(),
-      reconnectUrl: reconnectUrl(connection.id),
+      reconnectUrl: reconnectUrl(connection),
     },
     sourceRef: `connection:${connection.id}:${type}:${String(connection.grantedAt.getTime())}`,
   });
@@ -118,7 +118,7 @@ export async function sweepConnectionGrants(
     .from(connections)
     .where(
       and(
-        googleBacked,
+        issuedBy("google"),
         inArray(connections.status, ["ok", "expiring"]),
         lte(connections.grantedAt, expiredBefore),
       ),
@@ -133,7 +133,7 @@ export async function sweepConnectionGrants(
     .set({ status: "expiring" })
     .where(
       and(
-        googleBacked,
+        issuedBy("google"),
         eq(connections.status, "ok"),
         lte(connections.grantedAt, expiringBefore),
       ),

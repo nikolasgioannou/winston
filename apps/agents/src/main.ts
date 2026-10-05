@@ -178,7 +178,7 @@ const worker = createWorker({
     [rollVmJob.type]: rollVmHandler(vmProvider, rolloutHours),
     [revokeConnectionTokenJob.type]: revokeConnectionTokenHandler({
       vault: tokenVault,
-      revoke: googleTokenRevoker(),
+      revoke: { google: googleTokenRevoker() },
       stopWatch: watchStopper(db, googleClient),
     }),
     [fireTriggerBatchJob.type]: fireTriggerBatchHandler,
@@ -225,7 +225,7 @@ const worker = createWorker({
     [deleteUserJob.type]: deleteUserHandler({
       provider: vmProvider,
       vault: tokenVault,
-      revoke: googleTokenRevoker(),
+      revoke: { google: googleTokenRevoker() },
       blobs,
       telegram,
       // Cloudflare in production, bun dev's sites service locally (§9a).

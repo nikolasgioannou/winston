@@ -92,4 +92,17 @@ describe("reconciliation", () => {
       ]);
     });
   });
+
+  test("a provider Winston doesn't sync gets neither a sync nor a watch", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      await insertConnection(tx, user.id, {
+        provider: "winston",
+        tokenCiphertext: null,
+      });
+      expect(await reconcileConnections(tx)).toBe(0);
+      expect(await queued(tx, "sync_connection")).toEqual([]);
+      expect(await queued(tx, "watch_connection")).toEqual([]);
+    });
+  });
 });

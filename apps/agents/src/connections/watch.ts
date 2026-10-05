@@ -15,9 +15,10 @@ import { googleCalendarSync } from "@winston/connectors/google-calendar-sync";
 import { ProviderNotFoundError } from "@winston/connectors/errors";
 import { gmailSync, WatchRefusedError } from "@winston/connectors/gmail-sync";
 import type { DbOrTx } from "@winston/db/client";
-import { googleBacked } from "@winston/db/connections";
+import { synced } from "@winston/db/connections";
 import { enqueue } from "@winston/db/queue";
 import { calendarChannels, connections } from "@winston/db/schema";
+import type { ConnectionProvider } from "@winston/domain/connections";
 import { watchConnectionJob } from "@winston/domain/jobs";
 import type { Logger } from "@winston/shared/logger";
 import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
@@ -51,50 +52,65 @@ export function watchConnectionHandler(deps: {
       .where(eq(connections.id, connectionId));
     if (
       !connection ||
-      connection.provider === "winston" ||
       connection.status === "expired" ||
       connection.status === "disconnected"
     )
       return;
-    if (connection.domain === "calendar") {
-      await watchCalendars(db, connection, deps, logger);
-      return;
-    }
-    if (!deps.gmailTopic) {
-      logger.info("GMAIL_PUSH_TOPIC isn't set; not watching mail");
-      return;
-    }
-    const sync = gmailSync({
-      accessToken: () => deps.accessToken(connectionId),
-      ...(deps.fetch ? { fetch: deps.fetch } : {}),
-    });
-    try {
-      const watch = await sync.watch(deps.gmailTopic);
-      await db
-        .update(connections)
-        .set({
-          watchExpiresAt: watch.expiresAt,
-          // Sync starts from here the first time; after that it keeps its own place.
-          syncState: sql`coalesce(${connections.syncState}, ${JSON.stringify({ historyId: watch.historyId })}::jsonb)`,
-        })
-        .where(eq(connections.id, connectionId));
-      logger.info(
-        { connectionId, expiresAt: watch.expiresAt },
-        "watching mail",
-      );
-    } catch (error) {
-      // Not worth retrying: the account can't be used, or the topic isn't set up.
-      if (
-        error instanceof ConnectionUnavailableError ||
-        error instanceof WatchRefusedError ||
-        error instanceof ProviderNotFoundError
-      ) {
-        logger.warn({ err: error, connectionId }, "couldn't watch mail");
+    switch (connection.provider) {
+      case "gmail":
+        await watchMail(db, connection, deps, logger);
         return;
-      }
-      throw error;
+      case "google_calendar":
+        await watchCalendars(db, connection, deps, logger);
+        return;
+      // Winston's own mailbox has no change feed: its mail is pushed to us.
+      case "winston":
+        return;
     }
   };
+}
+
+type WatchDeps = Parameters<typeof watchConnectionHandler>[0];
+
+/** Keeps a Gmail watch on the account. */
+async function watchMail(
+  db: DbOrTx,
+  connection: typeof connections.$inferSelect,
+  deps: WatchDeps,
+  logger: Logger,
+) {
+  const connectionId = connection.id;
+  if (!deps.gmailTopic) {
+    logger.info("GMAIL_PUSH_TOPIC isn't set; not watching mail");
+    return;
+  }
+  const sync = gmailSync({
+    accessToken: () => deps.accessToken(connectionId),
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+  try {
+    const watch = await sync.watch(deps.gmailTopic);
+    await db
+      .update(connections)
+      .set({
+        watchExpiresAt: watch.expiresAt,
+        // Sync starts from here the first time; after that it keeps its own place.
+        syncState: sql`coalesce(${connections.syncState}, ${JSON.stringify({ historyId: watch.historyId })}::jsonb)`,
+      })
+      .where(eq(connections.id, connectionId));
+    logger.info({ connectionId, expiresAt: watch.expiresAt }, "watching mail");
+  } catch (error) {
+    // Not worth retrying: the account can't be used, or the topic isn't set up.
+    if (
+      error instanceof ConnectionUnavailableError ||
+      error instanceof WatchRefusedError ||
+      error instanceof ProviderNotFoundError
+    ) {
+      logger.warn({ err: error, connectionId }, "couldn't watch mail");
+      return;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -106,7 +122,7 @@ export function watchConnectionHandler(deps: {
 async function watchCalendars(
   db: DbOrTx,
   connection: typeof connections.$inferSelect,
-  deps: Parameters<typeof watchConnectionHandler>[0],
+  deps: WatchDeps,
   logger: Logger,
   now = new Date(),
 ) {
@@ -201,39 +217,45 @@ export function watchStopper(
   send: typeof fetch = fetch,
 ) {
   return async (
-    connection: { id: string; domain: string },
+    connection: { id: string; provider: ConnectionProvider },
     refreshToken: string,
   ) => {
     const token = await refreshGoogleToken(refreshToken, client, send);
     // A grant that's already gone has no watch left to stop.
     if (token === "invalid_grant") return;
     const accessToken = () => Promise.resolve(token.access_token);
-    if (connection.domain === "mail") {
-      await gmailSync({ accessToken, fetch: send }).stop();
-      return;
-    }
-    const sync = googleCalendarSync({ accessToken, fetch: send });
-    const channels = await db
-      .select()
-      .from(calendarChannels)
-      .where(eq(calendarChannels.connectionId, connection.id));
-    for (const channel of channels) {
-      await sync.stopChannel(channel.id, channel.resourceId);
-      await db
-        .delete(calendarChannels)
-        .where(eq(calendarChannels.id, channel.id));
+    switch (connection.provider) {
+      case "gmail":
+        await gmailSync({ accessToken, fetch: send }).stop();
+        return;
+      case "google_calendar": {
+        const sync = googleCalendarSync({ accessToken, fetch: send });
+        const channels = await db
+          .select()
+          .from(calendarChannels)
+          .where(eq(calendarChannels.connectionId, connection.id));
+        for (const channel of channels) {
+          await sync.stopChannel(channel.id, channel.resourceId);
+          await db
+            .delete(calendarChannels)
+            .where(eq(calendarChannels.id, channel.id));
+        }
+        return;
+      }
+      case "winston":
+        return;
     }
   };
 }
 
-/** Queues a watch for each usable Google connection whose watch is missing or ends soon. */
+/** Queues a watch for each usable synced connection whose watch is missing or ends soon. */
 export async function renewWatches(db: DbOrTx, now = new Date()) {
   const due = await db
     .select({ id: connections.id, userId: connections.userId })
     .from(connections)
     .where(
       and(
-        googleBacked,
+        synced,
         inArray(connections.status, ["ok", "expiring"]),
         or(
           isNull(connections.watchExpiresAt),

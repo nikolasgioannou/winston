@@ -13,6 +13,7 @@ import {
   triggers,
   users,
 } from "@winston/db/schema";
+import { isConnectionDomain } from "@winston/domain/connections";
 import { refreshTimersJob } from "@winston/domain/jobs";
 import {
   eventDefinition,
@@ -214,7 +215,7 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
     // The account it listens to: named, or the scope's, or every one of the domain.
     let connectionId = current?.connectionId ?? null;
     if (input.account !== undefined) {
-      if (domain !== "mail" && domain !== "calendar")
+      if (!isConnectionDomain(domain))
         throw invalid(`--account doesn't apply to ${input.on}.`);
       const connection = await resolveConnection(
         db,

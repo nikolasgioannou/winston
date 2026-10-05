@@ -13,6 +13,7 @@ import {
   vms,
 } from "@winston/db/schema";
 import { retireMailboxAddresses } from "@winston/db/mailbox";
+import { providerTraits } from "@winston/domain/connections";
 import { applyVmEvent } from "@winston/db/vm-state";
 import type { TokenVault } from "@winston/shared/token-vault";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
@@ -20,7 +21,7 @@ import { z } from "zod";
 import type { BlobStore } from "@winston/blobs";
 import type { SiteHost } from "@winston/site-host/host";
 import { removeSite } from "@winston/site-host/remove";
-import type { RevokeGoogleToken } from "../connections/revoke.ts";
+import type { Revokers } from "../connections/revoke.ts";
 import type { TelegramSender } from "../telegram/sender.ts";
 import type { VmProvider } from "../vm/provider.ts";
 import type { JobHandler } from "../worker.ts";
@@ -31,7 +32,7 @@ export const goodbyeMessage =
 export interface DeleteUserDeps {
   provider: VmProvider;
   vault: TokenVault;
-  revoke: RevokeGoogleToken;
+  revoke: Revokers;
   blobs: BlobStore;
   telegram: Pick<TelegramSender, "sendMessage">;
   /** Where the user's sites run (§9a); without one, an account with sites can't be deleted. */
@@ -136,7 +137,11 @@ async function revokeGrants(
   userId: string,
 ) {
   const sealed = await db
-    .select({ id: connections.id, token: connections.tokenCiphertext })
+    .select({
+      id: connections.id,
+      provider: connections.provider,
+      token: connections.tokenCiphertext,
+    })
     .from(connections)
     .where(
       and(
@@ -145,10 +150,11 @@ async function revokeGrants(
       ),
     );
   for (const connection of sealed) {
-    if (!connection.token) continue;
-    // Revoking one grant revokes the account's others too; Google then calls
-    // theirs invalid, which counts as revoked.
-    await revoke(
+    const issuer = providerTraits[connection.provider].issuer;
+    if (!connection.token || !issuer) continue;
+    // Revoking one Google grant revokes the account's others too; Google then
+    // calls theirs invalid, which counts as revoked.
+    await revoke[issuer](
       await vault.decrypt(connection.token, tokenContext(connection.id)),
     );
     await db

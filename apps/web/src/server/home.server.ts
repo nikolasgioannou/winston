@@ -1,9 +1,19 @@
 import type { DbOrTx } from "@winston/db/client";
-import { googleBacked } from "@winston/db/connections";
+import { userConnected } from "@winston/db/connections";
+import {
+  reconnectPath,
+  type ConnectionDomain,
+} from "@winston/domain/connections";
 import { connections, telegramLinks } from "@winston/db/schema";
 import { computerStatus } from "@winston/db/vms";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import type { AttentionItem, HomeState } from "./home-state";
+
+/** Each domain as a reconnect notice names it. */
+const domainNames: Record<ConnectionDomain, string> = {
+  mail: "Mail",
+  calendar: "Calendar",
+};
 
 /** What `/home` shows the user (docs/design.md §20). */
 export async function homeState(
@@ -20,7 +30,7 @@ export async function homeState(
     .where(
       and(
         eq(connections.userId, user.id),
-        googleBacked,
+        userConnected,
         ne(connections.status, "disconnected"),
       ),
     );
@@ -28,6 +38,7 @@ export async function homeState(
     .select({
       id: connections.id,
       domain: connections.domain,
+      provider: connections.provider,
       externalEmail: connections.externalEmail,
       status: connections.status,
     })
@@ -41,7 +52,7 @@ export async function homeState(
     .orderBy(asc(connections.createdAt));
   const attention = needingReconnect
     .map((connection): AttentionItem => {
-      const kind = connection.domain === "mail" ? "Mail" : "Calendar";
+      const kind = domainNames[connection.domain];
       const expired = connection.status === "expired";
       return {
         id: connection.id,
@@ -52,7 +63,7 @@ export async function homeState(
         description: `Reconnect so Winston can ${expired ? "help with it again" : "keep helping with it"}.`,
         action: {
           label: "Reconnect",
-          href: `/auth/google/connect?reconnect=${connection.id}`,
+          href: reconnectPath(connection) ?? "/accounts",
         },
       };
     })

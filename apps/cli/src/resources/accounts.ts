@@ -1,3 +1,10 @@
+import {
+  connectionDomains,
+  isConnectionDomain,
+  issuerOf,
+  type ConnectionDomain,
+  type ConnectionProvider,
+} from "@winston/domain/connections";
 import type { InferResponseType } from "hono/client";
 import { call, type ApiClient } from "../client.ts";
 import type { Resource } from "../commands.ts";
@@ -16,10 +23,22 @@ type ConnectLink = InferResponseType<
   200
 >;
 
-const providerNames = {
+const providerNames: Record<ConnectionProvider, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   winston: "Winston's own",
+};
+
+/** What `connect` says about each domain's link. */
+const connectCopy: Record<ConnectionDomain, { what: string; how: string }> = {
+  mail: {
+    what: "a Google account's mail",
+    how: "It connects mail only; calendar is a separate connection with its own link (winston accounts connect calendar). It goes straight to Google's sign-in",
+  },
+  calendar: {
+    what: "a Google account's calendar",
+    how: "It connects calendar only; mail is a separate connection with its own link (winston accounts connect mail). It goes straight to Google's sign-in",
+  },
 };
 const statusWords = {
   ok: "ok",
@@ -78,7 +97,7 @@ function showAccount(account: Account) {
       lines.push(`The user turns permissions on or off at ${links.settings}`);
     if (account.capabilities.some((c) => !c.granted))
       lines.push(
-        `"Not granted" was left unticked on Google's screen; the user can reconnect to allow it: ${links.reconnect}`,
+        `"Not granted" was left unticked on ${issuerOf(account.provider)}'s screen; the user can reconnect to allow it: ${links.reconnect}`,
       );
   }
   if (account.calendars) {
@@ -133,7 +152,7 @@ export const accounts: Resource = {
       name: "connect",
       summary:
         "A link to send the user that starts connecting a Google account's mail or calendar",
-      usage: "<mail|calendar>",
+      usage: `<${connectionDomains.join("|")}>`,
       flags: [],
       examples: [
         "winston accounts connect calendar",
@@ -141,20 +160,20 @@ export const accounts: Resource = {
       ],
       run: async ({ client, flags, args }) => {
         const [domain] = args;
-        if (domain !== "mail" && domain !== "calendar")
+        if (domain === undefined || !isConnectionDomain(domain))
           throw CliError.usage(
-            "Connect what? Pass mail or calendar.",
+            `Connect what? Pass ${connectionDomains.join(" or ")}.`,
             "Mail and calendar are separate connections, each with its own link.",
           );
         const result = await call<ConnectLink>(
           client.v1.accounts.connect[":domain"].$get({ param: { domain } }),
         );
         if (flags.json === true) return json(result);
-        const other = domain === "mail" ? "calendar" : "mail";
+        const copy = connectCopy[domain];
         return [
-          `Send the user this link to connect a Google account's ${domain}:`,
+          `Send the user this link to connect ${copy.what}:`,
           `  ${result.url}`,
-          `It connects ${domain} only; ${other} is a separate connection with its own link (winston accounts connect ${other}). It goes straight to Google's sign-in (signing in to Winston first if needed), and you'll get system.app.connected when it's done.`,
+          `${copy.how} (signing in to Winston first if needed), and you'll get system.app.connected when it's done.`,
           result.connected.length > 0
             ? `Already connected for ${domain}: ${result.connected.join(", ")}.`
             : `No ${domain} account is connected yet.`,

@@ -239,8 +239,10 @@ describe("connector failures", () => {
       toApiFailure(new ProviderNotFoundError("No such message"), web)?.code,
     ).toBe("not_found");
     expect(
-      toApiFailure(new ConnectionUnavailableError("acct_1", "expired"), web)
-        ?.hint,
+      toApiFailure(
+        new ConnectionUnavailableError("acct_1", "expired", "gmail"),
+        web,
+      )?.hint,
     ).toContain("reconnect=acct_1");
     expect(toApiFailure(new Error("boom"), web)).toBeUndefined();
   });

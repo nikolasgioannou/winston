@@ -5,6 +5,7 @@
  * read it, so they can't drift apart.
  */
 import { z } from "zod";
+import { connectionDomains } from "./connections.ts";
 import {
   mailImpersonationPayloadSchema,
   reactionPayloadSchema,
@@ -80,7 +81,7 @@ const person = z.object({ name: z.string().nullable(), email: z.string() });
 /** A connection's facts, as system events carry them. */
 const connectionFacts = z.object({
   connectionId: z.string(),
-  domain: z.enum(["mail", "calendar"]),
+  domain: z.enum(connectionDomains),
   provider: z.string(),
   externalEmail: z.string(),
 });

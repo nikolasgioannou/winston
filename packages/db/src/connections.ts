@@ -1,9 +1,13 @@
 import {
   defaultCapabilities,
   isCapabilityOf,
+  providersIssuedBy,
+  providerTraits,
+  syncedProviders,
   type ConnectionDomain,
   type ConnectionProvider,
   type ConnectionStatus,
+  type TokenIssuer,
 } from "@winston/domain/connections";
 import {
   revokeConnectionTokenJob,
@@ -72,10 +76,17 @@ export function toConnectionDto(
 }
 
 /**
- * Connections backed by a Google grant: everything but Winston's own
- * mailbox, which has no token to expire, watch or sync from Google.
+ * The accounts the user connected: everything but Winston's own mailbox,
+ * which is a channel of his rather than the user's data.
  */
-export const googleBacked = ne(connections.provider, "winston");
+export const userConnected = ne(connections.provider, "winston");
+
+/** Connections whose token `issuer` issued. */
+export const issuedBy = (issuer: TokenIssuer) =>
+  inArray(connections.provider, providersIssuedBy(issuer));
+
+/** Connections Winston syncs and watches for changes (§3). */
+export const synced = inArray(connections.provider, syncedProviders);
 
 /** The vault context a connection's token is sealed with. */
 export const tokenContext = (connectionId: string) => ({ connectionId });
@@ -87,8 +98,14 @@ export const tokenContext = (connectionId: string) => ({ connectionId });
  * The refresh token is sealed with the connection's id as context. A new
  * connection also tells Winston (`system.app.connected`).
  */
-/** Asks for a watch on the account's change feed (§3). */
-async function queueWatch(db: DbOrTx, userId: string, connectionId: string) {
+/** Asks for a watch on the account's change feed (§3), for a provider Winston syncs. */
+async function queueWatch(
+  db: DbOrTx,
+  userId: string,
+  connectionId: string,
+  provider: ConnectionProvider,
+) {
+  if (!providerTraits[provider].syncs) return;
   await enqueue(db, watchConnectionJob.type, {
     userId,
     payload: { connectionId },
@@ -132,7 +149,7 @@ export async function saveConnection(
   if (existing) {
     await db.update(connections).set(fresh).where(eq(connections.id, id));
     // A new grant means a new watch (the old one may be gone with it).
-    await queueWatch(db, grant.userId, id);
+    await queueWatch(db, grant.userId, id, grant.provider);
     // Coming back after a disconnect is news to Winston; a refresh isn't.
     if (existing.status === "disconnected")
       await recordConnected(
@@ -155,7 +172,7 @@ export async function saveConnection(
       ...fresh,
     });
     await recordConnected(tx, grant.userId, id, "connected");
-    await queueWatch(tx, grant.userId, id);
+    await queueWatch(tx, grant.userId, id, grant.provider);
     return { connectionId: id, created: true };
   });
 }
@@ -189,12 +206,12 @@ export async function recordConnected(
   });
 }
 
-/** One of the user's connected (Google) accounts; never Winston's mailbox. */
+/** One of the user's connected accounts; never Winston's mailbox. */
 const ownedBy = (userId: string, connectionId: string) =>
   and(
     eq(connections.id, connectionId),
     eq(connections.userId, userId),
-    googleBacked,
+    userConnected,
   );
 
 /**
@@ -229,7 +246,7 @@ export async function setCapability(
 /**
  * Disconnects a user's connection: it's `disconnected` at once, so nothing
  * uses it again, Winston is told (`system.app.disconnected`), and a job in
- * `agents` deals with the Google grant. Returns false if there's no such
+ * `agents` deals with its grant. Returns false if there's no such
  * connection or it's already disconnected.
  */
 export async function disconnectConnection(

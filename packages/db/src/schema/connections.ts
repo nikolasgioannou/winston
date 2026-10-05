@@ -1,4 +1,8 @@
-import type { CapabilityMap } from "@winston/domain/connections";
+import {
+  connectionDomains,
+  connectionProviders,
+  type CapabilityMap,
+} from "@winston/domain/connections";
 import {
   jsonb,
   pgEnum,
@@ -10,15 +14,12 @@ import {
 import { newId } from "../ids.ts";
 import { users } from "./users.ts";
 
-export const connectionDomain = pgEnum("connection_domain", [
-  "mail",
-  "calendar",
-]);
-export const connectionProvider = pgEnum("connection_provider", [
-  "gmail",
-  "google_calendar",
-  "winston",
-]);
+/** Adding a domain or provider needs a migration (`ALTER TYPE … ADD VALUE`). */
+export const connectionDomain = pgEnum("connection_domain", connectionDomains);
+export const connectionProvider = pgEnum(
+  "connection_provider",
+  connectionProviders,
+);
 export const connectionStatus = pgEnum("connection_status", [
   "ok",
   "expiring",

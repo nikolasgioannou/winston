@@ -4,6 +4,7 @@
  * time. It turns the provider's changes into events.
  */
 import { ConnectionUnavailableError } from "@winston/connectors/access-token";
+import type { DbOrTx } from "@winston/db/client";
 import { connections } from "@winston/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -15,14 +16,28 @@ import { syncMail, type MailSyncDeps } from "./sync-mail.ts";
 
 type Connection = typeof connections.$inferSelect;
 
-export function syncConnectionHandler(deps: {
+interface SyncDeps {
   /** The mail provider and change feed for a connection. */
   mail: (connection: Connection) => MailSyncDeps;
   /** The calendar change feed for a connection. */
   calendar: (connection: Connection) => CalendarSyncDeps;
   /** Checks subscriptions' provider-native queries (Gmail search). */
   native?: NativeQueryCheck;
-}): JobHandler {
+}
+
+/** Turns one connection's changes into events, or undefined for a provider Winston doesn't sync. */
+function syncProvider(db: DbOrTx, connection: Connection, deps: SyncDeps) {
+  switch (connection.provider) {
+    case "gmail":
+      return syncMail(db, connection, deps.mail(connection));
+    case "google_calendar":
+      return syncCalendar(db, connection, deps.calendar(connection));
+    case "winston":
+      return undefined;
+  }
+}
+
+export function syncConnectionHandler(deps: SyncDeps): JobHandler {
   return async ({ job, db, logger }) => {
     const { connectionId } = z
       .object({ connectionId: z.string() })
@@ -31,19 +46,16 @@ export function syncConnectionHandler(deps: {
       .select()
       .from(connections)
       .where(eq(connections.id, connectionId));
-    // Winston's own mailbox isn't synced from anywhere: its mail is pushed to us.
     if (
       !connection ||
-      connection.provider === "winston" ||
       connection.status === "expired" ||
       connection.status === "disconnected"
     )
       return;
     try {
-      const stored =
-        connection.domain === "mail"
-          ? await syncMail(db, connection, deps.mail(connection))
-          : await syncCalendar(db, connection, deps.calendar(connection));
+      const stored = await syncProvider(db, connection, deps);
+      // Not synced from anywhere (Winston's own mailbox: its mail is pushed to us).
+      if (!stored) return;
       // Meetings moved, added or cancelled: heads-up timers follow them.
       if (connection.domain === "calendar" && stored.length > 0)
         await queueTimerRefreshes(db, connection.userId);

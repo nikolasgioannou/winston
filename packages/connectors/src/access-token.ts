@@ -1,6 +1,7 @@
 import type { DbOrTx } from "@winston/db/client";
 import { tokenContext } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
+import type { ConnectionProvider } from "@winston/domain/connections";
 import type { TokenVault } from "@winston/shared/token-vault";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -16,6 +17,7 @@ export class ConnectionUnavailableError extends Error {
   constructor(
     readonly connectionId: string,
     readonly status: "expired" | "disconnected",
+    readonly provider: ConnectionProvider,
   ) {
     super(`Connection ${connectionId} is ${status}.`);
   }
@@ -87,6 +89,7 @@ export function googleAccessTokens({
     const [connection] = await db
       .select({
         status: connections.status,
+        provider: connections.provider,
         tokenCiphertext: connections.tokenCiphertext,
       })
       .from(connections)
@@ -97,7 +100,11 @@ export function googleAccessTokens({
       connection.status === "disconnected"
     ) {
       cache.delete(connectionId);
-      throw new ConnectionUnavailableError(connectionId, connection.status);
+      throw new ConnectionUnavailableError(
+        connectionId,
+        connection.status,
+        connection.provider,
+      );
     }
 
     const cached = cache.get(connectionId);
@@ -105,7 +112,11 @@ export function googleAccessTokens({
       return cached.token;
 
     if (!connection.tokenCiphertext)
-      throw new ConnectionUnavailableError(connectionId, "disconnected");
+      throw new ConnectionUnavailableError(
+        connectionId,
+        "disconnected",
+        connection.provider,
+      );
     const refreshToken = await vault.decrypt(
       connection.tokenCiphertext,
       tokenContext(connectionId),
@@ -114,7 +125,11 @@ export function googleAccessTokens({
     if (fresh === "invalid_grant") {
       cache.delete(connectionId);
       await markExpired(db, connectionId, reconnectUrl);
-      throw new ConnectionUnavailableError(connectionId, "expired");
+      throw new ConnectionUnavailableError(
+        connectionId,
+        "expired",
+        connection.provider,
+      );
     }
     cache.set(connectionId, {
       token: fresh.access_token,

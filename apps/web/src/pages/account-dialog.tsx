@@ -1,7 +1,10 @@
 import type { ConnectionDto } from "@winston/db/connections";
 import {
   capabilitiesByDomain,
+  issuerOf,
+  reconnectPath,
   type Capability,
+  type ConnectionDomain,
 } from "@winston/domain/connections";
 import {
   Badge,
@@ -21,7 +24,7 @@ import {
 
 export interface AccountDialogProps {
   account: ConnectionDto;
-  /** Capabilities whose Google scope wasn't granted. */
+  /** Capabilities whose scope its issuer didn't grant. */
   unavailable: readonly Capability[];
   /** Toggles as they show, including ones still saving. */
   capabilities: ConnectionDto["capabilities"];
@@ -30,37 +33,49 @@ export interface AccountDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const capabilityCopy: Record<
-  Capability,
-  { label: string; description: string }
-> = {
-  // Reading depends on the domain (`readCopy`).
-  read: { label: "Read", description: "" },
-  draft: {
-    label: "Draft",
-    description: "Write drafts that you review and send yourself.",
+interface Copy {
+  label: string;
+  description: string;
+}
+
+/** Each domain's capabilities, as their toggles say them. */
+const capabilityCopy: {
+  [D in ConnectionDomain]: Record<Capability<D>, Copy>;
+} = {
+  mail: {
+    read: {
+      label: "Read",
+      description: "Search and read, so Winston can answer and keep track.",
+    },
+    draft: {
+      label: "Draft",
+      description: "Write drafts that you review and send yourself.",
+    },
+    send: { label: "Send", description: "Send email as you." },
+    modify_labels: {
+      label: "Organize",
+      description: "Archive, label and mark messages as read.",
+    },
   },
-  send: { label: "Send", description: "Send email as you." },
-  modify_labels: {
-    label: "Organize",
-    description: "Archive, label and mark messages as read.",
-  },
-  create: {
-    label: "Create events",
-    description: "Add events to your calendars.",
-  },
-  update: { label: "Change events", description: "Move and edit events." },
-  delete: { label: "Delete events", description: "Remove events." },
-  rsvp: {
-    label: "Respond to invitations",
-    description: "Accept or decline invitations for you.",
+  calendar: {
+    read: { label: "Read", description: "See your calendars and events." },
+    create: {
+      label: "Create events",
+      description: "Add events to your calendars.",
+    },
+    update: { label: "Change events", description: "Move and edit events." },
+    delete: { label: "Delete events", description: "Remove events." },
+    rsvp: {
+      label: "Respond to invitations",
+      description: "Accept or decline invitations for you.",
+    },
   },
 };
 
-const readCopy: Record<ConnectionDto["domain"], string> = {
-  mail: "Search and read, so Winston can answer and keep track.",
-  calendar: "See your calendars and events.",
-};
+function copyOf(domain: ConnectionDomain, capability: Capability): Copy {
+  const copy: Partial<Record<Capability, Copy>> = capabilityCopy[domain];
+  return copy[capability] ?? { label: capability, description: "" };
+}
 
 /**
  * One connected account's permissions, in a dialog over `/accounts`
@@ -74,7 +89,7 @@ export function AccountDialog(props: AccountDialogProps) {
     <Button
       size="sm"
       nativeButton={false}
-      render={<a href={`/auth/google/connect?reconnect=${account.id}`} />}
+      render={<a href={reconnectPath(account) ?? "/accounts"} />}
     >
       Reconnect
     </Button>
@@ -99,7 +114,6 @@ export function AccountDialog(props: AccountDialogProps) {
           <CapabilityRow
             key={capability}
             capability={capability}
-            domain={account.domain}
             {...props}
             disabled={disconnected}
             reconnect={reconnect}
@@ -142,8 +156,8 @@ function StatusCallout({
 }
 
 function CapabilityRow({
+  account,
   capability,
-  domain,
   unavailable,
   capabilities,
   onToggle,
@@ -151,18 +165,16 @@ function CapabilityRow({
   reconnect,
 }: AccountDialogProps & {
   capability: Capability;
-  domain: ConnectionDto["domain"];
   disabled: boolean;
   reconnect: ReactNode;
 }) {
-  const copy = capabilityCopy[capability];
-  const description =
-    capability === "read" ? readCopy[domain] : copy.description;
+  const copy = copyOf(account.domain, capability);
+  const description = copy.description;
   if (unavailable.includes(capability))
     return (
       <SettingRow
         label={copy.label}
-        description={`${description} Not granted on Google's screen; reconnect to enable.`}
+        description={`${description} Not granted on ${issuerOf(account.provider)}'s screen; reconnect to enable.`}
         control={reconnect}
       />
     );

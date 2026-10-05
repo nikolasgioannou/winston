@@ -1,18 +1,25 @@
 import { tokenContext } from "@winston/db/connections";
 import { connections } from "@winston/db/schema";
 import type { TokenVault } from "@winston/shared/token-vault";
-import { and, eq, ne } from "drizzle-orm";
+import {
+  providersIssuedBy,
+  providerTraits,
+  type ConnectionProvider,
+  type TokenIssuer,
+} from "@winston/domain/connections";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import type { JobHandler } from "../worker.ts";
 
 const revokeEndpoint = "https://oauth2.googleapis.com/revoke";
 
-/** Revokes a Google token. Returns normally when it's revoked or was already invalid. */
-export type RevokeGoogleToken = (token: string) => Promise<void>;
+/** Revokes a token. Returns normally when it's revoked or was already invalid. */
+export type RevokeToken = (token: string) => Promise<void>;
 
-export function googleTokenRevoker(
-  send: typeof fetch = fetch,
-): RevokeGoogleToken {
+/** A revoker for each issuer's tokens. */
+export type Revokers = Record<TokenIssuer, RevokeToken>;
+
+export function googleTokenRevoker(send: typeof fetch = fetch): RevokeToken {
   return async (token) => {
     const response = await send(revokeEndpoint, {
       method: "POST",
@@ -33,11 +40,11 @@ export function googleTokenRevoker(
 
 /**
  * The `revoke_connection_token` job (docs/design.md §12a): for a connection
- * that's still disconnected, revokes its grant with Google, unless another of
- * the user's live connections uses the same Google account (revoking one
- * grant revokes them all, which would break it), then deletes the token. The
- * row stays locked meanwhile, so a reconnect waits rather than having its new
- * grant revoked.
+ * that's still disconnected, revokes its grant with its issuer, unless another
+ * of the user's live connections from that issuer uses the same account
+ * (revoking one Google grant revokes them all, which would break it), then
+ * deletes the token. The row stays locked meanwhile, so a reconnect waits
+ * rather than having its new grant revoked.
  */
 export function revokeConnectionTokenHandler({
   vault,
@@ -45,10 +52,10 @@ export function revokeConnectionTokenHandler({
   stopWatch,
 }: {
   vault: TokenVault;
-  revoke: RevokeGoogleToken;
+  revoke: Revokers;
   /** Ends an account's watches with its refresh token, before the token goes (§3). */
   stopWatch?: (
-    connection: { id: string; domain: string },
+    connection: { id: string; provider: ConnectionProvider },
     refreshToken: string,
   ) => Promise<void>;
 }): JobHandler {
@@ -64,6 +71,8 @@ export function revokeConnectionTokenHandler({
         .for("update");
       if (connection?.status !== "disconnected" || !connection.tokenCiphertext)
         return;
+      const issuer = providerTraits[connection.provider].issuer;
+      if (!issuer) return;
 
       const [sibling] = await tx
         .select({ id: connections.id })
@@ -72,6 +81,7 @@ export function revokeConnectionTokenHandler({
           and(
             eq(connections.userId, connection.userId),
             eq(connections.externalEmail, connection.externalEmail),
+            inArray(connections.provider, providersIssuedBy(issuer)),
             ne(connections.id, connection.id),
             ne(connections.status, "disconnected"),
           ),
@@ -91,9 +101,9 @@ export function revokeConnectionTokenHandler({
       if (sibling)
         logger.info(
           { connectionId, siblingId: sibling.id },
-          "another connection uses this Google account; deleting the token without revoking",
+          "another connection uses this account's grant; deleting the token without revoking",
         );
-      else await revoke(refreshToken);
+      else await revoke[issuer](refreshToken);
 
       await tx
         .update(connections)

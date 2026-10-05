@@ -6,7 +6,7 @@
  * events have dedupe keys.
  */
 import type { DbOrTx } from "@winston/db/client";
-import { googleBacked } from "@winston/db/connections";
+import { synced } from "@winston/db/connections";
 import { enqueue } from "@winston/db/queue";
 import { connections } from "@winston/db/schema";
 import { syncConnectionJob } from "@winston/domain/jobs";
@@ -36,7 +36,7 @@ export async function reconcileConnections(db: DbOrTx, now = new Date()) {
   const healthy = await db
     .select({ id: connections.id, userId: connections.userId })
     .from(connections)
-    .where(and(googleBacked, inArray(connections.status, ["ok", "expiring"])));
+    .where(and(synced, inArray(connections.status, ["ok", "expiring"])));
   for (const connection of healthy)
     await enqueue(db, syncConnectionJob.type, {
       userId: connection.userId,

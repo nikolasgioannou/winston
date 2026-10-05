@@ -1,8 +1,10 @@
-import type {
-  ConnectionDomain,
-  ConnectionProvider,
+import {
+  connectPath,
+  type ConnectionDomain,
+  type ConnectionProvider,
 } from "@winston/domain/connections";
 import { GmailIcon, GoogleCalendarIcon } from "@winston/ui";
+import type { ReactNode } from "react";
 
 /** Each domain's name, as the type badge shows it. */
 export const domainNames: Record<ConnectionDomain, string> = {
@@ -16,9 +18,16 @@ export const providerNames: Record<ConnectionProvider, string> = {
   winston: "Winston",
 };
 
-/** A provider's brand icon (see the note on `GmailIcon` about Google's permission). */
+/** Each provider's brand icon (see the note on `GmailIcon` about Google's permission). */
+const providerIcons: Record<ConnectionProvider, () => ReactNode> = {
+  gmail: () => <GmailIcon />,
+  google_calendar: () => <GoogleCalendarIcon />,
+  // Winston's own mailbox is never listed with the user's accounts.
+  winston: () => null,
+};
+
 export function ProviderIcon({ provider }: { provider: ConnectionProvider }) {
-  return provider === "gmail" ? <GmailIcon /> : <GoogleCalendarIcon />;
+  return providerIcons[provider]();
 }
 
 /**
@@ -31,17 +40,10 @@ export const connectableProviders: {
 }[] = [
   {
     domain: "mail",
-    providers: [
-      { provider: "gmail", href: "/auth/google/connect?domain=mail" },
-    ],
+    providers: [{ provider: "gmail", href: connectPath("mail") }],
   },
   {
     domain: "calendar",
-    providers: [
-      {
-        provider: "google_calendar",
-        href: "/auth/google/connect?domain=calendar",
-      },
-    ],
+    providers: [{ provider: "google_calendar", href: connectPath("calendar") }],
   },
 ];

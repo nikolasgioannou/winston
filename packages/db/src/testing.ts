@@ -1,7 +1,7 @@
 /**
  * Helpers for tests that need a real Postgres. See docs/testing.md.
  */
-import { capabilitiesByDomain } from "@winston/domain/connections";
+import { capabilitiesByDomain, providerOf } from "@winston/domain/connections";
 import { loadConfig } from "@winston/shared/config";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -141,7 +141,7 @@ export async function insertConnection(
     .values({
       userId,
       domain,
-      provider: domain === "mail" ? "gmail" : "google_calendar",
+      provider: providerOf[domain],
       externalEmail: `account${connectionCount.toString()}@example.com`,
       capabilities: Object.fromEntries(
         capabilitiesByDomain[domain].map((capability) => [capability, true]),

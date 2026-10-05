@@ -1,7 +1,7 @@
 ---
 id: "74641a"
 title: Connections treat every provider but Winston's mailbox as Google
-status: todo
+status: done
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - db
 parent: "80fcf0"
 created_at: 2026-10-05T23:00:51.799Z
-updated_at: 2026-10-05T23:01:41.876Z
+updated_at: 2026-10-05T23:34:34.175Z
 ---
 
 A third provider would break in ways that compile cleanly (research doc, "What changes in Winston"):
@@ -33,6 +33,16 @@ A third provider would break in ways that compile cleanly (research doc, "What c
 
 **Done when**
 
-- [ ] Existing tests pass unchanged, and new tests show that a provider which neither syncs nor expires is never swept, synced, watched or refreshed through Google
-- [ ] Adding a domain to `connectionDomains` fails to compile until every per-domain place handles it
-- [ ] `design.md` §5 (Connections & credentials, Access control) describes the per-provider description
+- [x] Existing tests pass unchanged, and new tests show that a provider which neither syncs nor expires is never swept, synced, watched or refreshed through Google
+- [x] Adding a domain to `connectionDomains` fails to compile until every per-domain place handles it
+- [x] `design.md` §5 (Connections & credentials, Access control) describes the per-provider description
+
+
+## As built
+
+- **`providerTraits`** in `@winston/domain/connections`, not `@winston/connectors`: the site, CLI and db need it too, and it's data. Each provider has an `issuer` (`google`, or `null` for Winston's mailbox) and `syncs`. Derived from it: `providersIssuedBy`, `syncedProviders`, `issuerOf` ("Google"), `connectPath(domain)`, `reconnectPath(connection)`. How a token refreshes and when a grant expires stay with Google's code (`googleAccessTokens`, the sweep's 7 days), selected by issuer, since Google is the only issuer; 52bf55 adds the rotating kind.
+- **`googleBacked` is gone**, split by what each caller meant: `userConnected` (not Winston's mailbox) for the site's list and count, toggles, disconnecting and `accounts connect`; `synced` for reconciliation and watch renewal; `issuedBy("google")` for the grant sweep. `saveConnection` queues a watch only for a synced provider.
+- **Exhaustive by construction:** the sync and watch handlers and `watchStopper` switch on the provider (lint's `switch-exhaustiveness-check`), and per-domain or per-provider copy lives in records (`capabilityWords` in vm-api, `capabilityCopy` on the site, the CLI's `providerNames` and `connectCopy`, the site's `providerIcons`, Home's `domainNames`). The `connection_domain` and `connection_provider` pgEnums are now built from `connectionDomains` and `connectionProviders` (drizzle-kit sees no change), so they can't drift. Checked by adding `ramp` to both lists: typecheck failed in vm-api, the CLI, the site, revoke, account deletion and the test helper, and lint failed on the three switches.
+- **Revoking** takes a revoker per issuer (`Revokers`), and the sibling check only counts connections from the same issuer. `ConnectionUnavailableError` now carries the provider, so its reconnect link is the right flow.
+- **Events** take any domain in `connectionDomains`; trigger `--account` accepts any connection domain.
+- **Tests:** existing tests pass; three changed only in shape (the revoker as `{ google: … }` in two files, and the error's new provider argument). New: the traits and paths (`packages/domain/src/connections.test.ts`), no watch for a provider that doesn't sync, and neither sync nor watch from reconciliation for one.

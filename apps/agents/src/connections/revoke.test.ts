@@ -44,9 +44,11 @@ function run(
 ) {
   return revokeConnectionTokenHandler({
     vault,
-    revoke: (token) => {
-      revoked.push(token);
-      return Promise.resolve();
+    revoke: {
+      google: (token) => {
+        revoked.push(token);
+        return Promise.resolve();
+      },
     },
     stopWatch: (_connection, token) => {
       stopped.push(token);

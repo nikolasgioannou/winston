@@ -3,6 +3,7 @@ import {
   useNavigate,
   useRouter,
 } from "@tanstack/react-router";
+import { reconnectPath } from "@winston/domain/connections";
 import { toast } from "@winston/ui";
 import { useEffect } from "react";
 import { z } from "zod";
@@ -82,8 +83,9 @@ function Accounts() {
       }}
       onReconnect={(connectionId) => {
         // Connecting starts on the server, so this is a full page load.
+        const connection = connections.find((c) => c.id === connectionId);
         window.location.assign(
-          `/auth/google/connect?reconnect=${connectionId}`,
+          (connection && reconnectPath(connection)) ?? "/accounts",
         );
       }}
       onDisconnect={disconnect}

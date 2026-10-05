@@ -13,6 +13,9 @@ import {
   type ApiErrorCode,
 } from "@winston/domain/api-errors";
 import {
+  connectPath,
+  issuerOf,
+  reconnectPath,
   unavailableCapabilities,
   type Capability,
   type ConnectionDomain,
@@ -48,25 +51,31 @@ export class ApiFailure extends Error {
   }
 }
 
-const domainName = { mail: "mail", calendar: "calendar" } as const;
+/** Each domain as a sentence names it ("no connected mail account"). */
+const domainName: Record<ConnectionDomain, string> = {
+  mail: "mail",
+  calendar: "calendar",
+};
 
 /**
- * The link that starts connecting a new Google account for one domain. Mail
- * and calendar are separate connections, so each has its own. Signed-out
+ * The link that starts connecting a new account for one domain. Mail and
+ * calendar are separate connections, so each has its own. Signed-out
  * visitors sign in first and come back to it.
  */
 export function connectLink(webPublicUrl: string, domain: ConnectionDomain) {
-  return new URL(`/auth/google/connect?domain=${domain}`, webPublicUrl).href;
+  return new URL(connectPath(domain), webPublicUrl).href;
 }
 
 /** Links into the site for fixing a connection. */
-export function accountLinks(webPublicUrl: string, connectionId: string) {
+export function accountLinks(
+  webPublicUrl: string,
+  connection: Pick<ConnectionRow, "id" | "provider">,
+) {
+  const settings = `/accounts?account=${connection.id}`;
   return {
-    settings: new URL(`/accounts?account=${connectionId}`, webPublicUrl).href,
-    reconnect: new URL(
-      `/auth/google/connect?reconnect=${connectionId}`,
-      webPublicUrl,
-    ).href,
+    settings: new URL(settings, webPublicUrl).href,
+    reconnect: new URL(reconnectPath(connection) ?? settings, webPublicUrl)
+      .href,
   };
 }
 
@@ -132,8 +141,8 @@ export async function resolveConnection(
 
 /**
  * Throws unless the connection may do `capability` now: it must not have
- * expired, and the user must have the capability switched on (and Google
- * must have granted its scope).
+ * expired, and the user must have the capability switched on (and its
+ * issuer must have granted its scope).
  */
 export function requireCapability(
   connection: ConnectionRow,
@@ -149,7 +158,7 @@ export function requireCapability(
       );
     return;
   }
-  const links = accountLinks(webPublicUrl, connection.id);
+  const links = accountLinks(webPublicUrl, connection);
   if (connection.status === "expired" || connection.status === "disconnected")
     throw new ApiFailure(
       "auth_expired",
@@ -165,28 +174,41 @@ export function requireCapability(
   )
     throw new ApiFailure(
       "permission_disabled",
-      `${connection.externalEmail} wasn't granted ${describe[capability]} on Google's screen.`,
+      `${connection.externalEmail} wasn't granted ${describe(connection.domain, capability)} on ${issuerOf(connection.provider)}'s screen.`,
       `The user can reconnect it and allow it: ${links.reconnect}`,
     );
   if (connection.capabilities[capability] !== true)
     throw new ApiFailure(
       "permission_disabled",
-      `${capitalize(describe[capability])} is turned off for ${connection.externalEmail}.`,
+      `${capitalize(describe(connection.domain, capability))} is turned off for ${connection.externalEmail}.`,
       `The user can turn it on at ${links.settings}`,
     );
 }
 
-/** Each capability, as an error message (and `winston accounts get`) says it. */
-export const describe: Record<Capability, string> = {
-  read: "reading",
-  draft: "drafting",
-  send: "sending",
-  modify_labels: "organizing mail",
-  create: "creating events",
-  update: "changing events",
-  delete: "deleting events",
-  rsvp: "answering invitations",
+/** Each domain's capabilities, as an error message (and `winston accounts get`) says them. */
+const capabilityWords: {
+  [D in ConnectionDomain]: Record<Capability<D>, string>;
+} = {
+  mail: {
+    read: "reading",
+    draft: "drafting",
+    send: "sending",
+    modify_labels: "organizing mail",
+  },
+  calendar: {
+    read: "reading",
+    create: "creating events",
+    update: "changing events",
+    delete: "deleting events",
+    rsvp: "answering invitations",
+  },
 };
+
+/** A capability of `domain`, in words. */
+export function describe(domain: ConnectionDomain, capability: Capability) {
+  const words: Partial<Record<Capability, string>> = capabilityWords[domain];
+  return words[capability] ?? capability;
+}
 
 const capitalize = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
@@ -239,7 +261,7 @@ export function toApiFailure(
       "auth_expired",
       "Access to this account has expired.",
       webPublicUrl
-        ? `The user can reconnect it with one tap: ${accountLinks(webPublicUrl, error.connectionId).reconnect}`
+        ? `The user can reconnect it with one tap: ${accountLinks(webPublicUrl, { id: error.connectionId, provider: error.provider }).reconnect}`
         : "The user can reconnect it on runwinston.com/accounts.",
     );
   return undefined;

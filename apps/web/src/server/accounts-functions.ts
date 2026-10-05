@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   connectionDtoColumns,
   disconnectConnection,
-  googleBacked,
+  userConnected,
   setCapability,
   toConnectionDto,
 } from "@winston/db/connections";
@@ -24,7 +24,7 @@ export const getAccounts = createServerFn({ method: "GET" }).handler(
     const rows = await database()
       .select(connectionDtoColumns)
       .from(connections)
-      .where(and(eq(connections.userId, user.id), googleBacked))
+      .where(and(eq(connections.userId, user.id), userConnected))
       .orderBy(asc(connections.createdAt));
     return rows.map(toConnectionDto);
   },
@@ -47,7 +47,7 @@ export const getAccount = createServerFn({ method: "GET" })
         and(
           eq(connections.id, data.id),
           eq(connections.userId, user.id),
-          googleBacked,
+          userConnected,
         ),
       );
     if (!row) throw notFound();

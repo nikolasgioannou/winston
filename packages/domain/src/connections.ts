@@ -7,6 +7,10 @@
 export const connectionDomains = ["mail", "calendar"] as const;
 export type ConnectionDomain = (typeof connectionDomains)[number];
 
+/** Whether `value` names a connection domain (an event's domain may not). */
+export const isConnectionDomain = (value: string): value is ConnectionDomain =>
+  (connectionDomains as readonly string[]).includes(value);
+
 /**
  * Who serves a connection; an attribute of the connection. `winston` is
  * Winston's own mailbox, which we serve ourselves.
@@ -95,6 +99,71 @@ export const providerOf = {
   mail: "gmail",
   calendar: "google_calendar",
 } as const satisfies Record<ConnectionDomain, ConnectionProvider>;
+
+/**
+ * Who issues a connection's token, which decides how it's connected,
+ * refreshed, expired and revoked. Mail and calendar share one Google OAuth
+ * client, so their grants share Google's screen and its revocation.
+ */
+export const tokenIssuers = ["google"] as const;
+export type TokenIssuer = (typeof tokenIssuers)[number];
+
+/**
+ * How each provider's connections behave (74641a): who issued their token
+ * (none for Winston's own mailbox, whose mail is pushed to us), and whether
+ * Winston syncs the account's changes and keeps a push watch on them.
+ */
+export const providerTraits = {
+  gmail: { issuer: "google", syncs: true },
+  google_calendar: { issuer: "google", syncs: true },
+  winston: { issuer: null, syncs: false },
+} as const satisfies Record<
+  ConnectionProvider,
+  { issuer: TokenIssuer | null; syncs: boolean }
+>;
+
+/** The providers whose tokens `issuer` issues. */
+export const providersIssuedBy = (issuer: TokenIssuer) =>
+  connectionProviders.filter(
+    (provider) => providerTraits[provider].issuer === issuer,
+  );
+
+/** The providers whose accounts Winston syncs and watches. */
+export const syncedProviders = connectionProviders.filter(
+  (provider) => providerTraits[provider].syncs,
+);
+
+/** Each issuer as the user knows it, from its sign-in screen. */
+export const issuerNames: Record<TokenIssuer, string> = { google: "Google" };
+
+/** Whose sign-in screen grants a provider's scopes ("Google"). */
+export function issuerOf(provider: ConnectionProvider) {
+  const issuer = providerTraits[provider].issuer;
+  return issuer ? issuerNames[issuer] : "the provider";
+}
+
+/** Where the site starts connecting an account with each issuer. */
+const connectPaths: Record<TokenIssuer, string> = {
+  google: "/auth/google/connect",
+};
+
+/** The site's path that starts connecting a new account for `domain`. */
+export function connectPath(domain: ConnectionDomain) {
+  const issuer = providerTraits[providerOf[domain]].issuer;
+  return `${connectPaths[issuer]}?domain=${domain}`;
+}
+
+/**
+ * The site's path that reconnects a connection with one tap, or null for one
+ * with no token to renew (Winston's own mailbox).
+ */
+export function reconnectPath(connection: {
+  id: string;
+  provider: ConnectionProvider;
+}) {
+  const issuer = providerTraits[connection.provider].issuer;
+  return issuer && `${connectPaths[issuer]}?reconnect=${connection.id}`;
+}
 
 /** Whether `capability` is one of `domain`'s. */
 export function isCapabilityOf<D extends ConnectionDomain>(
