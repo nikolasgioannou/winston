@@ -17,6 +17,7 @@
     "./mail-compose": "./src/mail-compose.ts",
     "./mail-parse": "./src/mail-parse.ts",
     "./mcp": "./src/mcp.ts",
+    "./ramp": "./src/ramp.ts",
     "./ramp-auth": "./src/ramp-auth.ts",
     "./rotating-tokens": "./src/rotating-tokens.ts",
     "./winston-mail": "./src/winston-mail.ts"

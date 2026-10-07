@@ -30,6 +30,7 @@ import {
   SendingRefusedError,
 } from "@winston/connectors/errors";
 import type { MailProvider } from "@winston/connectors/mail";
+import type { RampProvider } from "@winston/connectors/ramp";
 import { TimeParseError } from "@winston/shared/time-flag";
 import { SiteChangeError } from "@winston/site-host/manage";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -227,6 +228,8 @@ export interface ConnectorDeps {
   mail: (connection: ConnectionRow) => MailProvider;
   /** Absent where calendars aren't wired, as in some tests. */
   calendar?: (connection: ConnectionRow) => CalendarProvider;
+  /** Absent where Ramp isn't wired (no client registered). */
+  ramp?: (connection: ConnectionRow) => RampProvider;
 }
 
 /**

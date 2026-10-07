@@ -25,6 +25,11 @@ const gatewayConfigSchema = dbConfigSchema.extend({
   /** The Google OAuth client, for trading refresh tokens for access tokens. */
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
+  /**
+   * This environment's Ramp client (docs/runbooks/ramp.md), for refreshing
+   * Ramp tokens. Without it, `winston ramp` is unavailable.
+   */
+  RAMP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   /** The site, for links in errors (permission toggles, reconnecting). */
   WEB_PUBLIC_URL: z.url().default("http://localhost:3002"),
   /** Production: the blobs bucket (Winston's raw mail, and sites' bundles, §9a). */

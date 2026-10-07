@@ -18,6 +18,7 @@ import { events } from "./resources/events.ts";
 import { history } from "./resources/history.ts";
 import { mail } from "./resources/mail.ts";
 import { me } from "./resources/me.ts";
+import { ramp } from "./resources/ramp.ts";
 import { site } from "./resources/site.ts";
 import { task } from "./resources/task.ts";
 import { trigger } from "./resources/trigger.ts";
@@ -28,6 +29,7 @@ export const resources: Resource[] = [
   me,
   mail,
   calendar,
+  ramp,
   accounts,
   task,
   trigger,
@@ -37,9 +39,14 @@ export const resources: Resource[] = [
   site,
 ];
 
+/** Every resource with verbs, objects included (`ramp transactions`). */
+const runnable = () => resources.flatMap((r) => r.objects ?? [r]);
+
 /** Every prefix `winston get` knows, as `msg_, thr_, …`. */
 const knownIds = () =>
-  resources.flatMap((r) => (r.ids ?? []).map((p) => `${p}_`)).join(", ");
+  runnable()
+    .flatMap((r) => (r.ids ?? []).map((p) => `${p}_`))
+    .join(", ");
 
 /** A TypeID: a lowercase prefix, then 26 base32 characters (§11 identifiers). */
 const typeIdPattern = /^([a-z]+(?:_[a-z]+)*)_[0-7][0-9a-hjkmnp-tv-z]{25}$/;
@@ -52,7 +59,7 @@ function ownerOf(id: string): [Resource, Verb] {
       `"${id}" isn't an id.`,
       `Ids look like evt_01k5…: a prefix (${knownIds()}) and 26 characters.`,
     );
-  const resource = resources.find((r) => r.ids?.includes(prefix));
+  const resource = runnable().find((r) => r.ids?.includes(prefix));
   const verb = resource?.verbs.find((v) => v.name === "get");
   if (!resource || !verb)
     throw CliError.usage(
@@ -111,6 +118,29 @@ export function resourceHelp(resource: Resource) {
     ...resource.verbs.flatMap((v) => v.examples.map((e) => `  ${e}`)),
     "",
     `Run \`winston ${resource.name} <verb> --help\` for a verb's flags.`,
+  ].join("\n");
+}
+
+/** An object resource's own word: `transactions` for `ramp transactions`. */
+const shortName = (object: Resource) => object.name.split(" ").at(-1) ?? "";
+
+/** A provider's resource: its objects, and an example of each. */
+export function objectsHelp(resource: Resource, objects: readonly Resource[]) {
+  const width = Math.max(...objects.map((o) => shortName(o).length)) + 2;
+  return [
+    `winston ${resource.name}: ${resource.description}`,
+    "",
+    `Usage: winston ${resource.name} <object> <verb> [<id>] [--flags]`,
+    "",
+    "Objects:",
+    ...objects.map((o) => `  ${pad(shortName(o), width)}${o.description}`),
+    "",
+    "Examples:",
+    ...objects
+      .flatMap((o) => o.verbs[0]?.examples.slice(0, 1) ?? [])
+      .map((e) => `  ${e}`),
+    "",
+    `Run \`winston ${resource.name} <object> --help\` for its verbs.`,
   ].join("\n");
 }
 
@@ -188,27 +218,56 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
         "Run `winston` to list the resources.",
       );
     }
-    if (verbName === undefined || verbName === "--help") {
-      io.out(resourceHelp(resource));
-      return 0;
-    }
-    const verb = resource.verbs.find(
-      (v) => v.name === verbName || v.aliases?.includes(verbName),
-    );
-    if (!verb) {
-      const guess = suggest(
-        verbName,
-        resource.verbs.map((v) => v.name),
-      );
-      throw CliError.usage(
-        `Unknown verb \`${verbName}\` for ${resource.name}.${guess ? ` Did you mean \`${guess}\`?` : ""}`,
-        `Run \`winston ${resource.name} --help\` to see its verbs.`,
-      );
-    }
-    return await runVerb(io, resource, verb, rest);
+    return await runResource(io, resource, verbName, rest);
   } catch (error) {
     if (!(error instanceof CliError)) throw error;
     io.err(error.hint ? `${error.message}\n${error.hint}` : error.message);
     return error.exitCode;
   }
+}
+
+/** Runs a resource's verb, or, for a provider's resource, one of its objects'. */
+async function runResource(
+  io: Io,
+  resource: Resource,
+  verbName: string | undefined,
+  rest: readonly string[],
+): Promise<number> {
+  const { objects } = resource;
+  if (objects) {
+    if (verbName === undefined || verbName === "--help") {
+      io.out(objectsHelp(resource, objects));
+      return 0;
+    }
+    const object = objects.find(
+      (o) => o.name === `${resource.name} ${verbName}`,
+    );
+    if (!object) {
+      const guess = suggest(verbName, objects.map(shortName));
+      throw CliError.usage(
+        `Unknown ${resource.name} object \`${verbName}\`.${guess ? ` Did you mean \`${guess}\`?` : ""}`,
+        `Run \`winston ${resource.name} --help\` to see them.`,
+      );
+    }
+    const [objectVerb, ...objectRest] = rest;
+    return runResource(io, object, objectVerb, objectRest);
+  }
+  if (verbName === undefined || verbName === "--help") {
+    io.out(resourceHelp(resource));
+    return 0;
+  }
+  const verb = resource.verbs.find(
+    (v) => v.name === verbName || v.aliases?.includes(verbName),
+  );
+  if (!verb) {
+    const guess = suggest(
+      verbName,
+      resource.verbs.map((v) => v.name),
+    );
+    throw CliError.usage(
+      `Unknown verb \`${verbName}\` for ${resource.name}.${guess ? ` Did you mean \`${guess}\`?` : ""}`,
+      `Run \`winston ${resource.name} --help\` to see its verbs.`,
+    );
+  }
+  return runVerb(io, resource, verb, rest);
 }

@@ -27,6 +27,11 @@ export const idPrefixes = {
   draft: "drf",
   attachment: "att",
   calendarEvent: "evt",
+  /** Ramp's transactions, reimbursements, requests and bills (02441f). */
+  rampTransaction: "txn",
+  rampReimbursement: "rmb",
+  rampRequest: "req",
+  rampBill: "bil",
   /** Winston's own mailbox's messages and threads, as its provider stores them. */
   mailboxMessage: "wmsg",
   mailboxThread: "wthr",

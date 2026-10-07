@@ -9,6 +9,10 @@ import { gmailProvider } from "@winston/connectors/gmail";
 import { googleCalendarProvider } from "@winston/connectors/google-calendar";
 import { winstonMailProvider } from "@winston/connectors/winston-mail";
 import { reconnectUrlFor } from "@winston/connectors/grants";
+import { mcpClient, type McpClient } from "@winston/connectors/mcp";
+import { rampProvider } from "@winston/connectors/ramp";
+import { rampMcpUrl, rampTokenRefresher } from "@winston/connectors/ramp-auth";
+import { rotatingAccessTokens } from "@winston/connectors/rotating-tokens";
 import { createDb } from "@winston/db/client";
 import { createTokenVault } from "@winston/shared/token-vault";
 import { siteHostFrom } from "@winston/site-host/config";
@@ -29,16 +33,43 @@ const logger = createLogger("gateway", {
 const db = createDb(config.DATABASE_URL, {
   rdsSecretArn: config.DATABASE_SECRET_ARN,
 });
+const vault = createTokenVault(config);
 // Connected accounts' access tokens, for mail and calendar calls (§12a).
 const accessToken = googleAccessTokens({
   db,
-  vault: createTokenVault(config),
+  vault,
   client: {
     clientId: config.GOOGLE_OAUTH_CLIENT_ID,
     clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
   },
   reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
 });
+// Ramp's refresh tokens rotate, so every service shares one access token
+// through the database (02441f, 52bf55); a session per connection is kept
+// between calls, so each call isn't a new MCP session.
+const rampTokens = config.RAMP_OAUTH_CLIENT_ID
+  ? rotatingAccessTokens({
+      db,
+      vault,
+      refresh: rampTokenRefresher(config.RAMP_OAUTH_CLIENT_ID),
+      reconnectUrl: reconnectUrlFor(config.WEB_PUBLIC_URL),
+    })
+  : undefined;
+const rampSessions = new Map<string, McpClient>();
+const rampSession = (
+  tokens: NonNullable<typeof rampTokens>,
+  connectionId: string,
+) => {
+  let session = rampSessions.get(connectionId);
+  if (!session) {
+    session = mcpClient({
+      url: rampMcpUrl,
+      accessToken: (rejected) => tokens(connectionId, rejected),
+    });
+    rampSessions.set(connectionId, session);
+  }
+  return session;
+};
 /** This task's own address: in ECS, its network interface's private IPv4. */
 function ownUrl() {
   if (config.GATEWAY_ADVERTISE_URL) return config.GATEWAY_ADVERTISE_URL;
@@ -101,6 +132,12 @@ const gateway = createGateway({
         address: connection.externalEmail,
         accessToken: () => accessToken(connection.id),
       }),
+    ...(rampTokens
+      ? {
+          ramp: (connection) =>
+            rampProvider({ client: rampSession(rampTokens, connection.id) }),
+        }
+      : {}),
   },
 });
 // New VM binaries reach connected VMs within a minute of being published.

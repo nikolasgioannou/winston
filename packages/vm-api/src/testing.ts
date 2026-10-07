@@ -17,6 +17,7 @@ import type {
   MailProvider,
   OutgoingMail,
 } from "@winston/connectors/mail";
+import type { RampProvider } from "@winston/connectors/ramp";
 import type { DbOrTx } from "@winston/db/client";
 import { mintRunToken } from "@winston/domain/run-token";
 import { createVmApi } from "./index.ts";
@@ -303,6 +304,105 @@ export function fakeCalendar() {
 }
 
 /** The API over `tx` with the fake provider and VM files; `as(userId)` makes calls. */
+/** A recording fake Ramp provider (02441f): one of each object. */
+export function fakeRamp() {
+  const calls: { method: string; args: unknown[] }[] = [];
+  const record =
+    <T>(method: string, result: T) =>
+    (...args: unknown[]) => {
+      calls.push({ method, args });
+      return Promise.resolve(result);
+    };
+  const transaction = {
+    providerId: "tx-1",
+    time: "2026-09-25T20:02:00Z",
+    amount: "$42.50",
+    originalAmount: null,
+    merchant: "Uber",
+    category: "Taxi",
+    spentBy: "Ada Lovelace",
+    state: "CLEARED",
+    declineReason: null,
+    memo: null,
+    trip: null,
+    fund: "Travel",
+    missing: ["receipt"],
+    link: null,
+  };
+  const provider: RampProvider = {
+    transactions: record("transactions", {
+      items: [transaction],
+      cursor: "c2",
+    }),
+    transaction: record("transaction", {
+      providerId: "tx-1",
+      time: transaction.time,
+      amount: "42.50",
+      merchant: "Uber",
+      spentBy: "Ada Lovelace",
+      memo: null,
+      fund: "Travel",
+      coding: [],
+    }),
+    reimbursements: record("reimbursements", { items: [], cursor: null }),
+    reimbursement: record("reimbursement", {
+      providerId: "rb-1",
+      date: "2026-09-20",
+      submittedAt: null,
+      amount: "18.00 USD",
+      merchant: "Parking",
+      memo: null,
+      status: "DRAFT",
+      coding: [],
+      missing: [],
+      link: null,
+    }),
+    requests: record("requests", { items: [], cursor: null }),
+    request: record("request", {
+      providerId: "rq-1",
+      kind: "PURCHASE_ORDER",
+      name: "Laptops",
+      vendor: null,
+      requester: "Dana Reyes",
+      amount: "$4,000.00",
+      status: "PENDING",
+      date: "2026-09-24",
+      reason: null,
+    }),
+    bills: record("bills", { items: [], cursor: null }),
+    bill: record("bill", {
+      providerId: "bl-1",
+      vendor: "AWS",
+      amount: "120.00 USD",
+      invoice: null,
+      dueDate: "2026-10-10",
+      approvalStatus: "PENDING",
+      paymentStatus: "UNPAID",
+      pastDue: false,
+      draft: false,
+      memo: null,
+      link: null,
+      description: null,
+      lineItems: [],
+    }),
+    attention: record("attention", [
+      {
+        kind: "TRANSACTION_APPROVALS",
+        name: "Transaction approvals",
+        total: 1,
+        tasks: [
+          {
+            kind: "APPROVE_TRANSACTION",
+            summary: "Uber · $42.50",
+            objects: [{ kind: "rampTransaction" as const, providerId: "tx-1" }],
+          },
+        ],
+      },
+    ]),
+  };
+  return { provider, calls };
+}
+
 export function setupApi(
   tx: DbOrTx,
   vmFileContents: Record<string, string | Uint8Array> = {},
@@ -310,6 +410,7 @@ export function setupApi(
 ) {
   const mail = fakeMail();
   const calendar = fakeCalendar();
+  const ramp = fakeRamp();
   const written: { userId: string; path: string; bytes: Uint8Array }[] = [];
   const app = createVmApi({
     db: tx,
@@ -322,6 +423,7 @@ export function setupApi(
       webPublicUrl: "https://runwinston.com",
       mail: () => mail.provider,
       calendar: () => calendar.reader,
+      ramp: () => ramp.provider,
     },
     vmFiles: {
       read: (_userId, path) => {
@@ -362,5 +464,5 @@ export function setupApi(
         { vmUserId: userId },
       );
   };
-  return { as, mail, calendar, written };
+  return { as, mail, calendar, ramp, written };
 }

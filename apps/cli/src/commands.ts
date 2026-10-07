@@ -48,4 +48,10 @@ export interface Resource {
   /** Id prefixes its `get` verb shows (`evt`); `winston get <id>` routes by them. */
   ids?: string[];
   verbs: Verb[];
+  /**
+   * Objects under a provider's resource, each a resource named with it
+   * (`ramp transactions`), for `winston ramp transactions list` (02441f).
+   * A resource with objects has no verbs of its own.
+   */
+  objects?: Resource[];
 }

@@ -15,6 +15,10 @@ export const externalRefKind = pgEnum("external_ref_kind", [
   "draft",
   "attachment",
   "calendarEvent",
+  "rampTransaction",
+  "rampReimbursement",
+  "rampRequest",
+  "rampBill",
 ]);
 
 /**
@@ -27,7 +31,7 @@ export const externalRefKind = pgEnum("external_ref_kind", [
 export const externalRefs = snakeCase.table(
   "external_refs",
   {
-    /** `msg_…`, `thr_…`, `drf_…`, `att_…` or `evt_…`. */
+    /** `msg_…`, `thr_…`, `drf_…`, `att_…`, `evt_…`, or Ramp's `txn_…`, `rmb_…`, `req_…`, `bil_…`. */
     id: text().primaryKey(),
     userId: text()
       .notNull()

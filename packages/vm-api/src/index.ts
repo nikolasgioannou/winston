@@ -25,6 +25,7 @@ import { historyRoutes } from "./history.ts";
 import { jevRoutes, type Jev } from "./jev.ts";
 import { mailRoutes } from "./mail.ts";
 import { mailWriteRoutes } from "./mail-write.ts";
+import { rampRoutes } from "./ramp.ts";
 import { siteRoutes, type SiteDeps } from "./sites.ts";
 import { taskRoutes, type TaskBrowser } from "./tasks.ts";
 import { triggerRoutes } from "./triggers.ts";
@@ -158,6 +159,7 @@ export function createVmApi({
       calendarRoutes({ db, connectors, ...(now ? { now } : {}) }),
     )
     .route("/v1/calendar", calendarWriteRoutes({ db, connectors }))
+    .route("/v1/ramp", rampRoutes({ db, connectors }))
     .route("/v1/tasks", taskRoutes({ db, browser }))
     .route("/v1/events", eventRoutes())
     .route("/v1/triggers", triggerRoutes({ db }))

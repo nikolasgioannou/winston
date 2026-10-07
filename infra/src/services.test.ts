@@ -153,9 +153,10 @@ describe("services stack", () => {
       expect(actionsFor(service)).toContain("kms:Decrypt");
     expect(actionsFor("web")).toContain("kms:GenerateDataKey");
     expect(actionsFor("web")).not.toContain("kms:Decrypt");
-    // The gateway opens tokens for mail and calendar calls, but never seals.
+    // The gateway opens tokens for connector calls, and seals Ramp's rotated
+    // refresh tokens (02441f).
     expect(actionsFor("gateway")).toContain("kms:Decrypt");
-    expect(actionsFor("gateway")).not.toContain("kms:GenerateDataKey");
+    expect(actionsFor("gateway")).toContain("kms:GenerateDataKey");
     expect(actionsFor("api").some((a) => a.startsWith("s3:"))).toBe(false);
     // Blobs: agents' images, attachments and received mail; the gateway's
     // sent mail and site bundles; web's rollbacks and take-downs (§9a).
