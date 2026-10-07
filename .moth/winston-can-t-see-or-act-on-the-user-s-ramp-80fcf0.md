@@ -8,7 +8,7 @@ labels:
   - connectors
   - spec
 created_at: 2026-10-05T23:00:20.335Z
-updated_at: 2026-10-05T23:01:41.721Z
+updated_at: 2026-10-07T15:04:30.806Z
 ---
 
 Specified with the founder 2026-10-06, from the research in `docs/research/ramp-mcp.md`. The work is filed as sub-tickets under this one.
@@ -58,3 +58,9 @@ Ids: `txn_`, `rmb_`, `req_`, `bil_` through `external_refs`, so `winston get` re
 
 - [ ] Every sub-ticket is done
 - [ ] In production, the founder connects Ramp, Winston lists what's waiting on them, and approves a reimbursement after a yes in chat
+
+
+**From the spike (aa06d1, 2026-10-07):**
+- **Disconnecting:** Ramp won't let Winston revoke its access. Disconnecting deletes Winston's token, and the user removes "Ramp MCP Remote" under Ramp's connected AI tools to cut it off on Ramp's side.
+- **Business name:** Ramp gives none, so a connection is known by its email alone.
+- **Capability toggles:** one Ramp scope covers several capabilities (`transactions:write` covers editing and approving), so the toggles are enforced only by Winston's routes, which call one tool each.

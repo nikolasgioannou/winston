@@ -1,6 +1,6 @@
 # Research: Ramp as a connected app, through Ramp MCP
 
-> Researched 2026-10-06. Nothing here is built. Ramp says its MCP server "is subject to change" and its tools change continuously, so check the live metadata before building. Facts marked _unverified_ need one real sign-in to confirm (see "To verify first").
+> Researched 2026-10-06. Nothing here is built. Ramp says its MCP server "is subject to change" and its tools change continuously, so check the live metadata before building. What a real sign-in showed is under "Verified" (2026-10-07); it overrides anything earlier in the doc.
 
 > **Decided 2026-10-06** (80fcf0): curated commands like Gmail's, named by provider (`winston ramp …`), not the pass-through recommended under "Decisions for the founder"; capabilities `read`, `edit`, `submit` and `approve`; no Ramp events yet. The spec and its sub-tickets are under 80fcf0.
 
@@ -83,15 +83,66 @@
 
 MCP has no push, so the first version has **no `spend.*` events**: Winston uses schedules to check (`get-attention-feed` is Ramp's "what needs me" list). Webhooks need the Developer API. An MCP token comes from the Developer API's own token endpoint, but whether it also works for REST calls is _unverified_.
 
-## To verify first
+## Verified
 
-These take one sign-in on `localhost`, with a Ramp account (or a sandbox account on the sandbox server), before any tickets are cut:
+Checked 2026-10-07 (aa06d1) with the founder's production Ramp account, an admin: one sign-in through a throwaway local script, read-only scopes, read-only calls. No data from the account is recorded here, only shapes.
 
-1. Dynamic registration accepts a `localhost` redirect without allowlisting.
-2. The authorize request honours a subset of scopes.
-3. The MCP tool names and annotations (`readOnlyHint`, `destructiveHint`) match the agent-tools spec. The demo server's one tool carries annotations.
-4. Whether refresh tokens rotate, and their lifetime.
-5. Which tool gives the user's email and business.
+**Registration and sign-in**
+
+- **Registration:** `POST /register` accepts a `http://127.0.0.1:<port>/callback` redirect with no allowlisting. It returns a `ramp_id_…` client id and an empty secret, and Ramp renames the client "Ramp MCP Remote" whatever name is sent.
+- **Authorize:** the request takes `resource=https://mcp.ramp.com/mcp`, and **a subset of scopes is honoured**: ten read scopes asked, exactly those ten granted.
+- **Token exchange:** at `api.ramp.com/developer/v1/token/pkce` with the code verifier and no secret. The token response has `access_token` (about 1.3k characters), `refresh_token`, `expires_in: 3600`, `scope` and `token_type`. **There's no `refresh_token_expires_in`**, so the grant has no lifetime Winston can warn about; it lasts until refused.
+
+**Refresh and revocation**
+
+- **Refresh tokens rotate:** each refresh returns a new one.
+- **Replaying a spent refresh token** gets `400 invalid_grant` ("The provided refresh token is invalid or expired") but **doesn't revoke the grant**: the newest token still worked afterwards. So the caller that loses a race fails and the grant survives. 52bf55's row lock keeps that from happening, and a lone `invalid_grant` still means the grant is gone.
+- **A public client can't revoke.** `POST /developer/v1/token/revoke` answers `401` "Client credentials not found or malformed", with or without Basic auth carrying the client id. Disconnecting can only delete Winston's token. The grant stays listed on Ramp's side until it's removed there, under Ramp's connected AI tools.
+
+**Server and tools**
+
+- **Server:** `initialize` returns plain JSON (protocol `2025-06-18`) and an `mcp-session-id`, with tools only and `listChanged: false`. `tools/list` returns everything in one page (no cursor).
+- **Only usable tools are listed:** a token sees only the tools its scopes allow (64 with ten read scopes).
+- **`ramp_token_info`** returns the granted scopes, the `auth_level` (`business`) and every unavailable tool with the scopes it needs. That's the map used for capability scopes, below.
+- **Tool names** are the agent-tools operation names with a `ramp_` prefix, in snake case (`ramp_get_transactions`, `ramp_edit_transaction`).
+- **Every tool requires a `rationale` string** and takes an optional `client_business_id`. Some require more than they look like they need: `ramp_get_requests_to_review` requires `thoughts`.
+- **Annotations:** every tool has them (`readOnlyHint`, `destructiveHint: false`, `openWorldHint: false`), but none has an `outputSchema`.
+
+**Tool results**
+
+- **Results** are one `text` content item holding JSON, with no `structuredContent`.
+- **Bad arguments** come back as `isError: true` with plain text ("Input validation error: 'thoughts' is a required property").
+- **Ramp's own errors** come back as `isError: false` with JSON: `{ error: true, status_code, error_code, message, error_id, additional_info: { mcp_error_code } }`. A transaction id that isn't visible is `400 DEVELOPER_7078 invalid_argument` "Transaction not found or not visible to the current user". So the connector must check the body, not only `isError`.
+
+**Identity and businesses**
+
+- **Identity:** `ramp_get_simplified_user_detail` returns `users[0]` with `id`, `business_id`, `first_name`, `last_name`, `email`, `department` and `location_name`. It gives no business name.
+- **Several businesses:** `ramp_get_authorized_businesses` answered `403` for an admin with these scopes, so its scope is unknown. Ramp's path aliases (`/ramp/<label>/mcp`) remain the documented way to use several businesses.
+
+**Shapes for the read ticket**
+
+- **Transactions:** `ramp_get_transactions` requires `transactions_to_retrieve` (`my_transactions`, or the whole business for admins). It pages with `page_size` and `next_page_cursor`, and each transaction has:
+  - its id (`transaction_uuid`) and who spent it (`spent_by_user`, `spent_by_user_uuid`)
+  - amounts: `amount` is a display string such as `$12.34`, plus `original_amount` and `original_currency`
+  - status: `state` (`CLEARED`, …) and `decline_reason`
+  - dates: `transaction_time`, `cleared_at`, `settlement_date`, `accounting_date`, `synced_at`
+  - merchant and fund: `merchant_name`, `merchant_category`, `spend_allocation_name`, `spend_allocation_id`
+  - details: `reason_or_justification`, `receipt_uuids`, `trip_uuid`, `trip_name`, `card`, `accounting_categories`, `attendees`, `missing_items`
+  - Ramp's suggestions: `suggested_memos`, `suggested_codings`, `suggested_funds`
+  - `transaction_link`, a link into Ramp
+- **The attention feed:** `ramp_get_attention_feed` returns `sections`, each with `section_type`, `display_name`, `total_count`, `next_cursor` and `items`. Each item has `task_snapshot_uuid`, `task_type`, `context` and `action_metadata`. The sections seen were `TRANSACTION_APPROVALS`, `TRANSACTIONS_TO_REVIEW`, `COMPLETE_MY_EXPENSES`, `TASKS_REQUIRING_YOUR_ACTION`, `BILL_DRAFTS`, `VENDOR_INFORMATION_REVIEW` and `ACCOUNT_HEALTH`. It fits `winston ramp approvals list` as it is.
+- **Reimbursements awaiting approval:** `ramp_get_reimbursements_for_approval` returns `{ reimbursements, total_count }`.
+
+**Scopes for each capability** (from `ramp_token_info`). One scope covers several capabilities, so Winston's routes must enforce the toggles; the scopes alone can't:
+
+| Capability | Tools                                                                                         | Scopes                                                          |
+| ---------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `read`     | `ramp_get_transactions`, `…_reimbursements`, `…_attention_feed`, bills, requests, user detail | the read scopes asked for above                                 |
+| `edit`     | `ramp_edit_transaction`, `ramp_edit_reimbursement`, `ramp_post_comment`                       | `transactions:write`, `reimbursements:write`, `comments:write`  |
+| `submit`   | `ramp_submit_reimbursement`, `ramp_resubmit_reimbursement`                                    | `reimbursements:write`                                          |
+| `approve`  | `ramp_approve_or_reject_transaction`, `…_reimbursement`, `ramp_approve_or_reject_request`     | `transactions:write`, `reimbursements:write`, `approvals:write` |
+
+**Scopes match risk better than the CLI's spec suggested:** booking flights and hotels needs `trips:write` on the live server, though `ramp_search_flights` is read-only. The never-offered scopes in 80fcf0 still hold.
 
 ## Rough plan
 

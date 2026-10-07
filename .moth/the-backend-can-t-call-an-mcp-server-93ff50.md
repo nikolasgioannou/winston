@@ -8,7 +8,7 @@ labels:
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:06.528Z
-updated_at: 2026-10-05T23:01:41.978Z
+updated_at: 2026-10-07T15:04:20.536Z
 blocked_by:
   - "aa06d1"
 ---
@@ -27,3 +27,6 @@ Winston reaches Ramp through its remote MCP server (80fcf0), and nothing in the 
 
 - [ ] Tests against a fake MCP server (Streamable HTTP, plain JSON and SSE replies) cover initialize, a call, an expired session, a 401 that refreshes once, and the error mapping
 - [ ] `design.md` §5 describes the client and why the SDK or a hand-written one was chosen
+
+
+**From the spike (aa06d1, 2026-10-07):** Ramp answers `initialize` with plain JSON and an `mcp-session-id`. Results are a single `text` item holding JSON. Ramp's own errors (403, not found) come back with `isError: false` and a JSON body of `{ error: true, status_code, error_code, message }`, so the client must check the body and map `status_code` the way it maps HTTP statuses. Validation errors come back with `isError: true` and plain text. Every Ramp tool requires a `rationale` argument; the client can fill it from the CLI command being run.

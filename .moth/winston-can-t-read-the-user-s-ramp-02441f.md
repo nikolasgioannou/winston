@@ -9,7 +9,7 @@ labels:
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:23.152Z
-updated_at: 2026-10-05T23:38:42.149Z
+updated_at: 2026-10-07T15:04:20.573Z
 blocked_by:
   - "52bf55"
   - "8f6c44"
@@ -34,3 +34,6 @@ The read side of `winston ramp` (80fcf0), built like reading mail from Gmail (6a
 
 
 **Added 2026-10-06 (from 52bf55):** the gateway is the first service to refresh Ramp's rotating tokens, so this ticket grants it `kms:GenerateDataKey` on the tokens key (`infra/src/services.ts`; its test currently asserts the gateway never seals, and `design.md` §13 and §19 say so). 52bf55 left the grant out because nothing used it yet.
+
+
+**From the spike (aa06d1, 2026-10-07):** the tool names, shapes and paging are in the "Verified" section of `docs/research/ramp-mcp.md`. Amounts are display strings (`$12.34`) beside `original_amount` and `original_currency`, so parse them. `ramp_get_attention_feed` already groups what's waiting on the user by section, which is `approvals list`. `ramp_get_requests_to_review` requires a `thoughts` argument.
