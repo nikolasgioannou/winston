@@ -72,7 +72,7 @@ function Checklist({ state, telegramLink, retrying, onRetry }: HomePageProps) {
           description={
             state.accountsConnected > 0
               ? `${accountCount(state.accountsConnected)} connected.`
-              : "Winston helps with your Gmail and Google Calendar."
+              : "Winston helps with your Gmail, Google Calendar and Ramp."
           }
           end={
             state.accountsConnected > 0 ? undefined : (

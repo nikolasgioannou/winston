@@ -4,6 +4,7 @@ import {
   type ConnectionProvider,
 } from "@winston/domain/connections";
 import { GmailIcon, GoogleCalendarIcon } from "@winston/ui";
+import { Receipt } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** Each domain's name, as the type badge shows it. */
@@ -26,8 +27,9 @@ const providerIcons: Record<ConnectionProvider, () => ReactNode> = {
   google_calendar: () => <GoogleCalendarIcon />,
   // Winston's own mailbox is never listed with the user's accounts.
   winston: () => null,
-  // Ramp's mark comes with its site entry (0bfa49).
-  ramp: () => null,
+  // A plain receipt until Ramp's mark is cleared for use (0bfa49): Ramp
+  // publishes no brand kit to take it from.
+  ramp: () => <Receipt size={16} aria-hidden />,
 };
 
 export function ProviderIcon({ provider }: { provider: ConnectionProvider }) {
@@ -49,5 +51,9 @@ export const connectableProviders: {
   {
     domain: "calendar",
     providers: [{ provider: "google_calendar", href: connectPath("calendar") }],
+  },
+  {
+    domain: "ramp",
+    providers: [{ provider: "ramp", href: connectPath("ramp") }],
   },
 ];

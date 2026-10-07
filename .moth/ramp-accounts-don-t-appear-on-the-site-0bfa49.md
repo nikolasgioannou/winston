@@ -1,14 +1,14 @@
 ---
 id: "0bfa49"
 title: Ramp accounts don't appear on the site
-status: todo
+status: in-progress
 priority: none
 labels:
   - ui
   - web
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:23.100Z
-updated_at: 2026-10-05T23:01:42.080Z
+updated_at: 2026-10-07T15:31:38.314Z
 blocked_by:
   - "8f6c44"
 ---
@@ -26,6 +26,18 @@ Once Ramp can be connected (8f6c44), the site has to show it like Gmail and Cale
 
 **Done when**
 
-- [ ] `/dev/design` shows Ramp on Connected accounts, the account dialog and Home, in light and dark, at desktop and mobile width
+- [x] `/dev/design` shows Ramp on Connected accounts, the account dialog and Home, in light and dark, at desktop and mobile width
 - [ ] Toggling a Ramp capability on the site changes what `winston accounts get` shows
-- [ ] `product.md` §1 (The website) mentions Ramp
+- [x] `product.md` §1 (The website) mentions Ramp
+
+
+## As built (the toggle check waits on the founder's local test)
+
+- **Icon:** Ramp's row and dialog use a plain receipt icon (lucide `Receipt`), not Ramp's mark. Ramp publishes no brand kit, and Simple Icons and thesvg have no copy. Swap in the real mark if the founder wants it, as was decided for Google's icons.
+- **Add account:** offers Ramp under "Spend" (the domain's badge), linking `connectPath("ramp")`.
+- **Copy:** disconnecting a Ramp account says Ramp keeps listing "Ramp MCP Remote", rather than "revoked with Google". The empty state and Home name Ramp beside Gmail and Calendar. A Ramp refusal (`ramp_refused`) tells the user to ask a Ramp admin to allow them Ramp MCP.
+- **Fixtures:**
+  - `companyRamp` appears in "A few accounts", in a new "Disconnect Ramp" state and in the dialog's "Ramp, write scopes not granted" state.
+  - Checked in the design view on a spare port (3990), desktop width: the row, the Add account dialog (Mail, Calendar, Spend) and the dialog's copy, including "Not granted on Ramp's screen".
+  - Not shown: Home doesn't list accounts by provider, so it has no Ramp state.
+- **Not yet checked:** a live toggle changing `winston accounts get`. The toggles are the same generic code as mail and calendar.

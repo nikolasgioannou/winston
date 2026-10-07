@@ -161,7 +161,7 @@ describe("completeRampConnect", () => {
           new URLSearchParams({ error: "access_denied", state: "the-state" }),
           cookies,
         ),
-      ).toEqual({ redirectTo: "/accounts?error=oauth" });
+      ).toEqual({ redirectTo: "/accounts?error=ramp_refused" });
       expect(
         await completeRampConnect(
           { ...deps, ramp: undefined },

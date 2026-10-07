@@ -20,9 +20,17 @@ import {
   providerNames,
 } from "../components/providers";
 
+/** What disconnecting does, by who issued the account's access. */
+function disconnectCopy(connection: ConnectionDto) {
+  const stops = `Winston stops using ${connection.externalEmail}`;
+  return connection.provider === "ramp"
+    ? `${stops} and deletes his access. Ramp keeps listing "Ramp MCP Remote" under its connected AI tools. You can connect it again any time.`
+    : `${stops}, and its access is revoked with Google. You can connect it again any time.`;
+}
+
 /**
- * `/accounts` (docs/design.md §20): the user's connected Google accounts,
- * any number per domain, and a way to add more. Each row's menu opens the
+ * `/accounts` (docs/design.md §20): the user's connected accounts (Google,
+ * Ramp), any number per domain, and a way to add more. Each row's menu opens the
  * account's permissions in a dialog over the list, reconnects or
  * disconnects it.
  */
@@ -60,7 +68,7 @@ export function AccountsPage({
         <EmptyState
           icon={<Blocks />}
           title="No accounts yet"
-          description="Connect Gmail or Google Calendar, and Winston can read, draft and keep track for you."
+          description="Connect Gmail, Google Calendar or Ramp, and Winston can read, draft and keep track for you."
           action={add}
         />
       ) : (
@@ -150,7 +158,7 @@ function AccountRow({
             open={confirming}
             onOpenChange={setConfirming}
             title={`Disconnect ${connection.externalEmail}?`}
-            description={`Winston stops using ${connection.externalEmail}, and its access is revoked with Google. You can connect it again any time.`}
+            description={disconnectCopy(connection)}
             confirmLabel="Disconnect"
             onConfirm={() => {
               onDisconnect(connection.id);

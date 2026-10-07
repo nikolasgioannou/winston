@@ -33,7 +33,8 @@ export const connectCallbackPath = "/auth/google/connect/callback";
 export const rampConnectCallbackPath = "/auth/ramp/connect/callback";
 
 /** Why connecting didn't work, as `/accounts` shows it. */
-export type ConnectProblem = "oauth" | "missing_scopes" | "unavailable";
+export type ConnectProblem =
+  "oauth" | "missing_scopes" | "unavailable" | "ramp_refused";
 
 export type ConnectResult =
   | { redirectTo: `/accounts?connected=${string}` }
@@ -129,6 +130,8 @@ export async function completeRampConnect(
   cookies: ConnectCookies,
 ): Promise<ConnectResult> {
   if (!deps.ramp) return problem("unavailable");
+  // Ramp said no (a refused consent, or a company that hasn't allowed MCP).
+  if (query.get("error")) return problem("ramp_refused");
   const redirect = checkedRedirect(query, cookies);
   if (!redirect || cookies.domain !== "ramp") return problem("oauth");
 
@@ -142,7 +145,7 @@ export async function completeRampConnect(
       email: await rampUserEmail(grant.accessToken, deps.fetch),
     };
   } catch (error) {
-    if (error instanceof RampAuthError) return problem("oauth");
+    if (error instanceof RampAuthError) return problem("ramp_refused");
     throw error;
   }
 

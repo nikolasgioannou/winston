@@ -31,6 +31,25 @@ export const personalCalendar = account({
   externalEmail: "ada.lovelace@gmail.com",
   scopes: ["calendar.events"],
 });
+export const companyRamp = account({
+  id: "acct_4",
+  domain: "ramp",
+  provider: "ramp",
+  externalEmail: "ada.com",
+  scopes: [
+    "transactions:read",
+    "reimbursements:read",
+    "bills:read",
+    "unified_requests:read",
+    "users:read",
+    "business:read",
+    "tasks:read",
+    "memos:read",
+    "accounting:read",
+    "trips:read",
+  ],
+  capabilities: { read: true, edit: false, submit: false, approve: false },
+});
 
 const accounts =
   (
@@ -63,7 +82,11 @@ export const accountsFixtures: PageFixtures = {
     empty: { label: "Empty", render: accounts([]) },
     few: {
       label: "A few accounts",
-      render: accounts([work, personalMail, personalCalendar]),
+      render: accounts([work, personalMail, personalCalendar, companyRamp]),
+    },
+    disconnectingRamp: {
+      label: "Disconnect Ramp",
+      render: accounts([work, companyRamp], false, companyRamp.id),
     },
     disconnecting: {
       label: "Disconnect confirmation",

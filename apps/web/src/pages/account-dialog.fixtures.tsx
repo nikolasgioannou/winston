@@ -1,7 +1,12 @@
 import { AppShell } from "../components/app-shell";
 import { AccountDialog, type AccountDialogProps } from "./account-dialog";
 import { AccountsPage } from "./accounts-page";
-import { personalCalendar, personalMail, work } from "./accounts-page.fixtures";
+import {
+  companyRamp,
+  personalCalendar,
+  personalMail,
+  work,
+} from "./accounts-page.fixtures";
 import type { PageFixtures } from "./fixtures";
 
 const noop = () => undefined;
@@ -51,6 +56,13 @@ export const accountFixtures: PageFixtures = {
       label: "Calendar, expired",
       render: page({
         account: { ...personalCalendar, status: "expired" },
+      }),
+    },
+    ramp: {
+      label: "Ramp, write scopes not granted",
+      render: page({
+        account: companyRamp,
+        unavailable: ["edit", "submit", "approve"],
       }),
     },
     disconnected: {

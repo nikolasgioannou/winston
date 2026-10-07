@@ -21,7 +21,9 @@ const searchSchema = z.object({
   account: z.string().optional(),
   /** Set by the connect callback: the connection just saved, or what went wrong. */
   connected: z.string().optional(),
-  error: z.enum(["oauth", "missing_scopes", "unavailable"]).optional(),
+  error: z
+    .enum(["oauth", "missing_scopes", "unavailable", "ramp_refused"])
+    .optional(),
 });
 
 const problems = {
@@ -29,6 +31,8 @@ const problems = {
   missing_scopes:
     "Winston needs every permission on Google's screen to help with that account. Please try again and leave them ticked.",
   unavailable: "Connecting that app isn't set up here yet.",
+  ramp_refused:
+    "Couldn't connect Ramp. If it keeps happening, ask a Ramp admin to allow you Ramp MCP (Company, Integrations, Ramp MCP, Manage access).",
 };
 
 export const Route = createFileRoute("/_authed/accounts/")({

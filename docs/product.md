@@ -29,7 +29,7 @@ Winston is a personal executive assistant that lives in Telegram. You can chat w
 A small web app with a **sidebar**. All chat happens in Telegram.
 
 - **Home:** Winston's status, and the first-run setup checklist until everything is connected (computer ready, Telegram linked, first account connected).
-- **Connected accounts:** connected mail and calendar accounts (multiple per app: work and personal), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server.
+- **Connected accounts:** connected mail and calendar accounts (multiple per app: work and personal) and Ramp (80fcf0), each with its own **capability toggles** (for example, work mail: read / draft only; personal mail: read / draft / send), enforced by the server.
 - **Channels:** the ways you reach Winston: Telegram linking (also on Home's setup checklist), and Winston's own email address.
 - **Sites:** the websites and small apps Winston built and deployed for the user (at `<name>.runwinston.app`): open one, share it by link or make it private again, restore an earlier version, or take it down. Sites start private to the user; Winston builds and changes them in chat.
 - **Profile:** first and last name, email, and account deletion (destroys the computer and wipes everything).
