@@ -170,7 +170,7 @@ describe("rampProvider", () => {
       }).client,
     }).reimbursement("rb-1");
     expect(found).toMatchObject({
-      amount: "18.00 USD",
+      amount: "$18.00",
       status: "DRAFT",
       coding: ["Department: Sales"],
     });

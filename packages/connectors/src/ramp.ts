@@ -197,15 +197,22 @@ const text = z.string().nullish();
 const money = z.union([z.string(), z.number()]).nullish();
 
 /** A money value as text: Ramp sends display strings or plain numbers. */
-const amountText = (
+function amountText(
   value: string | number | null | undefined,
   currency?: string | null,
-) =>
-  value === null || value === undefined
-    ? ""
-    : typeof value === "number"
-      ? `${value.toFixed(2)}${currency ? ` ${currency}` : ""}`
-      : value;
+) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  // The way Ramp shows amounts elsewhere (`$12.34`), so every line reads alike.
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency ?? "USD",
+    }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency ?? ""}`.trim();
+  }
+}
 
 /** The names of the `missing_*` flags that are set, without the prefix. */
 const missingOf = (value: unknown): string[] =>

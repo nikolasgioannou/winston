@@ -349,7 +349,7 @@ export function fakeRamp() {
       providerId: "rb-1",
       date: "2026-09-20",
       submittedAt: null,
-      amount: "18.00 USD",
+      amount: "$18.00",
       merchant: "Parking",
       memo: null,
       status: "DRAFT",
@@ -373,7 +373,7 @@ export function fakeRamp() {
     bill: record("bill", {
       providerId: "bl-1",
       vendor: "AWS",
-      amount: "120.00 USD",
+      amount: "$120.00",
       invoice: null,
       dueDate: "2026-10-10",
       approvalStatus: "PENDING",

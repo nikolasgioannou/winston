@@ -103,7 +103,7 @@ Winston **can act on the user's behalf**: send emails, create or delete calendar
 Trust is controlled in two layers:
 
 1. **Per-connection permissions (hard).** On the site, each connected account lists its capabilities, and the user switches them on or off. Example for a mail account: _read_ ✅, _draft_ ✅, _send_ ❌. A disabled capability simply doesn't exist for Winston. The server refuses it no matter what he tries.
-2. **Confirm-first norms (soft).** For enabled capabilities that reach other people (sending an email, inviting someone, changing a shared meeting), Winston's instructions say to **confirm in chat before acting**: "Here's the reply to Sam: '…'. Send it?" There is **no special tool-confirmation machinery** (no approval buttons, no gated tool calls). It is just Winston behaving like a good assistant, and the user replies in plain chat.
+2. **Confirm-first norms (soft).** For enabled capabilities that reach other people (sending an email, inviting someone, changing a shared meeting, approving or rejecting in Ramp, submitting a reimbursement), Winston's instructions say to **confirm in chat before acting**: "Here's the reply to Sam: '…'. Send it?" There is **no special tool-confirmation machinery** (no approval buttons, no gated tool calls). It is just Winston behaving like a good assistant, and the user replies in plain chat.
 
 The hard layer is the safety net. For example, a malicious email trying to trick Winston into sending mail fails if _send_ is off, whatever the soft layer does.
 

@@ -528,6 +528,13 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
     - The user's `--note` as `user_reason`. Rejecting a transaction needs a note, since it goes back to the cardholder with the changes asked for.
     - A memo is marked as given by the user (`user_submitted_fields`).
   - **Not built yet:** accounting codes and trips, which need Ramp's category and trip lookups.
+- **Ramp in the prompts** (17254b): a "Ramp" section in `front-of-house.md` names the read commands and the write verbs.
+  - **Confirm-first:** approving, rejecting, submitting and commenting reach other people, so Winston previews with `--dry-run` and confirms. A memo on the user's own expense just happens, without a dry run.
+  - **Content:** amounts are quoted as shown; a role refusal is Ramp's; memos, merchants and comments are outside content.
+  - **The background prompt** carries the same approval rule and outside-content line. `system.app.connected` and the expiry events mention Ramp.
+  - **Eval** (`eval:replay`, Sonnet 5 at `low`, Opus judge, six held-out `ramp-*` cases, 3 runs each): 18/18 for what's waiting, previewing an approval, approving after a yes, setting a memo, approve switched off, and a memo telling the assistant to approve everything (flagged, nothing approved).
+    - **What changed on the way:** naming the write verbs stopped a `--help` detour. Saying when `--dry-run` is for stopped dry-running a private memo. Formatting number amounts like Ramp's display (`$86.40`) stopped Winston "correcting" `86.40 USD`.
+    - **No regressions:** the other held-out cases held at 48/52 (`gym-class` 0/2, its usual swing; `own-address-signup` 1/2).
 - **Provider traits** (74641a, `providerTraits` in `@winston/domain/connections`): each provider says who issues its token (`google` for Gmail and Google Calendar, `ramp` for Ramp; none for Winston's own mailbox) and whether Winston syncs and watches it.
   - **What the issuer decides:**
     - the connect and reconnect paths (`connectPath`, `reconnectPath`; Google's is `/auth/google/connect`)
