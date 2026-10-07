@@ -8,7 +8,7 @@
 
 **Doable, and Ramp's side is standard.** Ramp's remote MCP server follows the MCP authorization spec as written: protected-resource metadata, dynamic client registration, PKCE with a public client (no secret) and refresh tokens. Winston can be an ordinary MCP client in the backend, so no Ramp credential goes near the VM (invariant 1).
 
-**Only Ramp can unblock production, and building doesn't have to wait.** Ramp must allowlist a custom client's hosted redirect URI, through a request form. `localhost` redirects don't need it, so building and local testing can start now. On the user's side, their company needs **Ramp Plus**, and a Ramp admin must let them use MCP.
+**Only Ramp can unblock production, and building doesn't have to wait.** Ramp must allowlist a custom client's hosted redirect URI, through a request form. `localhost` redirects don't need it, so building and local testing can start now. On the user's side, any Ramp plan works, but a Ramp admin must let them use MCP.
 
 **Most of the work is generalizing Winston's connections, which assume Google throughout.** Several places treat "not Winston's own mailbox" as "Google", so a Ramp connection would be swept, synced and refreshed as if it were Google. Two decisions are the founder's (below): how the CLI exposes a provider whose tools Ramp defines, and which Ramp actions Winston may take at all.
 
@@ -30,7 +30,7 @@
 
 - **Redirect URIs:** `https://` or `localhost`/`127.0.0.1`, exact host (no wildcards). Ramp's guide says custom clients and gateways "must have their redirect URI allowlisted by Ramp first", through [the request form](https://docs.ramp.com/developer-api/v1/mcp-redirect-whitelist-request). Its turnaround isn't published. Winston needs one URI per hosted environment, and the exact path must be settled before applying.
 - **Tokens:** access tokens last 1 hour by default (from `expires_in`). Refresh tokens **rotate**: Ramp's own CLI stores the new refresh token after every refresh and guards against "another process may have already rotated this token family". The refresh token's lifetime comes in `refresh_token_expires_in` when one is set _(unverified for MCP clients)_.
-- **Who can use it:** employees and admins, each with their own Ramp permissions. Employees see only their own cards, transactions and reimbursements; company-wide spend, bills and vendors need an admin or business owner. It needs **Ramp Plus**, and admins choose who may connect (Company → Integrations → Ramp MCP → Manage access).
+- **Who can use it:** employees and admins, each with their own Ramp permissions. Employees see only their own cards, transactions and reimbursements; company-wide spend, bills and vendors need an admin or business owner. Any plan can use it. Admins choose who may connect (Company → Integrations → Ramp MCP → Manage access), and on Ramp Plus they can also control it by role.
 - **Tools:** Ramp lists them by task, not name: search and analyze spend; approve or reject transactions, reimbursements and requests (not bills); submit and edit expenses and reimbursements; edit transactions (memo, coding, trip), post comments, lock, unlock and activate cards; policy and Help Center answers; trips and bookings; treasury balances; and **agent card credentials** for purchases. Queries return at most 100 rows, and the server can refuse with "ETL operation limit reached". **File uploads (receipts) aren't supported** over MCP.
 - **The full surface:** Ramp's open-source CLI (`ramp-public/ramp-cli`) ships the spec for the "agent tools" that back these features: 137 operations, 48 of which need a write scope. Several move money or hand out card numbers: `get-agent-card-creds` (`cards:read_agentic`), `pay-with-x402` (`x402:write`), `issue-one-off-funds` (`funds:write`), limit changes (`limits:write`), bank accounts and drawdown requests, and flight and hotel bookings. **Scopes don't match risk.** `submit-flight-booking` needs only `trips:read`, so asking for fewer scopes can't be Winston's only safeguard.
 
@@ -85,7 +85,7 @@ MCP has no push, so the first version has **no `spend.*` events**: Winston uses 
 
 ## To verify first
 
-These take one sign-in on `localhost`, with a Ramp Plus account (or a sandbox account on the sandbox server), before any tickets are cut:
+These take one sign-in on `localhost`, with a Ramp account (or a sandbox account on the sandbox server), before any tickets are cut:
 
 1. Dynamic registration accepts a `localhost` redirect without allowlisting.
 2. The authorize request honours a subset of scopes.
@@ -97,7 +97,7 @@ These take one sign-in on `localhost`, with a Ramp Plus account (or a sandbox ac
 
 In order, with 1 and 2 starting at once:
 
-1. **Ramp prerequisites** (founder): a Ramp Plus account to test with; MCP enabled for that user; a redirect allowlist request for production.
+1. **Ramp prerequisites** (founder): a Ramp account to test with; MCP enabled for that user; a redirect allowlist request for production.
 2. **Spike:** answers to "To verify first", using a throwaway local script.
 3. **Make connections provider-neutral:** the per-provider description, exhaustive branches, events payload, connect routes, refresh with rotation and a row lock, and revoke. No behaviour change for Google.
 4. **The MCP client and Ramp connector:** registration, connect flow, identity, tool policy and scopes.

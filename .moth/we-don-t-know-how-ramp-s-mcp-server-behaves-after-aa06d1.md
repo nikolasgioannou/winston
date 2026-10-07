@@ -12,7 +12,7 @@ created_at: 2026-10-05T23:00:34.531Z
 updated_at: 2026-10-05T23:01:41.773Z
 ---
 
-The spec (80fcf0) rests on Ramp's published metadata and the agent-tools spec in Ramp's CLI. Before building, confirm what only a real sign-in shows. It needs the founder's Ramp Plus account (or a Ramp sandbox account against `https://demo-mcp.ramp.com/mcp`).
+The spec (80fcf0) rests on Ramp's published metadata and the agent-tools spec in Ramp's CLI. Before building, confirm what only a real sign-in shows. It needs the founder's Ramp account (or a Ramp sandbox account against `https://demo-mcp.ramp.com/mcp`).
 
 **What to find out**, with a throwaway local script outside the repo (no client code lands here):
 
