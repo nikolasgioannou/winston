@@ -25,6 +25,7 @@ import type { CalendarProvider } from "@winston/connectors/calendar";
 import {
   NotSupportedError,
   ProviderNotFoundError,
+  ProviderRefusedError,
   ProviderUnavailableError,
   SendingRefusedError,
 } from "@winston/connectors/errors";
@@ -250,6 +251,12 @@ export function toApiFailure(
     return new ApiFailure("invalid_request", error.message, error.hint);
   if (error instanceof SiteChangeError)
     return new ApiFailure(error.kind, error.message, error.hint);
+  if (error instanceof ProviderRefusedError)
+    return new ApiFailure(
+      "invalid_request",
+      error.message,
+      error.hint ?? "Change the request: as it is, trying again won't help.",
+    );
   if (error instanceof ProviderUnavailableError)
     return new ApiFailure(
       "unavailable",

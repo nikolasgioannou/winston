@@ -1,14 +1,14 @@
 ---
 id: "93ff50"
 title: The backend can't call an MCP server
-status: todo
+status: done
 priority: none
 labels:
   - backend
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:06.528Z
-updated_at: 2026-10-07T15:04:20.536Z
+updated_at: 2026-10-07T15:16:11.461Z
 blocked_by:
   - "aa06d1"
 ---
@@ -25,8 +25,17 @@ Winston reaches Ramp through its remote MCP server (80fcf0), and nothing in the 
 
 **Done when**
 
-- [ ] Tests against a fake MCP server (Streamable HTTP, plain JSON and SSE replies) cover initialize, a call, an expired session, a 401 that refreshes once, and the error mapping
-- [ ] `design.md` §5 describes the client and why the SDK or a hand-written one was chosen
+- [x] Tests against a fake MCP server (Streamable HTTP, plain JSON and SSE replies) cover initialize, a call, an expired session, a 401 that refreshes once, and the error mapping
+- [x] `design.md` §5 describes the client and why the SDK or a hand-written one was chosen
 
 
 **From the spike (aa06d1, 2026-10-07):** Ramp answers `initialize` with plain JSON and an `mcp-session-id`. Results are a single `text` item holding JSON. Ramp's own errors (403, not found) come back with `isError: false` and a JSON body of `{ error: true, status_code, error_code, message }`, so the client must check the body and map `status_code` the way it maps HTTP statuses. Validation errors come back with `isError: true` and plain text. Every Ramp tool requires a `rationale` argument; the client can fill it from the CLI command being run.
+
+
+## As built
+
+- **`mcpClient`** (`packages/connectors/src/mcp.ts`, exported as `@winston/connectors/mcp`) is hand-written: `@modelcontextprotocol/sdk` 1.32.1 depends on Express, CORS, hono's node server and more, for a client that needs `initialize`, one notification and `tools/call`.
+- **Behaviour:** a session per client (re-initialized once on a 404), plain JSON or SSE replies, a 30 s timeout, and one retry on 401 with a fresh token.
+- **Errors:** `ProviderUnavailableError` for 429, 5xx, timeouts and network failures; the new `ProviderRefusedError` (API `invalid_request`) for other refusals and for `isError` results, carrying the tool's own text.
+- **The rejected token:** `rotatingAccessTokens(id, rejected)` takes the token the server refused, so neither the cache nor the stored copy hands it back. Tested.
+- **Tests:** against a fake server in `mcp.test.ts`, covering a session, SSE, a forgotten session, a refused token, 429 and 503, no answer at all, and a tool error.

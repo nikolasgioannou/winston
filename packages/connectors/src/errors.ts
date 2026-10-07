@@ -33,6 +33,21 @@ export class SendingRefusedError extends Error {
   }
 }
 
+/**
+ * The provider refused the request as asked: a bad argument, more than it
+ * will return at once, or something the user's own role there doesn't allow.
+ * Trying again unchanged won't help; the message is the provider's.
+ */
+export class ProviderRefusedError extends Error {
+  override name = "ProviderRefusedError";
+  constructor(
+    message: string,
+    readonly hint: string | null = null,
+  ) {
+    super(message);
+  }
+}
+
 /** The provider is rate-limiting or down; trying again later is safe (exit 5). */
 export class ProviderUnavailableError extends Error {
   override name = "ProviderUnavailableError";

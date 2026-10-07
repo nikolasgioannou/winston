@@ -106,6 +106,24 @@ describe("rotatingAccessTokens", () => {
     });
   });
 
+  test("a token the provider rejected before it expired is refreshed, not handed back", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const connectionId = await connect(tx, user.id);
+      const provider = rotatingProvider();
+      const accessToken = rotatingAccessTokens({
+        db: tx,
+        vault,
+        reconnectUrl,
+        ...provider,
+      });
+      expect(await accessToken(connectionId)).toBe("a1");
+      expect(await accessToken(connectionId, "a1")).toBe("a2");
+      expect(await accessToken(connectionId)).toBe("a2");
+      expect(provider.used).toEqual(["r0", "r1"]);
+    });
+  });
+
   test("a grant the provider refuses expires the connection and tells Winston once", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

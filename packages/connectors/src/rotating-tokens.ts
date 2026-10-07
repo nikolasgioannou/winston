@@ -54,10 +54,31 @@ export function rotatingAccessTokens({
   now?: () => number;
 }) {
   const cache = new Map<string, Held>();
-  const usable = (expiresAt: number) => expiresAt - refreshBeforeMs > now();
+  const usable = (held: Held | undefined, rejected?: string) =>
+    held !== undefined &&
+    held.token !== rejected &&
+    held.expiresAt - refreshBeforeMs > now();
+
+  /** The access token stored on a connection, if there is one. */
+  const storedToken = async (
+    connectionId: string,
+    row: {
+      accessTokenCiphertext: string | null;
+      accessTokenExpiresAt: Date | null;
+    },
+  ): Promise<Held | undefined> =>
+    row.accessTokenCiphertext && row.accessTokenExpiresAt
+      ? {
+          token: await vault.decrypt(
+            row.accessTokenCiphertext,
+            accessTokenContext(connectionId),
+          ),
+          expiresAt: row.accessTokenExpiresAt.getTime(),
+        }
+      : undefined;
 
   /** The stored access token if it's still good, or a fresh one; under the row lock. */
-  const refreshed = (connectionId: string) =>
+  const refreshed = (connectionId: string, rejected?: string) =>
     db.transaction(async (tx): Promise<Held | "expired"> => {
       const [row] = await tx
         .select()
@@ -68,18 +89,8 @@ export function rotatingAccessTokens({
       if (row.status === "expired" || row.status === "disconnected")
         return "expired";
       // Another service may have refreshed while this one waited for the lock.
-      if (
-        row.accessTokenCiphertext &&
-        row.accessTokenExpiresAt &&
-        usable(row.accessTokenExpiresAt.getTime())
-      )
-        return {
-          token: await vault.decrypt(
-            row.accessTokenCiphertext,
-            accessTokenContext(connectionId),
-          ),
-          expiresAt: row.accessTokenExpiresAt.getTime(),
-        };
+      const stored = await storedToken(connectionId, row);
+      if (stored && usable(stored, rejected)) return stored;
       if (!row.tokenCiphertext) return "expired";
 
       const fresh = await refresh(
@@ -111,7 +122,11 @@ export function rotatingAccessTokens({
       return { token: fresh.accessToken, expiresAt };
     });
 
-  return async function accessToken(connectionId: string) {
+  /**
+   * An access token for the connection. `rejected` is one the provider just
+   * refused although it hadn't expired by our clock: it isn't handed back.
+   */
+  return async function accessToken(connectionId: string, rejected?: string) {
     const [connection] = await db
       .select({
         status: connections.status,
@@ -134,19 +149,13 @@ export function rotatingAccessTokens({
       throw unavailable(connection.status);
 
     const cached = cache.get(connectionId);
-    if (cached && usable(cached.expiresAt)) return cached.token;
+    if (cached && usable(cached, rejected)) return cached.token;
     // One another service stored is good without taking the lock.
-    const stored = connection.accessTokenExpiresAt?.getTime();
+    const stored = await storedToken(connectionId, connection);
     const held =
-      connection.accessTokenCiphertext && stored && usable(stored)
-        ? {
-            token: await vault.decrypt(
-              connection.accessTokenCiphertext,
-              accessTokenContext(connectionId),
-            ),
-            expiresAt: stored,
-          }
-        : await refreshed(connectionId);
+      stored && usable(stored, rejected)
+        ? stored
+        : await refreshed(connectionId, rejected);
     if (held === "expired") throw unavailable("expired");
     cache.set(connectionId, held);
     return held.token;

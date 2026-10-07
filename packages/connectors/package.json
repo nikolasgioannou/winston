@@ -16,6 +16,7 @@
     "./mail-body": "./src/mail-body.ts",
     "./mail-compose": "./src/mail-compose.ts",
     "./mail-parse": "./src/mail-parse.ts",
+    "./mcp": "./src/mcp.ts",
     "./winston-mail": "./src/winston-mail.ts"
   },
   "scripts": {

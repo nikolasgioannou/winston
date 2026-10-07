@@ -495,6 +495,14 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
 - **Credentials never touch the VM.** The backend stores OAuth tokens (encrypted), refreshes them and emits `system.app.auth_expiring` / `auth_expired`.
 - **The CLI is a thin client.** It talks only to local `winstond` over a unix socket. `winstond` (which alone holds the VM token) forwards requests over its websocket to `gateway`, where the backend API checks capability toggles, calls the Google API and writes an **audit log** of every call. No credential on the VM works from anywhere else (§15).
 - All agents reach connected apps through the CLI on the VM.
+- **MCP client** (93ff50, `mcpClient` in `@winston/connectors/mcp`): for connected apps reached through a remote MCP server (Ramp, 80fcf0), over Streamable HTTP. It's written by hand: the official SDK (1.32) brings Express, CORS and a server stack for what are a few JSON-RPC calls here.
+  - **Sessions:** it starts a session on first use (`initialize`, then `notifications/initialized`, protocol `2025-06-18`), sends `mcp-session-id` after that, and starts a new session once if the server answers 404 for a forgotten one.
+  - **Calls:** it only calls tools by name and returns the text content; replies can be plain JSON or server-sent events.
+  - **Tokens:** a 401 asks the token callback for a fresh token once, passing the refused one so it isn't handed back (`rotatingAccessTokens(id, rejected)`). The callback throws `ConnectionUnavailableError` if the grant is gone.
+  - **Errors:**
+    - 429, 5xx, timeouts (30 s) and no answer at all are `ProviderUnavailableError` (exit 5).
+    - Other refusals and tool errors (`isError`) are the new `ProviderRefusedError`, which the API answers as `invalid_request` with the provider's words.
+    - A provider that reports errors inside a successful result (Ramp does) is checked by its own connector.
 - **Provider traits** (74641a, `providerTraits` in `@winston/domain/connections`): each provider says who issues its token (`google` for Gmail and Google Calendar; none for Winston's own mailbox) and whether Winston syncs and watches it.
   - **What the issuer decides:**
     - the connect and reconnect paths (`connectPath`, `reconnectPath`; Google's is `/auth/google/connect`)
