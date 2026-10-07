@@ -67,7 +67,7 @@ export type LocalClient = ReturnType<typeof localClient>;
  * transient failure (exit 5).
  */
 /** What a call returns: a Hono RPC response, or anything shaped like one. */
-interface ResponseLike {
+export interface ResponseLike {
   ok: boolean;
   status: number;
   json(): Promise<unknown>;

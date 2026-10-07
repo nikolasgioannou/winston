@@ -156,7 +156,42 @@ export interface RampProvider {
   ): Promise<RampPage<RampBill>>;
   bill(providerId: string): Promise<RampBillDetail>;
   attention(): Promise<RampAttentionSection[]>;
+
+  // Acting (944c5b): each behind its capability in the routes.
+  /** Sets a transaction's or reimbursement's memo (`edit`). */
+  setMemo(
+    kind: "rampTransaction" | "rampReimbursement",
+    providerId: string,
+    memo: string,
+  ): Promise<void>;
+  /** Posts a comment on an object's thread in Ramp (`edit`). */
+  comment(
+    kind: RampObjectKind,
+    providerId: string,
+    text: string,
+  ): Promise<void>;
+  /** Submits the user's draft reimbursement for approval (`submit`). */
+  submitReimbursement(providerId: string): Promise<void>;
+  /**
+   * Approves or rejects something waiting on the user (`approve`). Rejecting
+   * a transaction sends it back to the cardholder with `note` as the changes
+   * asked for, so it needs one.
+   */
+  decide(
+    kind: "rampTransaction" | "rampReimbursement" | "rampRequest",
+    providerId: string,
+    decision: "approve" | "reject",
+    note: string | undefined,
+  ): Promise<void>;
 }
+
+/** Ramp's name for each kind, where it comments. */
+const commentTypes: Record<RampObjectKind, string> = {
+  rampTransaction: "transaction",
+  rampReimbursement: "reimbursement",
+  rampRequest: "spend_request",
+  rampBill: "bill",
+};
 
 const text = z.string().nullish();
 const money = z.union([z.string(), z.number()]).nullish();
@@ -708,6 +743,97 @@ export function rampProvider({ client }: { client: McpClient }): RampProvider {
         total: s.total_count ?? s.items?.length ?? 0,
         tasks: (s.items ?? []).map(taskOf),
       }));
+    },
+
+    async setMemo(kind, providerId, memo) {
+      if (kind === "rampTransaction")
+        await call(
+          "ramp_edit_transaction",
+          "set the memo the user gave on their transaction.",
+          {
+            transaction_uuid: providerId,
+            memo,
+            user_submitted_fields: ["memo"],
+          },
+          z.unknown(),
+        );
+      else
+        await call(
+          "ramp_edit_reimbursement",
+          "set the memo the user gave on their reimbursement.",
+          { reimbursement_uuid: providerId, memo },
+          z.unknown(),
+        );
+    },
+
+    async comment(kind, providerId, message) {
+      await call(
+        "ramp_post_comment",
+        "post the comment the user wrote.",
+        {
+          ramp_object_type: commentTypes[kind],
+          ramp_object_uuid: providerId,
+          message,
+        },
+        z.unknown(),
+      );
+    },
+
+    async submitReimbursement(providerId) {
+      await call(
+        "ramp_submit_reimbursement",
+        "submit the user's draft reimbursement, as they asked.",
+        { reimbursement_uuid: providerId },
+        z.unknown(),
+      );
+    },
+
+    async decide(kind, providerId, decision, note) {
+      const thoughts = `The user explicitly asked to ${decision} this.`;
+      const rationale = `${decision} what the user asked to ${decision}.`;
+      const reason = note === undefined ? {} : { user_reason: note };
+      if (kind === "rampTransaction") {
+        if (decision === "reject" && note === undefined)
+          throw new ProviderRefusedError(
+            "Rejecting a transaction sends it back with the changes asked for, so it needs a note.",
+            "Add --note with what the cardholder should change.",
+          );
+        await call(
+          "ramp_approve_or_reject_transaction",
+          rationale,
+          {
+            transaction_id: providerId,
+            action:
+              decision === "approve" ? "APPROVE" : "REJECT_AND_REQUEST_CHANGES",
+            thoughts,
+            ...reason,
+          },
+          z.unknown(),
+        );
+      } else if (kind === "rampReimbursement")
+        await call(
+          "ramp_approve_or_reject_reimbursement",
+          rationale,
+          {
+            reimbursement_id: providerId,
+            action: decision,
+            thoughts,
+            ...reason,
+          },
+          z.unknown(),
+        );
+      else
+        await call(
+          "ramp_approve_or_reject_request",
+          rationale,
+          {
+            request_uuid: providerId,
+            action: decision === "approve" ? "APPROVE" : "REJECT",
+            thoughts:
+              note === undefined ? thoughts : `${thoughts} Their note: ${note}`,
+          },
+          z.unknown(),
+        );
     },
   };
 }

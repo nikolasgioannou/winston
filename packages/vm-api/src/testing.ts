@@ -385,6 +385,10 @@ export function fakeRamp() {
       description: null,
       lineItems: [],
     }),
+    setMemo: record("setMemo", undefined),
+    comment: record("comment", undefined),
+    submitReimbursement: record("submitReimbursement", undefined),
+    decide: record("decide", undefined),
     attention: record("attention", [
       {
         kind: "TRANSACTION_APPROVALS",

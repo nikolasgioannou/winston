@@ -67,7 +67,7 @@ Examples of emergent behaviors:
 ## 4. Capabilities & connected apps
 
 - **Mail (Gmail) and calendar (Google Calendar)**: reading _and_ acting (sending, drafting, creating/updating events, RSVPs), subject to each connection's permission toggles (§6).
-- **Ramp** (being built, 80fcf0): connected like Gmail, from the site. Winston sees what the user's Ramp role allows (their own spend, or the company's for an admin); acting in Ramp comes with its write commands. Disconnecting deletes Winston's token, but Ramp keeps listing the connection (it can't be revoked from our side).
+- **Ramp** (being built, 80fcf0): connected like Gmail, from the site. Winston sees what the user's Ramp role allows (their own spend, or the company's for an admin); with `edit`, `submit` and `approve` switched on, he sets memos and comments, submits draft reimbursements, and approves or rejects what waits on the user. Disconnecting deletes Winston's token, but Ramp keeps listing the connection (it can't be revoked from our side).
 - His own computer (a VM).
 
 ### Browser use (a core strength)

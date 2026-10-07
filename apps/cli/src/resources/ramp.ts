@@ -1,10 +1,11 @@
 /**
  * `winston ramp` (02441f, docs/design.md §11): the user's Ramp, named for its
  * provider (decision #81), one object per resource under it:
- * `winston ramp transactions list`. Read only for now; acting is 944c5b.
+ * `winston ramp transactions list`. Reading (02441f) and acting (944c5b):
+ * every write takes --dry-run, and the server checks its capability.
  */
 import type { InferResponseType } from "hono/client";
-import { call, type ApiClient } from "../client.ts";
+import { call, type ApiClient, type ResponseLike } from "../client.ts";
 import type { Resource, Verb } from "../commands.ts";
 import { CliError } from "../errors.ts";
 import {
@@ -127,6 +128,142 @@ const getVerb = (
 const shown = (data: unknown, lines: (string | undefined)[]) => ({
   data,
   text: lines.filter(Boolean).join("\n"),
+});
+
+// --- acting (944c5b) ---
+
+/** What a write's answer says it was about. */
+interface WriteResult {
+  id: string;
+  dryRun: boolean;
+  about: { what: string; who: string | null };
+  decision?: "approve" | "reject";
+  note?: string | null;
+  changes?: { memo?: string; comment?: string };
+}
+
+const dryRunFlag = {
+  ...standardFlags.dryRun,
+  description: "Show exactly what would happen, without doing it",
+};
+const noteFlag: FlagSpec = {
+  name: "note",
+  value: "<text>",
+  description:
+    "Why, recorded in Ramp's approval history (needed to reject a transaction)",
+};
+
+/** One line for a write, real or dry run. */
+function wrote(result: WriteResult, done: string, wouldDo: string) {
+  const what = `${result.about.what}${result.about.who ? ` from ${result.about.who}` : ""} (${result.id})`;
+  const extras = [
+    result.changes?.memo === undefined
+      ? undefined
+      : `memo: "${result.changes.memo}"`,
+    result.changes?.comment === undefined
+      ? undefined
+      : `comment: "${result.changes.comment}"`,
+    result.note ? `note: "${result.note}"` : undefined,
+  ].filter(Boolean);
+  const detail = extras.length > 0 ? ` · ${extras.join(" · ")}` : "";
+  return result.dryRun
+    ? `DRY RUN (nothing changed) · would ${wouldDo} ${what}${detail}`
+    : `${done} ${what}${detail}.`;
+}
+
+type Post<J> = (args: {
+  param: { id: string };
+  json: J;
+}) => Promise<ResponseLike>;
+interface DecideJson {
+  note?: string | undefined;
+  dryRun: boolean;
+}
+interface UpdateJson {
+  memo?: string | undefined;
+  comment?: string | undefined;
+  dryRun: boolean;
+}
+
+/** `approve` or `reject` on one kind of object. */
+const decideVerb = (
+  object: string,
+  prefix: string,
+  decision: "approve" | "reject",
+  post: (client: ApiClient) => Post<DecideJson>,
+  examples: string[],
+): Verb => ({
+  name: decision,
+  summary:
+    decision === "approve"
+      ? `Approve one waiting on the user (confirm with them first; try --dry-run)`
+      : `Reject one waiting on the user (confirm with them first; try --dry-run)`,
+  usage: `<${prefix}_id>`,
+  flags: [noteFlag, dryRunFlag],
+  examples,
+  run: async ({ client, flags, args }) => {
+    const [id] = args;
+    if (!id)
+      throw CliError.usage(
+        `Which one? Pass a ${prefix}_ id.`,
+        `winston ramp ${object} list --to-approve shows what's waiting.`,
+      );
+    const result = await call<WriteResult>(
+      post(client)({
+        param: { id },
+        json: {
+          note: textFlag(flags, "note"),
+          dryRun: flags["dry-run"] === true,
+        },
+      }),
+    );
+    if (flags.json === true) return json(result);
+    return decision === "approve"
+      ? wrote(result, "Approved", "approve")
+      : wrote(result, "Rejected", "reject");
+  },
+});
+
+/** `update`: a memo and/or a comment. */
+const updateVerb = (
+  object: string,
+  prefix: string,
+  post: (client: ApiClient) => Post<UpdateJson>,
+): Verb => ({
+  name: "update",
+  summary: "Set the memo, or post a comment on its thread in Ramp",
+  usage: `<${prefix}_id>`,
+  flags: [
+    { name: "memo", value: "<text>", description: "The memo to set" },
+    {
+      name: "comment",
+      value: "<text>",
+      description:
+        "A comment to post (others on the thread see it; confirm first)",
+    },
+    dryRunFlag,
+  ],
+  examples: [
+    `winston ramp ${object} update ${prefix}_01k5… --memo "Client dinner with Acme"`,
+    `winston ramp ${object} update ${prefix}_01k5… --comment "Receipt attached in email" --dry-run`,
+  ],
+  run: async ({ client, flags, args }) => {
+    const [id] = args;
+    const memo = textFlag(flags, "memo");
+    const comment = textFlag(flags, "comment");
+    if (!id) throw CliError.usage(`Which one? Pass a ${prefix}_ id.`);
+    if (memo === undefined && comment === undefined)
+      throw CliError.usage("Nothing to change.", "Pass --memo or --comment.");
+    const result = await call<WriteResult>(
+      post(client)({
+        param: { id },
+        json: { memo, comment, dryRun: flags["dry-run"] === true },
+      }),
+    );
+    return flags.json === true
+      ? json(result)
+      : wrote(result, "Updated", "update");
+  },
 });
 
 // --- approvals ---
@@ -293,6 +430,30 @@ const transactions: Resource = {
         ]);
       },
     ),
+    updateVerb(
+      "transactions",
+      "txn",
+      (client) => (args) =>
+        client.v1.ramp.transactions[":id"].update.$post(args),
+    ),
+    decideVerb(
+      "transactions",
+      "txn",
+      "approve",
+      (client) => (args) =>
+        client.v1.ramp.transactions[":id"].approve.$post(args),
+      ["winston ramp transactions approve txn_01k5… --dry-run"],
+    ),
+    decideVerb(
+      "transactions",
+      "txn",
+      "reject",
+      (client) => (args) =>
+        client.v1.ramp.transactions[":id"].reject.$post(args),
+      [
+        'winston ramp transactions reject txn_01k5… --note "Please add the receipt and attendees"',
+      ],
+    ),
   ],
 };
 
@@ -391,6 +552,55 @@ const reimbursements: Resource = {
         ]);
       },
     ),
+    updateVerb(
+      "reimbursements",
+      "rmb",
+      (client) => (args) =>
+        client.v1.ramp.reimbursements[":id"].update.$post(args),
+    ),
+    {
+      name: "submit",
+      summary:
+        "Submit the user's draft reimbursement for approval (confirm first)",
+      usage: "<rmb_id>",
+      flags: [dryRunFlag],
+      examples: ["winston ramp reimbursements submit rmb_01k5… --dry-run"],
+      run: async ({ client, flags, args }) => {
+        const [id] = args;
+        if (!id)
+          throw CliError.usage(
+            "Which one? Pass an rmb_ id.",
+            "winston ramp reimbursements list shows the user's drafts.",
+          );
+        const result = await call<WriteResult>(
+          client.v1.ramp.reimbursements[":id"].submit.$post({
+            param: { id },
+            json: { dryRun: flags["dry-run"] === true },
+          }),
+        );
+        return flags.json === true
+          ? json(result)
+          : wrote(result, "Submitted", "submit");
+      },
+    },
+    decideVerb(
+      "reimbursements",
+      "rmb",
+      "approve",
+      (client) => (args) =>
+        client.v1.ramp.reimbursements[":id"].approve.$post(args),
+      ["winston ramp reimbursements approve rmb_01k5… --dry-run"],
+    ),
+    decideVerb(
+      "reimbursements",
+      "rmb",
+      "reject",
+      (client) => (args) =>
+        client.v1.ramp.reimbursements[":id"].reject.$post(args),
+      [
+        'winston ramp reimbursements reject rmb_01k5… --note "Duplicate of last week\'s"',
+      ],
+    ),
   ],
 };
 
@@ -443,6 +653,22 @@ const requests: Resource = {
           r.reason ? `Reason: ${r.reason}` : undefined,
         ]);
       },
+    ),
+    decideVerb(
+      "requests",
+      "req",
+      "approve",
+      (client) => (args) => client.v1.ramp.requests[":id"].approve.$post(args),
+      ["winston ramp requests approve req_01k5… --dry-run"],
+    ),
+    decideVerb(
+      "requests",
+      "req",
+      "reject",
+      (client) => (args) => client.v1.ramp.requests[":id"].reject.$post(args),
+      [
+        'winston ramp requests reject req_01k5… --note "Over budget this quarter"',
+      ],
     ),
   ],
 };

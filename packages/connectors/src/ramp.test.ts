@@ -184,3 +184,63 @@ describe("rampProvider", () => {
     ).toBeInstanceOf(ProviderNotFoundError);
   });
 });
+
+describe("acting in Ramp", () => {
+  test("approving and rejecting send Ramp's own action words, with the user's note", async () => {
+    const { client, calls } = fakeClient({
+      ramp_approve_or_reject_transaction: { success: true },
+      ramp_approve_or_reject_reimbursement: { success: true },
+      ramp_approve_or_reject_request: { success: true },
+    });
+    const ramp = rampProvider({ client });
+    await ramp.decide("rampTransaction", "tx-1", "approve", undefined);
+    await ramp.decide("rampTransaction", "tx-1", "reject", "Add the receipt");
+    await ramp.decide("rampReimbursement", "rb-1", "reject", undefined);
+    await ramp.decide("rampRequest", "rq-1", "approve", undefined);
+    expect(
+      calls.map((c) => [c.name, c.args.action, c.args.user_reason]),
+    ).toEqual([
+      ["ramp_approve_or_reject_transaction", "APPROVE", undefined],
+      [
+        "ramp_approve_or_reject_transaction",
+        "REJECT_AND_REQUEST_CHANGES",
+        "Add the receipt",
+      ],
+      ["ramp_approve_or_reject_reimbursement", "reject", undefined],
+      ["ramp_approve_or_reject_request", "APPROVE", undefined],
+    ]);
+    expect(
+      await ramp
+        .decide("rampTransaction", "tx-1", "reject", undefined)
+        .catch((e: unknown) => e),
+    ).toBeInstanceOf(ProviderRefusedError);
+  });
+
+  test("a memo says the user gave it, a comment goes on the right kind of thread, and Ramp's refusal is passed on", async () => {
+    const { client, calls } = fakeClient({
+      ramp_edit_transaction: { success: true },
+      ramp_post_comment: { success: true },
+      ramp_submit_reimbursement: rampError(
+        400,
+        "Reimbursement is missing a receipt",
+      ),
+    });
+    const ramp = rampProvider({ client });
+    await ramp.setMemo("rampTransaction", "tx-1", "Client dinner");
+    await ramp.comment("rampRequest", "rq-1", "Looks good");
+    expect(calls[0]?.args).toMatchObject({
+      transaction_uuid: "tx-1",
+      memo: "Client dinner",
+      user_submitted_fields: ["memo"],
+    });
+    expect(calls[1]?.args).toMatchObject({
+      ramp_object_type: "spend_request",
+      ramp_object_uuid: "rq-1",
+      message: "Looks good",
+    });
+    const refused = await ramp
+      .submitReimbursement("rb-1")
+      .catch((e: unknown) => e);
+    expect((refused as Error).message).toContain("missing a receipt");
+  });
+});

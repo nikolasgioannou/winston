@@ -125,3 +125,42 @@ describe("winston ramp", () => {
     );
   });
 });
+
+describe("winston ramp writes", () => {
+  test("a dry run says what would happen and that nothing changed", async () => {
+    const { code, out, requests } = await cli(
+      [
+        "ramp",
+        "transactions",
+        "approve",
+        "txn_01k5aaaaaaaaaaaaaaaaaaaaaa",
+        "--dry-run",
+      ],
+      answering({
+        account,
+        id: "txn_01k5aaaaaaaaaaaaaaaaaaaaaa",
+        decision: "approve",
+        note: null,
+        about: { what: "Uber 42.50", who: "Ada Lovelace" },
+        dryRun: true,
+      }),
+    );
+    expect(code).toBe(0);
+    expect(out).toBe(
+      "DRY RUN (nothing changed) · would approve Uber 42.50 from Ada Lovelace (txn_01k5aaaaaaaaaaaaaaaaaaaaaa)",
+    );
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe(
+      "/v1/ramp/transactions/txn_01k5aaaaaaaaaaaaaaaaaaaaaa/approve",
+    );
+    expect(await requests[0]?.json()).toEqual({ dryRun: true });
+  });
+
+  test("update needs something to change", async () => {
+    const { code, err } = await cli(
+      ["ramp", "transactions", "update", "txn_01k5aaaaaaaaaaaaaaaaaaaaaa"],
+      answering({}),
+    );
+    expect(code).toBe(1);
+    expect(err).toContain("Pass --memo or --comment.");
+  });
+});

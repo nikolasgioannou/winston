@@ -519,6 +519,15 @@ Full research is in [research/browser-agents.md](research/browser-agents.md) and
   - **What's dropped:** Ramp's `external_agent_messages`, text Ramp addresses to AI agents, is outside content and never reaches Winston.
   - **Ids:** `txn_`, `rmb_`, `req_` and `bil_` (`external_refs`; migration `ramp_refs`). The attention feed's tasks name objects by the uuids in their context.
   - **In the gateway:** `rotatingAccessTokens` with Ramp's refresher (the gateway now seals, §13), and one MCP session per connection kept between calls. Without `RAMP_OAUTH_CLIENT_ID`, `winston ramp` is `unavailable`.
+- **Acting in Ramp** (944c5b, `packages/vm-api/src/ramp-write.ts`): built like Gmail's writes.
+  - **The routes:** `POST /v1/ramp/{transactions|reimbursements}/:id/update` (memo, comment; `edit`), `/reimbursements/:id/submit` (`submit`), and `/{transactions|reimbursements|requests}/:id/{approve|reject}` (`approve`).
+  - **The checks:** the capability is checked before anything, including a scope Ramp didn't grant. `dryRun` then shows the object (merchant and amount, who it's from) and the change, and calls nothing.
+  - **The audit:** real writes are audited (`ramp.transaction.update`, `ramp.reimbursement.update`, `ramp.reimbursement.submit`, `ramp.approve`, `ramp.reject`) with the CLI id as `target_ref`.
+  - **What Ramp is told:**
+    - Ramp's own action words: `APPROVE`/`REJECT_AND_REQUEST_CHANGES` for transactions, `approve`/`reject` for reimbursements, `APPROVE`/`REJECT` for requests.
+    - The user's `--note` as `user_reason`. Rejecting a transaction needs a note, since it goes back to the cardholder with the changes asked for.
+    - A memo is marked as given by the user (`user_submitted_fields`).
+  - **Not built yet:** accounting codes and trips, which need Ramp's category and trip lookups.
 - **Provider traits** (74641a, `providerTraits` in `@winston/domain/connections`): each provider says who issues its token (`google` for Gmail and Google Calendar, `ramp` for Ramp; none for Winston's own mailbox) and whether Winston syncs and watches it.
   - **What the issuer decides:**
     - the connect and reconnect paths (`connectPath`, `reconnectPath`; Google's is `/auth/google/connect`)
@@ -1054,7 +1063,7 @@ calendar rsvp    <evt_id> --accept|--decline|--tentative [--note <text>] [--scop
 Named for its provider (decision #81), with one more level than other resources: `winston ramp <object> <verb>`.
 
 - **How the nesting works:** a resource can hold objects (`Resource.objects`, each named like `ramp transactions`). `winston ramp` and `winston ramp <object> --help` list them, a typo gets "Did you mean", and `winston get` finds an object's prefixes.
-- **What's built (02441f):** reading only; acting is 944c5b.
+- **What's built:** reading (02441f) and acting (944c5b). Every write takes `--dry-run` and is checked on the server against its capability.
 
 ```
 winston ramp approvals list                       What's waiting on the user, by Ramp's home-page sections
@@ -1066,6 +1075,12 @@ winston ramp requests list                        Spend requests waiting for the
 winston ramp requests get <req_id>
 winston ramp bills list|search <text>             [--unpaid]
 winston ramp bills get <bil_id>
+winston ramp transactions update <txn_id>   --memo <text> | --comment <text>   (edit)
+winston ramp transactions approve|reject <txn_id> [--note]   (approve; reject needs --note)
+winston ramp reimbursements update <rmb_id> --memo | --comment          (edit)
+winston ramp reimbursements submit <rmb_id>                              (submit)
+winston ramp reimbursements approve|reject <rmb_id> [--note]             (approve)
+winston ramp requests approve|reject <req_id> [--note]                   (approve)
 ```
 
 - **Scope:** lists are the user's own unless `--company` (everyone's, Ramp admins only) or `--to-approve`.

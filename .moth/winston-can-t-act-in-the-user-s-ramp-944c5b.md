@@ -1,7 +1,7 @@
 ---
 id: "944c5b"
 title: Winston can't act in the user's Ramp
-status: todo
+status: in-progress
 priority: none
 labels:
   - backend
@@ -9,7 +9,7 @@ labels:
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:37.516Z
-updated_at: 2026-10-05T23:01:42.183Z
+updated_at: 2026-10-07T15:50:47.108Z
 blocked_by:
   - "02441f"
 ---
@@ -27,6 +27,18 @@ The write side of `winston ramp` (80fcf0), built like Gmail's writes (837a29, d6
 
 **Done when**
 
-- [ ] vm-api tests for each verb: capability off, dry run, real call audited, Ramp's error (already approved, not the approver) mapped to a clear message
+- [x] vm-api tests for each verb: capability off, dry run, real call audited, Ramp's error (already approved, not the approver) mapped to a clear message
 - [ ] Locally, against the founder's Ramp: a memo edited, and a request approved with `--dry-run` first
-- [ ] `design.md` §5 and §11 describe the write routes and commands; `product.md` §4 and §6 list what Winston can do in Ramp
+- [x] `design.md` §5 and §11 describe the write routes and commands; `product.md` §4 and §6 list what Winston can do in Ramp
+
+
+## As built (waiting on the founder's local check)
+
+- **Provider methods** (`@winston/connectors/ramp`): `setMemo`, `comment`, `submitReimbursement` and `decide`, calling `ramp_edit_transaction`, `ramp_edit_reimbursement`, `ramp_post_comment`, `ramp_submit_reimbursement` and `ramp_approve_or_reject_{transaction,reimbursement,request}`. Their inputs come from Ramp's agent-tools spec, since the spike only had read scopes.
+  - **Approving and rejecting:** Ramp's own action words. The user's `--note` goes as `user_reason`. Rejecting a transaction is `REJECT_AND_REQUEST_CHANGES` and needs a note; full repayment isn't offered.
+  - **Memos:** marked `user_submitted_fields: ["memo"]`.
+- **Routes** (`ramp-write.ts`): explicit paths per object, so the CLI's typed client sees each one. Each checks its capability (and the granted scopes) first, `dryRun` shows the object and the change, and real writes go through `audited` with the CLI id as `target_ref`.
+- **CLI:** `update` (`--memo`, `--comment`), `submit`, `approve` and `reject` (`--note`), all with `--dry-run`. Writes print `Approved Uber $42.50 from Ada Lovelace (txn_…).`, or `DRY RUN (nothing changed) · would approve …`. Hono's client methods are proxies, so they're called through closures.
+- **Narrower than planned:** accounting codes and trips on `update` aren't built. Setting them needs Ramp's category, option and trip lookups first; worth a ticket if the founder wants them.
+- **Docs:** `product.md` §6 (confirm-first for Ramp) comes with the prompts (17254b).
+- **Tests:** the routes (capability off, a missing scope refused before Ramp is asked, a dry run calling nothing, an audited approve, a reject needing a note, `edit` and `submit` kept apart, the wrong kind of id); the connector (action words, memo fields, comment types, Ramp's refusal passed on); the CLI (dry-run line, an update with nothing to change).
