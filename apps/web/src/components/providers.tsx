@@ -10,12 +10,14 @@ import type { ReactNode } from "react";
 export const domainNames: Record<ConnectionDomain, string> = {
   mail: "Mail",
   calendar: "Calendar",
+  ramp: "Spend",
 };
 
 export const providerNames: Record<ConnectionProvider, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   winston: "Winston",
+  ramp: "Ramp",
 };
 
 /** Each provider's brand icon (see the note on `GmailIcon` about Google's permission). */
@@ -24,6 +26,8 @@ const providerIcons: Record<ConnectionProvider, () => ReactNode> = {
   google_calendar: () => <GoogleCalendarIcon />,
   // Winston's own mailbox is never listed with the user's accounts.
   winston: () => null,
+  // Ramp's mark comes with its site entry (0bfa49).
+  ramp: () => null,
 };
 
 export function ProviderIcon({ provider }: { provider: ConnectionProvider }) {

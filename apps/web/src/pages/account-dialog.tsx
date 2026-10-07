@@ -70,6 +70,27 @@ const capabilityCopy: {
       description: "Accept or decline invitations for you.",
     },
   },
+  ramp: {
+    read: {
+      label: "Read",
+      description:
+        "See your transactions, reimbursements and what's waiting on you.",
+    },
+    edit: {
+      label: "Edit",
+      description:
+        "Change memos, coding and trips on your expenses, and comment.",
+    },
+    submit: {
+      label: "Submit",
+      description: "Submit your draft reimbursements.",
+    },
+    approve: {
+      label: "Approve",
+      description:
+        "Approve or reject transactions, reimbursements and requests waiting on you.",
+    },
+  },
 };
 
 function copyOf(domain: ConnectionDomain, capability: Capability): Copy {

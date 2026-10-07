@@ -63,8 +63,9 @@ export function watchConnectionHandler(deps: {
       case "google_calendar":
         await watchCalendars(db, connection, deps, logger);
         return;
-      // Winston's own mailbox has no change feed: its mail is pushed to us.
+      // Winston's own mailbox is pushed to us; Ramp has no change feed.
       case "winston":
+      case "ramp":
         return;
     }
   };
@@ -243,6 +244,7 @@ export function watchStopper(
         return;
       }
       case "winston":
+      case "ramp":
         return;
     }
   };

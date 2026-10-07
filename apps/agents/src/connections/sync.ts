@@ -32,7 +32,9 @@ function syncProvider(db: DbOrTx, connection: Connection, deps: SyncDeps) {
       return syncMail(db, connection, deps.mail(connection));
     case "google_calendar":
       return syncCalendar(db, connection, deps.calendar(connection));
+    // Winston's mailbox is pushed to us; Ramp has no change feed to follow.
     case "winston":
+    case "ramp":
       return undefined;
   }
 }

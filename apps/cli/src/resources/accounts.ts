@@ -27,6 +27,7 @@ const providerNames: Record<ConnectionProvider, string> = {
   gmail: "Gmail",
   google_calendar: "Google Calendar",
   winston: "Winston's own",
+  ramp: "Ramp",
 };
 
 /** What `connect` says about each domain's link. */
@@ -38,6 +39,10 @@ const connectCopy: Record<ConnectionDomain, { what: string; how: string }> = {
   calendar: {
     what: "a Google account's calendar",
     how: "It connects calendar only; mail is a separate connection with its own link (winston accounts connect mail). It goes straight to Google's sign-in",
+  },
+  ramp: {
+    what: "the user's Ramp account",
+    how: "It goes straight to Ramp's sign-in; any Ramp plan works, but a Ramp admin must have allowed them MCP",
   },
 };
 const statusWords = {

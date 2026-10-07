@@ -49,6 +49,11 @@ export const providerNotes: Record<ConnectionProvider, string[]> = {
     '--repeat takes an RRULE (FREQ=WEEKLY;BYDAY=TU). Changing "this and following" splits the series in two.',
     "People outside the account's organization often hide their free/busy; winston calendar free says whose it couldn't see.",
   ],
+  ramp: [
+    "Winston sees what the user's Ramp role lets them see: their own spend as an employee, the company's as an admin.",
+    "Amounts, statuses and who is waiting come from Ramp; quote them, never estimate.",
+    'Disconnecting here deletes Winston\'s access token, but Ramp keeps listing the connection ("Ramp MCP Remote") under its connected AI tools.',
+  ],
 };
 
 const summary = (c: ConnectionRow) => ({

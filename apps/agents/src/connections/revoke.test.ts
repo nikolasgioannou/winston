@@ -49,6 +49,7 @@ function run(
         revoked.push(token);
         return Promise.resolve();
       },
+      ramp: () => Promise.resolve(),
     },
     stopWatch: (_connection, token) => {
       stopped.push(token);

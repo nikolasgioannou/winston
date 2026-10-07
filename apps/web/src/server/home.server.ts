@@ -13,6 +13,7 @@ import type { AttentionItem, HomeState } from "./home-state";
 const domainNames: Record<ConnectionDomain, string> = {
   mail: "Mail",
   calendar: "Calendar",
+  ramp: "Ramp",
 };
 
 /** What `/home` shows the user (docs/design.md §20). */

@@ -71,4 +71,4 @@ aws ssm start-session --target <instance_id> --profile winston-prod
 - [vm-recovery.md](vm-recovery.md): replacing, rolling and restoring a VM.
 - [secrets.md](secrets.md): production keys and rotation.
 - [costs.md](costs.md): budgets, limits and the spend report.
-- [aws-access.md](aws-access.md), [dns.md](dns.md), [google-cloud.md](google-cloud.md), [gcp-terraform.md](gcp-terraform.md).
+- [aws-access.md](aws-access.md), [dns.md](dns.md), [google-cloud.md](google-cloud.md), [gcp-terraform.md](gcp-terraform.md), [ramp.md](ramp.md).

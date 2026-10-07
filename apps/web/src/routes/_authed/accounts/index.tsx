@@ -21,13 +21,14 @@ const searchSchema = z.object({
   account: z.string().optional(),
   /** Set by the connect callback: the connection just saved, or what went wrong. */
   connected: z.string().optional(),
-  error: z.enum(["oauth", "missing_scopes"]).optional(),
+  error: z.enum(["oauth", "missing_scopes", "unavailable"]).optional(),
 });
 
 const problems = {
   oauth: "Couldn't connect that account. Please try again.",
   missing_scopes:
     "Winston needs every permission on Google's screen to help with that account. Please try again and leave them ticked.",
+  unavailable: "Connecting that app isn't set up here yet.",
 };
 
 export const Route = createFileRoute("/_authed/accounts/")({

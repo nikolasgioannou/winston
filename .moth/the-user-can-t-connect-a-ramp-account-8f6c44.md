@@ -1,7 +1,7 @@
 ---
 id: "8f6c44"
 title: The user can't connect a Ramp account
-status: todo
+status: in-progress
 priority: none
 labels:
   - backend
@@ -11,7 +11,7 @@ labels:
   - web
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:06.580Z
-updated_at: 2026-10-07T15:04:20.494Z
+updated_at: 2026-10-07T15:26:55.432Z
 blocked_by:
   - "74641a"
   - "93ff50"
@@ -30,8 +30,21 @@ The spec (80fcf0): a Ramp connection like a Google one, with domain `ramp`, prov
 **Done when**
 
 - [ ] Locally, the founder connects Ramp from the link, sees it in `winston accounts list`, disconnects it, and the token is gone from the database
-- [ ] Tests: callback with all scopes, with a scope missing (that capability is unavailable), a bad state, reconnecting the same login, and the setup script being safe to re-run
-- [ ] `design.md` §5 (Connections & credentials) and `product.md` §4 describe Ramp connections
+- [x] Tests: callback with all scopes, with a scope missing (that capability is unavailable), a bad state, reconnecting the same login, and the setup script being safe to re-run
+- [x] `design.md` §5 (Connections & credentials) and `product.md` §4 describe Ramp connections
 
 
 **From the spike (aa06d1, 2026-10-07):** the scopes are as in the "Verified" section of `docs/research/ramp-mcp.md`, which also shows that a subset of scopes is honoured. There's no `refresh_token_expires_in`, so the grant sweep doesn't change: a Ramp connection expires only when a refresh is refused. Ramp renames every registered client "Ramp MCP Remote", so that's what users see on Ramp's screen and in its connected tools.
+
+
+## As built (waiting on the founder's local check)
+
+- **Vocabulary:** `ramp` is a domain and a provider (migration `ramp_connections`), issuer `ramp`, not synced. Capabilities `read` (on), `edit`, `submit` and `approve` (off).
+- **Scopes:** `capabilityScopes` is now a list per capability, since a Ramp capability needs several scopes. Connecting asks for their union (`rampConnectScopes`), and `unavailableCapabilities` marks one unavailable if any of its scopes is missing.
+- **Ramp's OAuth** is in `@winston/connectors/ramp-auth`: the sign-in URL, the code exchange, the refresher for `rotatingAccessTokens`, and the user's email through MCP. PKCE's `codeChallenge` moved to `@winston/shared/tokens`. Endpoints are production's: Ramp's sandbox server can't use production accounts, and the founder tests with their real one. So no `RAMP_MCP_URL`.
+- **Routes:** `/auth/ramp/connect` and `/callback` beside Google's. The connect cookies now take the flow's path, so the two flows never read each other's. Google's flow only accepts Google's domains (`isGoogleDomain`). `?next` after sign-in may go to either connect flow. A new `unavailable` problem covers a missing `RAMP_OAUTH_CLIENT_ID`.
+- **Client:** `scripts/ramp-client.ts <redirect>` registers one. It's standalone because root scripts can't import workspace packages. `scripts/setup.sh` registers the local client once (checked by re-running: "Ramp client set").
+- **Disconnecting:** `rampTokenRevoker` is a no-op, because Ramp refuses revocation from a public client.
+- **Site and CLI:** Ramp's names, capability copy, the `accounts connect ramp` text and the vm-api notes are in, as the records require. Its icon and its entry in the Add account dialog are 0bfa49's, so for now the link comes from `winston accounts connect ramp`.
+- **Docs:** `docs/runbooks/ramp.md` (new), `design.md` §5 and §14, `product.md` §4.
+- **Tests:** `connect-ramp.server.test.ts` covers the account saved with only `read` on, the token sealed and no watch; missing read scopes; a bad state; a refusal; no client; reconnecting the same login. `ramp-auth.test.ts` covers the requested scopes (none of the never-offered ones) and refreshing. The domain tests cover capabilities left unavailable by a missing scope.

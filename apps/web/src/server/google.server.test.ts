@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { codeChallenge } from "@winston/shared/tokens";
 import {
-  codeChallenge,
   exchangeGoogleCode,
   googleAuthorizationUrl,
   googleConnectUrl,

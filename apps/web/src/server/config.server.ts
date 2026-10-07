@@ -13,6 +13,11 @@ const webConfigSchema = dbConfigSchema
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1),
     GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1),
     /**
+     * This environment's Ramp MCP client (8f6c44, docs/runbooks/ramp.md): a
+     * public client, so no secret. Without it, Ramp can't be connected.
+     */
+    RAMP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    /**
      * Where the site is served. Builds the sign-in redirect URI, and https
      * makes cookies Secure.
      */

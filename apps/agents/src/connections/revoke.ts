@@ -39,6 +39,12 @@ export function googleTokenRevoker(send: typeof fetch = fetch): RevokeToken {
 }
 
 /**
+ * Ramp won't let a public client revoke (aa06d1), so its token is only
+ * deleted; the user removes Winston under Ramp's connected AI tools.
+ */
+export const rampTokenRevoker: RevokeToken = () => Promise.resolve();
+
+/**
  * The `revoke_connection_token` job (docs/design.md §12a): for a connection
  * that's still disconnected, revokes its grant with its issuer, unless another
  * of the user's live connections from that issuer uses the same account

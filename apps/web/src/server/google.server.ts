@@ -6,6 +6,7 @@
  * one domain's scopes, offline, so a refresh token comes back.
  */
 import type { ConnectionDomain } from "@winston/domain/connections";
+import { codeChallenge } from "@winston/shared/tokens";
 import { z } from "zod";
 
 const authorizeEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -16,14 +17,6 @@ export interface GoogleClient {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
-}
-
-/** PKCE's S256 challenge: the verifier's SHA-256, base64url. */
-export function codeChallenge(codeVerifier: string) {
-  return new Bun.CryptoHasher("sha256")
-    .update(codeVerifier)
-    .digest()
-    .toString("base64url");
 }
 
 /** Where to send the browser to sign in. */
@@ -48,6 +41,16 @@ export function googleAuthorizationUrl(
 
 const connectScopePrefix = "https://www.googleapis.com/auth/";
 
+/** The domains a Google account is connected for. */
+export const googleDomains = [
+  "mail",
+  "calendar",
+] as const satisfies readonly ConnectionDomain[];
+export type GoogleDomain = (typeof googleDomains)[number];
+
+export const isGoogleDomain = (value: unknown): value is GoogleDomain =>
+  googleDomains.includes(value as GoogleDomain);
+
 /**
  * What connecting each domain asks Google for (docs/runbooks/google-cloud.md),
  * and the scope it can't work without. The user can untick scopes on Google's
@@ -69,7 +72,7 @@ export const connectGrants = {
     required: "calendar.events",
   },
 } as const satisfies Record<
-  ConnectionDomain,
+  GoogleDomain,
   { provider: string; scopes: readonly string[]; required: string }
 >;
 
@@ -96,7 +99,7 @@ export function googleConnectUrl(
   }: {
     state: string;
     codeVerifier: string;
-    domain: ConnectionDomain;
+    domain: GoogleDomain;
     loginHint?: string | undefined;
   },
 ) {

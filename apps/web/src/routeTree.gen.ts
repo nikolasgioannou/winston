@@ -27,6 +27,8 @@ import { Route as DevDesignIndexRouteImport } from './routes/dev/design/index'
 import { Route as DevDesignFrameRouteImport } from './routes/dev/design/frame'
 import { Route as AuthGoogleConnectIndexRouteImport } from './routes/auth/google/connect/index'
 import { Route as AuthGoogleConnectCallbackRouteImport } from './routes/auth/google/connect/callback'
+import { Route as AuthRampConnectIndexRouteImport } from './routes/auth/ramp/connect/index'
+import { Route as AuthRampConnectCallbackRouteImport } from './routes/auth/ramp/connect/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -118,6 +120,16 @@ const AuthGoogleConnectCallbackRoute =
     path: '/auth/google/connect/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthRampConnectIndexRoute = AuthRampConnectIndexRouteImport.update({
+  id: '/auth/ramp/connect/',
+  path: '/auth/ramp/connect/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRampConnectCallbackRoute = AuthRampConnectCallbackRouteImport.update({
+  id: '/auth/ramp/connect/callback',
+  path: '/auth/ramp/connect/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,7 +148,9 @@ export interface FileRoutesByFullPath {
   '/sites/': typeof AuthedSitesIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
+  '/auth/ramp/connect/callback': typeof AuthRampConnectCallbackRoute
   '/auth/google/connect/': typeof AuthGoogleConnectIndexRoute
+  '/auth/ramp/connect/': typeof AuthRampConnectIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -155,7 +169,9 @@ export interface FileRoutesByTo {
   '/sites': typeof AuthedSitesIndexRoute
   '/dev/design': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
+  '/auth/ramp/connect/callback': typeof AuthRampConnectCallbackRoute
   '/auth/google/connect': typeof AuthGoogleConnectIndexRoute
+  '/auth/ramp/connect': typeof AuthRampConnectIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -176,7 +192,9 @@ export interface FileRoutesById {
   '/_authed/sites/': typeof AuthedSitesIndexRoute
   '/dev/design/': typeof DevDesignIndexRoute
   '/auth/google/connect/callback': typeof AuthGoogleConnectCallbackRoute
+  '/auth/ramp/connect/callback': typeof AuthRampConnectCallbackRoute
   '/auth/google/connect/': typeof AuthGoogleConnectIndexRoute
+  '/auth/ramp/connect/': typeof AuthRampConnectIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -197,7 +215,9 @@ export interface FileRouteTypes {
     | '/sites/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
+    | '/auth/ramp/connect/callback'
     | '/auth/google/connect/'
+    | '/auth/ramp/connect/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -216,7 +236,9 @@ export interface FileRouteTypes {
     | '/sites'
     | '/dev/design'
     | '/auth/google/connect/callback'
+    | '/auth/ramp/connect/callback'
     | '/auth/google/connect'
+    | '/auth/ramp/connect'
   id:
     | '__root__'
     | '/'
@@ -236,7 +258,9 @@ export interface FileRouteTypes {
     | '/_authed/sites/'
     | '/dev/design/'
     | '/auth/google/connect/callback'
+    | '/auth/ramp/connect/callback'
     | '/auth/google/connect/'
+    | '/auth/ramp/connect/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -252,7 +276,9 @@ export interface RootRouteChildren {
   DevDesignFrameRoute: typeof DevDesignFrameRoute
   DevDesignIndexRoute: typeof DevDesignIndexRoute
   AuthGoogleConnectCallbackRoute: typeof AuthGoogleConnectCallbackRoute
+  AuthRampConnectCallbackRoute: typeof AuthRampConnectCallbackRoute
   AuthGoogleConnectIndexRoute: typeof AuthGoogleConnectIndexRoute
+  AuthRampConnectIndexRoute: typeof AuthRampConnectIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -383,6 +409,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleConnectCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/ramp/connect/': {
+      id: '/auth/ramp/connect/'
+      path: '/auth/ramp/connect'
+      fullPath: '/auth/ramp/connect/'
+      preLoaderRoute: typeof AuthRampConnectIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/ramp/connect/callback': {
+      id: '/auth/ramp/connect/callback'
+      path: '/auth/ramp/connect/callback'
+      fullPath: '/auth/ramp/connect/callback'
+      preLoaderRoute: typeof AuthRampConnectCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -418,7 +458,9 @@ const rootRouteChildren: RootRouteChildren = {
   DevDesignFrameRoute: DevDesignFrameRoute,
   DevDesignIndexRoute: DevDesignIndexRoute,
   AuthGoogleConnectCallbackRoute: AuthGoogleConnectCallbackRoute,
+  AuthRampConnectCallbackRoute: AuthRampConnectCallbackRoute,
   AuthGoogleConnectIndexRoute: AuthGoogleConnectIndexRoute,
+  AuthRampConnectIndexRoute: AuthRampConnectIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

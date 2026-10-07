@@ -56,6 +56,7 @@ export class ApiFailure extends Error {
 const domainName: Record<ConnectionDomain, string> = {
   mail: "mail",
   calendar: "calendar",
+  ramp: "Ramp",
 };
 
 /**
@@ -202,6 +203,12 @@ const capabilityWords: {
     update: "changing events",
     delete: "deleting events",
     rsvp: "answering invitations",
+  },
+  ramp: {
+    read: "reading",
+    edit: "editing expenses",
+    submit: "submitting reimbursements",
+    approve: "approving and rejecting",
   },
 };
 

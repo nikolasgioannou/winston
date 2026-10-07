@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { connectPaths } from "@winston/domain/connections";
 import { generateToken } from "@winston/shared/tokens";
 import {
   connectCallbackPath,
   connectionToReconnect,
-  isConnectionDomain,
 } from "../../../../server/connect.server";
 import { database } from "../../../../server/db.server";
-import { googleConnectUrl } from "../../../../server/google.server";
+import {
+  googleConnectUrl,
+  isGoogleDomain,
+} from "../../../../server/google.server";
 import {
   currentUser,
   googleClient,
@@ -36,10 +39,10 @@ export const Route = createFileRoute("/auth/google/connect/")({
           params.get("reconnect"),
         );
         const domain = reconnecting?.domain ?? params.get("domain");
-        if (!isConnectionDomain(domain)) return redirect("/accounts");
+        if (!isGoogleDomain(domain)) return redirect("/accounts");
         const state = generateToken();
         const codeVerifier = generateToken();
-        setConnectCookies({ state, codeVerifier, domain });
+        setConnectCookies(connectPaths.google, { state, codeVerifier, domain });
         return redirect(
           googleConnectUrl(googleClient(connectCallbackPath), {
             state,

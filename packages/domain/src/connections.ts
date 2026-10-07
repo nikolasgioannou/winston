@@ -1,10 +1,11 @@
 /**
  * Connected accounts' vocabulary (docs/design.md §3 Naming, §12a): domains,
- * never provider names, and each domain's capabilities, which the user
- * toggles per connection and the server enforces.
+ * never provider names (except Ramp's, decision #81), and each domain's
+ * capabilities, which the user toggles per connection and the server
+ * enforces.
  */
 
-export const connectionDomains = ["mail", "calendar"] as const;
+export const connectionDomains = ["mail", "calendar", "ramp"] as const;
 export type ConnectionDomain = (typeof connectionDomains)[number];
 
 /** Whether `value` names a connection domain (an event's domain may not). */
@@ -13,18 +14,21 @@ export const isConnectionDomain = (value: string): value is ConnectionDomain =>
 
 /**
  * Who serves a connection; an attribute of the connection. `winston` is
- * Winston's own mailbox, which we serve ourselves.
+ * Winston's own mailbox, which we serve ourselves. `ramp` is both a domain
+ * and its provider (80fcf0).
  */
 export const connectionProviders = [
   "gmail",
   "google_calendar",
   "winston",
+  "ramp",
 ] as const;
 export type ConnectionProvider = (typeof connectionProviders)[number];
 
 export const capabilitiesByDomain = {
   mail: ["read", "draft", "send", "modify_labels"],
   calendar: ["read", "create", "update", "delete", "rsvp"],
+  ramp: ["read", "edit", "submit", "approve"],
 } as const satisfies Record<ConnectionDomain, readonly string[]>;
 
 export type Capability<D extends ConnectionDomain = ConnectionDomain> =
@@ -56,32 +60,63 @@ export const defaultCapabilities = {
     delete: false,
     rsvp: false,
   },
+  ramp: { read: true, edit: false, submit: false, approve: false },
 } as const satisfies Record<ConnectionDomain, CapabilityMap>;
 
+/** Ramp's read scopes: what `read` needs (docs/research/ramp-mcp.md, Verified). */
+const rampReadScopes = [
+  "transactions:read",
+  "reimbursements:read",
+  "bills:read",
+  "unified_requests:read",
+  "users:read",
+  "business:read",
+  "tasks:read",
+  "memos:read",
+  "accounting:read",
+  "trips:read",
+] as const;
+
 /**
- * The Google scope each capability needs, per provider. The connect flow asks
- * for every scope a domain uses, but the user can untick some on Google's
- * screen; a capability whose scope is missing is unavailable until they
- * reconnect.
+ * The scopes each capability needs, per provider. The connect flow asks for
+ * every scope a domain uses, but the user can untick some on Google's screen;
+ * a capability missing a scope is unavailable until they reconnect. Ramp's
+ * scopes are coarser than its capabilities (`transactions:write` covers
+ * editing and approving), so only Winston's routes keep those apart.
  */
 export const capabilityScopes = {
   gmail: {
-    read: "gmail.modify",
-    draft: "gmail.modify",
-    send: "gmail.modify",
-    modify_labels: "gmail.modify",
+    read: ["gmail.modify"],
+    draft: ["gmail.modify"],
+    send: ["gmail.modify"],
+    modify_labels: ["gmail.modify"],
   },
   google_calendar: {
-    read: "calendar.events",
-    create: "calendar.events",
-    update: "calendar.events",
-    delete: "calendar.events",
-    rsvp: "calendar.events",
+    read: ["calendar.events"],
+    create: ["calendar.events"],
+    update: ["calendar.events"],
+    delete: ["calendar.events"],
+    rsvp: ["calendar.events"],
+  },
+  ramp: {
+    read: rampReadScopes,
+    edit: ["transactions:write", "reimbursements:write", "comments:write"],
+    submit: ["reimbursements:write"],
+    approve: ["transactions:write", "reimbursements:write", "approvals:write"],
   },
 } as const satisfies {
-  gmail: Record<Capability<"mail">, string>;
-  google_calendar: Record<Capability<"calendar">, string>;
+  gmail: Record<Capability<"mail">, readonly string[]>;
+  google_calendar: Record<Capability<"calendar">, readonly string[]>;
+  ramp: Record<Capability<"ramp">, readonly string[]>;
 };
+
+/**
+ * Every scope connecting Ramp asks for. Never the ones that move money or
+ * hand out card numbers (80fcf0).
+ */
+export const rampConnectScopes = [
+  ...new Set(Object.values(capabilityScopes.ramp).flat()),
+];
 
 /**
  * Every capability of Winston's own mailbox is on, with no switches: limits
@@ -98,6 +133,7 @@ export const winstonMailboxCapabilities = {
 export const providerOf = {
   mail: "gmail",
   calendar: "google_calendar",
+  ramp: "ramp",
 } as const satisfies Record<ConnectionDomain, ConnectionProvider>;
 
 /**
@@ -105,7 +141,7 @@ export const providerOf = {
  * refreshed, expired and revoked. Mail and calendar share one Google OAuth
  * client, so their grants share Google's screen and its revocation.
  */
-export const tokenIssuers = ["google"] as const;
+export const tokenIssuers = ["google", "ramp"] as const;
 export type TokenIssuer = (typeof tokenIssuers)[number];
 
 /**
@@ -117,6 +153,7 @@ export const providerTraits = {
   gmail: { issuer: "google", syncs: true },
   google_calendar: { issuer: "google", syncs: true },
   winston: { issuer: null, syncs: false },
+  ramp: { issuer: "ramp", syncs: false },
 } as const satisfies Record<
   ConnectionProvider,
   { issuer: TokenIssuer | null; syncs: boolean }
@@ -134,7 +171,10 @@ export const syncedProviders = connectionProviders.filter(
 );
 
 /** Each issuer as the user knows it, from its sign-in screen. */
-export const issuerNames: Record<TokenIssuer, string> = { google: "Google" };
+export const issuerNames: Record<TokenIssuer, string> = {
+  google: "Google",
+  ramp: "Ramp",
+};
 
 /** Whose sign-in screen grants a provider's scopes ("Google"). */
 export function issuerOf(provider: ConnectionProvider) {
@@ -143,8 +183,9 @@ export function issuerOf(provider: ConnectionProvider) {
 }
 
 /** Where the site starts connecting an account with each issuer. */
-const connectPaths: Record<TokenIssuer, string> = {
+export const connectPaths: Record<TokenIssuer, string> = {
   google: "/auth/google/connect",
+  ramp: "/auth/ramp/connect",
 };
 
 /** The site's path that starts connecting a new account for `domain`. */
@@ -176,8 +217,8 @@ export function isCapabilityOf<D extends ConnectionDomain>(
 }
 
 /**
- * A connection's capabilities whose Google scope wasn't granted: unusable
- * until it's reconnected. Winston's own mailbox has no grant to lack.
+ * A connection's capabilities missing a scope its issuer didn't grant:
+ * unusable until it's reconnected. Winston's own mailbox has no grant to lack.
  */
 export function unavailableCapabilities(
   provider: ConnectionProvider,
@@ -185,8 +226,11 @@ export function unavailableCapabilities(
   scopes: readonly string[],
 ): Capability[] {
   if (provider === "winston") return [];
-  const needed: Record<string, string> = capabilityScopes[provider];
-  return capabilitiesByDomain[domain].filter(
-    (capability) => !scopes.includes(needed[capability] ?? ""),
+  const needed: Partial<Record<string, readonly string[]>> =
+    capabilityScopes[provider];
+  return capabilitiesByDomain[domain].filter((capability) =>
+    (needed[capability] ?? [capability]).some(
+      (scope) => !scopes.includes(scope),
+    ),
   );
 }

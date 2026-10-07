@@ -125,6 +125,7 @@ function fakes() {
           revoked.push(token);
           return Promise.resolve();
         },
+        ramp: () => Promise.resolve(),
       },
       telegram: {
         sendMessage: (chatId: number, text: string) => {
@@ -294,6 +295,7 @@ describe("deleteUserHandler", () => {
           blobs,
           revoke: {
             google: () => Promise.reject(new Error("Google is down")),
+            ramp: () => Promise.resolve(),
           },
         },
         user.id,

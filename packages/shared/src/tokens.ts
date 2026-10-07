@@ -13,6 +13,11 @@ export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** PKCE's S256 challenge: the verifier's SHA-256, base64url. */
+export function codeChallenge(codeVerifier: string) {
+  return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
 /** Whether `token` matches a stored hash, compared in constant time. */
 export function tokenMatches(token: string, storedHash: string) {
   const given = Buffer.from(hashToken(token), "hex");

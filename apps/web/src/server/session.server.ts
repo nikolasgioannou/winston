@@ -109,18 +109,19 @@ const connectCookieNames = {
   codeVerifier: "winston_connect_verifier",
   domain: "winston_connect_domain",
 } as const;
-const connectCookiePath = "/auth/google/connect";
-
-export function setConnectCookies(values: {
-  state: string;
-  codeVerifier: string;
-  domain: string;
-}) {
+/**
+ * Sets them on the flow's own path (an issuer's `connectPaths` entry), so
+ * Google's and Ramp's flows never read each other's.
+ */
+export function setConnectCookies(
+  path: string,
+  values: { state: string; codeVerifier: string; domain: string },
+) {
   const options = {
     httpOnly: true,
     secure: secure(),
     sameSite: "lax" as const,
-    path: connectCookiePath,
+    path,
     maxAge: 600,
   };
   for (const [key, name] of Object.entries(connectCookieNames))
@@ -128,14 +129,14 @@ export function setConnectCookies(values: {
 }
 
 /** Reads the connect flow's cookies once and clears them. */
-export function takeConnectCookies() {
+export function takeConnectCookies(path: string) {
   const values = {
     state: getCookie(connectCookieNames.state),
     codeVerifier: getCookie(connectCookieNames.codeVerifier),
     domain: getCookie(connectCookieNames.domain),
   };
   for (const name of Object.values(connectCookieNames))
-    deleteCookie(name, { path: connectCookiePath });
+    deleteCookie(name, { path });
   return values;
 }
 
@@ -150,6 +151,20 @@ export function takeFlowCookies() {
   for (const name of Object.values(flowCookieNames))
     deleteCookie(name, { path: "/auth/google" });
   return values;
+}
+
+/**
+ * This environment's Ramp client, redirecting back to `callbackPath` on the
+ * site, or undefined where none is registered.
+ */
+export function rampClient(callbackPath: string) {
+  const config = webConfig();
+  return config.RAMP_OAUTH_CLIENT_ID
+    ? {
+        clientId: config.RAMP_OAUTH_CLIENT_ID,
+        redirectUri: new URL(callbackPath, config.WEB_PUBLIC_URL).toString(),
+      }
+    : undefined;
 }
 
 /** The Google client for this environment, redirecting back to `callbackPath` on the site. */

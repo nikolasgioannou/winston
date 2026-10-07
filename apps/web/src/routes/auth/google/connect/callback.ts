@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { connectPaths } from "@winston/domain/connections";
 import {
   completeGoogleConnect,
   connectCallbackPath,
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/auth/google/connect/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const cookies = takeConnectCookies();
+        const cookies = takeConnectCookies(connectPaths.google);
         const user = await currentUser();
         const result = user
           ? await completeGoogleConnect(
