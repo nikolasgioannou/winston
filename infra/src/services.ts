@@ -71,6 +71,12 @@ const sizes: Record<Service, { cpu: number; memoryMiB: number }> = {
 export const gcpProject = "winston-510100";
 
 /**
+ * Winston's Ramp MCP client (docs/runbooks/ramp.md): public, and the same id
+ * for every registration; Ramp's allowlist of our redirect is what's ours.
+ */
+export const rampClientId = "ramp_id_7ugjEFLeFC9aZRJk5C1r6XgW2i5PBJJs6ZG9Rvpt";
+
+/**
  * Where sites run (docs/design.md §9a, docs/runbooks/sites.md): Winston's
  * Cloudflare account, set up by hand. None of it is secret.
  */
@@ -176,6 +182,8 @@ export class ServicesStack extends Stack {
         SES_CONFIGURATION_SET: props.mail.configurationSetName,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         WEB_PUBLIC_URL: publicUrl,
+        // Ramp's public client (docs/runbooks/ramp.md): no secret, so plain config.
+        RAMP_OAUTH_CLIENT_ID: rampClientId,
         ...siteHost,
       },
       web: {
@@ -184,6 +192,7 @@ export class ServicesStack extends Stack {
         WEB_PUBLIC_URL: publicUrl,
         GATEWAY_PUBLIC_URL: `wss://gateway.${domain}`,
         TELEGRAM_BOT_USERNAME: "RunWinstonBot",
+        RAMP_OAUTH_CLIENT_ID: rampClientId,
         TOKEN_KMS_KEY_ID: props.tokensKey.keyArn,
         ...siteHost,
         BLOB_BUCKET: props.blobs.bucketName,
