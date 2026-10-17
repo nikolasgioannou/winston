@@ -123,13 +123,15 @@ ensure_setting() {
 
 ensure_setting SITES_ADMIN_URL "http://127.0.0.1:3004"
 ensure_setting SITES_CONNECT_URL "http://127.0.0.1:3003"
+# Ramp refuses a "localhost" callback but takes 127.0.0.1 (docs/runbooks/ramp.md).
+ensure_setting RAMP_CALLBACK_URL "http://127.0.0.1:3002/auth/ramp/connect/callback"
 # Ramp's local client (docs/runbooks/ramp.md): registered once with Ramp for
 # the local site's callback, which needs no approval from Ramp.
 if grep -qE '^RAMP_OAUTH_CLIENT_ID=.+' .env.local; then
   done_ "Ramp client set"
 else
   doing "registering a local Ramp client"
-  if ramp_client=$(bun scripts/ramp-client.ts http://localhost:3002/auth/ramp/connect/callback); then
+  if ramp_client=$(bun scripts/ramp-client.ts http://127.0.0.1:3002/auth/ramp/connect/callback); then
     awk -v line="RAMP_OAUTH_CLIENT_ID=$ramp_client" '
       index($0, "RAMP_OAUTH_CLIENT_ID=") == 1 { print line; found = 1; next }
       { print }

@@ -162,7 +162,9 @@ export function rampClient(callbackPath: string) {
   return config.RAMP_OAUTH_CLIENT_ID
     ? {
         clientId: config.RAMP_OAUTH_CLIENT_ID,
-        redirectUri: new URL(callbackPath, config.WEB_PUBLIC_URL).toString(),
+        redirectUri:
+          config.RAMP_CALLBACK_URL ??
+          new URL(callbackPath, config.WEB_PUBLIC_URL).toString(),
       }
     : undefined;
 }

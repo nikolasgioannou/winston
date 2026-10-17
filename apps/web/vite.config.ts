@@ -19,7 +19,9 @@ const prodRouteTree = fileURLToPath(
 export default defineConfig(({ command }) => {
   const build = command === "build";
   return {
-    server: { port: 3002, strictPort: true },
+    // IPv4, so Ramp's callback reaches it at 127.0.0.1 (docs/runbooks/ramp.md);
+    // browsers still find it at localhost.
+    server: { host: "127.0.0.1", port: 3002, strictPort: true },
     plugins: [
       tanstackStart(
         build

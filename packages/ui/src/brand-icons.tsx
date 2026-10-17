@@ -1,24 +1,28 @@
 import { useId, type SVGProps } from "react";
 
 /**
- * Ramp's mark, the two strokes at the end of its logo, unmodified: its paths
- * are cut from the logo Ramp serves (next.ramp.com/assets/images/ramp-logo.svg,
- * 2026-10-17). Ramp publishes no brand kit; as with Google's icons, the
- * founder chose to use it on a private, friends-only site (2026-10-17), to be
- * asked about before any wider launch. Drawn in the text color, as Ramp draws
- * it in black, so it shows in dark mode too.
+ * Ramp's app icon: its black mark on its yellow (#E4F222) circle, as Ramp's
+ * own touch icon shows it (ramp.com/apple-touch-icon.png). The mark's paths
+ * are cut unmodified from the logo Ramp serves
+ * (next.ramp.com/assets/images/ramp-logo.svg, 2026-10-17). Ramp publishes no
+ * brand kit; as with Google's icons, the founder chose to use it on a
+ * private, friends-only site (2026-10-17), to be asked about before any wider
+ * launch.
  */
 export function RampIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      viewBox="55.9 -2.13 20 20"
-      fill="currentColor"
+      viewBox="49.9 -8.13 32 32"
       width={16}
       height={16}
       aria-hidden
       {...props}
     >
-      <path d="M75.172 15.665v.07l-10.1.003v-.073c1.457-.823 2.462-1.66 3.367-2.536h4.147l2.586 2.536ZM72.67 2.51 70.11 0h-.075s.043 4.68-4.255 8.936c-4.206 4.166-9.152 4.175-9.152 4.175v.073l2.608 2.555s4.874.048 9.18-4.175c4.29-4.21 4.254-9.053 4.254-9.053Z" />
+      <circle cx="65.9" cy="7.87" r="16" fill="#E4F222" />
+      <path
+        fill="#000"
+        d="M75.172 15.665v.07l-10.1.003v-.073c1.457-.823 2.462-1.66 3.367-2.536h4.147l2.586 2.536ZM72.67 2.51 70.11 0h-.075s.043 4.68-4.255 8.936c-4.206 4.166-9.152 4.175-9.152 4.175v.073l2.608 2.555s4.874.048 9.18-4.175c4.29-4.21 4.254-9.053 4.254-9.053Z"
+      />
     </svg>
   );
 }

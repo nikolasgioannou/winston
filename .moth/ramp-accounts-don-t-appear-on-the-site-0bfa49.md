@@ -8,7 +8,7 @@ labels:
   - web
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:23.100Z
-updated_at: 2026-10-17T17:50:01.920Z
+updated_at: 2026-10-17T17:56:28.566Z
 blocked_by:
   - "8f6c44"
 ---
@@ -44,3 +44,6 @@ Once Ramp can be connected (8f6c44), the site has to show it like Gmail and Cale
 
 
 **Ramp's mark (2026-10-17, the founder's ask):** `RampIcon` in `@winston/ui/brand-icons` replaces the receipt. It's the two strokes from the logo Ramp serves (`next.ramp.com/assets/images/ramp-logo.svg`), unmodified, drawn in the text color. Ramp has no brand kit; as with Google's icons, it's used on a private, friends-only site, and Ramp should be asked before any wider launch. Also fixed the Ramp fixture's address (`ada@acme.com`).
+
+
+**Yellow (2026-10-17, the founder's ask):** `RampIcon` is now Ramp's app icon, the black mark on Ramp's yellow (#E4F222) circle, as Ramp's own touch icon shows it.

@@ -19,7 +19,7 @@ It prints the client id.
 
 ### Local
 
-`scripts/setup.sh` registers a client for `http://localhost:3002/auth/ramp/connect/callback` the first time and writes its id into `.env.local`. Ramp needs no approval for a `localhost` redirect, so any Ramp account can connect locally:
+`scripts/setup.sh` registers a client the first time and writes its id into `.env.local`, with `RAMP_CALLBACK_URL=http://127.0.0.1:3002/auth/ramp/connect/callback`. Ramp needs no approval for a `127.0.0.1` callback, but it refuses `localhost` ("This client isn't supported yet", 2026-10-17). So Ramp sends the browser to 127.0.0.1, and the callback hands it straight back to the same path on the site's own address (`WEB_PUBLIC_URL`), where the session and the flow's cookies are. Any Ramp account can connect locally:
 
 - Any plan works.
 - A Ramp admin must allow the user under Company → Integrations → Ramp MCP → Manage access.

@@ -1,10 +1,10 @@
 /**
  * Registers a Ramp MCP client for one redirect URI and prints its id
  * (docs/runbooks/ramp.md). Ramp's clients are public (no secret), so the id
- * is all an environment keeps, as RAMP_OAUTH_CLIENT_ID. A `localhost`
+ * is all an environment keeps, as RAMP_OAUTH_CLIENT_ID. A loopback
  * redirect needs nothing more; a hosted one must first be allowlisted by Ramp.
  *
- *   bun scripts/ramp-client.ts http://localhost:3002/auth/ramp/connect/callback
+ *   bun scripts/ramp-client.ts http://127.0.0.1:3002/auth/ramp/connect/callback
  */
 // Ramp's dynamic registration, as its MCP server's metadata names it.
 const rampRegistrationEndpoint = "https://mcp.ramp.com/register";

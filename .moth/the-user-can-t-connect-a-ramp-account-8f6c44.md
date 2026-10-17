@@ -11,7 +11,7 @@ labels:
   - web
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:06.580Z
-updated_at: 2026-10-07T15:26:55.432Z
+updated_at: 2026-10-17T17:56:28.494Z
 blocked_by:
   - "74641a"
   - "93ff50"
@@ -48,3 +48,11 @@ The spec (80fcf0): a Ramp connection like a Google one, with domain `ramp`, prov
 - **Site and CLI:** Ramp's names, capability copy, the `accounts connect ramp` text and the vm-api notes are in, as the records require. Its icon and its entry in the Add account dialog are 0bfa49's, so for now the link comes from `winston accounts connect ramp`.
 - **Docs:** `docs/runbooks/ramp.md` (new), `design.md` §5 and §14, `product.md` §4.
 - **Tests:** `connect-ramp.server.test.ts` covers the account saved with only `read` on, the token sealed and no watch; missing read scopes; a bad state; a refusal; no client; reconnecting the same login. `ramp-auth.test.ts` covers the requested scopes (none of the never-offered ones) and refreshing. The domain tests cover capabilities left unavailable by a missing scope.
+
+
+**Local callback (2026-10-17, from the founder's first local try):** Ramp refused `http://localhost:3002/auth/ramp/connect/callback` with "This client isn't supported yet", though it took the spike's `http://127.0.0.1:8976/callback`. So locally:
+- **`RAMP_CALLBACK_URL`:** a new web setting, `http://127.0.0.1:3002/auth/ramp/connect/callback`, which `setup.sh` adds and registers. It's used as the redirect in both the sign-in and the code exchange.
+- **The bounce:** the callback route sends a browser that arrives on another host to the same path on `WEB_PUBLIC_URL`, where the session and the flow's cookies live.
+- **Listening:** the site now listens on `127.0.0.1` (it was on IPv6 `::1` only), so the callback can reach it. Browsers still reach it at `localhost`.
+
+Production is unchanged: its callback is on its own address.

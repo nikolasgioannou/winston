@@ -4,6 +4,7 @@ import {
   completeRampConnect,
   rampConnectCallbackPath,
 } from "../../../../server/connect.server";
+import { webConfig } from "../../../../server/config.server";
 import { database } from "../../../../server/db.server";
 import {
   currentUser,
@@ -18,6 +19,18 @@ export const Route = createFileRoute("/auth/ramp/connect/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        // Locally Ramp comes back to 127.0.0.1 (RAMP_CALLBACK_URL); the
+        // session and the flow's cookies are on the site's own address, so
+        // finish there, with the same code and state.
+        const url = new URL(request.url);
+        const site = new URL(webConfig().WEB_PUBLIC_URL);
+        if (url.host !== site.host)
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: new URL(`${url.pathname}${url.search}`, site).href,
+            },
+          });
         const cookies = takeConnectCookies(connectPaths.ramp);
         const user = await currentUser();
         const result = user

@@ -18,6 +18,13 @@ const webConfigSchema = dbConfigSchema
      */
     RAMP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     /**
+     * Where Ramp sends the browser back, when it isn't the site's own address.
+     * Locally it's http://127.0.0.1:3002/auth/ramp/connect/callback: Ramp
+     * accepts 127.0.0.1 without approval but refuses "localhost" (2026-10-17),
+     * and the callback hands the browser back to the site's own address.
+     */
+    RAMP_CALLBACK_URL: z.url().optional(),
+    /**
      * Where the site is served. Builds the sign-in redirect URI, and https
      * makes cookies Secure.
      */
