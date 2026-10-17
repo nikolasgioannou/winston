@@ -35,7 +35,7 @@ export const companyRamp = account({
   id: "acct_4",
   domain: "ramp",
   provider: "ramp",
-  externalEmail: "ada.com",
+  externalEmail: "ada@acme.com",
   scopes: [
     "transactions:read",
     "reimbursements:read",

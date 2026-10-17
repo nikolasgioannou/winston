@@ -3,6 +3,7 @@ export {
   GmailIcon,
   GoogleCalendarIcon,
   GoogleIcon,
+  RampIcon,
   TelegramIcon,
 } from "./brand-icons";
 export { Button, type ButtonProps } from "./button";
