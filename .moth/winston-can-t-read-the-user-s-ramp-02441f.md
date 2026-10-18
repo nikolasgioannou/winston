@@ -9,7 +9,7 @@ labels:
   - connectors
 parent: "80fcf0"
 created_at: 2026-10-05T23:01:23.152Z
-updated_at: 2026-10-07T15:43:20.953Z
+updated_at: 2026-10-18T14:04:38.155Z
 blocked_by:
   - "52bf55"
   - "8f6c44"
@@ -53,3 +53,6 @@ The read side of `winston ramp` (80fcf0), built like reading mail from Gmail (6a
   - The routes: ids stable across lists, dates in the user's zone, approvals' ids, no account, `read` off, the wrong kind of id, short search text, an expired grant, a missing scope.
   - The CLI: help and typos, list lines, short searches, approvals, `winston get txn_…`.
 - **Not tested:** an employee's view against an admin's. Ramp decides what each role sees; `--company` only asks for it.
+
+
+**From production (2026-10-18):** Ramp sends reimbursement dates as midnight UTC (`2026-10-13T00:00:00+00:00`). `winston ramp` now prints them as days (`2026-10-13`), and bill due dates and submitted dates too.

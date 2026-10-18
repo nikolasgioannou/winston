@@ -82,6 +82,12 @@ function scopeOf(flags: FlagValues) {
       : undefined;
 }
 
+/**
+ * A calendar day as Ramp means it: it sends dates as midnight UTC
+ * (`2026-10-13T00:00:00+00:00`), which are days, not moments.
+ */
+const day = (value: string | null | undefined) => value?.slice(0, 10);
+
 /** Words to search for, at least three characters (Ramp's minimum). */
 function searchWords(args: string[], what: string) {
   const words = args.join(" ").trim();
@@ -462,7 +468,7 @@ const transactions: Resource = {
 const reimbursementLine = (r: Reimbursement) =>
   record(
     r.id,
-    r.date ?? undefined,
+    day(r.date),
     r.amount,
     r.merchant,
     r.status.toLowerCase().replaceAll("_", " "),
@@ -546,7 +552,9 @@ const reimbursements: Resource = {
         const r = result.reimbursement;
         return shown(result, [
           reimbursementLine(r),
-          r.submittedAt ? `Submitted: ${r.submittedAt}` : "Not submitted yet",
+          r.submittedAt
+            ? `Submitted: ${day(r.submittedAt) ?? ""}`
+            : "Not submitted yet",
           r.coding.length > 0 ? `Coding: ${r.coding.join("; ")}` : undefined,
           r.link ? `In Ramp: ${r.link}` : undefined,
         ]);
@@ -609,7 +617,7 @@ const reimbursements: Resource = {
 const requestLine = (r: Request) =>
   record(
     r.id,
-    r.date ?? undefined,
+    day(r.date),
     r.kind?.toLowerCase().replaceAll("_", " "),
     r.name ?? r.vendor,
     r.requester ? `from ${r.requester}` : undefined,
@@ -680,7 +688,7 @@ const billLine = (b: Bills["items"][number]) =>
     b.id,
     b.vendor,
     b.amount,
-    b.dueDate ? `due ${b.dueDate}` : undefined,
+    b.dueDate ? `due ${day(b.dueDate) ?? ""}` : undefined,
     b.pastDue ? "past due" : undefined,
     b.draft ? "draft" : undefined,
     b.approvalStatus?.toLowerCase().replaceAll("_", " "),
