@@ -1,13 +1,13 @@
 ---
 id: "b60483"
 title: act loops, loses its place and can't reach shadow DOM
-status: todo
+status: done
 priority: high
 labels:
   - browser
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.601Z
-updated_at: 2026-10-24T16:50:33.192Z
+updated_at: 2026-10-24T18:50:26.143Z
 ---
 
 `winston browser act` (autopilot, rebuilt in 0946c59) is where most browser failures in production start.
@@ -41,3 +41,26 @@ updated_at: 2026-10-24T16:50:33.192Z
 - [ ] A `target=_blank` link fixture ends on the new page and reports its URL (test)
 - [ ] With the text helper unavailable, `act` returns the fallback message and the front-of-house replay doesn't sleep-loop
 - [ ] docs/design.md (the autopilot section) updated
+
+## As built (2026-10-24)
+
+- **Going round:** each step taken is counted against the state of the page it was taken from (its fingerprint).
+  - Jev choosing a step it already took from the same state goes to the step picker ("Jev wants to take a step it already took from this same page").
+  - The third time the same step is taken from the same state stops the run with `no_progress` ("It kept going round…").
+  - The existing guard, three unchanged actions in a row, missed the Ramp loops: a dropdown opening and closing changes the page every time.
+  - Test: a menu flipping between two states stops after 5 actions, not 30.
+- **New tabs:** a step that opens a tab (`target=_blank`, `window.open`) already made it the run's current window (`windows.ts`). `act` now carries on there and says "It opened a new tab (<url>); carrying on there." Before, it kept reading the unchanged page it came from (the RentCafe "Resident Login" link, Oct 11). Test added.
+- **Helper down:** both `unavailable` stops now give the fallback: act again in a minute, or take the step with `click`/`type`/`select` from a snapshot, and don't wait in a loop. The front-of-house prompt says to tell the user once, then do the step with those commands or delegate, never sleep-retry in their turn.
+- **docs/design.md:** the autopilot section (when the picker is asked, `no_progress`, `unavailable`, new tabs).
+
+**Not done, and why:**
+- **Shadow DOM:** the reader and hit test already walk open shadow roots, with a Chrome test (`fast-page.chrome.test.ts`). BA's `<ba-select>` failed because it's a custom widget with no ARIA roles, which an ARIA-based reader can't see. That's a different problem, filed separately (see below).
+- **Stale indexes after a dropdown:** element indexes are rebuilt on every read, and input is refused on a stale page (`StalePage`). The Ramp "clicked Currency instead of Merchant" couldn't be reproduced from the trace alone, and the loop it came from is now caught by the going-round guard. It'll be revisited with a reproduction if it recurs.
+- **Front-of-house replay for an unavailable `act`:** not written. The prompt line is small, and replays need OpenRouter credit.
+
+- [x] A step that changes nothing, or keeps flipping the page, stops in ≤3 visits with `no_progress` (test)
+- [ ] A dropdown that shifts indexes clicks the named element: not reproduced (see above)
+- [ ] Shadow-DOM select and checkbox: open shadow roots already work; custom widgets filed separately
+- [x] A `target=_blank` link ends on the new page and reports its URL (test)
+- [x] With the text helper unavailable, `act` returns the fallback, and the front-of-house prompt says not to sleep-loop (replay not run)
+- [x] docs/design.md updated

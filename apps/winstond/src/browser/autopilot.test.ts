@@ -140,6 +140,7 @@ function harness({
   observe,
   reliable = true,
   jevDown = false,
+  opensTab,
 }: {
   pages?: FastPage[];
   answers: Answer[];
@@ -151,6 +152,8 @@ function harness({
   observe?: (index: number) => Promise<FastPage>;
   reliable?: boolean;
   jevDown?: boolean;
+  /** A tab the first action opens, which becomes the run's current window. */
+  opensTab?: string;
 }) {
   const acted: { id: string; text?: string }[] = [];
   const asked: Questions[] = [];
@@ -161,10 +164,15 @@ function harness({
   const entry = {
     id: "win_1",
     url: "https://shop.test/",
+    openedBy: null,
     worlds: new Map(),
   } as unknown as WindowEntry;
+  let current = entry;
+  /** The windows each page read was taken from. */
+  const readFrom: string[] = [];
   const pages_: FastPageReader = {
-    observe: () => {
+    observe: (window) => {
+      readFrom.push(window.id);
       const index = reads++;
       return observe
         ? observe(index)
@@ -174,6 +182,13 @@ function harness({
     act: async (_entry, _page, action, text) => {
       await act(action, text);
       acted.push({ id: action.id, ...(text !== undefined ? { text } : {}) });
+      if (opensTab && current === entry)
+        current = {
+          id: "win_2",
+          url: opensTab,
+          openedBy: "win_1",
+          worlds: new Map(),
+        } as unknown as WindowEntry;
     },
     settle: () => Promise.resolve(),
   };
@@ -181,15 +196,19 @@ function harness({
     pages: pages_,
     core: {
       caller: () => "task_1",
-      windowFor: () => entry,
+      windowFor: (_owner, window) => (window ? entry : current),
       sessionFor: () =>
         Promise.resolve({
           c: { send: () => Promise.resolve({}) } as unknown as Cdp,
           sessionId: "s1",
         }),
       refresh: () => Promise.resolve(),
-      info: () =>
-        ({ id: "win_1", url: entry.url, title: "Search" }) as BrowserWindowInfo,
+      info: (window) =>
+        ({
+          id: window.id,
+          url: window.url,
+          title: "Search",
+        }) as BrowserWindowInfo,
       lock: () => undefined,
       now: Date.now,
     },
@@ -249,6 +268,7 @@ function harness({
     picked,
     written,
     outcomes,
+    readFrom,
     reads: () => reads,
   };
 }
@@ -475,6 +495,41 @@ describe("autopilot's loop", () => {
       "Jev wants to repeat a step that changed nothing.",
     );
     expect(result.stop).toBe("no_progress");
+  });
+
+  test("a step that flips the page between two states stops it going round, after the picker is asked", async () => {
+    // A menu that opens and closes: every click changes the page.
+    const closed = page({ text: "Currency" });
+    const open = page({ text: "Currency\nUSD\nEUR" });
+    const { autopilot, acted, picked } = harness({
+      pages: Array.from({ length: 30 }, (_, i) =>
+        i % 2 === 0 ? closed : open,
+      ),
+      answers: Array.from({ length: 30 }, () => pick("CLICK", "2")),
+    });
+    const result = await autopilot.run(token, { goal: "Pick EUR" });
+    expect(acted).toHaveLength(5);
+    expect(picked[0]?.reason).toBe(
+      "Jev wants to take a step it already took from this same page.",
+    );
+    expect(result.stop).toBe("no_progress");
+    expect(result.reason).toContain("kept going round");
+  });
+
+  test("a link that opens a new tab carries the run on in that tab", async () => {
+    const { autopilot, acted, readFrom } = harness({
+      pages: [page(), page({ url: "https://login.test/", text: "Sign in" })],
+      answers: [pick("CLICK", "2"), pick("DONE")],
+      opensTab: "https://login.test/",
+    });
+    const result = await autopilot.run(token, { goal: "Open resident login" });
+    expect(acted).toEqual([{ id: "e3" }]);
+    expect(readFrom).toEqual(["win_1", "win_2"]);
+    expect(result.actions).toContain(
+      "It opened a new tab (https://login.test/); carrying on there.",
+    );
+    expect(result.window.id).toBe("win_2");
+    expect(result.stop).toBe("done");
   });
 
   test("a click that makes the page ask for files stops the run there, for upload", async () => {

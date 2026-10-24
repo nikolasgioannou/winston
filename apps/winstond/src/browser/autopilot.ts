@@ -51,6 +51,12 @@ export const autopilotLimits = {
   maxSeconds: 120,
   /** Actions in a row that changed nothing before it stops. */
   noProgress: 3,
+  /**
+   * Times the same step is taken from the same page before it stops: a step
+   * that flips the page between two states (a menu opening and closing)
+   * changes it every time, so only this catches it going round.
+   */
+  sameStep: 3,
   /** Recent actions Jev sees. */
   recentActions: 10,
   /** Recent actions the text helper sees. */
@@ -396,6 +402,14 @@ const pickRules = [nextActionRules, targetRules].join("\n\n");
 /** How much of the page's text the agent gets back with the report. */
 const reportTextChars = 1_500;
 
+/** A step as taken from one state of the page, for spotting a run going round. */
+const visitOf = (page: FastPage, action: FastAction) =>
+  JSON.stringify([page.fingerprint, action.kind, action.label]);
+
+/** What the agent can do when the models behind act don't answer. */
+const unavailableHint =
+  "act again in a minute, or take this step yourself with winston browser click, type or select from a snapshot. Don't wait in a loop.";
+
 /** The window registry's parts autopilot drives a window through. */
 export interface AutopilotCore {
   caller: (runToken: string) => string;
@@ -605,7 +619,8 @@ export function createAutopilot(deps: AutopilotDeps) {
       },
     ): Promise<BrowserAutopilotResponse> {
       const owner = core.caller(runToken);
-      const entry = core.windowFor(owner, request.window, "own");
+      // A link that opens a new tab moves the run there (see `followTab`).
+      let entry = core.windowFor(owner, request.window, "own");
       const started = core.now();
       // A file picker counts only if this run opened it.
       entry.fileChooser = undefined;
@@ -634,6 +649,8 @@ export function createAutopilot(deps: AutopilotDeps) {
       let latest: FastPage | undefined;
       /** Text written for a field, reused only if its context is the same. */
       let written: { context: string; text: string } | undefined;
+      /** How often each step was taken from each state of the page. */
+      const visits = new Map<string, number>();
 
       const done = async (
         stop: AutopilotStop,
@@ -696,14 +713,35 @@ export function createAutopilot(deps: AutopilotDeps) {
           !(JSON.parse(site.body) as { reliable: boolean }).reliable;
       }
       // Background windows keep rendering, so animations and waits run.
-      const { c, sessionId } = await core.sessionFor(entry);
-      await c
-        .send(
-          "Emulation.setFocusEmulationEnabled",
-          { enabled: true },
-          sessionId,
-        )
-        .catch(() => undefined);
+      const keepRendering = async (window: WindowEntry) => {
+        const { c, sessionId } = await core.sessionFor(window);
+        await c
+          .send(
+            "Emulation.setFocusEmulationEnabled",
+            { enabled: true },
+            sessionId,
+          )
+          .catch(() => undefined);
+      };
+      await keepRendering(entry);
+
+      /**
+       * A step that opened a new tab (a target=_blank link, window.open):
+       * the tab is already the run's current window, so carry on there
+       * rather than read the page it came from, which didn't change.
+       */
+      const followTab = async () => {
+        let now: WindowEntry;
+        try {
+          now = core.windowFor(owner, undefined, "own");
+        } catch {
+          return;
+        }
+        if (now.id === entry.id || now.openedBy !== entry.id) return;
+        entry = now;
+        await keepRendering(entry);
+        did.push(`It opened a new tab (${entry.url}); carrying on there.`);
+      };
 
       let page: FastPage;
       try {
@@ -774,6 +812,13 @@ export function createAutopilot(deps: AutopilotDeps) {
               next.label === previous.action
             )
               reason = "Jev wants to repeat a step that changed nothing.";
+            else if (
+              next &&
+              next.kind !== "wait" &&
+              visits.has(visitOf(page, next))
+            )
+              reason =
+                "Jev wants to take a step it already took from this same page.";
           } catch (error) {
             if (error instanceof Unavailable) reason = "Jev isn't available.";
             else if (error instanceof InvalidAnswer)
@@ -821,7 +866,7 @@ export function createAutopilot(deps: AutopilotDeps) {
             if (!decision)
               return done(
                 "unavailable",
-                "Neither Jev nor the step picker could decide the next step; act again in a moment.",
+                `Neither Jev nor the step picker could decide the next step: ${unavailableHint}`,
               );
           }
         }
@@ -917,7 +962,7 @@ export function createAutopilot(deps: AutopilotDeps) {
               if (!(error instanceof Unavailable)) throw error;
               return done(
                 "unavailable",
-                "The text helper isn't available right now; act again in a moment.",
+                `The text helper isn't available right now: ${unavailableHint}`,
               );
             }
             if (value === null)
@@ -962,6 +1007,8 @@ export function createAutopilot(deps: AutopilotDeps) {
         }
         written = undefined;
         entry.lastUsedAt = core.now();
+        const visit = visitOf(page, action);
+        visits.set(visit, (visits.get(visit) ?? 0) + 1);
         // Recorded before the next read, so a page that won't settle can't erase it.
         const step: Done = {
           action: action.label,
@@ -974,6 +1021,7 @@ export function createAutopilot(deps: AutopilotDeps) {
         // One approved commitment, then the agent looks at what happened.
         if (commits) {
           await pages.settle(entry, page, action);
+          await followTab();
           try {
             page = await observe();
           } catch {
@@ -995,6 +1043,7 @@ export function createAutopilot(deps: AutopilotDeps) {
                 300,
               );
         await pages.settle(entry, page, action);
+        await followTab();
         const before = page.fingerprint;
         try {
           page = await observe();
@@ -1011,6 +1060,14 @@ export function createAutopilot(deps: AutopilotDeps) {
           return done(
             "no_progress",
             `The last ${String(autopilotLimits.noProgress)} actions changed nothing.`,
+          );
+        if (
+          action.kind !== "wait" &&
+          (visits.get(visit) ?? 0) >= autopilotLimits.sameStep
+        )
+          return done(
+            "no_progress",
+            `It kept going round: "${action.label}" was taken ${String(autopilotLimits.sameStep)} times from the same page without getting further. Look with a snapshot and try another way.`,
           );
       }
     },
