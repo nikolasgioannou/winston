@@ -8,7 +8,7 @@ labels:
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.540Z
-updated_at: 2026-10-24T18:45:15.782Z
+updated_at: 2026-10-24T20:01:02.286Z
 ---
 
 The ISO 8601 fix (e19be9) covers times passed to the CLI. It doesn't cover which zone a time belongs to, conversions Winston does in his head, or where the user will be when something happens.
@@ -59,3 +59,11 @@ The ISO 8601 fix (e19be9) covers times passed to the CLI. It doesn't cover which
 - [ ] Replay of the Bella reminder (`tz-reminder-after-trip`): waiting on credit
 - [x] `calendar create` says which zone a local time at a place was read in (`calendar.test.ts`; changed from "warns when the zones differ", see above)
 - [x] docs/design.md updated
+
+## Replays (2026-10-24): mostly passing
+
+- `tz-trip-landing-trigger`: 0/3 on the old prompt → 0/5 on the first change → **5/5** once the prompt named the moment ("whenever you add a flight… or read a booking… in the same turn").
+- `tz-event-elsewhere`: 5/5 (3/3 on the old prompt too).
+- `tz-reminder-after-trip`: 0/3 on the old prompt → **9/13** across three rounds. Better, not yet reliable: the misses set `--at` with no offset and don't mention the zone.
+
+Left open for the reminder case.

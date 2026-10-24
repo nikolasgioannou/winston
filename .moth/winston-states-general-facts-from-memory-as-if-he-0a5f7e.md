@@ -8,7 +8,7 @@ labels:
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.868Z
-updated_at: 2026-10-24T19:11:52.864Z
+updated_at: 2026-10-24T20:01:02.489Z
 ---
 
 The grounding rule from ea2e27 ("Go to the best source") is framed around the user's bookings and live facts. General claims skip it, and wrong ones are stated with confidence.
@@ -47,3 +47,10 @@ The grounding rule from ea2e27 ("Go to the best source") is framed around the us
 - **`background.md`:** the same, in its grounding paragraph.
 - **Held-out replay cases:** `fact-frame-size` and `fact-document-requirements`.
 - **Left:** run them, the Edward case if exported, and the existing grounding cases. Blocked: the dev OpenRouter key is out of credit. Then record in docs/design.md and close.
+
+## Replays (2026-10-24): improved, not yet passing
+
+- `fact-frame-size`: 0/8 on the old prompt → 0/5 on the first change → **4/13** after "a question about a fact in the world is a lookup… never state from memory that something isn't standard". The misses still answer from memory at `low` effort.
+- `fact-document-requirements`: 5/5 (3/3 on the old prompt too).
+
+Left open. Answering general-knowledge questions without a lookup looks like a limit of Sonnet at `low`, more than of the wording.
