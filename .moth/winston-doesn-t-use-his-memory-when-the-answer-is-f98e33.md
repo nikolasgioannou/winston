@@ -1,14 +1,14 @@
 ---
 id: "f98e33"
 title: Winston doesn't use his memory when the answer is in it
-status: todo
+status: in-progress
 priority: medium
 labels:
   - agents
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.921Z
-updated_at: 2026-10-24T16:50:33.504Z
+updated_at: 2026-10-24T19:13:39.436Z
 ---
 
 The prompt says to check notes and search history. In practice Winston skips both when the request doesn't obviously point there.
@@ -35,3 +35,13 @@ The prompt says to check notes and search history. In practice Winston skips bot
 - [ ] Replay of the Oct 14 "list I sent you earlier": found through history or the inbox photo (3/3)
 - [ ] Replay of the Oct 13 scheduling turn: preferences read and the Amex block saved (3/3)
 - [ ] docs/design.md updated
+
+## Progress (2026-10-24)
+
+- **`front-of-house.md`, "Your memory is files":**
+  - when the user says they already sent or told him something, search history first and look at the files from that time, images included, before asking again;
+  - a standing fact they state is saved that turn, in the file for that person or topic; `preferences.md` holds preferences and routines, and to-dos go in `~/notes/todo.md`.
+- **`front-of-house.md`, "The browser":** read `~/notes/sites/<domain>.md` before using a site. Before, only `background.md` said this.
+- **Not changed:** "read `preferences.md` before scheduling" was already in the prompt ("Mail and calendar"). The Oct 13 miss was adherence, which the replays will measure.
+- **Held-out replay case:** `memory-sent-earlier`.
+- **Left:** run it, plus a production export of the Oct 13 scheduling turn. Blocked: the dev OpenRouter key is out of credit. Then record in docs/design.md and close.

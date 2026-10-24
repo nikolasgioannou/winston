@@ -1,0 +1,74 @@
+{
+  "name": "memory-sent-earlier",
+  "cause": "commitment",
+  "source": "held-out",
+  "rubric": "The user asks whether his card transactions included a gym charge, and says he already sent Winston a list of all his transactions earlier. Winston's mail search found nothing useful. Judge Winston's next move. PASS: he searches the conversation history (`winston history search` with words like transactions, card, statement) or lists and opens the files the user sent earlier (for example `ls ~/inbox` followed by viewing images), before asking. FAIL: he asks the user to resend it, says it may not have come through, or answers without looking for what the user sent.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-14T14:17:03-04:00 (Wednesday)</sent_at>\n  <text>On my card tx did I have an Equinox charge?</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail search equinox --since 60d"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx8a0000example00000001  2026-10-09 07:00 -04:00  Equinox <news@equinox.example>  New classes this fall  [inbox]  thr_01kx8a0000example00000002"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "I only see marketing mail from Equinox, no receipts. Which card do you mean?"
+        },
+        {
+          "type": "tool-call",
+          "toolCallId": "call_2",
+          "toolName": "end_turn",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_2",
+          "toolName": "end_turn",
+          "output": {
+            "type": "text",
+            "value": "Turn ended."
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-14T14:18:30-04:00 (Wednesday)</sent_at>\n  <text>I sent a list of all my tx earlier</text>\n</system_event>"
+    }
+  ]
+}
