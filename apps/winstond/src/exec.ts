@@ -24,6 +24,27 @@ const baseEnv = {
   LANG: "C.UTF-8",
 };
 
+/**
+ * What runs on the command line: a fixed script that reads the real one
+ * from stdin, then gives the command no stdin, as before. The command and
+ * the request's environment (the run token) arrive on stdin, so a process
+ * listing shows neither, and `pkill -f` on a command's own words can't
+ * match the shell running it.
+ */
+export const bootstrap = 'script=$(cat); exec </dev/null; eval "$script"';
+
+const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+
+/** The script bash reads from stdin: the request's environment, then its command. */
+export function scriptOf(request: Pick<ExecRequest, "cmd" | "env">) {
+  const exports = Object.entries(request.env).map(([key, value]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+      throw new Error(`Not an environment variable name: ${key}`);
+    return `export ${key}=${quote(value)}`;
+  });
+  return [...exports, request.cmd].join("\n");
+}
+
 export interface ExecRequest {
   id: string;
   cmd: string;
@@ -83,7 +104,8 @@ export function createExecutor(
     };
     results.set(request.id, record);
     const seconds = (request.timeoutMs / 1000).toFixed(3);
-    const env = Object.entries({ ...baseEnv, ...request.env }).map(
+    // Only the fixed, harmless part of the environment is on the command line.
+    const env = Object.entries(baseEnv).map(
       ([key, value]) => `${key}=${value}`,
     );
     const started = performance.now();
@@ -101,10 +123,12 @@ export function createExecutor(
         seconds,
         "bash",
         "-lc",
-        request.cmd,
+        bootstrap,
       ],
-      { cwd: "/", stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+      { cwd: "/", stdin: "pipe", stdout: "pipe", stderr: "pipe" },
     );
+    void proc.stdin.write(scriptOf(request));
+    void proc.stdin.end();
 
     const pump = async (
       stream: ReadableStream<Uint8Array>,

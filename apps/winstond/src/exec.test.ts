@@ -56,6 +56,25 @@ describe.skipIf(!linux)("executor", () => {
     expect(joined(output, "stdout")).toBe("/usr\nrun-123\nabsent\n");
   });
 
+  test("neither the command nor the run token is on the command line, and pkill on the command's words spares its shell", async () => {
+    const { output, done } = run({
+      cmd: "ps -eo args | grep -c 'secret-token-123' || true; ps -eo args | grep -c 'unique-marker-xyz' || true; pkill -f unique-marker-xyz; echo survived",
+      env: { WINSTON_RUN_TOKEN: "secret-token-123" },
+    });
+    expect((await done).exitCode).toBe(0);
+    // Each grep finds only its own command line.
+    expect(joined(output, "stdout")).toBe("1\n1\nsurvived\n");
+  });
+
+  test("a command gets no stdin, and a quote in the environment stays intact", async () => {
+    const { output, done } = run({
+      cmd: "cat; printenv ODD",
+      env: { ODD: 'it\'s "quoted" $HOME' },
+    });
+    await done;
+    expect(joined(output, "stdout")).toBe(`it's "quoted" $HOME\n`);
+  });
+
   test("a timeout kills the whole process group, children included", async () => {
     const marker = `/tmp/winstond-child-${String(Date.now())}`;
     const { done } = run({
