@@ -25,6 +25,8 @@ export interface BrowserWindowInfo {
   mine: boolean;
   /** Websites its run holds the lock for, acting from this window. */
   locks: string[];
+  /** The user has it: handed over to them, or taken over on the browser page. */
+  withUser?: "handoff" | "takeover";
 }
 
 export interface BrowserWindowsResponse {

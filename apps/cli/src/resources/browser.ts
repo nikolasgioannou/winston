@@ -29,10 +29,17 @@ export function windowLine(window: BrowserWindowInfo) {
     ? window.current
       ? "yours, current"
       : "yours"
-    : `task ${window.owner}`;
+    : window.owner === "front"
+      ? "the front of house's"
+      : `task ${window.owner}`;
   return record(
     window.id,
     whose,
+    window.withUser === "takeover"
+      ? "the user took it over"
+      : window.withUser === "handoff"
+        ? "handed to the user"
+        : undefined,
     window.openedBy ? `opened by ${window.openedBy}` : undefined,
     window.locks.length > 0 ? `holds ${window.locks.join(", ")}` : undefined,
     window.url,

@@ -15,6 +15,17 @@ import { BrowserFailure } from "./state.ts";
 
 export const lockTtlMs = 5 * 60_000;
 
+/**
+ * The front of house's locks lapse sooner: its commands come seconds apart
+ * while it works, and a lock it kept for five minutes after its turn made
+ * background tasks sleep on sites it had stopped using (the trace audit,
+ * 499347).
+ */
+export const frontLockTtlMs = 60_000;
+
+const ttlOf = (owner: string) =>
+  owner === "front" ? frontLockTtlMs : lockTtlMs;
+
 /** The lock a URL needs: its registrable domain, its host when there's none, nothing for blank pages. */
 export function lockDomain(url: string): string | undefined {
   let parsed: URL;
@@ -54,6 +65,21 @@ export function createLocks(now: () => number) {
     return lock;
   };
 
+  /** Fails with exit 6, naming the holder, when another run has the lock for `domain`. */
+  const refuseIfHeld = (domain: string, owner: string) => {
+    const held = live(domain);
+    if (held && held.owner !== owner) {
+      const minutes = Math.max(1, Math.ceil((held.expiresAt - now()) / 60_000));
+      throw new BrowserFailure(
+        "conflict",
+        `${domain} is in use by ${whose(held.owner)} (${held.windowId}), for up to ${String(minutes)} more min.`,
+        // Seen in use: told "up to 5 min", an agent slept 5 min while the
+        // site came free 30 s later. It frees as soon as that task is done.
+        "Only one task acts on a site at a time, and it's free as soon as that task is done with it, often sooner. Try again in 30 seconds (a short sleep, then retry), or work on something else meanwhile.",
+      );
+    }
+  };
+
   return {
     /**
      * Takes (or renews) the lock for acting on `url` from a window. Fails
@@ -62,22 +88,15 @@ export function createLocks(now: () => number) {
     acquire(url: string, owner: string, windowId: string) {
       const domain = lockDomain(url);
       if (!domain) return undefined;
-      const held = live(domain);
-      if (held && held.owner !== owner) {
-        const minutes = Math.max(
-          1,
-          Math.ceil((held.expiresAt - now()) / 60_000),
-        );
-        throw new BrowserFailure(
-          "conflict",
-          `${domain} is in use by ${whose(held.owner)} (${held.windowId}), for up to ${String(minutes)} more min.`,
-          // Seen in use: told "up to 5 min", an agent slept 5 min while the
-          // site came free 30 s later. It frees as soon as that task is done.
-          "Only one task acts on a site at a time, and it's free as soon as that task is done with it, often sooner. Try again in 30 seconds (a short sleep, then retry), or work on something else meanwhile.",
-        );
-      }
-      locks.set(domain, { owner, windowId, expiresAt: now() + lockTtlMs });
+      refuseIfHeld(domain, owner);
+      locks.set(domain, { owner, windowId, expiresAt: now() + ttlOf(owner) });
       return domain;
+    },
+
+    /** Fails as `acquire` would, taking nothing: checked before a window is made for `url`. */
+    check(url: string, owner: string) {
+      const domain = lockDomain(url);
+      if (domain) refuseIfHeld(domain, owner);
     },
 
     /**
@@ -93,7 +112,7 @@ export function createLocks(now: () => number) {
     unpin(owner: string) {
       for (const lock of locks.values())
         if (lock.owner === owner && lock.expiresAt === Infinity)
-          lock.expiresAt = now() + lockTtlMs;
+          lock.expiresAt = now() + ttlOf(owner);
     },
 
     /** A window changed hands: the sites locked from it go with it. */

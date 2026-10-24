@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { apiErrors } from "@winston/domain/api-errors";
-import { createLocks, lockDomain, lockTtlMs } from "./locks.ts";
+import { createLocks, frontLockTtlMs, lockDomain, lockTtlMs } from "./locks.ts";
 import { BrowserFailure } from "./state.ts";
 
 describe("domain locks", () => {
@@ -45,6 +45,21 @@ describe("domain locks", () => {
       locks.acquire("https://amazon.com", "run_b", "win_b"),
     ).toThrow();
     expect(locks.heldFrom("win_a")).toEqual(["amazon.com"]);
+  });
+
+  test("the front of house's lock lapses after a minute; a check refuses like acquire but takes nothing", () => {
+    let clock = 0;
+    const locks = createLocks(() => clock);
+    locks.acquire("https://ramp.com", "front", "win_f");
+    expect(() => {
+      locks.check("https://app.ramp.com", "run_b");
+    }).toThrow("ramp.com is in use by the front of house");
+    clock += frontLockTtlMs;
+    locks.check("https://app.ramp.com", "run_b");
+    // The check took nothing: the front can still have it.
+    expect(locks.acquire("https://ramp.com", "front", "win_f")).toBe(
+      "ramp.com",
+    );
   });
 
   test("a lock lapses after its time, and goes when its run is released", () => {

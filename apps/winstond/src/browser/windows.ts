@@ -103,6 +103,7 @@ export function createBrowser(deps: BrowserDeps) {
     current: current.get(owner) === entry.id,
     mine: entry.owner === owner,
     locks: locks.heldFrom(entry.id),
+    ...(entry.heldForUser ? { withUser: entry.heldForUser } : {}),
   });
 
   /** A run with no windows left gives up its sites. */
@@ -637,6 +638,8 @@ export function createBrowser(deps: BrowserDeps) {
     async open(runToken: string, url?: string) {
       const owner = caller(runToken);
       const c = await connection();
+      // Refused before any window is made: a refused open used to leave a blank one.
+      if (url) locks.check(normalizeUrl(url), owner);
       // A blank window first, then navigate once attached, so the load is seen.
       const { targetId } = await c.send<{ targetId: string }>(
         "Target.createTarget",

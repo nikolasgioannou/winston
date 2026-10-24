@@ -472,6 +472,13 @@ describe("agent windows", () => {
         .readOnly,
     ).toBe(true);
     await browser.screenshot(token("run_b"), { window: a.window.id });
+    // A refused open makes no window.
+    const before = (await browser.windows(token("run_b"))).length;
+    expect(
+      (await failure(browser.open(token("run_b"), "https://shop.test/deals")))
+        .code,
+    ).toBe("conflict");
+    expect(await browser.windows(token("run_b"))).toHaveLength(before);
     await browser.close(token("run_a"));
     const moved = await browser.navigate(token("run_b"), {
       url: "https://checkout.shop.test",
@@ -533,6 +540,11 @@ describe("agent windows", () => {
     expect(refused.message).toBe(
       `The user took over ${a.window.id}; it's theirs until they give it back.`,
     );
+    // The run's own list says so, not just its next command.
+    expect(
+      (await browser.windows(token("run_a"))).find((w) => w.id === a.window.id)
+        ?.withUser,
+    ).toBe("takeover");
     // Another run's window can't be held under the wrong owner.
     expect(
       browser.hold("run_z", { windowId: a.window.id, takeover: true }),
