@@ -631,6 +631,39 @@ describe("runFrontTurn", () => {
     );
   });
 
+  test("a reaction arriving while a message is written doesn't drop it; it's read with the next step", async () => {
+    let react: (() => Promise<void>) | undefined;
+    await scenario(
+      [[textReply("Gate closes at 12:10, about 25 minutes from now.")]],
+      async ({ tx, userId, say, turn, sent, requests }) => {
+        react = async () => {
+          await tx.insert(inboundItems).values({
+            userId,
+            type: "telegram.reaction.added",
+            payload: {
+              emoji: "❤️",
+              target: { telegramMessageId: 3, text: "Checked in." },
+            },
+            occurredAt: new Date("2026-09-27T16:00:00Z"),
+          });
+        };
+        await say("when does my gate close?");
+        await turn();
+        expect(sent.map((message) => message.text)).toEqual([
+          "Gate closes at 12:10, about 25 minutes from now.",
+        ]);
+        // Sent from the first call: nothing was dropped and asked again.
+        expect(requests[0]).toHaveLength(1);
+        expect(JSON.stringify(requests[0])).not.toContain(messageDroppedNote);
+      },
+      {
+        onRequest: async (index) => {
+          if (index === 0) await react?.();
+        },
+      },
+    );
+  });
+
   test("input arriving mid-turn is steered in at the next model call", async () => {
     await scenario(
       [[textReply(""), textReply("Got both.")]],

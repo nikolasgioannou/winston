@@ -53,6 +53,7 @@ import {
   isNull,
   lt,
   notExists,
+  notInArray,
   sql,
 } from "drizzle-orm";
 import { cacheBreakpoint, withRollingBreakpoint } from "../model/cache.ts";
@@ -270,7 +271,7 @@ export async function runFrontTurn(deps: FrontTurnDeps, userId: string) {
       .join("")
       .trim();
     if (!text) return;
-    if (await hasClaimableInput(db, userId)) {
+    if (await hasClaimableInput(db, userId, { except: neverInterrupts })) {
       stream.dropStep = true;
       return;
     }
@@ -826,14 +827,33 @@ export function claimableInput(userId: string) {
 }
 
 /** Whether the user has input a turn could take now. Pending items don't count: saving their file queues a turn. */
-export async function hasClaimableInput(db: DbOrTx, userId: string) {
+export async function hasClaimableInput(
+  db: DbOrTx,
+  userId: string,
+  options: { except?: readonly string[] } = {},
+) {
   const [item] = await db
     .select({ id: inboundItems.id })
     .from(inboundItems)
-    .where(claimableInput(userId))
+    .where(
+      options.except?.length
+        ? and(
+            claimableInput(userId),
+            notInArray(inboundItems.type, [...options.except]),
+          )
+        : claimableInput(userId),
+    )
     .limit(1);
   return item !== undefined;
 }
+
+/**
+ * Input that never stops a step's message: a reaction is feedback, not a
+ * request, so the message goes out and the reaction is read with the next
+ * step. In production a heart on an old message dropped an answer the user
+ * was waiting for at an airport, and the turn then ended silently.
+ */
+export const neverInterrupts = ["telegram.reaction.added"] as const;
 
 /** The user's claimable inbound items, oldest first, locked for this transaction. */
 async function lockUnconsumed(tx: DbOrTx, userId: string) {
