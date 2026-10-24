@@ -16,6 +16,7 @@
 import type {
   BrowserActionResponse,
   BrowserEvalResponse,
+  BrowserPdfResponse,
   BrowserScreenshotResponse,
   BrowserWindowInfo,
 } from "@winston/domain/browser";
@@ -340,6 +341,50 @@ export function createActions(core: ActionCore) {
         height,
         fullPage: full,
         clipped: full && pageHeight > height,
+      };
+    },
+
+    /**
+     * The window's page as a PDF (Chrome's print), saved under the home
+     * folder: a receipt or confirmation as the site shows it, which a
+     * screenshot or the page's text isn't (the trace audit, 68ae89).
+     */
+    async pdf(
+      runToken: string,
+      request: { path: string; window?: string | undefined },
+    ): Promise<BrowserPdfResponse> {
+      const owner = core.caller(runToken);
+      // Printing changes nothing, so another run's window may be printed too.
+      const entry = core.windowFor(owner, request.window, "look");
+      const home = "/home/winston/";
+      if (!request.path.startsWith(home) || !request.path.endsWith(".pdf"))
+        throw new BrowserFailure(
+          "invalid_request",
+          `Can't save a PDF to ${request.path}.`,
+          "Give a path under your home folder ending in .pdf, like ~/downloads/receipt.pdf.",
+        );
+      const { c, sessionId } = await core.sessionFor(entry);
+      const printed = await unlessDialog(
+        entry,
+        c.send<{ data: string }>(
+          "Page.printToPDF",
+          { printBackground: true, preferCSSPageSize: true },
+          sessionId,
+        ),
+      );
+      if (!printed)
+        throw new BrowserFailure(
+          "invalid_request",
+          `${dialogText(pendingDialog(entry) ?? { type: "dialog", message: "", defaultPrompt: "" })}, so the page can't be printed.`,
+          "Answer it with winston browser dialog accept (or dismiss).",
+        );
+      const bytes = Buffer.from(printed.data, "base64");
+      await core.saveFile(request.path.slice(home.length), bytes);
+      await core.refresh(entry).catch(() => undefined);
+      return {
+        window: core.info(entry, owner),
+        path: request.path,
+        bytes: bytes.length,
       };
     },
 

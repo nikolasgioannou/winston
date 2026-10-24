@@ -122,6 +122,11 @@ export function browserRpc(browser: Browser, autopilot?: Autopilot) {
                 fullPage: body.fullPage === true,
               }),
             );
+          case "pdf":
+            return reply(
+              200,
+              await browser.pdf(token, { path: text("path") ?? "", window }),
+            );
           case "eval":
             return reply(
               200,

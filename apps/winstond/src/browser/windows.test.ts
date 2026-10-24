@@ -99,6 +99,8 @@ function fakeChrome() {
           });
         case "Page.captureScreenshot":
           return answer({ data: Buffer.from("png-bytes").toString("base64") });
+        case "Page.printToPDF":
+          return answer({ data: Buffer.from("%PDF-bytes").toString("base64") });
         case "Page.createIsolatedWorld":
           return answer({ executionContextId: 7 });
         case "Runtime.evaluate": {
@@ -426,6 +428,31 @@ describe("agent windows", () => {
       captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: 1280, height: 12_000, scale: 1 },
     });
+  });
+
+  test("a page is printed to a PDF under the home folder, and nowhere else", async () => {
+    const { browser, saved, chrome } = setup();
+    await browser.open(token("run_a"), "https://rides.test/receipt");
+    const printed = await browser.pdf(token("run_a"), {
+      path: "/home/winston/downloads/receipt.pdf",
+    });
+    expect(printed).toMatchObject({
+      path: "/home/winston/downloads/receipt.pdf",
+      bytes: 10,
+    });
+    expect(saved.at(-1)).toEqual({
+      path: "downloads/receipt.pdf",
+      bytes: "%PDF-bytes",
+    });
+    expect(
+      chrome()
+        .sent.filter((s) => s.method === "Page.printToPDF")
+        .at(-1)?.params,
+    ).toEqual({ printBackground: true, preferCSSPageSize: true });
+    for (const path of ["/etc/receipt.pdf", "/home/winston/notes.txt"])
+      expect((await failure(browser.pdf(token("run_a"), { path }))).code).toBe(
+        "invalid_request",
+      );
   });
 
   test("eval prints the result as JSON, cut short when long, and says clearly when the script threw", async () => {

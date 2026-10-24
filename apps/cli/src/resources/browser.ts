@@ -3,6 +3,7 @@ import type {
   BrowserAutopilotResponse,
   BrowserCloseResponse,
   BrowserEvalResponse,
+  BrowserPdfResponse,
   BrowserScreenshotResponse,
   BrowserPageResponse,
   BrowserSnapshotResponse,
@@ -403,6 +404,38 @@ export const browser: Resource = {
         ]
           .filter(Boolean)
           .join("\n");
+      },
+    },
+    {
+      name: "pdf",
+      summary:
+        "Save the window's page as a PDF, as Chrome prints it: a receipt or confirmation to keep or send on",
+      usage: "<path>",
+      flags: [
+        {
+          name: "window",
+          value: "<win_id>",
+          description: "Another window than your current one",
+        },
+      ],
+      examples: [
+        "winston browser pdf ~/downloads/uber-receipt-2026-10-04.pdf",
+        "winston browser pdf ~/downloads/booking.pdf --window win_01k5…",
+      ],
+      run: async (context) => {
+        const [path] = context.args;
+        if (!path)
+          throw CliError.usage(
+            "Where to? Pass a path ending in .pdf.",
+            "For example ~/downloads/receipt.pdf.",
+          );
+        const window = textFlag(context.flags, "window");
+        const result = await post<BrowserPdfResponse>(context, "pdf", {
+          path: uploadPath(path, process.cwd(), homedir()),
+          ...(window ? { window } : {}),
+        });
+        if (context.flags.json === true) return json(result);
+        return `Saved ${result.path} (${String(Math.ceil(result.bytes / 1024))} KB) from ${result.window.url}.`;
       },
     },
     {

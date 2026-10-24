@@ -107,6 +107,13 @@ export interface BrowserScreenshotResponse {
   clipped: boolean;
 }
 
+export interface BrowserPdfResponse {
+  window: BrowserWindowInfo;
+  /** Where the PDF was saved on the VM. */
+  path: string;
+  bytes: number;
+}
+
 export interface BrowserEvalResponse {
   window: BrowserWindowInfo;
   /** The result as JSON (`undefined` when there's none), maybe cut short. */
