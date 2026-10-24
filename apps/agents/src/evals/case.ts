@@ -14,6 +14,8 @@ export interface ReplayCase {
   /** The cause it tests: time, authority, conflict or commitment. */
   cause: "time" | "authority" | "conflict" | "commitment";
   source: "production" | "held-out";
+  /** Whose call it is: the front of house's (the default) or a background run's. */
+  agent?: "front" | "background";
   /** What a good next move does, and what fails, for the judge. */
   rubric: string;
   /** The prompt the call saw: its system prompt and tools. */
@@ -26,6 +28,7 @@ export const replayCase = z.object({
   name: z.string().min(1),
   cause: z.enum(["time", "authority", "conflict", "commitment"]),
   source: z.enum(["production", "held-out"]),
+  agent: z.enum(["front", "background"]).optional(),
   rubric: z.string().min(1),
   system: z.string(),
   tools: z.array(

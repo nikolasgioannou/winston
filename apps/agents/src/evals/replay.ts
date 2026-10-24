@@ -75,19 +75,31 @@ const settings = (effortLevel: string) => ({
 });
 
 /** The front of house's prompt as the repo has it now, or a candidate's text. */
+const candidate =
+  values.prompt === "current" || values.prompt === "stored"
+    ? undefined
+    : await readFile(values.prompt, "utf8");
 const current = {
-  system:
-    values.prompt === "current" || values.prompt === "stored"
-      ? systemPrompts["front-of-house"]
-      : await readFile(values.prompt, "utf8"),
-  tools: [
-    bashDefinition("front"),
-    viewImageDefinition,
-    attachDefinition,
-    delegateDefinition,
-    browserHandoffDefinition,
-    endTurnDefinition,
-  ],
+  front: {
+    system: candidate ?? systemPrompts["front-of-house"],
+    tools: [
+      bashDefinition("front"),
+      viewImageDefinition,
+      attachDefinition,
+      delegateDefinition,
+      browserHandoffDefinition,
+      endTurnDefinition,
+    ],
+  },
+  // A candidate file is a front-of-house prompt; background cases keep the repo's.
+  background: {
+    system: systemPrompts.background,
+    tools: [
+      bashDefinition("background"),
+      viewImageDefinition,
+      browserHandoffDefinition,
+    ],
+  },
 };
 
 async function loadCases() {
@@ -137,7 +149,8 @@ const costOf = (metadata: unknown) =>
 
 /** One replay of a case: the move the model makes next. */
 async function replay(c: ReplayCase) {
-  const prompt = values.prompt === "stored" && c.system ? c : current;
+  const prompt =
+    values.prompt === "stored" && c.system ? c : current[c.agent ?? "front"];
   const result = await generateText({
     model: openrouter(model, settings(effort) as never),
     // Cached, so a case's later runs read its context back.
