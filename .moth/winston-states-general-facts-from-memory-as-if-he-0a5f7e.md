@@ -1,14 +1,14 @@
 ---
 id: "0a5f7e"
 title: Winston states general facts from memory as if he checked them
-status: todo
+status: in-progress
 priority: medium
 labels:
   - agents
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.868Z
-updated_at: 2026-10-24T16:50:33.452Z
+updated_at: 2026-10-24T19:11:52.864Z
 ---
 
 The grounding rule from ea2e27 ("Go to the best source") is framed around the user's bookings and live facts. General claims skip it, and wrong ones are stated with confidence.
@@ -37,3 +37,13 @@ The grounding rule from ea2e27 ("Go to the best source") is framed around the us
 - [ ] Replay: the Apple proof of address picks a listed document type, or says the lease isn't on the list (3/3)
 - [ ] Existing grounding replay cases still pass
 - [ ] docs/design.md updated
+
+## Progress (2026-10-24)
+
+- **`front-of-house.md`, "Staying honest":**
+  - AI overviews count as secondhand.
+  - "Memory is a guess too": a fact the user will act on gets looked up or is said to be from memory, and anything that must meet a stated list is checked against it, saying so when it doesn't match.
+  - Anything written in the user's voice says only what they said or what's on record.
+- **`background.md`:** the same, in its grounding paragraph.
+- **Held-out replay cases:** `fact-frame-size` and `fact-document-requirements`.
+- **Left:** run them, the Edward case if exported, and the existing grounding cases. Blocked: the dev OpenRouter key is out of credit. Then record in docs/design.md and close.
