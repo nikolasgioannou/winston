@@ -54,19 +54,28 @@ export async function finishTask(
       .where(eq(runs.id, runId));
     if (!run) throw new Error(`No run ${runId}`);
     const trigger = run.triggerType === "delegate" ? null : run.triggerType;
-    await recordSystemEvent(tx, {
-      userId: run.userId,
-      type: event === "fail" ? "task.failed" : "task.completed",
-      payload: {
-        taskId: runId,
-        brief: briefPreview(run.brief),
-        report: result,
-        ...(event === "cap" ? { capped: true } : {}),
-        ...(event === "cancel" ? { cancelled: true } : {}),
-        ...(trigger ? { trigger } : {}),
+    await recordSystemEvent(
+      tx,
+      {
+        userId: run.userId,
+        type: event === "fail" ? "task.failed" : "task.completed",
+        payload: {
+          taskId: runId,
+          brief: briefPreview(run.brief),
+          report: result,
+          ...(event === "cap" ? { capped: true } : {}),
+          ...(event === "cancel" ? { cancelled: true } : {}),
+          ...(trigger ? { trigger } : {}),
+        },
+        sourceRef: `task:${runId}:finished`,
       },
-      sourceRef: `task:${runId}:finished`,
-    });
+      // A trigger's run that found nothing for the user doesn't wake the
+      // front of house, which would only end its turn (and often pay for a
+      // cold cache to do it); the report stays in history.
+      trigger && event === "complete" && nothingForUser(result)
+        ? { seenBy: runId }
+        : {},
+    );
     await enqueue(tx, closeTaskBrowserJob.type, {
       userId: run.userId,
       payload: { runId },
@@ -76,6 +85,14 @@ export async function finishTask(
     return status;
   });
 }
+
+/** The report a trigger's run gives when nothing needs the user (background.md). */
+export const nothingReport = "Nothing needs the user's attention.";
+
+/** Whether a report is that one, give or take case and the full stop. */
+export const nothingForUser = (report: string) =>
+  report.trim().replace(/\.$/, "").toLowerCase() ===
+  nothingReport.replace(/\.$/, "").toLowerCase();
 
 /** The start of a brief, for a report's `<task>` line. */
 function briefPreview(brief: string | null) {

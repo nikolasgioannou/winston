@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { DbOrTx } from "@winston/db/client";
 import {
   inboundItems,
+  jobs,
   outboundMessages,
   runMessages,
   runs,
@@ -9,7 +10,8 @@ import {
 } from "@winston/db/schema";
 import { finishTask } from "@winston/db/tasks";
 import { inRollback, insertRun, insertUser, testDb } from "@winston/db/testing";
-import { asc, eq } from "drizzle-orm";
+import { frontTurnJob } from "@winston/domain/jobs";
+import { and, asc, eq } from "drizzle-orm";
 import { notesReminder, startTriggerRun } from "./trigger-run.ts";
 
 const db = await testDb();
@@ -200,6 +202,42 @@ describe("trigger runs", () => {
         .where(eq(inboundItems.type, "task.completed"));
       expect(report?.payload).toMatchObject({ trigger: "schedule" });
       expect(userId).toBeTruthy();
+    });
+  });
+
+  test("a report that nothing needs the user stays in history without waking the front of house; anything else wakes it", async () => {
+    await inRollback(db, async (tx) => {
+      const { userId, trigger } = await setup(tx);
+      const finish = async (report: string) => {
+        const runId = await startTriggerRun(tx, {
+          triggerId: trigger.id,
+          reason: "schedule",
+        });
+        if (!runId) throw new Error("no run");
+        await tx
+          .update(runs)
+          .set({ status: "running" })
+          .where(eq(runs.id, runId));
+        await finishTask(tx, runId, "complete", report);
+        const [item] = await tx
+          .select({ consumedBy: inboundItems.consumedByRunId })
+          .from(inboundItems)
+          .where(eq(inboundItems.sourceRef, `task:${runId}:finished`));
+        const turns = await tx
+          .select()
+          .from(jobs)
+          .where(
+            and(eq(jobs.type, frontTurnJob.type), eq(jobs.userId, userId)),
+          );
+        await tx.delete(jobs);
+        return { runId, consumedBy: item?.consumedBy, turns: turns.length };
+      };
+      const quiet = await finish("nothing needs the user's attention");
+      expect(quiet.consumedBy).toBe(quiet.runId);
+      expect(quiet.turns).toBe(0);
+      const worth = await finish("Dana moved the lease signing to Friday.");
+      expect(worth.consumedBy).toBeNull();
+      expect(worth.turns).toBe(1);
     });
   });
 });

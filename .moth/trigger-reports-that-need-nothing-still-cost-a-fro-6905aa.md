@@ -1,14 +1,14 @@
 ---
 id: "6905aa"
 title: Trigger reports that need nothing still cost a front-of-house turn
-status: todo
+status: in-progress
 priority: medium
 labels:
   - agents
   - costs
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.815Z
-updated_at: 2026-10-24T16:50:33.400Z
+updated_at: 2026-10-24T19:00:31.531Z
 ---
 
 Every trigger run's report wakes the front of house, even when the report is exactly "Nothing needs the user's attention.". The front then only calls `end_turn`. After an idle gap that turn is a full cache write.
@@ -30,3 +30,16 @@ Every trigger run's report wakes the front of house, even when the report is exa
 - [ ] An empty trigger report creates no front run (test)
 - [ ] An interrupted turn followed by another within minutes reads from the cache (verified against OpenRouter, as in 93c46b)
 - [ ] docs/design.md (cost section) updated
+
+## As built, part one (2026-10-24)
+
+- `finishTask` (`@winston/db/tasks`) records the report of a completed trigger run as already seen by that run when it says nothing needs the user (`nothingForUser`, ignoring case and the full stop). It does this through `recordSystemEvent(…, { seenBy })`. The report stays in `inbound_items`, so history still finds it, but no front-of-house turn is queued.
+- Delegated tasks, failures, caps and cancels always reach the front.
+- Test (`trigger-run.test.ts`): a "nothing" report is consumed by its run with no turn queued, and a real report is unconsumed with a turn queued.
+- docs/design.md (triggers, as built) updated.
+
+**Not done yet:** finding what breaks the prompt cache within the hour (16 misses, $7). It needs paid measurement against OpenRouter, as in 93c46b, and the dev key is out of credit.
+
+- [x] An empty trigger report creates no front run (test)
+- [ ] An interrupted turn followed by another within minutes reads from the cache: waiting on credit
+- [x] docs/design.md (cost section) updated: recorded under triggers, where the behavior lives

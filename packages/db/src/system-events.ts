@@ -13,11 +13,22 @@ import { events, inboundItems } from "./schema/index.ts";
 export async function recordSystemEvent(
   db: DbOrTx,
   event: { userId: string; type: string; payload: unknown; sourceRef: string },
+  options: {
+    /**
+     * Kept in history but already seen, by this run: no turn is queued, so
+     * the front of house isn't woken for something that needs nothing.
+     */
+    seenBy?: string;
+  } = {},
 ) {
   return db.transaction(async (tx) => {
     const [stored] = await tx
       .insert(inboundItems)
-      .values({ ...event, occurredAt: new Date() })
+      .values({
+        ...event,
+        occurredAt: new Date(),
+        ...(options.seenBy ? { consumedByRunId: options.seenBy } : {}),
+      })
       .onConflictDoNothing({ target: inboundItems.sourceRef })
       .returning({ id: inboundItems.id });
     if (!stored) return false;
@@ -44,6 +55,7 @@ export async function recordSystemEvent(
           payload: { eventIds: [catalogEvent.id] },
         });
     }
+    if (options.seenBy) return true;
     await enqueue(tx, frontTurnJob.type, {
       userId: event.userId,
       dedupeKey: frontTurnJob.dedupeKey(event.userId),
