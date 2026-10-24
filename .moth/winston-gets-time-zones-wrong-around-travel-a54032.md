@@ -1,14 +1,14 @@
 ---
 id: "a54032"
 title: Winston gets time zones wrong around travel
-status: todo
+status: in-progress
 priority: high
 labels:
   - agents
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.540Z
-updated_at: 2026-10-24T16:50:33.140Z
+updated_at: 2026-10-24T18:45:15.782Z
 ---
 
 The ISO 8601 fix (e19be9) covers times passed to the CLI. It doesn't cover which zone a time belongs to, conversions Winston does in his head, or where the user will be when something happens.
@@ -41,3 +41,21 @@ The ISO 8601 fix (e19be9) covers times passed to the CLI. It doesn't cover which
 - [ ] Replay of the Oct 12 Bella reminder: set in ET, or Winston asks (3/3)
 - [ ] `calendar create` warns when a location's zone differs from the user's (test)
 - [ ] docs/design.md updated
+
+## As built (2026-10-24)
+
+- **Front-of-house prompt ("Mail and calendar"):**
+  - Something happening somewhere else takes that place's offset.
+  - **Say the zone:** name it in every time confirmed or given, add the user's own time when the two differ, and convert with a command (`TZ=… date -d …`), never in his head.
+  - **Their zone follows them:** the zone is the one setting he changes, and he says so when he does. When he learns of a trip, he sets a one-off trigger at each landing that switches the zone and tells the user in local time, and he says so when he sets it up. Anything set for later goes in the zone the user will be in then.
+- **`PATCH /v1/me`** already took any run's token. A test now shows a background run (a landing trigger's run) changing the zone.
+- **`winston calendar create`:** with a `--location` and a local `--start` (no offset), it adds a line naming the zone the time was read in and how to give the place's own offset (`zoneNote`). This replaces the planned "warn when the location's zone differs". That would need a geocoder to know where a free-text location is, so the CLI instead says which zone it used whenever a place is given.
+- **docs/design.md:** §20 (time zone follows the itinerary), decision 55, and the calendar CLI line.
+- **Held-out replay cases:** `tz-event-elsewhere`, `tz-reminder-after-trip` and `tz-trip-landing-trigger`. Not run: the dev OpenRouter key is out of credit.
+
+- [ ] Replay: a flight booking leads to landing triggers that change the zone (`tz-trip-landing-trigger`): waiting on credit
+- [x] A trigger run at landing can change the zone with `winston me update` (`index.test.ts`)
+- [ ] Replay of the movie ticket (`tz-event-elsewhere`, plus the production call when exported): waiting on credit
+- [ ] Replay of the Bella reminder (`tz-reminder-after-trip`): waiting on credit
+- [x] `calendar create` says which zone a local time at a place was read in (`calendar.test.ts`; changed from "warns when the zones differ", see above)
+- [x] docs/design.md updated

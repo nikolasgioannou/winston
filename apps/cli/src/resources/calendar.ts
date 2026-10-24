@@ -330,7 +330,23 @@ const emails = (notifies: string[], dryRun: boolean) =>
       ? "Would email no one."
       : "No one was emailed.";
 
-function showCreated(result: Created, asJson: boolean) {
+/**
+ * A local start (no offset) is read in the user's zone. When the event has a
+ * place, say so, since the place may be somewhere else (a ticket for a show
+ * in New York, bought from Cyprus).
+ */
+export function zoneNote(
+  start: string | undefined,
+  location: string | undefined,
+  timeZone: string,
+) {
+  if (!start || !location) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(start.trim()))
+    return undefined;
+  return `Read as ${timeZone} time, the user's zone. If ${location} is in another zone, give that place's offset instead (--start ${start.trim()}±hh:mm).`;
+}
+
+function showCreated(result: Created, asJson: boolean, note?: string) {
   if (asJson) return json(result);
   if (result.dryRun) {
     const e = result.event;
@@ -344,6 +360,7 @@ function showCreated(result: Created, asJson: boolean) {
       e.video ? "with a Google Meet link" : undefined,
       e.recurrence ? `repeats: ${e.recurrence.join(" ")}` : undefined,
       emails(result.notifies, true),
+      note,
     ]
       .filter((line) => line !== undefined)
       .join("\n");
@@ -353,6 +370,7 @@ function showCreated(result: Created, asJson: boolean) {
     `Created ${e.id} "${e.title}"  ${span(e.start, e.end, result.timeZone)}  in ${result.account.email}.`,
     e.videoLink ? `Video: ${e.videoLink}` : undefined,
     emails(result.notifies, false),
+    note,
   ]
     .filter((line) => line !== undefined)
     .join("\n");
@@ -581,42 +599,45 @@ export const calendar: Resource = {
             "Say how long: exactly one of --end, --duration or --all-day.",
           );
         const description = textFlag(flags, "description");
+        const location = textFlag(flags, "location");
+        const created = await call<Created>(
+          client.v1.calendar.events.$post({
+            json: {
+              ...(textFlag(flags, "account")
+                ? { account: textFlag(flags, "account") }
+                : {}),
+              ...(textFlag(flags, "calendar")
+                ? { calendar: textFlag(flags, "calendar") }
+                : {}),
+              title,
+              start,
+              ...(end === undefined ? {} : { end }),
+              ...(duration === undefined
+                ? {}
+                : { duration: minutes(duration) }),
+              allDay,
+              attendees: listFlag(flags, "attendee"),
+              ...(textFlag(flags, "location")
+                ? { location: textFlag(flags, "location") }
+                : {}),
+              ...(description === undefined
+                ? {}
+                : {
+                    description: await resolveText(description, context.text),
+                  }),
+              video: flags.video === true,
+              ...(textFlag(flags, "repeat")
+                ? { repeat: textFlag(flags, "repeat") }
+                : {}),
+              ...notifyOf(flags),
+              dryRun: flags["dry-run"] === true,
+            },
+          }),
+        );
         return showCreated(
-          await call<Created>(
-            client.v1.calendar.events.$post({
-              json: {
-                ...(textFlag(flags, "account")
-                  ? { account: textFlag(flags, "account") }
-                  : {}),
-                ...(textFlag(flags, "calendar")
-                  ? { calendar: textFlag(flags, "calendar") }
-                  : {}),
-                title,
-                start,
-                ...(end === undefined ? {} : { end }),
-                ...(duration === undefined
-                  ? {}
-                  : { duration: minutes(duration) }),
-                allDay,
-                attendees: listFlag(flags, "attendee"),
-                ...(textFlag(flags, "location")
-                  ? { location: textFlag(flags, "location") }
-                  : {}),
-                ...(description === undefined
-                  ? {}
-                  : {
-                      description: await resolveText(description, context.text),
-                    }),
-                video: flags.video === true,
-                ...(textFlag(flags, "repeat")
-                  ? { repeat: textFlag(flags, "repeat") }
-                  : {}),
-                ...notifyOf(flags),
-                dryRun: flags["dry-run"] === true,
-              },
-            }),
-          ),
+          created,
           flags.json === true,
+          zoneNote(start, location, created.timeZone),
         );
       },
     },

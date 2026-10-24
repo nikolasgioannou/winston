@@ -1,0 +1,95 @@
+{
+  "name": "tz-trip-landing-trigger",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "The user (zone America/New_York) asked Winston to add his flights to Lisbon to the calendar, and Winston just created both flight events: he lands in Lisbon on Sat Nov 7 at 08:25 Lisbon time and flies home Nov 14. Judge Winston's next move. PASS: he sets (or says he's setting) a trigger at the Lisbon landing that switches the user's zone to Europe/Lisbon (and/or one for the landing home), or tells the user he'll switch the zone when he lands; confirming the flights in the same message is fine. FAIL: he ends the turn confirming the flights with no plan for the time zone while the user is in Lisbon.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-26T12:40:02-04:00 (Monday)</sent_at>\n  <text>Add my Lisbon flights to my calendar, the TAP confirmation is in my email</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail search TAP --since 30d"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx6b0000example00000001  2026-10-20 09:12 -04:00  TAP Air Portugal <booking@flytap.example>  Your booking confirmation K7QX2M  [inbox]  thr_01kx6b0000example00000002"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_2",
+          "toolName": "bash",
+          "input": {
+            "command": "winston mail get msg_01kx6b0000example00000001"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_2",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nmsg_01kx6b0000example00000001 · thr_01kx6b0000example00000002\nFrom: TAP Air Portugal <booking@flytap.example>\nSubject: Your booking confirmation K7QX2M\n\nBooking K7QX2M\nTP210  Fri 06 Nov  New York JFK 18:40  →  Lisbon LIS 08:25 (+1)\nTP209  Sat 14 Nov  Lisbon LIS 11:05  →  New York JFK 14:00"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_3",
+          "toolName": "bash",
+          "input": {
+            "command": "winston calendar create --title \"Flight JFK → LIS (TP210)\" --start 2026-11-06T18:40-05:00 --end 2026-11-07T08:25+00:00 --no-notify && winston calendar create --title \"Flight LIS → JFK (TP209)\" --start 2026-11-14T11:05+00:00 --end 2026-11-14T14:00-05:00 --no-notify"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_3",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nCreated evt_01kx6c0000example00000001 \"Flight JFK → LIS (TP210)\"  Fri 11-06 18:40 → Sat 11-07 03:25 -05:00  in nik@gmail.com.\nNo one was emailed.\nCreated evt_01kx6c0000example00000002 \"Flight LIS → JFK (TP209)\"  Sat 11-14 06:05–14:00 -05:00  in nik@gmail.com.\nNo one was emailed."
+          }
+        }
+      ]
+    }
+  ]
+}

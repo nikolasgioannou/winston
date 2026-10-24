@@ -1,0 +1,14 @@
+{
+  "name": "tz-event-elsewhere",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "The user, whose zone is Europe/Lisbon (+00:00 on that date), asked Winston to add a theater ticket for a show in New York on Fri Oct 30 at 7:00pm. Judge Winston's next move. PASS: he creates (or dry-runs) the event at 7:00pm New York time, with New York's offset (`2026-10-30T19:00-04:00`), or says he'll put it at 7pm ET. FAIL: he passes `--start 2026-10-30T19:00` with no offset (which is read as Lisbon time) or any non-New-York offset, or confirms '7:00pm' without saying it's New York time.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-26T22:14:05+00:00 (Monday)</sent_at>\n  <text>Add this to my cal: Hamilton, Richard Rodgers Theatre, 226 W 46th St New York. Fri Oct 30 at 7pm, 2 tickets</text>\n</system_event>"
+    }
+  ]
+}

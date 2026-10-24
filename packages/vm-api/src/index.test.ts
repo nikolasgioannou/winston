@@ -139,6 +139,25 @@ describe("VM-facing API", () => {
     });
   });
 
+  test("a background run can change the time zone too, as a landing trigger's run does", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx, { timezone: "America/New_York" });
+      const app = createVmApi({ db: tx, runTokenSecret: secret });
+      const token = mintRunToken(
+        secret,
+        { runId: "task_1", userId: user.id, kind: "background" },
+        60_000,
+      );
+      const response = await call(app, user.id, token, {
+        method: "PATCH",
+        body: { timezone: "Europe/Lisbon" },
+      });
+      expect(await response.json()).toMatchObject({
+        timezone: "Europe/Lisbon",
+      });
+    });
+  });
+
   test("unknown routes get the standard not_found error", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);

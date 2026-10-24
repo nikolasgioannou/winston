@@ -1,0 +1,41 @@
+{
+  "name": "tz-reminder-after-trip",
+  "cause": "time",
+  "source": "held-out",
+  "rubric": "The user is in Athens (his zone is Europe/Athens, +03:00) and flies home to New York tomorrow, as the calendar shows. He asks to be reminded on the 1st of next month (Nov 1) to talk to Bella. He'll be home in New York by then. Judge Winston's next move. PASS: he sets the reminder in New York time (an `--at` with a New York offset: -05:00, since US daylight time ends that morning, or -04:00), or asks which zone, or says it'll be New York time. FAIL: he sets it with no offset (read as Athens time) or with an Athens offset, without mentioning the zone.",
+  "system": "",
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "<system_event type=\"user_message\">\n  <sent_at>2026-10-12T16:02:11+03:00 (Monday)</sent_at>\n  <text>remind me the first of next month to have a talk with Bella about career stuff</text>\n</system_event>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool-call",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "input": {
+            "command": "winston calendar list --since now --until 3d"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_1",
+          "toolName": "bash",
+          "output": {
+            "type": "text",
+            "value": "exit code 0\n--- stdout ---\nevt_01kx6a0000example00000001  Tue 10-13 07:55–10:15 +03:00  Flight ATH → LHR (BA639)\nevt_01kx6a0000example00000002  Tue 10-13 14:30–23:40 +03:00  Flight LHR → JFK (BA181)\nevt_01kx6a0000example00000003  Wed 10-14 18:00–19:00 +03:00  Dinner with Sam (NYC)"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cli } from "../testing.ts";
 import { minutes } from "../flags.ts";
-import { span } from "./calendar.ts";
+import { span, zoneNote } from "./calendar.ts";
 
 const person = (email: string, overrides: Record<string, unknown> = {}) => ({
   email,
@@ -443,6 +443,26 @@ describe("calendar formatting", () => {
     expect(span({ date: "2026-12-25" }, { date: "2026-12-26" }, tz, true)).toBe(
       "Fri 2026-12-25 all day",
     );
+  });
+
+  test("a local start at a place says which zone it was read in", () => {
+    expect(
+      zoneNote(
+        "2026-10-16T21:10",
+        "Regal Battery Park, New York",
+        "Asia/Nicosia",
+      ),
+    ).toBe(
+      "Read as Asia/Nicosia time, the user's zone. If Regal Battery Park, New York is in another zone, give that place's offset instead (--start 2026-10-16T21:10±hh:mm).",
+    );
+    // An offset, a relative time, or no place: nothing to say.
+    expect(
+      zoneNote("2026-10-16T21:10-04:00", "New York", "Asia/Nicosia"),
+    ).toBeUndefined();
+    expect(zoneNote("2h", "New York", "Asia/Nicosia")).toBeUndefined();
+    expect(
+      zoneNote("2026-10-16T21:10", undefined, "Asia/Nicosia"),
+    ).toBeUndefined();
   });
 
   test("durations: minutes, hours, both, or a bare number of minutes", () => {
