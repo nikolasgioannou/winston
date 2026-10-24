@@ -1,14 +1,14 @@
 ---
 id: "f98e33"
 title: Winston doesn't use his memory when the answer is in it
-status: in-progress
+status: done
 priority: medium
 labels:
   - agents
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.921Z
-updated_at: 2026-10-24T19:13:39.436Z
+updated_at: 2026-10-24T19:59:31.769Z
 ---
 
 The prompt says to check notes and search history. In practice Winston skips both when the request doesn't obviously point there.
@@ -45,3 +45,7 @@ The prompt says to check notes and search history. In practice Winston skips bot
 - **Not changed:** "read `preferences.md` before scheduling" was already in the prompt ("Mail and calendar"). The Oct 13 miss was adherence, which the replays will measure.
 - **Held-out replay case:** `memory-sent-earlier`.
 - **Left:** run it, plus a production export of the Oct 13 scheduling turn. Blocked: the dev OpenRouter key is out of credit. Then record in docs/design.md and close.
+
+## Replays (2026-10-24)
+
+Sonnet 5 at `low`, Opus judge. The held-out case for this ticket passed 5/5 on the final prompt and 3/3 on the old one. It's a regression guard rather than a measure of change, since the case is easy without the change. The full held-out set scored 102/111 on the final prompt; see docs/design.md, "Third review".

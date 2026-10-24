@@ -1,14 +1,14 @@
 ---
 id: "510b10"
 title: Winston offers to call or text people
-status: in-progress
+status: done
 priority: low
 labels:
   - agents
   - prompts
 parent: "07ba81"
 created_at: 2026-10-24T16:49:57.080Z
-updated_at: 2026-10-24T19:15:27.864Z
+updated_at: 2026-10-24T19:59:31.874Z
 ---
 
 Winston has no phone or SMS, but offers both.
@@ -36,3 +36,7 @@ Winston has no phone or SMS, but offers both.
 - `background.md`: no calls or texts to offer in a report.
 - Held-out replay case: `capability-no-calls`.
 - Left: run it (OpenRouter credit), record in docs/design.md, close.
+
+## Replays (2026-10-24)
+
+Sonnet 5 at `low`, Opus judge. The held-out case for this ticket passed 5/5 on the final prompt and 3/3 on the old one. It's a regression guard rather than a measure of change, since the case is easy without the change. The full held-out set scored 102/111 on the final prompt; see docs/design.md, "Third review".

@@ -1,13 +1,13 @@
 ---
 id: "cde47d"
 title: Winston can't reply in a thread to the recipients the user picks
-status: in-progress
+status: done
 priority: high
 labels:
   - mail
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.707Z
-updated_at: 2026-10-24T18:40:24.000Z
+updated_at: 2026-10-24T19:59:31.665Z
 ---
 
 `winston mail reply` takes only `--all`: it can't change To/Cc/Bcc or the sending account. `mail send` can't reply into a thread. So when the user asks for specific recipients on a reply, Winston sends a new thread.
@@ -44,3 +44,7 @@ updated_at: 2026-10-24T18:40:24.000Z
 - [x] `reply --account` works for the thread's account and refuses another (`mail-write.test.ts`; the CLI passes it, `mail.test.ts`)
 - [ ] Replay of the Cory request (`reply-chosen-recipients`), 3/3: waiting on OpenRouter credit
 - [x] docs/design.md updated
+
+## Replays (2026-10-24)
+
+Sonnet 5 at `low`, Opus judge. The held-out case for this ticket passed 5/5 on the final prompt and 3/3 on the old one. It's a regression guard rather than a measure of change, since the case is easy without the change. The full held-out set scored 102/111 on the final prompt; see docs/design.md, "Third review".
