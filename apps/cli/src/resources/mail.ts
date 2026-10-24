@@ -290,7 +290,7 @@ function showSend(result: SendResult, asJson: boolean) {
         p.cc.length ? `cc: ${p.cc.join(", ")}` : undefined,
         p.bcc.length ? `bcc: ${p.bcc.join(", ")}` : undefined,
         `subject: ${p.subject}`,
-        p.threadId ? `in ${p.threadId}` : undefined,
+        p.threadId ? `in ${p.threadId}` : "new thread",
       ]
         .filter(Boolean)
         .join("  "),
@@ -557,23 +557,49 @@ export const mail: Resource = {
           name: "all",
           description: "Reply to everyone on it, not just the sender",
         },
+        {
+          ...writeFlags.to,
+          description:
+            "Who it goes to instead of the sender (repeatable); still in the thread",
+        },
+        {
+          ...writeFlags.cc,
+          description: "Who's copied instead (repeatable); still in the thread",
+        },
+        writeFlags.bcc,
         writeFlags.attach,
         writeFlags.draft,
         standardFlags.dryRun,
+        {
+          ...standardFlags.account,
+          description:
+            "The thread's own account (optional: a reply always goes from it)",
+        },
       ],
       examples: [
         "winston mail reply msg_01k5… --body - --dry-run <<'EOF'\nTuesday works. Thanks, Dana.\nEOF",
         'winston mail reply msg_01k5… --all --body "Sounds good." --draft',
+        'winston mail reply thr_01k5… --to sam@example.com --to lee@example.com --cc cory@example.com --body "Great to meet you both." --dry-run',
       ],
       run: async (context) => {
         const { client, flags, args } = context;
         const [id] = args;
         if (!id) throw CliError.usage("Which message? Pass a msg_ or thr_ id.");
+        // Only lists that were passed replace the reply's own recipients.
+        const chosen = Object.fromEntries(
+          (["to", "cc", "bcc"] as const)
+            .map((name) => [name, listFlag(flags, name)] as const)
+            .filter(([, list]) => list.length > 0),
+        );
         return showSend(
           await call<SendResult>(
             client.v1.mail.messages[":id"].reply.$post({
               param: { id },
               json: {
+                ...(textFlag(flags, "account")
+                  ? { account: textFlag(flags, "account") }
+                  : {}),
+                ...chosen,
                 body: (await bodyText(flags, context, true)) ?? "",
                 all: flags.all === true,
                 attach: attachPaths(flags, context.files),

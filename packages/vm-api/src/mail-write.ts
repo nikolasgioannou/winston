@@ -53,8 +53,13 @@ const sendBody = z.object({
 });
 
 const replyBody = z.object({
+  account: z.string().optional(),
   body: z.string(),
   all: z.boolean().default(false),
+  /** Each replaces who that field would go to; the reply stays in the thread. */
+  to: addresses.min(1).optional(),
+  cc: addresses.optional(),
+  bcc: addresses.optional(),
   attach: z.array(vmPath).max(20).default([]),
   draft: z.boolean().default(false),
   dryRun: z.boolean().default(false),
@@ -458,12 +463,25 @@ export function mailWriteRoutes({
           ["message", "thread"],
           input.draft ? "draft" : "send",
         );
+        // A reply goes from the thread's own account.
+        if (
+          input.account !== undefined &&
+          input.account.toLowerCase() !== connection.externalEmail.toLowerCase()
+        )
+          throw new ApiFailure(
+            "invalid_request",
+            `${id} is in ${connection.externalEmail}, not ${input.account}.`,
+            `A reply goes from the thread's own account: pass --account ${connection.externalEmail}, or leave it out.`,
+          );
         const original = await originalOf(connection, ref);
         const mail: OutgoingMail = {
           ...replyTo(original, {
             body: input.body,
             all: input.all,
             self: connection.externalEmail,
+            to: input.to,
+            cc: input.cc,
+            bcc: input.bcc,
           }),
           attachments: await attachments(userId, input.attach),
         };

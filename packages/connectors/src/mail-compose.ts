@@ -9,7 +9,7 @@
  * - **Replies** answer the `Reply-To` (or the sender), thread through
  *   `In-Reply-To` and `References`, and add "Re: " unless the subject has it.
  *   Reply-all adds everyone else from To and Cc, without the user and without
- *   repeats.
+ *   repeats. Chosen To, Cc or Bcc replace those fields, still in the thread.
  * - **Forwards** keep the original's attachments and put the usual
  *   "Forwarded message" header block under the new text.
  */
@@ -80,10 +80,28 @@ function uniqueAddresses(addresses: MailAddress[], exclude: string[]) {
   return out;
 }
 
-/** A reply to `original`: who it goes to, its subject and threading. */
+/**
+ * A reply to `original`: who it goes to, its subject and threading. Each of
+ * `to`, `cc` and `bcc` given replaces who that field would go to, and the
+ * reply stays in the thread.
+ */
 export function replyTo(
   original: FullMailMessage,
-  { body, all, self }: { body: string; all: boolean; self: string },
+  {
+    body,
+    all,
+    self,
+    to: chosenTo,
+    cc: chosenCc,
+    bcc,
+  }: {
+    body: string;
+    all: boolean;
+    self: string;
+    to?: string[] | undefined;
+    cc?: string[] | undefined;
+    bcc?: string[] | undefined;
+  },
 ): OutgoingMail {
   const answering =
     original.replyTo.length > 0
@@ -94,16 +112,19 @@ export function replyTo(
   // Replying to a message the user sent goes back to its recipients.
   const fromSelf = original.from?.email.toLowerCase() === self.toLowerCase();
   const primary = fromSelf ? original.to : answering;
-  const to = uniqueAddresses(primary, [self]);
-  const cc = all
-    ? uniqueAddresses(
-        [...original.to, ...original.cc],
-        [self, ...primary.map((a) => a.email)],
-      )
-    : [];
+  const to = chosenTo ?? uniqueAddresses(primary, [self]);
+  const cc =
+    chosenCc ??
+    (all
+      ? uniqueAddresses(
+          [...original.to, ...original.cc],
+          [self, ...primary.map((a) => a.email)],
+        )
+      : []);
   return {
     to,
     ...(cc.length ? { cc } : {}),
+    ...(bcc?.length ? { bcc } : {}),
     subject: reSubject(original.subject, "Re"),
     body,
     inReplyTo: threading(original),

@@ -1,13 +1,13 @@
 ---
 id: "cde47d"
 title: Winston can't reply in a thread to the recipients the user picks
-status: todo
+status: in-progress
 priority: high
 labels:
   - mail
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.707Z
-updated_at: 2026-10-24T16:50:33.244Z
+updated_at: 2026-10-24T18:40:24.000Z
 ---
 
 `winston mail reply` takes only `--all`: it can't change To/Cc/Bcc or the sending account. `mail send` can't reply into a thread. So when the user asks for specific recipients on a reply, Winston sends a new thread.
@@ -30,3 +30,17 @@ updated_at: 2026-10-24T16:50:33.244Z
 - [ ] `reply --account` works for Winston's own address and refuses an address that isn't the thread's (test)
 - [ ] Replay of the Cory request: previews and sends in-thread with Nik's recipients (3/3)
 - [ ] docs/design.md updated
+
+## As built (2026-10-24)
+
+- `replyTo` (`@winston/connectors/mail-compose`) takes optional `to`, `cc` and `bcc`. Each one given replaces who that field would go to, and In-Reply-To/References stay, so the reply is in the thread. With only `--to` chosen, `--all` still fills Cc.
+- `POST /v1/mail/messages/:id/reply` accepts `to`, `cc`, `bcc` and `account`. An account that isn't the thread's own is refused with the right one named, since a reply always goes from the thread's account.
+- `winston mail reply` gains `--to`/`--cc`/`--bcc` (repeatable) and `--account`, sending only the lists passed. Every dry-run line now ends with `in thr_…` or `new thread`, so a "Re:" sent with `send` shows that it won't thread.
+- Front-of-house prompt, "Mail and calendar": an answer to an email is `mail reply`, with `--to`/`--cc` when the user picks recipients, and `mail send` always starts a new thread.
+- docs/design.md (the `winston mail` writes) updated.
+- Held-out replay case `reply-chosen-recipients` added. Not run yet: the dev OpenRouter key is out of credit.
+
+- [x] A reply with `--to`/`--cc` goes in the original thread with exactly those recipients (`mail-write.test.ts`, `mail-compose.test.ts`)
+- [x] `reply --account` works for the thread's account and refuses another (`mail-write.test.ts`; the CLI passes it, `mail.test.ts`)
+- [ ] Replay of the Cory request (`reply-chosen-recipients`), 3/3: waiting on OpenRouter credit
+- [x] docs/design.md updated

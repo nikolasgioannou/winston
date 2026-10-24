@@ -127,6 +127,36 @@ describe("composing mail", () => {
     ]);
   });
 
+  test("chosen recipients replace each field they name, and the reply stays in the thread", () => {
+    const reply = replyTo(original, {
+      body: "Great to meet you both.",
+      all: true,
+      self: "me@example.com",
+      to: ["ana@example.com", "lee@example.com"],
+      cc: ["dana@example.com"],
+      bcc: ["archive@example.com"],
+    });
+    expect(reply).toMatchObject({
+      to: ["ana@example.com", "lee@example.com"],
+      cc: ["dana@example.com"],
+      bcc: ["archive@example.com"],
+      subject: "Re: Lease renewal",
+      inReplyTo: {
+        threadId: "t-1",
+        messageIdHeader: "<abc@mail.example.com>",
+      },
+    });
+    // Only To chosen: reply-all still fills Cc.
+    expect(
+      replyTo(original, {
+        body: "",
+        all: true,
+        self: "me@example.com",
+        to: ["ana@example.com"],
+      }).cc,
+    ).toEqual(["Sam Lee <sam@example.com>", "Bo <bo@example.com>"]);
+  });
+
   test("Reply-To wins over From; replying to your own message goes to its recipients", () => {
     expect(
       replyTo(

@@ -299,12 +299,63 @@ describe("winston mail", () => {
     expect(out).toBe(
       [
         "DRY RUN (nothing sent)",
-        "from: me@example.com  to: dana@example.com, sam@example.com  subject: Re: Lease renewal",
+        "from: me@example.com  to: dana@example.com, sam@example.com  subject: Re: Lease renewal  new thread",
         "attachments: plan.pdf",
         "Tuesday works.",
         "Thanks, Dana.",
       ].join("\n"),
     );
+  });
+
+  test("reply sends only the recipient lists passed, and --account", async () => {
+    let sentBody: unknown;
+    const { out } = await cli(
+      [
+        "mail",
+        "reply",
+        "thr_01t",
+        "--to",
+        "ana@example.com",
+        "--to",
+        "lee@example.com",
+        "--cc",
+        "cory@example.com",
+        "--account",
+        "me@example.com",
+        "--body",
+        "Great to meet you both.",
+        "--dry-run",
+      ],
+      async (request) => {
+        sentBody = await request.json();
+        return Response.json({
+          account: { id: "acct_1", email: "me@example.com" },
+          preview: {
+            dryRun: true,
+            draft: false,
+            account: "me@example.com",
+            to: ["ana@example.com", "lee@example.com"],
+            cc: ["cory@example.com"],
+            bcc: [],
+            subject: "Re: Intro",
+            body: "Great to meet you both.",
+            attachments: [],
+            threadId: "thr_01t",
+          },
+        });
+      },
+    );
+    expect(sentBody).toEqual({
+      account: "me@example.com",
+      to: ["ana@example.com", "lee@example.com"],
+      cc: ["cory@example.com"],
+      body: "Great to meet you both.",
+      all: false,
+      attach: [],
+      draft: false,
+      dryRun: true,
+    });
+    expect(out).toContain("subject: Re: Intro  in thr_01t");
   });
 
   test("send prints the sent ids; --draft prints the draft and how to send it; a drf_ id sends that draft", async () => {

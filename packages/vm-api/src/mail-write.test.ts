@@ -175,6 +175,54 @@ describe("mail writes", () => {
     });
   });
 
+  test("a reply to chosen recipients stays in the thread; --account must be the thread's", async () => {
+    await inRollback(db, async (tx) => {
+      const user = await insertUser(tx);
+      const connection = await insertConnection(tx, user.id, {
+        scopes: ["gmail.modify"],
+        capabilities: everything,
+        externalEmail: "me@example.com",
+      });
+      const { as, mail } = setupApi(tx);
+      const id = await refFor(tx, user.id, connection.id, "message", "m-1");
+      const call = as(user.id, (await insertRun(tx, user.id)).id);
+      const preview = await json(
+        await call(`/v1/mail/messages/${id}/reply`, {
+          method: "POST",
+          body: {
+            account: "ME@example.com",
+            to: ["ana@example.com", "lee@example.com"],
+            cc: ["dana@example.com"],
+            body: "Great to meet you both.",
+            dryRun: true,
+          },
+        }),
+      );
+      expect(preview.preview).toMatchObject({
+        to: ["ana@example.com", "lee@example.com"],
+        cc: ["dana@example.com"],
+        threadId: await refFor(tx, user.id, connection.id, "thread", "t-1"),
+      });
+      await call(`/v1/mail/messages/${id}/reply`, {
+        method: "POST",
+        body: { to: ["ana@example.com"], body: "Hi." },
+      });
+      expect(mail.sent[0]).toMatchObject({
+        to: ["ana@example.com"],
+        inReplyTo: {
+          threadId: "t-1",
+          messageIdHeader: "<m-1@mail.example.com>",
+        },
+      });
+      const elsewhere = await call(`/v1/mail/messages/${id}/reply`, {
+        method: "POST",
+        body: { account: "winston@runwinston.email", body: "Hi." },
+      });
+      expect(elsewhere.status).toBe(400);
+      expect(mail.sent).toHaveLength(1);
+    });
+  });
+
   test("forward keeps the original's attachments; its dry run names them", async () => {
     await inRollback(db, async (tx) => {
       const user = await insertUser(tx);
