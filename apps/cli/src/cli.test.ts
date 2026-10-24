@@ -75,6 +75,19 @@ describe("flags", () => {
     });
   });
 
+  test("an alias is read as its flag", () => {
+    const ranged = [
+      { ...standardFlags.since, aliases: ["from", "start"] },
+      { ...standardFlags.until, aliases: ["to", "end"] },
+    ];
+    expect(
+      parseFlags(["--from", "2026-10-08", "--to=2026-10-09"], ranged).flags,
+    ).toEqual({ since: "2026-10-08", until: "2026-10-09" });
+    expect(parseFlags(["--start", "2h"], ranged).flags).toEqual({
+      since: "2h",
+    });
+  });
+
   test("an unknown flag suggests the closest one, as §11 words it", () => {
     expect(() => parseFlags(["--form", "a@b.com"], specs)).toThrow(
       "Unknown flag `--form`. Did you mean `--from`?",

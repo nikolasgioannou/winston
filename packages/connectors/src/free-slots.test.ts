@@ -62,6 +62,24 @@ describe("free slots", () => {
     expect(withWeekends).toHaveLength(3);
   });
 
+  test("0–24 is the whole day, up to midnight", () => {
+    const slots = freeSlots({
+      // Tuesday, Sep 29 2026: busy 10–11 local.
+      busy: [
+        { start: d("2026-09-29T14:00:00Z"), end: d("2026-09-29T15:00:00Z") },
+      ],
+      since: d("2026-09-29T04:00:00Z"),
+      until: d("2026-09-30T04:00:00Z"),
+      durationMinutes: 30,
+      timeZone: ny,
+      hours: { startMinute: 0, endMinute: 24 * 60, days: [2] },
+    });
+    expect(show(slots)).toEqual([
+      "2026-09-29T04:00:00.000Z–2026-09-29T14:00:00.000Z",
+      "2026-09-29T15:00:00.000Z–2026-09-30T04:00:00.000Z",
+    ]);
+  });
+
   test("on the day the clocks fall back, 9–18 local is still 9–18 local", () => {
     // Sunday Nov 1 2026: EDT → EST at 2:00. 9:00 EST is 14:00Z.
     const slots = freeSlots({

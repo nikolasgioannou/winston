@@ -232,10 +232,15 @@ const filterFlags: FlagSpec[] = [
     description: "Only events with people outside the account's organization",
   },
   { name: "title", value: "<text>", description: "Title contains" },
-  { ...standardFlags.since, description: "From this time (default now)" },
+  {
+    ...standardFlags.since,
+    description: "From this time (default now)",
+    aliases: ["from", "start"],
+  },
   {
     ...standardFlags.until,
     description: "Up to this time (default a week after --since)",
+    aliases: ["to", "end"],
   },
   standardFlags.limit,
   standardFlags.cursor,
@@ -488,10 +493,15 @@ export const calendar: Resource = {
       summary:
         "Free slots in working hours, the user's and attendees' where their calendars are visible",
       flags: [
-        { ...standardFlags.since, description: "From this time (default now)" },
+        {
+          ...standardFlags.since,
+          description: "From this time (default now)",
+          aliases: ["from", "start"],
+        },
         {
           ...standardFlags.until,
           description: "Up to this time (default a week after --since)",
+          aliases: ["to", "end"],
         },
         {
           name: "duration",

@@ -2,13 +2,13 @@
 id: "9afd60"
 title: Triggers can't start later or drop an expiry, and calendar flags are easy
   to guess wrong
-status: todo
+status: done
 priority: low
 labels:
   - cli
 parent: "07ba81"
 created_at: 2026-10-24T16:49:57.026Z
-updated_at: 2026-10-24T16:50:33.660Z
+updated_at: 2026-10-24T19:20:02.317Z
 ---
 
 **From the trace audit (07ba81):**
@@ -32,3 +32,18 @@ updated_at: 2026-10-24T16:50:33.660Z
 - [ ] `trigger update --no-expires` clears the expiry (test)
 - [ ] `calendar list --from` works or names `--since` (test)
 - [ ] `--hours 0-24` covers the whole day (test)
+
+## As built (2026-10-24)
+
+- **`trigger create --cron … --starts <time>`:** the first fire is the first cron match on or after the start. It's computed from just before the start, and `--starts` without `--cron` is refused. The start isn't stored (no new column): an update, or a time-zone change before it, recomputes from now. Recorded in docs/design.md.
+- **`trigger update --no-expires`:** drops the expiry and its on-expire note, and is refused alongside `--expires`/`--on-expire`.
+- **Flag aliases:** `FlagSpec.aliases`, hidden from help. `calendar list`, `search` and `free` take `--from`/`--start` for `--since` and `--to`/`--end` for `--until`.
+- **`--hours 0-24`:** `freeSlots` reads 24:00 as midnight at the end of the day. `Temporal.PlainTime` refused hour 24, so this used to throw.
+- **Front-of-house prompt:** `--starts` named under triggers.
+- **docs/design.md:** CLI flags, triggers, time flags.
+- **Tests:** `triggers.test.ts` (starts on or after, starts only with cron, no-expires), `cli.test.ts` (aliases), `free-slots.test.ts` (0–24).
+
+- [x] A cron trigger with `--starts` first fires at the start (test)
+- [x] `trigger update --no-expires` clears the expiry (test)
+- [x] `calendar list --from` works (aliases, test)
+- [x] `--hours 0-24` covers the whole day (test)

@@ -48,13 +48,15 @@ function windowOn(
   hours: WorkingHours,
   timeZone: string,
 ): Interval {
+  // 24:00 (`--hours 0-24`, the whole day) is midnight at the end of the day.
   const at = (minute: number) =>
     new Date(
       date
+        .add({ days: Math.floor(minute / (24 * 60)) })
         .toZonedDateTime({
           timeZone,
           plainTime: Temporal.PlainTime.from({
-            hour: Math.floor(minute / 60),
+            hour: Math.floor((minute % (24 * 60)) / 60),
             minute: minute % 60,
           }),
         })

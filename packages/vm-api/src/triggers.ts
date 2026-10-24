@@ -48,7 +48,11 @@ const fields = {
   account: z.string().min(1).optional(),
   maxFires: z.number().int().min(1).optional(),
   expires: z.string().min(1).optional(),
+  /** Drops the expiry, and its on-expire note with it. */
+  noExpires: z.boolean().optional(),
   onExpire: z.string().trim().min(1).optional(),
+  /** For --cron: the first fire is on or after this time. */
+  starts: z.string().min(1).optional(),
 };
 
 const createBody = z.object({ ...fields, note: z.string().trim().min(1) });
@@ -110,11 +114,18 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
         'Say what wakes you: exactly one of --at <time>, --cron "<5-field cron>" or --on <event-type>.',
       );
     const now = new Date();
-    const expiresAt =
-      input.expires === undefined
+    if (input.noExpires && (input.expires ?? input.onExpire) !== undefined)
+      throw invalid(
+        "--no-expires drops the expiry: leave out --expires and --on-expire.",
+      );
+    const expiresAt = input.noExpires
+      ? null
+      : input.expires === undefined
         ? (current?.expiresAt ?? null)
         : future("expires", input.expires, timeZone);
-    const onExpireNote = input.onExpire ?? current?.onExpireNote ?? null;
+    const onExpireNote = input.noExpires
+      ? null
+      : (input.onExpire ?? current?.onExpireNote ?? null);
     if (onExpireNote !== null && expiresAt === null)
       throw invalid("--on-expire needs --expires: when should it notice?");
     const common = {
@@ -151,9 +162,28 @@ export function triggerRoutes({ db }: { db: DbOrTx }) {
         at,
         cron: input.cron?.trim() ?? null,
       };
-      const next = nextFireAt(schedule, now, timeZone);
+      if (input.starts !== undefined && input.cron === undefined)
+        throw invalid(
+          "--starts is for --cron schedules.",
+          "For a single time, use --at.",
+        );
+      // A routine that begins later counts from just before its start, so a
+      // start that matches the cron is its first fire.
+      const startsAt =
+        input.starts === undefined
+          ? undefined
+          : future("starts", input.starts, timeZone);
+      const next = nextFireAt(
+        schedule,
+        startsAt ? new Date(startsAt.getTime() - 1) : now,
+        timeZone,
+      );
       if (expiresAt && at && expiresAt <= at)
         throw invalid("--expires is before --at, so it would never fire.");
+      if (expiresAt && next && startsAt && expiresAt <= next)
+        throw invalid(
+          "--expires is before its first fire, so it would never fire.",
+        );
       return {
         ...schedule,
         ...common,

@@ -169,7 +169,7 @@ Triggers are how you act without being asked: at a time, or when something happe
 
 Pick the kind that fits:
 
-- **A time:** `--at` once ("remind me Friday at 2:45"), `--cron` for a routine ("a briefing every weekday at 8"). Both are in the user's time zone.
+- **A time:** `--at` once ("remind me Friday at 2:45"), `--cron` for a routine ("a briefing every weekday at 8"), with `--starts` when it begins later ("from Thursday"). All are in the user's time zone.
 - **A kind of event:** `--on <type>` from `winston events catalog`, narrowed with filters to what the user actually cares about (a sender, a category, `--native` Gmail search for anything finer), never every message.
 - **Before meetings:** `--on calendar.event.starting --lead 15m`, with filters such as `--external`.
 - **Waiting on one thing:** scope it to the thread or event (`--scope thr_…`), `--max-fires 1`, and `--expires` with `--on-expire` for when it doesn't happen. "Tell me when Dana replies, and if she hasn't by Friday, offer a nudge" is one trigger. It's how you notice silence.

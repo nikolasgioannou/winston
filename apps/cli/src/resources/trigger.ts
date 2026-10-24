@@ -83,9 +83,19 @@ const triggerFlags: FlagSpec[] = [
     integer: true,
   },
   {
+    name: "starts",
+    value: "<time>",
+    description:
+      'With --cron: begin at this time, written like --at ("every morning from Thursday")',
+  },
+  {
     name: "expires",
     value: "<time>",
     description: "Stop at this time, written like --at",
+  },
+  {
+    name: "no-expires",
+    description: "Update: drop the expiry (and its --on-expire note)",
   },
   {
     name: "on-expire",
@@ -119,6 +129,7 @@ async function requestOf(flags: FlagValues, context: Context) {
     scope: textFlag(flags, "scope"),
     account: textFlag(flags, "account"),
     expires: textFlag(flags, "expires"),
+    starts: textFlag(flags, "starts"),
   };
   return {
     ...Object.fromEntries(
@@ -137,6 +148,7 @@ async function requestOf(flags: FlagValues, context: Context) {
     ...(typeof flags["max-fires"] === "number"
       ? { maxFires: flags["max-fires"] }
       : {}),
+    ...(flags["no-expires"] === true ? { noExpires: true } : {}),
   };
 }
 

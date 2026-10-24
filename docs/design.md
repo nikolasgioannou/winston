@@ -923,7 +923,7 @@ The CLI is Winston's main toolset. Apart from five native tools (§5), **every c
 **As built** (`apps/cli`):
 
 - **No framework:** a declarative command table with a hand-rolled flag parser (the reasoning is in `apps/cli/README.md`).
-- **Flags:** unknown flags, resources and verbs get Levenshtein "Did you mean" suggestions and exit 1. The standard flags are defined once (`standardFlags`), `--json` and `--help` work everywhere, and long-text flags resolve a literal, `-` (stdin) or `@path`.
+- **Flags:** unknown flags, resources and verbs get Levenshtein "Did you mean" suggestions and exit 1. A flag can have hidden aliases (`FlagSpec.aliases`) for the names agents keep reaching for: `calendar list`, `search` and `free` take `--from`/`--start` for `--since` and `--to`/`--end` for `--until` (9afd60: background runs guessed them on five days, and one gave up on a clash check). `calendar free --hours 0-24` is the whole day (24:00 is midnight at its end). The standard flags are defined once (`standardFlags`), `--json` and `--help` work everywhere, and long-text flags resolve a literal, `-` (stdin) or `@path`.
 - **Output:** `record` prints id-first lines joined by " · ". `list` is bounded (20 by default) with a "… N more. To see them, use --cursor … or narrow with …" footer. `json` has sorted keys, and times format in the user's zone with the offset.
 - **Transport:** Hono's `hc<VmApi>` client over winstond's socket, with `Authorization: Bearer $WINSTON_RUN_TOKEN`. Response types come from the API (`InferResponseType`), and backend error codes map to exit codes (`@winston/domain/api-errors`). An unreachable winstond is exit 5.
 - **Commands:** `me`, `mail`, `calendar`, `ramp`, `accounts`, `task`, `trigger`, `events`, `history` and `browser`, one file each in `apps/cli/src/resources/` (the full list is in the command reference below). Mail:
@@ -969,7 +969,7 @@ Same name and meaning everywhere:
 
 - `--account <email>`: which connection, by its address (or `acct_` id). Optional if the user has exactly one for that app. Otherwise an error lists the choices.
 - `--limit <n>`, `--cursor <c>`: pagination. The output footer prints the next cursor.
-- `--since <t>`, `--until <t>`, and every other time flag (`--start`, `--end`, `--at`, `--expires`): ISO 8601, `now`, or a duration from now. Resolved in the user's time zone.
+- `--since <t>`, `--until <t>`, and every other time flag (`--start`, `--end`, `--at`, `--expires`, `--starts`): ISO 8601, `now`, or a duration from now. Resolved in the user's time zone.
   - **As built** (`@winston/shared/time-flag`, `parseTimeFlag(input, { timeZone, direction })`; simplified in e19be9, 2026-10-03):
     - **Where it's resolved:** the CLI sends time flags to the backend as raw strings, and the backend resolves them in the user's zone. One source of truth, shared with triggers.
     - **Exact times only:** ISO 8601 (a date is the start of that day in the user's zone; a date and time without an offset is in the user's zone; with an offset or `Z` it's that exact moment), `now`, and durations (`30m`, `2h`, `3d`, `1w`). Anything else is an error listing the accepted forms (exit 1), never a guess. The earlier phrase grammar (`tomorrow 9am`, `fri`, `next mon`, `noon`, `in 2h`, `2h ago`) was removed (decision #73): Winston knows the moment and the user's offset from every envelope, wrote exact times in nearly every command anyway, and his real time mistakes were about which zone a time was in, which phrases can't fix.
@@ -1109,6 +1109,7 @@ trigger delete  <trg_id>
 ```
 
 - `--at` = one-off schedule. `--cron` = recurring, evaluated in the user's time zone. `--on` = subscription to an event type from `winston events catalog`.
+- **`--starts <time>`** (with `--cron`) makes the first fire the first match on or after it; **`--no-expires`** (on update) drops the expiry and its on-expire note (9afd60). Before them, "remind me a few times a day starting Thursday" became a cron firing from Monday with a note telling each run to stay silent, and clearing an expiry meant deleting and recreating the trigger. The start isn't stored: an update, or a time-zone change before it, recomputes from now, so give `--starts` again with a new cron.
 - **Subscriptions reuse the domain filter flags**, for example `--on mail.message.received --from dana --unread`. The same vocabulary as `search`.
 - `--scope` targets one object (`thr_…`, `evt_…`). `--lead` is for `calendar.event.starting` (for example `--lead 15m`).
 - Example: `winston trigger create --on mail.message.received --scope thr_91a --max-fires 1 --expires "fri 9am" --note "Dana replied about the lease; summarize for the user" --on-expire "Dana never replied; offer to draft a nudge"`

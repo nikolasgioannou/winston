@@ -64,6 +64,63 @@ describe("trigger routes", () => {
     });
   });
 
+  test("a cron with --starts first fires on or after its start; --starts is only for crons", async () => {
+    await inRollback(db, async (tx) => {
+      const { create } = await api(tx);
+      // Thursday Mar 6 2031, 10:00 in New York (EST) is 15:00 UTC.
+      const later = await create({
+        cron: "0 10,13,17 * * *",
+        starts: "2031-03-06T10:00",
+      });
+      expect(later.trigger?.nextFireAt).toBe("2031-03-06T15:00:00.000Z");
+      const midday = await create({
+        cron: "0 10,13,17 * * *",
+        starts: "2031-03-06T11:00",
+      });
+      expect(midday.trigger?.nextFireAt).toBe("2031-03-06T18:00:00.000Z");
+      const once = await create({
+        at: "2031-03-06T10:00",
+        starts: "2031-03-05",
+      });
+      expect([once.status, once.error?.message]).toEqual([
+        400,
+        "--starts is for --cron schedules.",
+      ]);
+    });
+  });
+
+  test("--no-expires drops the expiry and its on-expire note", async () => {
+    await inRollback(db, async (tx) => {
+      const { call, create } = await api(tx);
+      const daily = await create({
+        cron: "0 10 * * *",
+        expires: "2031-03-06T10:00",
+        onExpire: "Ask if this is still needed.",
+      });
+      const id = daily.trigger?.id ?? "";
+      const updated = (await (
+        await call(`/v1/triggers/${id}`, {
+          method: "PATCH",
+          body: { noExpires: true },
+        })
+      ).json()) as {
+        trigger: TriggerDto & {
+          expiresAt: string | null;
+          onExpire: string | null;
+        };
+      };
+      expect(updated.trigger).toMatchObject({
+        expiresAt: null,
+        onExpire: null,
+      });
+      const both = await call(`/v1/triggers/${id}`, {
+        method: "PATCH",
+        body: { noExpires: true, expires: "2031-03-07" },
+      });
+      expect(both.status).toBe(400);
+    });
+  });
+
   test("a subscription keeps its filters, account and scope", async () => {
     await inRollback(db, async (tx) => {
       const { user, mail, create } = await api(tx);

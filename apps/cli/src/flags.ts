@@ -16,6 +16,11 @@ export interface FlagSpec {
   integer?: boolean;
   /** May be given more than once (`--to a --to b`); the value is a list. */
   repeatable?: boolean;
+  /**
+   * Other names that mean the same, for the ones agents keep reaching for
+   * (`--from` for `--since`); not shown in help. The value is kept under `name`.
+   */
+  aliases?: string[];
 }
 
 /** The standard flags (§11): the same name and meaning on every resource. */
@@ -77,7 +82,11 @@ export function parseFlags(
   specs: readonly FlagSpec[],
 ): Parsed {
   const all = [...specs, ...globalFlags];
-  const byName = new Map(all.map((spec) => [spec.name, spec]));
+  const byName = new Map(
+    all.flatMap((spec) =>
+      [spec.name, ...(spec.aliases ?? [])].map((name) => [name, spec] as const),
+    ),
+  );
   const positionals: string[] = [];
   const flags: FlagValues = {};
   for (let i = 0; i < args.length; i += 1) {
