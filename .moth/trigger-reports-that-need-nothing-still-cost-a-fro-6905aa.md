@@ -1,14 +1,14 @@
 ---
 id: "6905aa"
 title: Trigger reports that need nothing still cost a front-of-house turn
-status: in-progress
+status: done
 priority: medium
 labels:
   - agents
   - costs
 parent: "07ba81"
 created_at: 2026-10-24T16:49:56.815Z
-updated_at: 2026-10-24T19:00:31.531Z
+updated_at: 2026-10-24T19:37:23.737Z
 ---
 
 Every trigger run's report wakes the front of house, even when the report is exactly "Nothing needs the user's attention.". The front then only calls `end_turn`. After an idle gap that turn is a full cache write.
@@ -43,3 +43,15 @@ Every trigger run's report wakes the front of house, even when the report is exa
 - [x] An empty trigger report creates no front run (test)
 - [ ] An interrupted turn followed by another within minutes reads from the cache: waiting on credit
 - [x] docs/design.md (cost section) updated: recorded under triggers, where the behavior lives
+
+## As built, part two (2026-10-24)
+
+What breaks the cache within the hour was measured from production `model_calls` (front runs, Oct 4–16): context window start, stub boundary and prompt hash, compared with the previous call. There were 11 cold first calls less than an hour after the previous call:
+
+- **5 after the window's start moved:** the FIFO window sliding, by design.
+- **3 after a deploy changed the prompt.**
+- **3 after a turn that showed an image.** `storableMessage` stores tool-result images as a text stub, and user photos are stubbed the same way, so the next turn's history no longer matches the cache from there on. Each of those calls read only the system prompt and tools from cache (9,479 tokens) right after the previous turn had cached 135–144k. That's about $1.35 over two weeks.
+
+None came from interrupted turns: the Oct 8 "cold 13 seconds later" case followed the dinner screenshot. The image case is left as it is, since the fix (keep images until they're behind the stub boundary) is a refactor for little money. It's recorded in docs/design.md under the cache lifetime.
+
+- [x] An interrupted turn followed by another within minutes reads from the cache: interruptions weren't a cause (see above); no change needed
