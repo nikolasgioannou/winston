@@ -2,6 +2,15 @@
 
 Winston's money goes to two places: AWS (everything that runs) and OpenRouter (the models). Each has its own alerts, so abnormal spending shows up in email either way (docs/design.md §8).
 
+## While paused (since 2026-10-25)
+
+Production is paused ([pause.md](pause.md)). Nothing runs, so AWS costs about $2–3 a month (the two KMS keys, the snapshots, S3 and ECR) and the models nothing. Cloudflare's $25 plan is cancelled by hand, which leaves the domains (about $49 a year).
+
+**Measured before the pause, for one user:**
+
+- **AWS:** $4.29 a day, about $130 a month: Fargate $36, the VM $27, seven public IPv4 addresses $26 (four services, two for the load balancer, the VM), the load balancer $16, RDS $14, the rest $10. That's above the ~$120 estimate below, because the VM ran on demand with no Savings Plan and there were more public addresses than estimated.
+- **Models:** $2.50–3.50 a day after launch week ($12–18 a day while testing), about 60% of it front of house. More than half of the front of house's spend was turns that rewrote its whole cache after an hour's gap.
+
 ## AWS
 
 The `Budget` stack (`infra/src/budget.ts`) keeps one AWS Budget for `winston-prod`, `winston-monthly`:

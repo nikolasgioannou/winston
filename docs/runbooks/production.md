@@ -4,6 +4,8 @@ There's no admin UI by design. Anything that has to touch production data runs a
 
 Log in first (docs/runbooks/aws-access.md): `aws sso login --profile winston-prod`. The script uses that profile unless AWS credentials are already set (as in CI).
 
+**Production is paused** (since 2026-10-25): nothing runs, so none of this works until it's brought back. What was kept and deleted, and how to bring it back, is in [pause.md](pause.md).
+
 ## Commands
 
 ```sh
@@ -71,4 +73,5 @@ aws ssm start-session --target <instance_id> --profile winston-prod
 - [vm-recovery.md](vm-recovery.md): replacing, rolling and restoring a VM.
 - [secrets.md](secrets.md): production keys and rotation.
 - [costs.md](costs.md): budgets, limits and the spend report.
+- [pause.md](pause.md): the 2026-10-25 pause, what it kept, and bringing production back.
 - [aws-access.md](aws-access.md), [dns.md](dns.md), [google-cloud.md](google-cloud.md), [gcp-terraform.md](gcp-terraform.md), [ramp.md](ramp.md).
